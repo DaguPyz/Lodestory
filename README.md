@@ -1,6 +1,6 @@
 # Lodestory
 
-Tauri 2 desktop app with a Vanilla TypeScript frontend.
+Tauri 2 desktop app with a React and TypeScript frontend.
 
 ## Development
 
@@ -8,7 +8,7 @@ Install [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/), then
 
 ```sh
 pnpm install
-pnpm tauri dev
+pnpm dev:desktop
 ```
 
 To build an application bundle:

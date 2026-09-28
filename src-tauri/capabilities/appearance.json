@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "appearance",
+  "description": "Allow the main window to coordinate its native appearance with the application theme.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:window:allow-set-theme",
+    "core:window:allow-theme"
+  ]
+}
+

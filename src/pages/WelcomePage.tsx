@@ -1,3 +1,5 @@
+import { useRef, useState } from "react";
+import { ThemeSettingsPage } from "./ThemeSettingsPage";
 import { Button, IconButton } from "../components/Button";
 import { Icon } from "../components/Icon";
 import { SearchField } from "../components/SearchField";
@@ -21,6 +23,14 @@ function ProjectPath({ path, id }: { path: string; id: string }) {
 }
 
 export function WelcomePage() {
+  const [section, setSection] = useState<"projects" | "settings">("projects");
+  const projectsButton = useRef<HTMLButtonElement>(null);
+
+  function returnToProjects() {
+    setSection("projects");
+    projectsButton.current?.focus();
+  }
+
   return (
     <div className="welcome-layout" data-ui-density="spacious">
       <aside className="navigation-panel" aria-label="应用导航">
@@ -33,23 +43,38 @@ export function WelcomePage() {
         </div>
 
         <nav className="navigation-items" aria-label="主导航">
-          <button className="navigation-item" type="button" aria-current="page" aria-label="项目" title="项目">
+          <button
+            ref={projectsButton}
+            className="navigation-item"
+            type="button"
+            aria-current={section === "projects" ? "page" : undefined}
+            aria-label="项目"
+            title="项目"
+            onClick={() => setSection("projects")}
+          >
             <Icon name="folder" />
             <span>项目</span>
           </button>
         </nav>
 
-        <button className="navigation-item navigation-settings" type="button" aria-label="设置" title="设置">
+        <button
+          className="navigation-item navigation-settings"
+          type="button"
+          aria-current={section === "settings" ? "page" : undefined}
+          aria-label="设置"
+          title="设置"
+          onClick={() => setSection("settings")}
+        >
           <Icon name="settings" />
           <span>设置</span>
         </button>
       </aside>
 
-      <main className="welcome-workspace">
+      <main className="welcome-workspace" hidden={section !== "projects"} aria-labelledby="welcome-page-heading">
         <div className="welcome-content">
           <header className="welcome-header">
             <div className="welcome-heading">
-              <h1>欢迎使用 Lodestory</h1>
+              <h1 id="welcome-page-heading">欢迎使用 Lodestory</h1>
               <p>继续写作，或开始一个新故事。</p>
             </div>
             <div className="welcome-actions" aria-label="项目操作">
@@ -91,7 +116,7 @@ export function WelcomePage() {
 
         <footer className="welcome-footer">一个目录，一部小说。</footer>
       </main>
+      <ThemeSettingsPage visible={section === "settings"} onBack={returnToProjects} />
     </div>
   );
 }
-

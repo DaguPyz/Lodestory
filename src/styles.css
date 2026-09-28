@@ -5,7 +5,7 @@
   font-size: 100%;
   color: var(--ui-text-primary);
   background: var(--ui-surface-workspace);
-  color-scheme: dark;
+  color-scheme: var(--ui-color-scheme);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -666,3 +666,353 @@ p {
   }
 }
 
+/* Welcome appearance settings share the existing Spacious page composition. */
+.welcome-workspace[hidden] {
+  display: none;
+}
+
+.appearance-content {
+  width: 100%;
+  max-width: 62rem;
+}
+
+.appearance-section {
+  margin-top: var(--ui-section-gap);
+}
+
+.appearance-section > h2 {
+  margin-bottom: var(--ui-space-8);
+  font-size: var(--ui-font-size-title);
+  line-height: var(--ui-line-height-title);
+  font-weight: 600;
+}
+
+.theme-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.theme-fieldset > legend {
+  padding: 0;
+  font-size: var(--ui-font-size-strong);
+  line-height: var(--ui-line-height-strong);
+  font-weight: 600;
+}
+
+.theme-description {
+  margin-top: var(--ui-space-3);
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-body);
+  line-height: var(--ui-line-height-body);
+}
+
+.theme-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--ui-space-7);
+  margin-top: var(--ui-space-8);
+}
+
+.theme-option {
+  position: relative;
+  display: block;
+  min-width: 0;
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-control);
+  border: 1px solid var(--ui-border-decoration);
+  border-radius: var(--ui-radius-control);
+  cursor: pointer;
+}
+
+.theme-option:hover {
+  background: var(--ui-surface-hover);
+  border-color: var(--ui-border-control);
+}
+
+.theme-option:has(input:checked) {
+  background: var(--ui-surface-selected);
+  border-color: var(--ui-accent-indicator);
+}
+
+.theme-option:has(input:checked):hover {
+  background: var(--ui-surface-selected-hover);
+}
+
+.theme-option:has(input:focus-visible) {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: var(--ui-focus-offset);
+}
+
+.theme-option-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+}
+
+.theme-option-input:focus-visible {
+  outline: none;
+}
+
+.theme-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-5);
+}
+
+.theme-option-heading {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ui-space-3);
+}
+
+.theme-option-name {
+  font-size: var(--ui-font-size-strong);
+  line-height: var(--ui-line-height-strong);
+  font-weight: 600;
+}
+
+.theme-option-default {
+  margin-left: auto;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+.theme-radio {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--ui-icon-medium);
+  height: var(--ui-icon-medium);
+  color: var(--ui-text-on-action);
+  background: var(--ui-surface-control);
+  border: 1px solid var(--ui-border-control);
+  border-radius: 50%;
+}
+
+.theme-option:has(input:checked) .theme-radio {
+  background: var(--ui-action-bg);
+  border-color: var(--ui-action-bg);
+}
+
+.theme-option-description {
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+  overflow-wrap: anywhere;
+}
+
+/* These are non-interactive previews; their explicit theme remains stable on selection. */
+.theme-preview {
+  display: grid;
+  grid-template-columns: 24% minmax(0, 1fr);
+  min-width: 0;
+  min-height: 10rem;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-workspace);
+  border-bottom: 1px solid var(--ui-border-divider);
+  border-radius: var(--ui-radius-control) var(--ui-radius-control) 0 0;
+  color-scheme: var(--ui-color-scheme);
+}
+
+.theme-preview-sidebar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--ui-space-5);
+  min-width: 0;
+  padding-block: var(--ui-space-5);
+  background: var(--ui-surface-panel);
+  border-right: 1px solid var(--ui-border-divider);
+}
+
+.theme-preview-navigation {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ui-space-8);
+  height: var(--ui-space-8);
+  color: var(--ui-accent-foreground);
+  background: var(--ui-surface-selected);
+  border-radius: var(--ui-radius-control);
+}
+
+.theme-preview-settings {
+  margin-top: auto;
+  color: var(--ui-text-secondary);
+}
+
+.theme-preview-main {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-3);
+  min-width: 0;
+  padding: var(--ui-space-5);
+}
+
+.theme-preview-heading {
+  overflow: hidden;
+  font-size: var(--ui-font-size-label);
+  line-height: var(--ui-line-height-label);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.theme-preview-caption {
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+  white-space: nowrap;
+}
+
+.theme-preview-project {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  color: var(--ui-text-secondary);
+}
+
+.theme-preview-project > span {
+  width: var(--ui-space-11);
+  max-width: 100%;
+  height: var(--ui-space-2);
+  background: var(--ui-text-muted);
+  border-radius: var(--ui-space-1);
+}
+
+.theme-preview-action {
+  width: var(--ui-space-11);
+  max-width: 100%;
+  height: var(--ui-space-3);
+  margin-top: auto;
+  background: var(--ui-action-bg);
+  border-radius: var(--ui-space-1);
+}
+
+.theme-preview-split {
+  position: relative;
+  display: block;
+  min-height: 10rem;
+  aspect-ratio: 16 / 10;
+}
+
+.theme-preview-split > .theme-preview {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+}
+
+.theme-preview-split > .theme-preview:first-child {
+  clip-path: inset(0 50% 0 0);
+}
+
+.theme-preview-split > .theme-preview:nth-child(2) {
+  clip-path: inset(0 0 0 50%);
+}
+
+.theme-preview-system-icon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ui-space-8);
+  height: var(--ui-space-8);
+  color: var(--ui-text-secondary);
+  background: var(--ui-surface-control);
+  border: 1px solid var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+  transform: translate(-50%, -50%);
+}
+
+.theme-current {
+  margin-top: var(--ui-space-7);
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-body);
+  line-height: var(--ui-line-height-body);
+}
+
+.theme-saving-note {
+  margin-top: var(--ui-space-5);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+.theme-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ui-space-5);
+  margin-top: var(--ui-space-5);
+  color: var(--ui-status-danger);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+@container welcome (max-width: 40rem) {
+  .theme-options {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--ui-space-5);
+  }
+
+  .theme-option {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .theme-preview,
+  .theme-preview-split {
+    min-height: 10rem;
+  }
+
+  .theme-preview {
+    border-bottom: 0;
+    border-right: 1px solid var(--ui-border-divider);
+    border-radius: var(--ui-radius-control) 0 0 var(--ui-radius-control);
+  }
+}
+
+@container welcome (max-width: 26rem) {
+  .theme-option {
+    display: block;
+  }
+
+  .theme-preview {
+    border-right: 0;
+    border-bottom: 1px solid var(--ui-border-divider);
+    border-radius: var(--ui-radius-control) var(--ui-radius-control) 0 0;
+  }
+}
+
+@media (forced-colors: active) {
+  .theme-option {
+    border-color: ButtonText;
+  }
+
+  .theme-option:has(input:checked) {
+    border-color: Highlight;
+  }
+
+  .theme-option:has(input:checked) .theme-radio {
+    color: HighlightText;
+    background: Highlight;
+    border-color: Highlight;
+  }
+
+  .theme-option:has(input:focus-visible) {
+    outline-color: Highlight;
+  }
+}

@@ -9,6 +9,14 @@ const shapes = {
   ),
   folder: <path d="M3 5a1 1 0 0 1 1-1h5l2 3h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  arrowLeft: <path d="m10 5-7 7 7 7M3 12h18" />,
+  check: <path d="m5 12 4 4L19 6" />,
+  monitor: (
+    <>
+      <rect x="3" y="4" width="18" height="13" rx="2" />
+      <path d="M12 17v3M8 20h8" />
+    </>
+  ),
   search: (
     <>
       <circle cx="10.5" cy="10.5" r="6.5" />
@@ -52,4 +60,3 @@ export function Icon({ name, size = "default" }: IconProps) {
     </svg>
   );
 }
-

@@ -1,6 +1,6 @@
 # Lodestory · UI 设计系统规范
 
-**版本：2.0.0 ｜ 日期：2026-09-28 ｜ 状态：欢迎页静态 UI 已按新版重构，渲染验收待完成**
+**版本：2.1.0 ｜ 日期：2026-09-28 ｜ 状态：欢迎页与主题设置已接入，运行验收待完成**
 
 适用范围：Lodestory 桌面应用的视觉语言、布局、公共组件、交互状态与页面验收。本规范定义产品的设计方向和可复用规则，不规定具体页面的内容清单、模块顺序或业务流程。
 
@@ -106,16 +106,57 @@
 
 一个操作上下文最多有一个实色主操作。其余操作使用中性或轻量外观。状态色只表达状态，普通分类标签保持中性。
 
+### COL-03｜主题模式与浅色配色
+
+应用提供深色、浅色和跟随系统三种模式，首次启动默认深色；跟随系统只解析为深色或浅色，不形成第三套配色。切换规则见[主题切换需求](需求设计/主题切换.md)。
+
+浅色采用白色与微冷浅灰的连续表面，保持相同的布局、密度、字体、控件尺度和状态语义。两套主题共用 COL-02 的实色操作配色，浅色变量如下。
+
+| 语义变量 | 浅色值 |
+| --- | --- |
+| --ui-surface-root | #F3F5F8 |
+| --ui-surface-workspace | #FFFFFF |
+| --ui-surface-panel | #F7F9FC |
+| --ui-surface-chrome | #EDF1F6 |
+| --ui-surface-control | #FFFFFF |
+| --ui-surface-overlay | #FFFFFF |
+| --ui-surface-hover | #E8EDF4 |
+| --ui-surface-pressed | #DCE4EE |
+| --ui-surface-selected | #E4EFFB |
+| --ui-surface-selected-hover | #D6E7F8 |
+| --ui-surface-selected-inactive | #E8ECF1 |
+| --ui-text-primary | #18212D |
+| --ui-text-secondary | #465468 |
+| --ui-text-muted | #536277 |
+| --ui-text-placeholder | #536277 |
+| --ui-text-disabled | #929DAB |
+| --ui-text-document | #243144 |
+| --ui-text-on-action | #F6F8FC |
+| --ui-border-divider | #DCE2EA |
+| --ui-border-decoration | #CBD3DF |
+| --ui-border-control | #65768C |
+| --ui-accent-foreground | #245F9B |
+| --ui-accent-indicator | #286BB1 |
+| --ui-focus-ring | #286BB1 |
+| --ui-text-selection-bg | #C5DCF6 |
+| --ui-status-success | #23693D |
+| --ui-status-warning | #8A5A08 |
+| --ui-status-danger | #B12F40 |
+| --ui-status-info | #245F9B |
+
+深色状态变量 --ui-status-success / warning / danger / info 分别为 #85C69A / #E3BC78 / #EE9393 / #76B6F2，与 COL-02 的状态配色一致。根节点的 data-ui-theme 表示当前实际主题；密度容器不覆盖主题。
+
 ### MAT-01｜边界与阴影
 
 默认边线为 1px，相邻面板共享一条分隔线。必要控件边界保持可识别；已有明确图标、文字和布局识别的对象不额外增加亮色框线。
 
 停靠面板、列表与常规按钮不使用外投影。浮动菜单可以使用中性轻投影，对话框使用独立浮层投影；不使用彩色阴影和发光效果。
 
-| 浮层角色 | 阴影 |
-| --- | --- |
-| 菜单 / Popover | 0 8px 24px rgba(0,0,0,.32), 0 2px 6px rgba(0,0,0,.24) |
-| 对话框 | 0 20px 64px rgba(0,0,0,.48), 0 2px 8px rgba(0,0,0,.24) |
+| 浮层角色 / 变量 | 深色 | 浅色 |
+| --- | --- | --- |
+| 菜单 / Popover / --ui-shadow-popover | 0 8px 24px rgba(0,0,0,.32), 0 2px 6px rgba(0,0,0,.24) | 0 8px 24px rgba(24,33,45,.12), 0 2px 6px rgba(24,33,45,.08) |
+| 对话框 / --ui-shadow-dialog | 0 20px 64px rgba(0,0,0,.48), 0 2px 8px rgba(0,0,0,.24) | 0 20px 64px rgba(24,33,45,.16), 0 2px 8px rgba(24,33,45,.08) |
+| 模态遮罩 / --ui-overlay-scrim | rgba(0,0,0,.48) | rgba(24,33,45,.24) |
 
 默认内容区不使用模糊、噪点、暗角与摄影式光照。系统窗口圆角、阴影与原生材质由平台管理。
 
@@ -376,9 +417,11 @@ macOS 与 Windows 分别核对。平台字体光栅化允许不同，但视觉�
 
 ### TOK-02｜当前项目状态
 
-现有 [主题变量](../src/styles/tokens.css)、[页面样式](../src/styles.css)与[欢迎页](../src/pages/WelcomePage.tsx)已按 2.0 重构：应用默认采用 Comfortable，欢迎页采用 Spacious，并统一了标题尺度、留白、列表密度、图标与共享控件。
+现有 [主题变量](../src/styles/tokens.css)、[页面样式](../src/styles.css)与[欢迎页](../src/pages/WelcomePage.tsx)已按新版重构：应用默认采用 Comfortable，欢迎页采用 Spacious，并统一了标题尺度、留白、列表密度、图标与共享控件。
 
-当前欢迎页使用示例数据，尚未接入业务功能。代码变更不代表渲染、多平台与缩放验收已通过；实际验证结果应单独记录。
+欢迎页已接入[主题设置页面](../src/pages/ThemeSettingsPage.tsx)与[共享主题管理](../src/theme/themeStore.ts)，支持深色、浅色、跟随系统、即时切换、本机偏好保存与失败重试。项目列表仍使用示例数据。
+
+目前只完成启动配色逻辑的 8 个检查用例及主题变量引用核对；完整测试、类型检查、构建与截图工具因命令环境异常未能运行。代码变更不代表渲染、多平台与缩放验收已通过。
 
 [窗口配置](../src-tauri/tauri.conf.json)沿用现有项目设置；后续页面实现应以实际客户区验证，不能仅凭配置尺寸判定符合规范。
 

@@ -56,7 +56,7 @@ export function ThemeSettingsPage({ visible, onBack }: ThemeSettingsPageProps) {
       <div className="appearance-content">
         <header className="welcome-header">
           <div className="welcome-heading">
-            <h1 id="appearance-page-heading">设置</h1>
+            <h1 id="appearance-page-heading" tabIndex={-1}>设置</h1>
             <p>让工作空间适合你的创作习惯。</p>
           </div>
           <Button variant="ghost" onClick={onBack}><Icon name="arrowLeft" />返回项目</Button>

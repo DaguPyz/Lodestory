@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
 import { ThemeSettingsPage } from "./ThemeSettingsPage";
 import { Button, IconButton } from "../components/Button";
 import { Icon } from "../components/Icon";
@@ -22,12 +22,24 @@ function ProjectPath({ path, id }: { path: string; id: string }) {
   );
 }
 
-export function WelcomePage() {
-  const [section, setSection] = useState<"projects" | "settings">("projects");
+export type WelcomeSection = "projects" | "settings";
+
+type WelcomePageProps = {
+  section: WelcomeSection;
+  onSectionChange: (section: WelcomeSection) => void;
+  onOpenProject: (name: string) => void;
+  onBackFromSettings?: () => void;
+};
+
+export function WelcomePage({ section, onSectionChange, onOpenProject, onBackFromSettings }: WelcomePageProps) {
   const projectsButton = useRef<HTMLButtonElement>(null);
 
   function returnToProjects() {
-    setSection("projects");
+    if (onBackFromSettings) {
+      onBackFromSettings();
+      return;
+    }
+    onSectionChange("projects");
     projectsButton.current?.focus();
   }
 
@@ -50,7 +62,7 @@ export function WelcomePage() {
             aria-current={section === "projects" ? "page" : undefined}
             aria-label="项目"
             title="项目"
-            onClick={() => setSection("projects")}
+            onClick={() => onSectionChange("projects")}
           >
             <Icon name="folder" />
             <span>项目</span>
@@ -63,7 +75,7 @@ export function WelcomePage() {
           aria-current={section === "settings" ? "page" : undefined}
           aria-label="设置"
           title="设置"
-          onClick={() => setSection("settings")}
+          onClick={() => onSectionChange("settings")}
         >
           <Icon name="settings" />
           <span>设置</span>
@@ -74,7 +86,7 @@ export function WelcomePage() {
         <div className="welcome-content">
           <header className="welcome-header">
             <div className="welcome-heading">
-              <h1 id="welcome-page-heading">欢迎使用 Lodestory</h1>
+              <h1 id="welcome-page-heading" tabIndex={-1}>欢迎使用 Lodestory</h1>
               <p>继续写作，或开始一个新故事。</p>
             </div>
             <div className="welcome-actions" aria-label="项目操作">
@@ -97,6 +109,7 @@ export function WelcomePage() {
                     type="button"
                     aria-label={`打开项目 ${project.name}`}
                     aria-describedby={`project-path-${project.id}`}
+                    onClick={() => onOpenProject(project.name)}
                   >
                     <Icon name="folder" />
                     <span className="project-details">

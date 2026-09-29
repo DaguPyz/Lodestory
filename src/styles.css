@@ -1016,3 +1016,17 @@ p {
     outline-color: Highlight;
   }
 }
+
+/* Keep page-local layout and scroll state when moving between editing and appearance. */
+.app-view {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-view[hidden] {
+  display: none;
+}

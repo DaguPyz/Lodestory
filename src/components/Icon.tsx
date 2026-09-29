@@ -10,6 +10,35 @@ const shapes = {
   folder: <path d="M3 5a1 1 0 0 1 1-1h5l2 3h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z" />,
   plus: <path d="M12 5v14M5 12h14" />,
   arrowLeft: <path d="m10 5-7 7 7 7M3 12h18" />,
+  file: (
+    <>
+      <path d="M14 3H5a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9Z" />
+      <path d="M14 3v6h6M8 13h8M8 17h6" />
+    </>
+  ),
+  chevronRight: <path d="m9 5 7 7-7 7" />,
+  chevronDown: <path d="m5 9 7 7 7-7" />,
+  close: <path d="m6 6 12 12M18 6 6 18" />,
+  collapseLeft: <path d="M19 4v16M13 6l-6 6 6 6" />,
+  collapseRight: <path d="M5 4v16M11 6l6 6-6 6" />,
+  split: (
+    <>
+      <rect x="3" y="4" width="18" height="16" rx="1" />
+      <path d="M15 4v16" />
+    </>
+  ),
+  focus: <path d="M8 3H3v5M16 3h5v5M21 16v5h-5M8 21H3v-5" />,
+  history: (
+    <>
+      <path d="M3 11a9 9 0 1 1 2.6 7M3 5v6h6M12 7v5l3 2" />
+    </>
+  ),
+  checkCircle: (
+    <>
+      <circle cx="12" cy="12" r="9" />
+      <path d="m7.5 12 3 3 6-6" />
+    </>
+  ),
   check: <path d="m5 12 4 4L19 6" />,
   monitor: (
     <>

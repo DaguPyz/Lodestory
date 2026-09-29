@@ -1,7 +1,41 @@
+import { useLayoutEffect, useRef } from "react";
+import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
-import type { PreviewDocument } from "./previewData";
+import type { WorkspaceDocument } from "../../documents/documentApi";
 
-export function Manuscript({ document, visible }: { document: PreviewDocument; visible: boolean }) {
+export function Manuscript({ document, projectName, visible, onChange, onSave }: {
+  document: WorkspaceDocument;
+  projectName: string;
+  visible: boolean;
+  onChange: (content: string) => void;
+  onSave: () => void;
+}) {
+  const input = useRef<HTMLTextAreaElement>(null);
+  useLayoutEffect(() => {
+    if (!visible || !input.current) return;
+    const element = input.current;
+    let width = element.getBoundingClientRect().width;
+    function resize() {
+      element.style.height = "auto";
+      element.style.height = `${Math.max(320, element.scrollHeight)}px`;
+    }
+    resize();
+    if (typeof ResizeObserver !== "undefined") {
+      const observer = new ResizeObserver(() => {
+        const nextWidth = element.getBoundingClientRect().width;
+        if (nextWidth === width) return;
+        width = nextWidth;
+        resize();
+      });
+      observer.observe(element);
+      return () => observer.disconnect();
+    }
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, [document.content, visible]);
+
+  const title = document.fileName.replace(/\.(md|markdown|txt)$/i, "");
+  const folder = document.path.includes("/") ? document.path.slice(0, document.path.lastIndexOf("/")) : "";
   return (
     <section
       className="editor-document"
@@ -9,26 +43,31 @@ export function Manuscript({ document, visible }: { document: PreviewDocument; v
       hidden={!visible}
       aria-labelledby={`editor-document-title-${document.id}`}
     >
-      <article className="manuscript" data-kind={document.kind}>
+      <article className="manuscript">
         <header className="manuscript-header">
-          <p className="manuscript-context">{document.context}</p>
-          <h1 className="manuscript-title" id={`editor-document-title-${document.id}`} tabIndex={-1}>{document.title}</h1>
+          <p className="manuscript-context">{projectName}{folder && ` · ${folder}`}</p>
+          <h1 className="manuscript-title" id={`editor-document-title-${document.id}`} tabIndex={-1}>{title}</h1>
         </header>
-        <div className="manuscript-body">
-          {document.paragraphs.map((paragraph, index) => <p key={index}>{paragraph}</p>)}
-        </div>
+        {document.saveError && <div className="document-save-error" role="alert">
+          <p className="project-error">{document.saveError}</p>
+          <Button variant="ghost" onClick={onSave}>重试保存</Button>
+        </div>}
+        <textarea ref={input} id={`editor-document-input-${document.id}`} className="manuscript-body manuscript-input"
+          aria-label={`${document.fileName} 正文`} placeholder="从这里开始写作…" value={document.content}
+          onChange={(event) => onChange(event.target.value)} spellCheck={false} />
       </article>
     </section>
   );
 }
 
-export function EmptyDocument() {
+export function EmptyDocument({ projectPath, onCreate, disabled }: { projectPath: string; onCreate: () => void; disabled: boolean }) {
   return (
     <section className="editor-empty" aria-labelledby="editor-empty-title">
       <Icon name="book" size="brand" />
-      <h1 id="editor-empty-title" tabIndex={-1}>从左侧打开一篇文稿</h1>
-      <p>章节与创作资料将在这里显示。</p>
+      <h1 id="editor-empty-title" tabIndex={-1}>作品已打开</h1>
+      <p className="editor-project-path" title={projectPath}>{projectPath}</p>
+      <p>选择左侧文档，或新建文档开始写作。</p>
+      <Button variant="primary" onClick={onCreate} disabled={disabled}><Icon name="plus" />新建文档</Button>
     </section>
   );
 }
-

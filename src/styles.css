@@ -21,7 +21,9 @@ body {
 }
 
 button,
-input {
+input,
+select,
+textarea {
   font: inherit;
 }
 
@@ -30,7 +32,9 @@ button {
 }
 
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
   outline: var(--ui-focus-width) solid var(--ui-focus-ring);
   outline-offset: var(--ui-focus-offset);
 }
@@ -544,6 +548,168 @@ p {
   color: var(--ui-text-muted);
   font-size: var(--ui-font-size-caption);
   line-height: var(--ui-line-height-caption);
+}
+
+.project-entry:disabled {
+  color: var(--ui-text-disabled);
+}
+
+.project-unavailable {
+  color: var(--ui-status-warning);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+.project-list-message {
+  padding: var(--ui-space-8) var(--ui-row-padding-inline);
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-body);
+  line-height: var(--ui-line-height-body);
+}
+
+.project-list-message p + p {
+  margin-top: var(--ui-space-3);
+  color: var(--ui-text-muted);
+}
+
+.project-feedback {
+  display: flex;
+  align-items: flex-start;
+  flex-wrap: wrap;
+  gap: var(--ui-space-5);
+  margin-bottom: var(--ui-space-5);
+}
+
+.project-error {
+  flex: 1;
+  min-width: 0;
+  color: var(--ui-status-danger);
+  font-size: var(--ui-font-size-body);
+  line-height: var(--ui-line-height-body);
+  overflow-wrap: anywhere;
+}
+
+.project-menu-positioner {
+  z-index: 20;
+}
+
+.project-menu {
+  min-width: 12rem;
+  padding: var(--ui-space-3);
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-overlay);
+  border: 1px solid var(--ui-border-divider);
+  border-radius: var(--ui-radius-overlay);
+  box-shadow: var(--ui-shadow-popover);
+}
+
+.project-menu-item {
+  display: flex;
+  align-items: center;
+  min-height: var(--ui-row-height);
+  padding: var(--ui-space-3) var(--ui-space-5);
+  border-radius: var(--ui-radius-row);
+  font-size: var(--ui-font-size-label);
+  line-height: var(--ui-line-height-label);
+  cursor: pointer;
+}
+
+.project-menu-item[data-highlighted] {
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-hover);
+}
+
+.project-menu-item[data-disabled] {
+  color: var(--ui-text-disabled);
+  cursor: not-allowed;
+}
+
+.project-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: var(--ui-overlay-scrim);
+}
+
+.project-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 31;
+  width: min(36rem, calc(100vw - 2 * var(--ui-space-7)));
+  max-height: calc(100dvh - 2 * var(--ui-space-7));
+  padding: var(--ui-panel-padding);
+  overflow: auto;
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-overlay);
+  border: 1px solid var(--ui-border-divider);
+  border-radius: var(--ui-radius-dialog);
+  box-shadow: var(--ui-shadow-dialog);
+  transform: translate(-50%, -50%);
+}
+
+.project-dialog-title {
+  font-size: var(--ui-font-size-title);
+  line-height: var(--ui-line-height-title);
+  font-weight: 600;
+}
+
+.project-dialog-description {
+  margin-top: var(--ui-space-3);
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-body);
+  line-height: var(--ui-line-height-body);
+}
+
+.project-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-7);
+  margin-top: var(--ui-space-7);
+}
+
+.project-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-3);
+  min-width: 0;
+  font-size: var(--ui-font-size-label);
+  line-height: var(--ui-line-height-label);
+}
+
+.project-form-field input,
+.project-form-field select {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--ui-control-height);
+  padding: var(--ui-space-3) var(--ui-control-padding-inline);
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-control);
+  border: 1px solid var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+}
+
+.project-form-field input::placeholder {
+  color: var(--ui-text-placeholder);
+}
+
+.project-directory-field {
+  display: flex;
+  gap: var(--ui-space-3);
+}
+
+.project-form-hint {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+.project-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--ui-space-3);
+  margin-top: var(--ui-space-3);
 }
 
 /* Use the available application width, including at browser/UI zoom. */

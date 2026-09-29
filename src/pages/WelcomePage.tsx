@@ -1,18 +1,20 @@
-import { useRef } from "react";
+import { Menu } from "@base-ui/react/menu";
+import { isTauri } from "@tauri-apps/api/core";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ThemeSettingsPage } from "./ThemeSettingsPage";
-import { Button, IconButton } from "../components/Button";
+import { NewProjectDialog } from "./NewProjectDialog";
+import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
 import { SearchField } from "../components/SearchField";
-
-// Presentation samples only. No project files or business actions are accessed.
-const previewProjects = [
-  { id: "long-night", name: "长夜行舟", path: "~/Novels/长夜行舟", lastOpened: "今天 09:41" },
-  { id: "sea-letter", name: "雾海来信", path: "~/Novels/雾海来信", lastOpened: "昨天 20:16" },
-  { id: "old-stories", name: "山河旧事", path: "~/Novels/山河旧事", lastOpened: "9月25日" },
-];
+import {
+  createProject, isUnavailableError, listRecentProjects, openProject, pickProjectDirectory,
+  projectErrorMessage, relocateProject, removeRecentProject,
+  type OpenedProject, type ProjectRecord, type RecentProject,
+} from "../projects/projectApi";
+import { formatLastOpened, projectPathSeparator } from "../projects/projectDisplay";
 
 function ProjectPath({ path, id }: { path: string; id: string }) {
-  const separator = path.lastIndexOf("/");
+  const separator = projectPathSeparator(path);
 
   return (
     <span className="project-path" id={id} title={path}>
@@ -25,14 +27,127 @@ function ProjectPath({ path, id }: { path: string; id: string }) {
 export type WelcomeSection = "projects" | "settings";
 
 type WelcomePageProps = {
+  active: boolean;
   section: WelcomeSection;
   onSectionChange: (section: WelcomeSection) => void;
-  onOpenProject: (name: string) => void;
+  onOpenProject: (project: ProjectRecord) => void;
   onBackFromSettings?: () => void;
 };
 
-export function WelcomePage({ section, onSectionChange, onOpenProject, onBackFromSettings }: WelcomePageProps) {
+export function WelcomePage({ active, section, onSectionChange, onOpenProject, onBackFromSettings }: WelcomePageProps) {
   const projectsButton = useRef<HTMLButtonElement>(null);
+  const operationPending = useRef(false);
+  const loadSequence = useRef(0);
+  const [projects, setProjects] = useState<RecentProject[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const desktop = isTauri();
+  const disabled = !desktop || busy || loading;
+  const query = search.trim().toLocaleLowerCase();
+  const matchingProjects = projects.filter((project) =>
+    `${project.name}\n${project.path}`.toLocaleLowerCase().includes(query));
+
+  const reload = useCallback(async () => {
+    if (operationPending.current) return;
+    const sequence = ++loadSequence.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const records = await listRecentProjects();
+      if (sequence !== loadSequence.current) return;
+      setProjects(records);
+      setLoadFailed(false);
+    } catch (cause) {
+      if (sequence !== loadSequence.current) return;
+      setLoadFailed(true);
+      setError(projectErrorMessage(cause));
+    } finally {
+      if (sequence === loadSequence.current) setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (active) void reload();
+    return () => { loadSequence.current += 1; };
+  }, [active, reload]);
+
+  async function runAction<T,>(action: () => Promise<T>): Promise<T | undefined> {
+    if (operationPending.current || loading) return undefined;
+    operationPending.current = true;
+    setBusy(true);
+    setError(null);
+    try {
+      return await action();
+    } catch (cause) {
+      setError(projectErrorMessage(cause));
+      return undefined;
+    } finally {
+      operationPending.current = false;
+      setBusy(false);
+    }
+  }
+
+  function enterProject(opened: OpenedProject) {
+    setProjects(opened.projects);
+    setLoadFailed(false);
+    onOpenProject(opened.project);
+  }
+
+  async function openDirectory() {
+    await runAction(async () => {
+      const path = await pickProjectDirectory("打开项目目录");
+      if (path) enterProject(await openProject(path));
+    });
+  }
+
+  async function openRecent(project: RecentProject) {
+    if (!project.available) {
+      await relocate(project);
+      return;
+    }
+    await runAction(async () => {
+      try {
+        enterProject(await openProject(project.path));
+      } catch (cause) {
+        if (isUnavailableError(cause)) {
+          setProjects((records) => records.map((record) => record.id === project.id ? { ...record, available: false } : record));
+        }
+        throw cause;
+      }
+    });
+  }
+
+  async function relocate(project: RecentProject) {
+    await runAction(async () => {
+      const path = await pickProjectDirectory(`重新定位 ${project.name}`);
+      if (path) enterProject(await relocateProject(project.id, path));
+    });
+  }
+
+  async function remove(project: RecentProject) {
+    await runAction(async () => {
+      setProjects(await removeRecentProject(project.id));
+      setLoadFailed(false);
+      requestAnimationFrame(() => {
+        const next = document.querySelector<HTMLButtonElement>(".project-entry:not(:disabled)")
+          ?? document.getElementById("recent-projects-heading");
+        next?.focus();
+      });
+    });
+  }
+
+  async function create(parentPath: string, name: string) {
+    await runAction(async () => {
+      const opened = await createProject(parentPath, name);
+      setCreateDialogOpen(false);
+      setSearch("");
+      enterProject(opened);
+    });
+  }
 
   function returnToProjects() {
     if (onBackFromSettings) {
@@ -60,12 +175,12 @@ export function WelcomePage({ section, onSectionChange, onOpenProject, onBackFro
             className="navigation-item"
             type="button"
             aria-current={section === "projects" ? "page" : undefined}
-            aria-label="项目"
-            title="项目"
+            aria-label="作品"
+            title="作品"
             onClick={() => onSectionChange("projects")}
           >
             <Icon name="folder" />
-            <span>项目</span>
+            <span>作品</span>
           </button>
         </nav>
 
@@ -90,37 +205,61 @@ export function WelcomePage({ section, onSectionChange, onOpenProject, onBackFro
               <p>继续写作，或开始一个新故事。</p>
             </div>
             <div className="welcome-actions" aria-label="项目操作">
-              <Button variant="primary"><Icon name="plus" />新建项目</Button>
-              <Button><Icon name="folder" />打开目录</Button>
+              <Button variant="primary" disabled={disabled} onClick={() => { setError(null); setCreateDialogOpen(true); }}>
+                <Icon name="plus" />开始新创作
+              </Button>
+              <Button disabled={disabled} onClick={() => void openDirectory()}><Icon name="folder" />打开已有作品</Button>
             </div>
           </header>
 
           <section className="recent-projects" aria-labelledby="recent-projects-heading">
             <div className="section-toolbar">
-              <h2 id="recent-projects-heading">最近项目</h2>
-              <SearchField label="搜索项目" />
+              <h2 id="recent-projects-heading" tabIndex={-1}>最近项目</h2>
+              <SearchField label="搜索项目" value={search} onChange={(event) => setSearch(event.target.value)} />
             </div>
 
-            <ul className="project-list" aria-label="最近打开的小说项目">
-              {previewProjects.map((project) => (
+            {error && !createDialogOpen && <div className="project-feedback" role="alert">
+              <p className="project-error">{error}</p>
+              <Button variant="ghost" onClick={() => void reload()} disabled={busy || loading}>刷新列表</Button>
+            </div>}
+            {loading ? <p className="project-list-message" role="status">正在加载最近项目…</p>
+              : !loadFailed && matchingProjects.length === 0 && <div className="project-list-message" role="status">
+                <p>{query ? "没有找到匹配的项目。" : "还没有最近项目。"}</p>
+                {!query && <p>{desktop ? "新建项目，或打开已有的小说目录。" : "请在桌面应用中创建或打开项目。"}</p>}
+              </div>}
+
+            <ul className="project-list" aria-label="最近打开的小说项目" aria-busy={busy || loading}>
+              {matchingProjects.map((project) => (
                 <li className="project-row" key={project.id}>
                   <button
                     className="project-entry"
                     type="button"
-                    aria-label={`打开项目 ${project.name}`}
+                    aria-label={`${project.available ? "打开项目" : "重新定位项目"} ${project.name}`}
                     aria-describedby={`project-path-${project.id}`}
-                    onClick={() => onOpenProject(project.name)}
+                    disabled={disabled}
+                    onClick={() => void openRecent(project)}
                   >
                     <Icon name="folder" />
                     <span className="project-details">
                       <span className="project-name" title={project.name}>{project.name}</span>
                       <ProjectPath path={project.path} id={`project-path-${project.id}`} />
+                      {!project.available && <span className="project-unavailable">目录不可用，点击重新定位</span>}
                     </span>
-                    <span className="project-time">{project.lastOpened}</span>
+                    <time className="project-time" dateTime={project.lastOpenedAt}>{formatLastOpened(project.lastOpenedAt)}</time>
                   </button>
-                  <IconButton label={`${project.name}的更多操作`}>
-                    <Icon name="more" />
-                  </IconButton>
+                  <Menu.Root>
+                    <Menu.Trigger className="icon-button" aria-label={`${project.name}的更多操作`} title={`${project.name}的更多操作`} disabled={disabled}>
+                      <Icon name="more" />
+                    </Menu.Trigger>
+                    <Menu.Portal>
+                      <Menu.Positioner className="project-menu-positioner" sideOffset={8} align="end">
+                        <Menu.Popup className="project-menu" data-ui-density="comfortable">
+                          <Menu.Item className="project-menu-item" disabled={disabled} onClick={() => void relocate(project)}>重新定位目录</Menu.Item>
+                          <Menu.Item className="project-menu-item" disabled={disabled} onClick={() => void remove(project)}>从最近项目移除</Menu.Item>
+                        </Menu.Popup>
+                      </Menu.Positioner>
+                    </Menu.Portal>
+                  </Menu.Root>
                 </li>
               ))}
             </ul>
@@ -130,6 +269,8 @@ export function WelcomePage({ section, onSectionChange, onOpenProject, onBackFro
         <footer className="welcome-footer">一个目录，一部小说。</footer>
       </main>
       <ThemeSettingsPage visible={section === "settings"} onBack={returnToProjects} />
+      {createDialogOpen && <NewProjectDialog busy={busy} error={error} onClose={() => setCreateDialogOpen(false)}
+        onPickDirectory={() => runAction(() => pickProjectDirectory("选择项目保存位置"))} onCreate={create} />}
     </div>
   );
 }

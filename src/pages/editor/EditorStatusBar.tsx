@@ -1,16 +1,19 @@
 import { Icon } from "../../components/Icon";
-import type { PreviewDocument } from "./previewData";
+import type { WorkspaceDocument } from "../../documents/documentApi";
 
-export function EditorStatusBar({ document }: { document: PreviewDocument | undefined }) {
+export function EditorStatusBar({ document }: { document: WorkspaceDocument | undefined }) {
+  const status = document ? { saved: "已保存", pending: "等待保存…", saving: "正在保存…", error: "保存失败" }[document.saveState] : "未打开文稿";
+  const count = document ? Array.from(document.content.replace(/\s/g, "")).length : 0;
   return (
     <footer className="editor-statusbar" aria-label="写作状态">
-      <span className="editor-save-status"><Icon name="checkCircle" size="small" /><span>{document ? "已自动保存" : "未打开文稿"}</span></span>
+      <span className="editor-save-status" role="status" data-state={document?.saveState}>
+        {document?.saveState === "saved" && <Icon name="checkCircle" size="small" />}<span>{status}</span>
+      </span>
       <div className="editor-document-status">
-        {document && <span>{document.kind === "chapter" ? "本章" : "文稿"} {document.wordCount.toLocaleString("zh-CN")} 字</span>}
+        {document && <span>文稿 {count.toLocaleString("zh-CN")} 字</span>}
         <span className="editor-font-status">宋体 · 18</span>
         <span>100%</span>
       </div>
     </footer>
   );
 }
-

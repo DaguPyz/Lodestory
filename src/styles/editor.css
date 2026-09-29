@@ -314,7 +314,7 @@
   background: var(--ui-surface-selected-hover);
 }
 
-.file-tree-folder[open] > summary > .icon:first-child {
+.file-tree-folder-toggle[aria-expanded="true"] > .icon:first-child {
   transform: rotate(90deg);
 }
 
@@ -330,6 +330,20 @@
   color: var(--ui-text-muted);
   font-size: var(--ui-font-size-caption);
   line-height: var(--ui-line-height-caption);
+}
+
+.file-tree-message {
+  padding: var(--ui-space-3) var(--ui-space-5);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+  overflow-wrap: anywhere;
+}
+
+.document-tab-unsaved {
+  flex-shrink: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-caption);
 }
 
 .editor-main {
@@ -467,6 +481,47 @@
 
 .manuscript-body p + p {
   margin-top: var(--ui-space-5);
+}
+
+.manuscript-input {
+  display: block;
+  width: 100%;
+  min-height: 20rem;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  resize: none;
+  overflow: hidden;
+}
+
+.manuscript-input::placeholder {
+  color: var(--ui-text-placeholder);
+}
+
+.manuscript-input:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: var(--ui-space-3);
+}
+
+.document-save-error,
+.editor-document-feedback {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-4) var(--ui-space-5);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+  overflow-wrap: anywhere;
+}
+
+.document-save-error {
+  margin-top: var(--ui-space-5);
+  padding-inline: 0;
+}
+
+.editor-save-status[data-state="error"] {
+  color: var(--ui-status-danger);
 }
 
 .manuscript[data-kind="chapter"] .manuscript-body p {
@@ -657,4 +712,15 @@
     border-color: ButtonText;
   }
 }
+/* Real project directories must not display the presentation sample documents. */
+.editor-project-path {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
 
+.reference-empty {
+  padding: var(--ui-panel-padding);
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-body);
+  line-height: var(--ui-line-height-body);
+}

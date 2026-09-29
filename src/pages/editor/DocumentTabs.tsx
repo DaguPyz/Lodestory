@@ -1,9 +1,9 @@
 import { IconButton } from "../../components/Button";
 import { Icon } from "../../components/Icon";
-import type { PreviewDocument } from "./previewData";
+import type { WorkspaceDocument } from "../../documents/documentApi";
 
 type DocumentTabsProps = {
-  documents: PreviewDocument[];
+  documents: WorkspaceDocument[];
   activeDocument: string | null;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
@@ -25,6 +25,7 @@ export function DocumentTabs({ documents, activeDocument, onSelect, onClose }: D
           >
             <Icon name="file" />
             <span>{document.fileName}</span>
+            {document.saveState !== "saved" && <span className="document-tab-unsaved" aria-label="有未保存修改">●</span>}
           </button>
           <IconButton label={`关闭 ${document.fileName}`} onClick={() => onClose(document.id)}>
             <Icon name="close" size="small" />

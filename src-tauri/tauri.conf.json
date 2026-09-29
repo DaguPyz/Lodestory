@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "appDirectoriesOverride": { "config": "$CONFIG/Lodestory" },
     "windows": [
       { "title": "Lodestory", "width": 1440, "height": 900, "minWidth": 960, "minHeight": 640, "theme": "Dark" }
     ],

@@ -3,11 +3,12 @@ import { useEffect, useState } from "react";
 import { startThemeSync, whenNativeThemeReady } from "./theme/themeStore";
 import { WelcomePage, type WelcomeSection } from "./pages/WelcomePage";
 import { EditorPage } from "./pages/editor/EditorPage";
+import type { ProjectRecord } from "./projects/projectApi";
 
 export default function App() {
   const [themeReady, setThemeReady] = useState(() => !isTauri());
   const [view, setView] = useState<"welcome" | "editor">("welcome");
-  const [projectName, setProjectName] = useState("长夜行舟");
+  const [project, setProject] = useState<ProjectRecord | null>(null);
   const [welcomeSection, setWelcomeSection] = useState<WelcomeSection>("projects");
   const [settingsReturn, setSettingsReturn] = useState<"welcome" | "editor">("welcome");
 
@@ -33,8 +34,8 @@ export default function App() {
     });
   }
 
-  function openProject(name: string) {
-    setProjectName(name);
+  function openProject(project: ProjectRecord) {
+    setProject(project);
     setSettingsReturn("welcome");
     setView("editor");
     focusEditor();
@@ -70,6 +71,7 @@ export default function App() {
       {!isTauri() && view === "welcome" && <header className="window-titlebar">Lodestory</header>}
       <div className="app-view" hidden={view !== "welcome"}>
         <WelcomePage
+          active={view === "welcome"}
           section={welcomeSection}
           onSectionChange={(section) => {
             setWelcomeSection(section);
@@ -79,14 +81,16 @@ export default function App() {
           onBackFromSettings={returnFromSettings}
         />
       </div>
-      <div className="app-view" hidden={view !== "editor"}>
+      {project && <div className="app-view" hidden={view !== "editor"}>
         <EditorPage
-          projectName={projectName}
+          key={`${project.id}:${project.path}`}
+          projectName={project.name}
+          projectPath={project.path}
           active={view === "editor"}
           onBack={returnToWelcome}
           onOpenSettings={openEditorSettings}
         />
-      </div>
+      </div>}
     </div>
   );
 }

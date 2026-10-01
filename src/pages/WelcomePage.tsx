@@ -6,6 +6,7 @@ import { NewProjectDialog } from "./NewProjectDialog";
 import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
 import { SearchField } from "../components/SearchField";
+import { ContextMenuRegion, useContextMenus, type MenuAction } from "../components/context-menu";
 import {
   createProject, isUnavailableError, listRecentProjects, openProject, pickProjectDirectory,
   projectErrorMessage, relocateProject, removeRecentProject,
@@ -35,6 +36,8 @@ type WelcomePageProps = {
 };
 
 export function WelcomePage({ active, section, onSectionChange, onOpenProject, onBackFromSettings }: WelcomePageProps) {
+  const menus = useContextMenus();
+  const [moreProject, setMoreProject] = useState<string | null>(null);
   const projectsButton = useRef<HTMLButtonElement>(null);
   const operationPending = useRef(false);
   const loadSequence = useRef(0);
@@ -50,6 +53,14 @@ export function WelcomePage({ active, section, onSectionChange, onOpenProject, o
   const query = search.trim().toLocaleLowerCase();
   const matchingProjects = projects.filter((project) =>
     `${project.name}\n${project.path}`.toLocaleLowerCase().includes(query));
+
+  useEffect(() => {
+    if (createDialogOpen) menus.closeAll();
+  }, [createDialogOpen, menus]);
+
+  useEffect(() => {
+    return () => { if (moreProject) menus.release(`recent-project-more:${moreProject}`); };
+  }, [moreProject, menus]);
 
   const reload = useCallback(async () => {
     if (operationPending.current) return;
@@ -138,6 +149,22 @@ export function WelcomePage({ active, section, onSectionChange, onOpenProject, o
         next?.focus();
       });
     });
+  }
+
+  function projectActions(id: string): MenuAction<string>[] {
+    const project = projects.find((record) => record.id === id);
+    async function perform(targetId: string, action: "open" | "relocate" | "remove") {
+      const target = projects.find((record) => record.id === targetId);
+      if (!target || disabled || !active || section !== "projects") return;
+      if (action === "open") { if (target.available) await openRecent(target); }
+      else if (action === "relocate") await relocate(target);
+      else await remove(target);
+    }
+    return [
+      { id: "open", label: "打开项目", icon: <Icon name="folder" />, disabled: disabled || !project?.available, restoreFocus: false, onSelect: (target) => perform(target, "open") },
+      { id: "relocate", label: "重新定位目录", disabled: disabled || !project, restoreFocus: false, onSelect: (target) => perform(target, "relocate") },
+      { id: "remove", label: "从最近项目移除", disabled: disabled || !project, restoreFocus: false, onSelect: (target) => perform(target, "remove") },
+    ];
   }
 
   async function create(parentPath: string, name: string) {
@@ -230,6 +257,7 @@ export function WelcomePage({ active, section, onSectionChange, onOpenProject, o
 
             <ul className="project-list" aria-label="最近打开的小说项目" aria-busy={busy || loading}>
               {matchingProjects.map((project) => (
+                <ContextMenuRegion key={project.id} context={project.id} label={`${project.name}项目操作`} items={projectActions}>
                 <li className="project-row" key={project.id}>
                   <button
                     className="project-entry"
@@ -247,20 +275,29 @@ export function WelcomePage({ active, section, onSectionChange, onOpenProject, o
                     </span>
                     <time className="project-time" dateTime={project.lastOpenedAt}>{formatLastOpened(project.lastOpenedAt)}</time>
                   </button>
-                  <Menu.Root>
+                  <Menu.Root modal={false} open={moreProject === project.id} onOpenChange={(open) => {
+                    const id = `recent-project-more:${project.id}`;
+                    if (open) { menus.activate(id, () => setMoreProject(null)); setMoreProject(project.id); }
+                    else { menus.release(id); setMoreProject((current) => current === project.id ? null : current); }
+                  }}>
                     <Menu.Trigger className="icon-button" aria-label={`${project.name}的更多操作`} title={`${project.name}的更多操作`} disabled={disabled}>
                       <Icon name="more" />
                     </Menu.Trigger>
                     <Menu.Portal>
                       <Menu.Positioner className="project-menu-positioner" sideOffset={8} align="end">
                         <Menu.Popup className="project-menu" data-ui-density="comfortable">
-                          <Menu.Item className="project-menu-item" disabled={disabled} onClick={() => void relocate(project)}>重新定位目录</Menu.Item>
-                          <Menu.Item className="project-menu-item" disabled={disabled} onClick={() => void remove(project)}>从最近项目移除</Menu.Item>
+                          {projectActions(project.id).filter((action) => action.id !== "open").map((action) => (
+                            <Menu.Item key={action.id} className="project-menu-item" disabled={action.disabled as boolean} onClick={() => {
+                              menus.closeAll("action");
+                              void action.onSelect(project.id);
+                            }}>{action.label}</Menu.Item>
+                          ))}
                         </Menu.Popup>
                       </Menu.Positioner>
                     </Menu.Portal>
                   </Menu.Root>
                 </li>
+                </ContextMenuRegion>
               ))}
             </ul>
           </section>

@@ -12,6 +12,7 @@ import { ReferencePanel } from "./ReferencePanel";
 import { createDocument, documentErrorMessage, listDocuments, type TreeEntry } from "../../documents/documentApi";
 import { useDocumentWorkspace } from "../../documents/useDocumentWorkspace";
 import "../../styles/editor.css";
+import { useContextMenus } from "../../components/context-menu";
 
 type PanelPreference = "auto" | "open" | "closed";
 type EditorPageProps = {
@@ -33,6 +34,7 @@ function insertDocument(entries: TreeEntry[], path: string, name: string): TreeE
 }
 
 export function EditorPage({ projectName, projectPath, active, onBack, onOpenSettings }: EditorPageProps) {
+  const menus = useContextMenus();
   const root = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, rem: 16 }));
   const [treePreference, setTreePreference] = useState<PanelPreference>("auto");
@@ -88,7 +90,9 @@ export function EditorPage({ projectName, projectPath, active, onBack, onOpenSet
     return () => window.removeEventListener("keydown", saveShortcut);
   }, [active, workspace.saveAll]);
 
-  function showNewDocument() {
+  function showNewDocument(parentPath = selectedFolder) {
+    menus.closeAll();
+    setSelectedFolder(parentPath);
     setCreateError(null);
     setCreateDialogOpen(true);
   }
@@ -171,10 +175,10 @@ export function EditorPage({ projectName, projectPath, active, onBack, onOpenSet
 
   function openDocument(path: string) {
     setSelectedFolder(path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
-    void workspace.open(path);
     if (!treeDocked) {
       setTreePreference("auto");
     }
+    return workspace.open(path);
   }
 
   return (
@@ -212,7 +216,8 @@ export function EditorPage({ projectName, projectPath, active, onBack, onOpenSet
         />
 
         <main className="editor-main" aria-label="文稿工作区">
-          <DocumentTabs documents={documents} activeDocument={activeId} onSelect={workspace.select} onClose={(id) => void workspace.close(id)} />
+          <DocumentTabs documents={documents} activeDocument={activeId} onSelect={workspace.select} onClose={workspace.close}
+            onSave={workspace.save} onNewDocument={() => showNewDocument()} newDisabled={newDisabled} />
           {workspace.error && <div className="editor-document-feedback" role="alert">
             <p className="project-error">{workspace.error}</p>
             <IconButton label="关闭提示" onClick={workspace.clearError}><Icon name="close" size="small" /></IconButton>
@@ -221,8 +226,8 @@ export function EditorPage({ projectName, projectPath, active, onBack, onOpenSet
           <div className="editor-document-stack">
             {documents.length > 0 ? documents.map((document) => (
               <Manuscript key={document.id} document={document} projectName={projectName} visible={document.id === activeId}
-                onChange={(content) => workspace.update(document.id, content)} onSave={() => void workspace.save(document.id)} />
-            )) : <EmptyDocument projectPath={projectPath} onCreate={showNewDocument} disabled={newDisabled} />}
+                onChange={(content) => workspace.update(document.id, content)} onSave={() => workspace.save(document.id)} />
+            )) : <EmptyDocument projectPath={projectPath} onCreate={() => showNewDocument()} disabled={newDisabled} />}
           </div>
         </main>
 

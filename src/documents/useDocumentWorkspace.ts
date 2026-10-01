@@ -9,6 +9,8 @@ export function useDocumentWorkspace(projectPath: string) {
   const openingSequence = useRef(0);
   const [documents, setDocuments] = useState<WorkspaceDocument[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const activeIdRef = useRef(activeId);
+  activeIdRef.current = activeId;
   const [openingPath, setOpeningPath] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -55,7 +57,11 @@ export function useDocumentWorkspace(projectPath: string) {
   async function close(id: string) {
     const session = sessions.current.get(id);
     if (!session) return;
-    if (!await session.save()) { setActiveId(id); return; }
+    if (!await session.save()) {
+      setActiveId(id);
+      requestAnimationFrame(() => document.getElementById(`editor-document-input-${id}`)?.focus());
+      return;
+    }
     const ids = [...sessions.current.keys()];
     const index = ids.indexOf(id);
     sessions.current.delete(id);
@@ -64,7 +70,10 @@ export function useDocumentWorkspace(projectPath: string) {
     const remaining = [...sessions.current.keys()];
     const nextId = remaining[Math.max(0, index - 1)] ?? null;
     setActiveId((current) => current === id ? nextId : current);
-    requestAnimationFrame(() => document.getElementById(nextId ? `document-tab-${nextId}` : "editor-empty-title")?.focus());
+    requestAnimationFrame(() => {
+      const focusId = activeIdRef.current;
+      document.getElementById(focusId ? `document-tab-${focusId}` : "editor-empty-title")?.focus();
+    });
   }
 
   const saveAll = useCallback(async () => {

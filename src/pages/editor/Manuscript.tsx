@@ -2,13 +2,14 @@ import { useLayoutEffect, useRef } from "react";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import type { WorkspaceDocument } from "../../documents/documentApi";
+import { ContextMenuRegion } from "../../components/context-menu";
 
 export function Manuscript({ document, projectName, visible, onChange, onSave }: {
   document: WorkspaceDocument;
   projectName: string;
   visible: boolean;
   onChange: (content: string) => void;
-  onSave: () => void;
+  onSave: () => unknown | Promise<unknown>;
 }) {
   const input = useRef<HTMLTextAreaElement>(null);
   useLayoutEffect(() => {
@@ -37,11 +38,16 @@ export function Manuscript({ document, projectName, visible, onChange, onSave }:
   const title = document.fileName.replace(/\.(md|markdown|txt)$/i, "");
   const folder = document.path.includes("/") ? document.path.slice(0, document.path.lastIndexOf("/")) : "";
   return (
+    <ContextMenuRegion context={document.id} label={`${document.fileName}文稿操作`} items={[
+      { id: "save", label: "保存", disabled: document.saveState === "saving",
+        onSelect: (id) => { if (visible && document.id === id) return onSave(); } },
+    ]}>
     <section
       className="editor-document"
       id={`editor-document-${document.id}`}
       hidden={!visible}
       aria-labelledby={`editor-document-title-${document.id}`}
+      tabIndex={-1}
     >
       <article className="manuscript">
         <header className="manuscript-header">
@@ -57,17 +63,23 @@ export function Manuscript({ document, projectName, visible, onChange, onSave }:
           onChange={(event) => onChange(event.target.value)} spellCheck={false} />
       </article>
     </section>
+    </ContextMenuRegion>
   );
 }
 
 export function EmptyDocument({ projectPath, onCreate, disabled }: { projectPath: string; onCreate: () => void; disabled: boolean }) {
   return (
-    <section className="editor-empty" aria-labelledby="editor-empty-title">
+    <ContextMenuRegion label="文稿工作区操作" items={[
+      { id: "new-document", label: "新建文档", icon: <Icon name="plus" />, disabled, restoreFocus: false,
+        onSelect: () => { if (!disabled) onCreate(); } },
+    ]}>
+    <section className="editor-empty" aria-labelledby="editor-empty-title" tabIndex={0}>
       <Icon name="book" size="brand" />
       <h1 id="editor-empty-title" tabIndex={-1}>作品已打开</h1>
       <p className="editor-project-path" title={projectPath}>{projectPath}</p>
       <p>选择左侧文档，或新建文档开始写作。</p>
       <Button variant="primary" onClick={onCreate} disabled={disabled}><Icon name="plus" />新建文档</Button>
     </section>
+    </ContextMenuRegion>
   );
 }

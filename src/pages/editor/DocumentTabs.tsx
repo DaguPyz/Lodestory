@@ -1,19 +1,33 @@
 import { IconButton } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import type { WorkspaceDocument } from "../../documents/documentApi";
+import { ContextMenuRegion } from "../../components/context-menu";
 
 type DocumentTabsProps = {
   documents: WorkspaceDocument[];
   activeDocument: string | null;
   onSelect: (id: string) => void;
-  onClose: (id: string) => void;
+  onClose: (id: string) => void | Promise<void>;
+  onSave: (id: string) => unknown | Promise<unknown>;
+  onNewDocument: () => void;
+  newDisabled: boolean;
 };
 
-export function DocumentTabs({ documents, activeDocument, onSelect, onClose }: DocumentTabsProps) {
+export function DocumentTabs({ documents, activeDocument, onSelect, onClose, onSave, onNewDocument, newDisabled }: DocumentTabsProps) {
   return (
-    <nav className="document-tabs" aria-label="已打开的文稿">
+    <ContextMenuRegion label="文稿标签栏操作" items={[
+      { id: "new-document", label: "新建文档", icon: <Icon name="plus" />, disabled: newDisabled, restoreFocus: false,
+        onSelect: () => { if (!newDisabled) onNewDocument(); } },
+    ]}>
+    <nav className="document-tabs" aria-label="已打开的文稿" tabIndex={0}>
       {documents.map((document) => (
-        <div className="document-tab" key={document.id} data-active={document.id === activeDocument}>
+        <ContextMenuRegion key={document.id} context={document.id} label={`${document.fileName}标签操作`} items={[
+          { id: "save", label: "保存", disabled: document.saveState === "saving",
+            onSelect: (id) => { if (documents.some((record) => record.id === id)) return onSave(id); } },
+          { id: "close", label: "关闭", icon: <Icon name="close" />, restoreFocus: false,
+            onSelect: (id) => { if (documents.some((record) => record.id === id)) return onClose(id); } },
+        ]}>
+        <div className="document-tab" data-active={document.id === activeDocument}>
           <button
             id={`document-tab-${document.id}`}
             className="document-tab-select"
@@ -31,7 +45,9 @@ export function DocumentTabs({ documents, activeDocument, onSelect, onClose }: D
             <Icon name="close" size="small" />
           </IconButton>
         </div>
+        </ContextMenuRegion>
       ))}
     </nav>
+    </ContextMenuRegion>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Button, IconButton } from "../../components/Button";
 import { Icon } from "../../components/Icon";
+import { useContextMenus } from "../../components/context-menu";
 
 type EditorToolbarProps = {
   active: boolean;
@@ -19,6 +20,9 @@ export function EditorToolbar({
   active, projectName, focusMode, referenceVisible, treeVisible, onToggleTree, onToggleFocus, onToggleReference, onBack, onOpenSettings,
 }: EditorToolbarProps) {
   const projectMenu = useRef<HTMLDetailsElement>(null);
+  const menus = useContextMenus();
+
+  useEffect(() => () => menus.release("editor-project-menu"), [menus]);
 
   useEffect(() => {
     if (!active) {
@@ -62,7 +66,12 @@ export function EditorToolbar({
         <span>Lodestory</span>
       </div>
 
-      <details className="editor-project-menu" ref={projectMenu}>
+      <details className="editor-project-menu" ref={projectMenu} onToggle={() => {
+        if (projectMenu.current?.open) menus.activate("editor-project-menu", () => {
+          if (projectMenu.current) projectMenu.current.open = false;
+        });
+        else menus.release("editor-project-menu");
+      }}>
         <summary className="editor-project-trigger" title={projectName}>
           <span>{projectName}</span>
           <Icon name="chevronDown" size="small" />

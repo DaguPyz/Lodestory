@@ -1,4 +1,4 @@
-import type { ServiceKey } from "./ServiceKey";
+import type { CapabilityKey, ServiceKey } from "./ServiceKey";
 
 type Entry = {
   ownerId: string;
@@ -7,7 +7,7 @@ type Entry = {
 
 /** EngineCore 在插件激活期间暂存的能力，成功后一次性注册。 */
 export type PendingRegistration = {
-  key: Pick<ServiceKey<unknown>, "id" | "token">;
+  key: CapabilityKey;
   value: unknown;
 };
 
@@ -42,6 +42,11 @@ export class CapabilityRegistry {
     const entry = this.entries.get(key.token);
     if (!entry) throw new Error(`Service '${key.id}' is not registered.`);
     return entry.value as T;
+  }
+
+  /** 查询能力的提供者，供 Core 检查依赖并保护提供者的生命周期。 */
+  getOwnerId(key: CapabilityKey): string | undefined {
+    return this.entries.get(key.token)?.ownerId;
   }
 
   /** 撤销某个插件注册的全部能力。 */

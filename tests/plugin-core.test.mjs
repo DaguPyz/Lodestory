@@ -29,6 +29,8 @@ function load(name) {
 
 const { EngineCore, PluginActivationError, PluginBatchActivationError } = load("EngineCore");
 const { createServiceKey } = load("ServiceKey");
+const { createEventKey } = load("EventKey");
+const { EventDispatchError } = load("EventBus");
 
 function deferred() {
   let resolve;
@@ -36,7 +38,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-test("capability declarations accept different service types and preserve context types", () => {
+test("capability declarations and events preserve context types", () => {
   const fixture = fileURLToPath(new URL("./fixtures/plugin-core.ts", import.meta.url));
   const program = ts.createProgram([fixture], {
     target: ts.ScriptTarget.ES2020,
@@ -859,4 +861,361 @@ test("empty batches are harmless and release the lifecycle lock", async () => {
   assert.equal(await core.mountAll([]), undefined);
   await core.mount({ id: "manual", requires: [], provides: [], activate() {} });
   await core.unmount("manual");
+});
+
+test("a subscriber can activate before its publisher and receives typed event data", async () => {
+  const saved = createEventKey("document/saved");
+  const core = new EngineCore();
+  const received = [];
+  let publisher;
+  await core.mountAll([
+    { id: "log", requires: [], provides: [], activate(context) {
+      context.on(saved, payload => { received.push(payload); });
+    } },
+    { id: "save", requires: [], provides: [], activate(context) { publisher = context; } },
+  ]);
+  assert.deepEqual(received, []);
+  const payload = { documentId: "doc-01" };
+  assert.equal(await publisher.emit(saved, payload), undefined);
+  assert.deepEqual(received, [payload]);
+  await core.unmount("save"); // A subscription does not create a capability dependency.
+  await core.mount({ id: "save", requires: [], provides: [], activate(context) { publisher = context; } });
+  await publisher.emit(saved, payload);
+  assert.equal(received.length, 2);
+});
+
+test("events need no publisher registration and use shared key identity within one core", async () => {
+  assert.throws(() => createEventKey(" \t"), /cannot be empty/);
+  const saved = createEventKey("document/saved");
+  const sameName = createEventKey("document/saved");
+  assert.equal(Object.isFrozen(saved), true);
+  const first = new EngineCore();
+  const second = new EngineCore();
+  let context;
+  let received = 0;
+  await first.mount({ id: "first", requires: [], provides: [], async activate(value) {
+    context = value;
+    assert.equal(await value.emit(saved, {}), undefined);
+    value.on(saved, () => { received++; });
+  } });
+  await second.mount({ id: "second", requires: [], provides: [], async activate(value) {
+    await value.emit(saved, {});
+  } });
+  await context.emit(sameName, {});
+  assert.equal(received, 0);
+  await context.emit(saved, {});
+  assert.equal(received, 1);
+});
+
+test("subscriptions stay invisible until asynchronous activation and capability commit succeed", async () => {
+  const saved = createEventKey("document/saved");
+  const ready = createServiceKey("ready");
+  const core = new EngineCore();
+  const activation = deferred();
+  let publisher;
+  let received = 0;
+  await core.mount({ id: "publisher", requires: [], provides: [], activate(context) { publisher = context; } });
+  const mounting = core.mount({ id: "subscriber", requires: [], provides: [ready], async activate(context) {
+    context.on(saved, () => {
+      assert.equal(core.get(ready), "ready");
+      received++;
+    });
+    context.provide(ready, "ready");
+    await context.emit(saved, {});
+    await activation.promise;
+  } });
+  await publisher.emit(saved, {});
+  assert.equal(received, 0);
+  assert.throws(() => core.get(ready), /not registered/);
+  activation.resolve();
+  await mounting;
+  await publisher.emit(saved, {});
+  assert.equal(received, 1);
+});
+
+test("canceling a pending subscription is idempotent and activation cannot restore it", async () => {
+  const event = createEventKey("ready");
+  const core = new EngineCore();
+  const activation = deferred();
+  let context;
+  let cancel;
+  let received = 0;
+  const mounting = core.mount({ id: "subscriber", requires: [], provides: [], activate(value) {
+    context = value;
+    cancel = value.on(event, () => { received++; });
+    return activation.promise;
+  } });
+  cancel();
+  cancel();
+  activation.resolve();
+  await mounting;
+  await context.emit(event, {});
+  assert.equal(received, 0);
+});
+
+test("failed activation and cleanup discard subscriptions and revoke retained event methods", async () => {
+  const event = createEventKey("ready");
+  const core = new EngineCore();
+  let publisher;
+  let failedContext;
+  let received = 0;
+  await core.mount({ id: "publisher", requires: [], provides: [], activate(context) { publisher = context; } });
+  await assert.rejects(core.mount({ id: "broken", requires: [], provides: [], activate(context) {
+    failedContext = context;
+    context.on(event, () => { received++; });
+    throw new Error("activation failed");
+  }, deactivate() {
+    // Even subscriptions created during failed activation cleanup remain pending.
+    failedContext.on(event, () => { received++; });
+    throw new Error("cleanup failed");
+  } }), error => {
+    assert.ok(error instanceof PluginActivationError);
+    assert.equal(error.activationError.message, "activation failed");
+    assert.equal(error.cleanupError.message, "cleanup failed");
+    return true;
+  });
+  await publisher.emit(event, {});
+  assert.equal(received, 0);
+  assert.throws(() => failedContext.on(event, () => {}), /no longer active/);
+  await assert.rejects(failedContext.emit(event, {}), /no longer active/);
+});
+
+test("incomplete capability declarations and commit conflicts also discard staged listeners", async () => {
+  const event = createEventKey("ready");
+  const service = createServiceKey("service");
+  const core = new EngineCore();
+  let publisher;
+  let received = 0;
+  await core.mount({ id: "existing", requires: [], provides: [service], activate(context) {
+    publisher = context;
+    context.provide(service, 42);
+    context.on(event, () => { received++; });
+  } });
+  for (const provide of [false, true]) {
+    await assert.rejects(core.mount({ id: "broken", requires: [], provides: [service], activate(context) {
+      context.on(event, () => { assert.fail("Failed activation listener must not run."); });
+      if (provide) context.provide(service, 99);
+    } }), provide ? /already registered/ : /did not provide declared/);
+  }
+  await publisher.emit(event, {});
+  assert.equal(received, 1);
+  assert.equal(core.get(service), 42);
+});
+
+test("runtime subscriptions have independent cancellation even for the same callback", async () => {
+  const event = createEventKey("ready");
+  const core = new EngineCore();
+  let context;
+  let received = 0;
+  await core.mount({ id: "plugin", requires: [], provides: [], activate(value) { context = value; } });
+  const listener = () => { received++; };
+  const first = context.on(event, listener);
+  const second = context.on(event, listener);
+  await context.emit(event, {});
+  assert.equal(received, 2);
+  first();
+  first();
+  await context.emit(event, {});
+  assert.equal(received, 3);
+  second();
+  await context.emit(event, {});
+  assert.equal(received, 3);
+});
+
+test("unload removes only the owner's listeners and old cancellation cannot affect a remount", async () => {
+  const event = createEventKey("ready");
+  const core = new EngineCore();
+  const received = [];
+  let publisher;
+  let oldContext;
+  let oldCancel;
+  await core.mount({ id: "publisher", requires: [], provides: [], activate(context) {
+    publisher = context;
+    context.on(event, () => { received.push("publisher"); });
+  } });
+  await core.mount({ id: "subscriber", requires: [], provides: [], activate(context) {
+    oldContext = context;
+    oldCancel = context.on(event, () => { received.push("old"); });
+  } });
+  await core.unmount("subscriber");
+  assert.throws(() => oldContext.on(event, () => {}), /no longer active/);
+  await assert.rejects(oldContext.emit(event, {}), /no longer active/);
+  await core.mount({ id: "subscriber", requires: [], provides: [], activate(context) {
+    context.on(event, () => { received.push("new"); });
+  } });
+  oldCancel();
+  await publisher.emit(event, {});
+  assert.deepEqual(received, ["publisher", "new"]);
+});
+
+test("subscriptions remain usable during deactivation and are removed even if cleanup throws", async () => {
+  const event = createEventKey("ready");
+  const core = new EngineCore();
+  const cleanup = deferred();
+  let publisher;
+  let subscriber;
+  let received = 0;
+  await core.mount({ id: "publisher", requires: [], provides: [], activate(context) { publisher = context; } });
+  await core.mount({ id: "subscriber", requires: [], provides: [], activate(context) {
+    subscriber = context;
+    context.on(event, () => { received++; });
+  }, async deactivate() {
+    await subscriber.emit(event, {});
+    await cleanup.promise;
+    throw new Error("cleanup failed");
+  } });
+  const unmounting = core.unmount("subscriber");
+  await publisher.emit(event, {});
+  assert.equal(received, 2);
+  cleanup.resolve();
+  await assert.rejects(unmounting, /cleanup failed/);
+  await publisher.emit(event, {});
+  assert.equal(received, 2);
+  await assert.rejects(subscriber.emit(event, {}), /no longer active/);
+});
+
+test("dispatch snapshots listeners, skips canceled callbacks and waits sequentially", async () => {
+  const event = createEventKey("ready");
+  const core = new EngineCore();
+  const started = deferred();
+  const finish = deferred();
+  const calls = [];
+  let context;
+  let cancelSecond;
+  await core.mount({ id: "plugin", requires: [], provides: [], activate(value) {
+    context = value;
+    value.on(event, async () => {
+      calls.push("first:start");
+      started.resolve();
+      await finish.promise;
+      calls.push("first:end");
+    });
+    cancelSecond = value.on(event, () => { calls.push("second"); });
+    value.on(event, () => { calls.push("third"); });
+  } });
+  const emitting = context.emit(event, {});
+  await started.promise;
+  context.on(event, () => { calls.push("new"); });
+  cancelSecond();
+  assert.deepEqual(calls, ["first:start"]);
+  finish.resolve();
+  await emitting;
+  assert.deepEqual(calls, ["first:start", "first:end", "third"]);
+  calls.length = 0;
+  await context.emit(event, {});
+  assert.deepEqual(calls, ["first:start", "first:end", "third", "new"]);
+});
+
+test("a listener committed during dispatch joins only the next emission", async () => {
+  const event = createEventKey("ready");
+  const core = new EngineCore();
+  const finish = deferred();
+  let publisher;
+  let received = 0;
+  await core.mount({ id: "publisher", requires: [], provides: [], activate(context) {
+    publisher = context;
+    context.on(event, () => finish.promise);
+  } });
+  const emitting = publisher.emit(event, {});
+  await core.mount({ id: "late", requires: [], provides: [], activate(context) {
+    context.on(event, () => { received++; });
+  } });
+  finish.resolve();
+  await emitting;
+  assert.equal(received, 0);
+  await publisher.emit(event, {});
+  assert.equal(received, 1);
+});
+
+test("listener failures are aggregated after all listeners with original errors and owner ids", async () => {
+  const event = createEventKey("ready");
+  const core = new EngineCore();
+  const syncError = new Error("sync failed");
+  const asyncError = new Error("async failed");
+  const calls = [];
+  let publisher;
+  await core.mountAll([
+    { id: "sync", requires: [], provides: [], activate(context) {
+      publisher = context;
+      context.on(event, () => { calls.push("sync"); throw syncError; });
+    } },
+    { id: "async", requires: [], provides: [], activate(context) {
+      context.on(event, async () => { calls.push("async"); throw asyncError; });
+    } },
+    { id: "undefined", requires: [], provides: [], activate(context) {
+      context.on(event, () => { calls.push("undefined"); throw undefined; });
+    } },
+    { id: "healthy", requires: [], provides: [], activate(context) {
+      context.on(event, () => { calls.push("healthy"); });
+    } },
+  ]);
+  await assert.rejects(publisher.emit(event, {}), error => {
+    assert.ok(error instanceof EventDispatchError);
+    assert.equal(error.eventId, "ready");
+    assert.deepEqual([...error.listenerErrors].map(entry => entry.pluginId), ["sync", "async", "undefined"]);
+    assert.deepEqual([...error.listenerErrors].map(entry => entry.error), [syncError, asyncError, undefined]);
+    assert.deepEqual(calls, ["sync", "async", "undefined", "healthy"]);
+    return true;
+  });
+});
+
+test("unload lets a running callback finish while skipping its owner's remaining snapshot callbacks", async () => {
+  const event = createEventKey("ready");
+  const core = new EngineCore();
+  const started = deferred();
+  const finish = deferred();
+  const calls = [];
+  let publisher;
+  await core.mount({ id: "publisher", requires: [], provides: [], activate(context) { publisher = context; } });
+  await core.mount({ id: "subscriber", requires: [], provides: [], activate(context) {
+    context.on(event, async () => {
+      calls.push("start");
+      started.resolve();
+      await finish.promise;
+      calls.push("end");
+    });
+    context.on(event, () => { calls.push("removed"); });
+  } });
+  publisher.on(event, () => { calls.push("other"); });
+  const emitting = publisher.emit(event, {});
+  await started.promise;
+  await core.unmount("subscriber");
+  finish.resolve();
+  await emitting;
+  assert.deepEqual(calls, ["start", "end", "other"]);
+  await publisher.emit(event, {});
+  assert.deepEqual(calls, ["start", "end", "other", "other"]);
+});
+
+test("batch rollback clears new committed and pending listeners while preserving existing subscriptions", async () => {
+  const event = createEventKey("ready");
+  const core = new EngineCore();
+  const received = [];
+  let publisher;
+  await core.mount({ id: "existing", requires: [], provides: [], activate(context) {
+    publisher = context;
+    context.on(event, () => { received.push("existing"); });
+  } });
+  await assert.rejects(core.mountAll([
+    { id: "new", requires: [], provides: [], activate(context) {
+      context.on(event, () => { received.push("new"); });
+    }, deactivate() { throw new Error("rollback failed"); } },
+    { id: "broken", requires: [], provides: [], async activate(context) {
+      context.on(event, () => { received.push("broken"); });
+      await context.emit(event, {});
+      throw new Error("activation failed");
+    } },
+  ]), error => {
+    assert.ok(error instanceof PluginBatchActivationError);
+    assert.equal(error.activationError.message, "activation failed");
+    assert.equal(error.rollbackErrors[0].pluginId, "new");
+    return true;
+  });
+  assert.deepEqual(received, ["existing", "new"]);
+  received.length = 0;
+  await publisher.emit(event, {});
+  assert.deepEqual(received, ["existing"]);
+  assert.equal(core.isMounted("existing"), true);
+  assert.equal(core.isMounted("new"), false);
+  assert.equal(core.isMounted("broken"), false);
 });

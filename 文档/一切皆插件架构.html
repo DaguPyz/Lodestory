@@ -1,0 +1,569 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <meta name="description" content="从一次保存开始，用逐步动画理解能力、插件、内核、依赖、事件与卸载。">
+  <title>一切皆插件 · 交互式架构推演</title>
+  <style>
+    :root { --bg:#131716; --surface:#1a201d; --surface-2:#202823; --line:#333c36; --text:#eef2e9; --muted:#a5afa5; --dim:#7d8a7e; --accent:#c0ec8b; --accent-soft:#263623; --danger:#f4ad94; --radius:12px; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; font-size:15px; line-height:1.7; }
+    button,select { font:inherit; }
+    button,a,select,summary { -webkit-tap-highlight-color:transparent; }
+    button { cursor:pointer; }
+    button:focus-visible,a:focus-visible,select:focus-visible,summary:focus-visible { outline:2px solid var(--accent); outline-offset:5px; }
+    button:disabled { cursor:default; opacity:.35; }
+    a { color:inherit; }
+    ::selection { background:var(--accent); color:var(--bg); }
+    .shell { display:grid; grid-template-columns:238px minmax(0,1fr); min-height:100vh; }
+    .sidebar { position:sticky; top:0; align-self:start; height:100vh; padding:34px 23px 24px; border-right:1px solid var(--line); display:flex; flex-direction:column; }
+    .brand { display:flex; align-items:center; gap:13px; text-decoration:none; }
+    .brand-symbol { width:34px; height:34px; color:var(--accent); }
+    .brand strong { display:block; font-size:16px; letter-spacing:.03em; font-weight:650; }
+    .brand small { display:block; color:var(--dim); font-size:10px; line-height:1.5; letter-spacing:.16em; }
+    .side-caption { margin:44px 10px 15px; font-size:10px; letter-spacing:.16em; color:var(--dim); }
+    .chapters { display:flex; flex-direction:column; gap:5px; }
+    .chapter { width:100%; display:flex; align-items:center; gap:13px; text-align:left; border:0; padding:12px 11px; background:transparent; color:var(--muted); border-radius:7px; transition:background .2s,color .2s; }
+    .chapter:hover { color:var(--text); background:#ffffff05; }
+    .chapter[aria-current="step"] { color:var(--accent); background:var(--accent-soft); }
+    .chapter-no { font:11px ui-monospace,SFMono-Regular,Consolas,monospace; color:var(--dim); }
+    .chapter[aria-current="step"] .chapter-no { color:var(--accent); }
+    .chapter-name { font-size:13px; }
+    .chapter.done .chapter-no { color:var(--accent); }
+    .side-note { border-top:1px solid var(--line); padding-top:20px; margin:26px 10px 0; color:var(--dim); font-size:12px; }
+    .side-note strong { display:block; font-weight:500; color:var(--muted); margin-bottom:5px; }
+    .side-footer { margin-top:auto; padding:22px 10px 0; color:var(--dim); font-size:11px; }
+    .side-footer kbd { border:1px solid var(--line); border-radius:3px; padding:1px 5px; margin-right:3px; font:11px ui-monospace,monospace; }
+    main { min-width:0; padding:0 46px 32px; max-width:1520px; width:100%; margin:auto; }
+    .topbar { height:76px; display:flex; align-items:center; justify-content:space-between; border-bottom:1px solid var(--line); gap:20px; }
+    .topbar-label { color:var(--dim); font-size:11px; letter-spacing:.16em; }
+    .source-button { color:var(--muted); background:none; border:0; font-size:12px; padding:8px 0; display:flex; align-items:center; gap:9px; }
+    .source-button:hover { color:var(--accent); }
+    .mobile-nav { display:none; }
+    .intro { padding:37px 0 26px; }
+    .eyebrow { display:flex; align-items:center; gap:12px; font-size:11px; letter-spacing:.06em; color:var(--accent); margin-bottom:12px; }
+    .eyebrow .dash { display:block; width:25px; height:1px; background:var(--accent); }
+    h1 { font-size:clamp(28px,3vw,43px); font-weight:560; line-height:1.36; letter-spacing:-.055em; margin:0 0 12px; }
+    h1 em { color:var(--accent); font-style:normal; }
+    .lead { font-size:14px; max-width:870px; color:var(--muted); margin:0; }
+    .reasoning { display:grid; grid-template-columns:1fr 1fr 1fr; margin:0 0 25px; padding:16px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); gap:25px; }
+    .reason { display:grid; grid-template-columns:30px 1fr; gap:8px; align-items:start; }
+    .reason-label { color:var(--dim); font-size:10px; padding-top:2px; }
+    .reason p { margin:0; font-size:12px; line-height:1.8; color:var(--muted); }
+    .reason:last-child p { color:var(--text); }
+    .workbench { border:1px solid var(--line); border-radius:var(--radius); overflow:hidden; background:var(--surface); }
+    .bench-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 21px; border-bottom:1px solid var(--line); }
+    .bench-title { display:flex; align-items:center; gap:9px; font-size:12px; color:var(--text); }
+    .dot { width:5px; height:5px; border-radius:100%; background:var(--accent); }
+    .bench-note { font-size:10px; color:var(--dim); }
+    .bench-body { display:grid; grid-template-columns:minmax(0,1fr) minmax(260px,31%); }
+    .visual-side { min-width:0; display:flex; flex-direction:column; }
+    .scene-tools { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:15px 21px 0; min-height:43px; }
+    .phase-label { color:var(--dim); font:10px ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.07em; }
+    .choice-group { display:flex; flex-wrap:wrap; gap:3px; }
+    .choice { padding:4px 10px; border:1px solid transparent; border-radius:4px; background:transparent; color:var(--muted); font-size:11px; transition:color .2s,background .2s; }
+    .choice[aria-pressed="true"] { background:var(--accent-soft); color:var(--accent); border-color:#c0ec8b22; }
+    .choice:hover { color:var(--text); }
+    .scene-select { max-width:190px; padding:4px 28px 4px 9px; color:var(--accent); background:var(--surface-2); border:1px solid var(--line); border-radius:4px; font-size:11px; }
+    .scene { position:relative; height:284px; margin:0 20px; isolation:isolate; }
+    .scene.complex { height:350px; }
+    .scene.overview { height:440px; }
+    .scene::before { content:""; position:absolute; inset:20px 0; opacity:.32; z-index:-1; background-image:radial-gradient(#738471 1px,transparent 1px); background-size:19px 19px; mask-image:radial-gradient(ellipse,#0009,transparent 75%); }
+    .wires { position:absolute; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
+    .wire { stroke:#515f50; stroke-width:1.3; fill:none; }
+    .wire.future { stroke-dasharray:4 5; }
+    .wire.active { stroke:var(--accent); stroke-width:2; }
+    .wire.error { stroke:var(--danger); }
+    .wire-label { fill:var(--muted); font:10px ui-monospace,SFMono-Regular,Consolas,monospace; paint-order:stroke; stroke:var(--surface); stroke-width:6px; stroke-linejoin:round; }
+    .wire-label.active { fill:var(--accent); }
+    .signal { fill:var(--accent); }
+    .node { position:absolute; width:clamp(94px,23%,155px); transform:translate(-50%,-50%); padding:13px 11px; background:#202822; border:1px solid #495345; border-radius:7px; text-align:center; box-shadow:0 8px 18px #0001; transition:background .3s,border-color .3s,opacity .3s,box-shadow .3s; }
+    .node.active { border-color:var(--accent); background:#2c3b26; box-shadow:0 0 0 4px #c0ec8b08,0 10px 22px #0002; }
+    .node.complete { border-color:#789464; }
+    .node.error { border-color:var(--danger); background:#372b26; }
+    .node.removed { opacity:.28; border-style:dashed; }
+    .node.future { border-style:dashed; }
+    .node-kind { font-size:9px; letter-spacing:.09em; color:var(--dim); margin-bottom:5px; }
+    .node.active .node-kind { color:var(--accent); }
+    .node-title { font-size:14px; font-weight:550; line-height:1.5; }
+    .node-sub { font:10px/1.6 ui-monospace,SFMono-Regular,Consolas,monospace; color:var(--muted); margin-top:4px; overflow-wrap:anywhere; }
+    .node-state { font-size:10px; color:var(--accent); margin-top:7px; min-height:16px; }
+    .node-state:empty { display:none; }
+    .node.error .node-state { color:var(--danger); }
+    .scene-annotation { position:absolute; bottom:2px; width:100%; text-align:center; font-size:11px; color:var(--dim); }
+    .caption { display:flex; align-items:flex-start; gap:13px; padding:16px 21px 20px; min-height:85px; border-top:1px solid #333c3680; }
+    .caption-no { color:var(--accent); font:11px/2 ui-monospace,monospace; flex-shrink:0; }
+    .caption strong { display:block; font-size:13px; font-weight:500; margin:0 0 2px; }
+    .caption p { color:var(--muted); font-size:12px; line-height:1.65; margin:0; }
+    .code-side { border-left:1px solid var(--line); background:#161c18; display:flex; flex-direction:column; min-width:0; }
+    .code-heading { display:flex; align-items:center; justify-content:space-between; padding:16px 19px; color:var(--dim); font:10px ui-monospace,monospace; }
+    .code-heading .language { font-size:9px; color:var(--accent); }
+    pre { margin:0; overflow-x:auto; font:11px/1.95 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; tab-size:2; }
+    .code-view { padding:0 14px 15px 0; flex:1; }
+    .code-line { display:block; padding:0 12px 0 19px; min-height:21px; border-left:2px solid transparent; transition:background .2s; }
+    .code-line.highlight { background:#c0ec8b0d; border-left-color:var(--accent); }
+    .syntax-comment { color:#869386; }
+    .syntax-keyword { color:#c0ec8b; }
+    .syntax-string { color:#c9c9a2; }
+    .syntax-function { color:#dbe7d3; }
+    .code-footnote { padding:11px 19px 16px; font-size:10px; color:var(--dim); border-top:1px solid #333c3680; line-height:1.8; }
+    .bench-controls { padding:14px 21px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--line); gap:16px; }
+    .controls-left { display:flex; align-items:center; gap:8px; }
+    .button { padding:8px 15px; border:1px solid var(--line); border-radius:6px; display:inline-flex; align-items:center; justify-content:center; gap:8px; color:var(--text); background:transparent; font-size:12px; line-height:1.6; text-decoration:none; transition:background .2s,transform .2s,border-color .2s; }
+    .button:hover { background:#ffffff08; border-color:#63715c; }
+    .button:active { transform:translateY(1px); }
+    .button.primary { background:var(--accent); color:#23301d; border-color:var(--accent); font-weight:550; }
+    .button.primary:hover { background:#d0f3a5; }
+    .button.icon { width:34px; height:36px; padding:0; color:var(--muted); }
+    .button svg { width:13px; height:13px; }
+    .play-state { font-size:10px; color:var(--dim); display:flex; align-items:center; gap:7px; }
+    .play-state.running { color:var(--accent); }
+    .play-state .dot { background:currentColor; }
+    .steps { display:flex; gap:4px; padding:14px 0 7px; margin:0 21px; }
+    .step { flex:1; min-width:0; padding:9px 5px 9px 0; background:transparent; border:0; border-top:2px solid var(--line); text-align:left; color:var(--dim); transition:border-color .2s,color .2s; }
+    .step .step-num { margin-right:5px; font:10px ui-monospace,monospace; }
+    .step .step-name { font-size:10px; }
+    .step.completed { border-color:#788f62; color:var(--muted); }
+    .step[aria-current="step"] { border-color:var(--accent); color:var(--accent); }
+    .takeaway { margin:25px 0 0; display:flex; align-items:baseline; gap:19px; }
+    .takeaway-label { white-space:nowrap; color:var(--accent); font-size:10px; letter-spacing:.1em; }
+    .takeaway p { margin:0; color:var(--text); font-size:14px; }
+    .deeper { margin-top:18px; border-top:1px solid var(--line); }
+    .deeper summary { list-style:none; display:flex; justify-content:space-between; padding:15px 0; font-size:12px; color:var(--muted); cursor:pointer; }
+    .deeper summary::-webkit-details-marker { display:none; }
+    .deeper summary::after { content:"＋"; color:var(--accent); }
+    .deeper[open] summary::after { content:"−"; }
+    .detail-content { padding:0 0 20px; font-size:12px; line-height:1.9; color:var(--muted); }
+    .detail-content p { margin:0 0 9px; }
+    .detail-content strong { color:var(--text); font-weight:500; }
+    .detail-content code,.modal code { font:11px ui-monospace,monospace; background:#c0ec8b09; color:var(--accent); padding:2px 4px; border-radius:3px; overflow-wrap:anywhere; }
+    .detail-content table { width:100%; border-collapse:collapse; margin:12px 0; }
+    .detail-content th,.detail-content td { text-align:left; padding:10px 12px 10px 0; border-bottom:1px solid var(--line); vertical-align:top; }
+    .detail-content th { color:var(--text); font-weight:500; }
+    .chapter-footer { display:flex; justify-content:space-between; gap:18px; padding-top:18px; align-items:center; }
+    .chapter-footer .previous { padding-left:0; border-color:transparent; color:var(--muted); }
+    .chapter-footer .next { color:var(--accent); }
+    .chapter-counter { color:var(--dim); font:10px ui-monospace,monospace; }
+    .lab-banner { background:#292e21; border-bottom:1px solid var(--line); padding:9px 21px; color:#c6d5ab; font-size:11px; line-height:1.7; }
+    .lab-banner:empty { display:none; }
+    .modal { border:1px solid #4b5844; border-radius:12px; background:var(--surface); color:var(--text); padding:29px; width:min(640px,calc(100% - 32px)); max-height:85vh; overflow:auto; }
+    .modal::backdrop { background:#07110bcc; backdrop-filter:blur(6px); }
+    .modal-title { display:flex; align-items:center; justify-content:space-between; gap:18px; margin-bottom:18px; }
+    .modal h2 { font-size:20px; margin:0; font-weight:550; }
+    .modal p { font-size:13px; color:var(--muted); margin:12px 0; }
+    .modal ul { padding-left:20px; color:var(--muted); font-size:12px; }
+    .modal li { margin-bottom:9px; }
+    .modal .button { margin-top:12px; }
+    .enter { animation:enter .35s ease both; }
+    @keyframes enter { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+    @media (min-width:1600px) { .scene { height:320px; } .node { width:160px; padding:17px 13px; } .node-title { font-size:16px; } .code-view { font-size:12px; } }
+    @media (max-width:1200px) { .shell { grid-template-columns:202px minmax(0,1fr); } .sidebar { padding:29px 15px 21px; } main { padding:0 28px 28px; } .bench-body { grid-template-columns:minmax(0,1fr) 260px; } .node { width:clamp(90px,25%,130px); padding:11px 8px; } .node-title { font-size:13px; } .scene { margin:0 15px; } .reasoning { gap:16px; } }
+    @media (max-width:1020px) { .shell { grid-template-columns:180px minmax(0,1fr); } .sidebar { padding-left:11px; padding-right:11px; } .brand { gap:8px; } .brand strong { font-size:14px; } .brand-symbol { width:28px; } main { padding:0 24px 24px; } .bench-body { grid-template-columns:1fr; } .code-side { border-left:0; border-top:1px solid var(--line); } .code-view { padding-bottom:18px; max-height:270px; overflow:auto; } .code-footnote { display:none; } .scene { height:280px; } .reason { display:block; } .reason-label { display:block; margin-bottom:4px; } .intro { padding-top:27px; } }
+    @media (max-width:720px) { .shell { display:block; } .sidebar { display:none; } main { padding:0 20px 23px; } .topbar { height:63px; } .topbar-label { color:var(--accent); font-size:10px; letter-spacing:.07em; } .source-button { font-size:11px; } .mobile-nav { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:18px 0 0; } .mobile-nav label { font-size:10px; color:var(--dim); letter-spacing:.08em; } .mobile-nav select { color:var(--text); background:var(--surface); border:1px solid var(--line); padding:7px 10px; border-radius:5px; font-size:12px; min-width:185px; } .intro { padding:24px 0 21px; } h1 { font-size:29px; letter-spacing:-.04em; } .lead { font-size:12px; line-height:1.9; } .reasoning { gap:13px; padding:13px 0; margin-bottom:20px; } .reason p { font-size:11px; } .bench-note { font-size:9px; max-width:134px; text-align:right; } .bench-bar { padding:12px 14px; } .scene-tools { padding:14px 14px 0; flex-wrap:wrap; gap:7px; } .scene { height:285px; margin:0 12px; } .node { width:clamp(84px,26%,120px); padding:11px 6px; } .node-title { font-size:12px; } .node-kind { font-size:8px; } .node-sub { font-size:9px; } .node-state { font-size:9px; } .caption { padding:14px; min-height:94px; gap:10px; } .caption strong { font-size:12px; } .caption p { font-size:11px; } .bench-controls { padding:13px 14px; gap:8px; } .button { padding:8px 10px; font-size:11px; } .play-state { font-size:9px; } .step .step-name { font-size:9px; line-height:1.5; display:block; margin-top:4px; } .takeaway { gap:12px; align-items:flex-start; } .takeaway-label { margin-top:4px; } .takeaway p { font-size:12px; } .lab-banner { padding:9px 14px; font-size:10px; } .chapter-counter { display:none; } }
+    @media (max-width:1020px) { .scene-tools { order:0; } .bench-controls { order:1; border-top:0; border-bottom:1px solid var(--line); margin-top:8px; } .scene { order:2; } .steps { order:3; } .caption { order:4; } }
+    @media (pointer:coarse) { .button,.choice,.scene-select,.mobile-nav select,.step { min-height:44px; } }
+    @media (max-width:380px) { main { padding:0 14px 20px; } .node { width:82px; } .scene { margin:0 8px; } .node-sub { font-size:8px; } .scene-annotation { font-size:10px; } .controls-left { gap:5px; } .button { gap:5px; } .play-state { display:none; } .choice { padding:4px 7px; } }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } *,*::before,*::after { animation:none!important; transition:none!important; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar" aria-label="章节导航">
+      <a class="brand" href="#ordinary" aria-label="一切皆插件，返回第一章">
+        <svg class="brand-symbol" viewBox="0 0 34 34" fill="none" aria-hidden="true"><path d="M10 2v9M24 2v9M7 11h20v7a10 10 0 0 1-20 0v-7ZM17 28v5" stroke="currentColor" stroke-width="2.3"/><path d="M11 17h12" stroke="currentColor" stroke-width="2.3"/></svg>
+        <span><strong>一切皆插件</strong><small>AN INTERACTIVE FIELD GUIDE</small></span>
+      </a>
+      <div class="side-caption">从一次保存，推导整套架构</div>
+      <nav class="chapters" id="chapters"></nav>
+      <div class="side-note"><strong>先看到问题，再引入机制。</strong>每一步都沿用上一步的代码，<br>只补上新需求缺少的能力。</div>
+      <div class="side-footer"><kbd>←</kbd><kbd>→</kbd> 切换章节<br><span style="display:block;margin-top:7px">基于项目架构文档 · 8 个步骤</span></div>
+    </aside>
+    <main>
+      <header class="topbar"><span class="topbar-label">PLUGIN ARCHITECTURE / 架构推演</span><button class="source-button" id="source">文档与实现范围 <span aria-hidden="true">↗</span></button></header>
+      <div class="mobile-nav"><label for="chapter-select">当前章节</label><select id="chapter-select"></select></div>
+      <section class="intro" aria-labelledby="lesson-title"><div class="eyebrow"><span class="dash"></span><span id="eyebrow"></span></div><h1 id="lesson-title"></h1><p class="lead" id="lead"></p></section>
+      <div class="reasoning" id="reasoning" aria-label="本步推导依据"></div>
+      <section class="workbench" aria-label="架构运行演示">
+        <div class="bench-bar"><span class="bench-title"><span class="dot"></span>运行现场</span><span class="bench-note">教学模拟 · 不写入真实文件</span></div>
+        <div class="lab-banner" id="lab-banner"></div>
+        <div class="bench-body">
+          <div class="visual-side"><div class="scene-tools"><span class="phase-label" id="phase"></span><div id="scene-options"></div></div><div class="scene" id="scene" role="img" aria-label="本章调用关系图"></div><div class="caption" aria-live="polite" aria-atomic="true"><span class="caption-no" id="caption-no">00</span><div><strong id="caption-title"></strong><p id="caption-text"></p></div></div><nav class="steps" id="steps" aria-label="演示步骤，点击可直接查看"></nav><div class="bench-controls"><div class="controls-left"><button class="button primary" id="play"><svg viewBox="0 0 14 14" aria-hidden="true"><path d="M4 2.5 11 7 4 11.5Z" fill="currentColor"/></svg><span id="play-label">播放演示</span></button><button class="button" id="single-step">单步执行 <span aria-hidden="true">→</span></button><button class="button icon" id="reset" aria-label="重置本章演示"><svg viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 5a5.5 5.5 0 1 1-.5 5M3 1v4h4" stroke="currentColor" stroke-width="1.4"/></svg></button></div><span class="play-state" id="play-state"><span class="dot"></span><span id="play-status">等待操作</span></span></div></div>
+          <div class="code-side"><div class="code-heading"><span id="code-name">save.ts</span><span class="language" id="code-language">TYPESCRIPT</span></div><pre class="code-view"><code id="code"></code></pre><div class="code-footnote" id="code-footnote"></div></div>
+        </div>
+
+      </section>
+      <div class="takeaway"><span class="takeaway-label">记住这一点</span><p id="takeaway"></p></div>
+      <details class="deeper" id="deeper"><summary>再理解深一点</summary><div class="detail-content" id="detail-content"></div></details>
+      <footer class="chapter-footer"><button class="button previous" id="previous"><span aria-hidden="true">←</span><span>上一章</span></button><span class="chapter-counter" id="chapter-counter"></span><button class="button next" id="next"><span id="next-label">下一章</span><span aria-hidden="true">→</span></button></footer>
+      <noscript><p>此网页的动画需要启用 JavaScript；完整文字说明请查看同目录的《一切皆插件架构.md》。</p></noscript>
+    </main>
+  </div>
+  <dialog class="modal" id="source-dialog" aria-labelledby="source-title"><div class="modal-title"><h2 id="source-title">文档与实现范围</h2><button class="button icon" id="close-dialog" aria-label="关闭">×</button></div><p>本页将《一切皆插件架构：从普通 JS 代码逐步推导》压缩为 8 个连续步骤。图、代码和运行结果用于教学推演。</p><p><strong>已实现：</strong><code>src/plugin-core</code> 中的 Core、C、能力 key、context、依赖检查、批量排序、激活提交、卸载保护与失败回滚，以及 EventBus、EventKey、on/emit 和订阅清理。</p><p><strong>尚未实现：</strong>外部插件加载、多提供者选择、事件目录生成和流程拦截协议。</p><p>存储、保存、日志插件均为教学示例，尚未接入 Lodestory 业务；本页也不会操作文件或挂载真实插件。</p><a class="button" href="./一切皆插件架构.md" target="_blank" rel="noopener">查看原文 <span aria-hidden="true">↗</span></a><button class="button" id="jump-overview">查看完整运行</button></dialog>
+  <script>
+  (() => {
+    'use strict';
+    const $ = id => document.getElementById(id);
+    const esc = value => String(value).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const N = (id,title,sub,x,y,kind='普通函数',extra={}) => ({id,title,sub,x,y,kind,...extra});
+    const L = (id,from,to,label='',extra={}) => ({id,from,to,label,...extra});
+    const S = (label,title,text,nodes=[],links=[],lines=[],extra={}) => ({label,title,text,nodes,links,lines,...extra});
+    let chapter = 0, cursor = -1, timer = null, playing = false;
+    let choice = 'file', scenario = 'normal', listener = 'on', cleanup = 'blocked', overview = 'startup';
+    let graph = {}, sequence = [];
+    const visited = new Set();
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+    const lessons = [
+      {
+        id:'ordinary', nav:'一次普通保存', eyebrow:'01 / 从已有代码开始', title:'一次保存，<em>还不需要插件。</em>',
+        lead:'用户点击按钮，页面调用保存函数，保存函数再调用文件写入。三个普通调用，已经能完成工作。',
+        reasons:['已有文件写入函数。','现在只需要保存到文件。','直接调用就够了。'],
+        takeaway:'先有真实需求，再增加机制；普通函数本身并没有问题。', phase:'运行时 / 用户点击保存', codeName:'save.js', language:'JAVASCRIPT',
+        code:()=>`async function saveDocument(doc) {\n  await writeToFile(doc);\n}\n\n// 用户点击保存按钮\nawait saveDocument(document);`,
+        footnote:'函数被调用时才执行业务；定义函数不会写入文件。',
+        detail:'<p>运行顺序是：页面收到点击 → 调用 <code>saveDocument(document)</code> → 保存函数等待 <code>writeToFile(document)</code> → 写入完成，保存函数返回。</p><p>当前限制只有一个：文件实现固定在保存函数内部。只要还没有更换实现的需求，就没有必要引入插件管理。</p>',
+        build:()=>({nodes:[N('page','页面','document',14,47,'调用者'),N('save','保存函数','saveDocument',50,47),N('file','文件写入','writeToFile',86,47)],links:[L('invoke','page','save','调用'),L('write','save','file','await')],annotation:'数据：{ id: "doc-01", content: "Hello" }'}),
+        steps:()=>[
+          S('点击保存','页面发起保存','用户点击按钮，页面把文档交给 saveDocument。',['page','save'],['invoke'],[5]),
+          S('执行写入','保存函数调用文件写入','saveDocument 内部固定调用 writeToFile，并等待它完成。',['save','file'],['write'],[1]),
+          S('完成返回','写入成功，保存返回','成功就返回；写入失败会抛错，页面负责显示失败。',['page','save','file'],[],[1,5],{states:{file:'写入成功',save:'返回'},complete:['file']})
+        ]
+      },
+      {
+        id:'replace', nav:'替换实现与契约', eyebrow:'02 / 新需求：测试时改写内存', title:'要换写入方式，<em>先改成参数。</em>',
+        lead:'写入实现固定在函数里，测试就会碰到文件。把写入函数作为参数传入，保存流程便可以原样复用。',
+        reasons:['保存函数写死文件实现。','正常写文件，测试写内存。','外部传入遵守同一约定的函数。'],
+        takeaway:'保存流程只知道“怎么调用写入”，不必知道“写到哪里”。', phase:'先在启动时选择 / 再在运行时调用', codeName:'create-save.ts', language:'TYPESCRIPT',
+        code:()=>`type WriteDocument =\n  (doc: DocumentData) => Promise<void>;\n\nfunction createSave(write: WriteDocument) {\n  return async (doc: DocumentData) => {\n    await write(doc);\n  };\n}\n\n// 启动时决定用谁\nconst save = createSave(${choice==='file'?'writeToFile':'writeToMemory'});\n\n// 点击时只传文档\nawait save(document);`,
+        footnote:'createSave 只创建函数；返回的 save 保留所选 write，点击时才写入。',
+        detail:'<p><strong>为什么需要契约？</strong>能传函数不代表任何函数都可用。双方必须约定输入 <code>{ id, content }</code>，返回 <code>Promise&lt;void&gt;</code>，成功代表写入完成，失败用 Promise 拒绝表达。这份约定就是能力契约。</p><p>TypeScript 检查输入输出类型，不能证明文件真的写好了；实现仍要履行约定。</p><p><strong>为什么再加 createSave？</strong>写入方式通常在启动时确定，因此让 <code>createSave(write)</code> 返回记住所选写入函数的 <code>save</code>。每次点击只传文档，不必重复选择实现。普通参数传递到这里仍然够用。</p>',
+        build:()=>({nodes:[N('startup','启动入口','选择 write',14,45,'装配者'),N('save','保存函数','createSave(write)',50,45,'返回的函数'),N('impl',choice==='file'?'文件写入':'内存写入',choice==='file'?'writeToFile':'writeToMemory',86,45,'可替换实现')],links:[L('select','startup','save','传入 write'),L('execute','save','impl','直接调用')],annotation:'切换右上角的实现：保存函数无需修改'}),
+        steps:()=>[
+          S('选择实现',choice==='file'?'启动时选择文件写入':'启动时选择内存写入','启动入口把选中的函数传给 createSave；此时还没有保存任何文档。',['startup','save'],['select'],[10]),
+          S('保留关系','createSave 返回保存函数','返回的 save 记住 write；输入输出约定相同，所以不用改变保存流程。',['save'],[],[3,4,7],{states:{save:'准备好，尚未执行'}}),
+          S('运行保存','点击时，save 直接调用所选 write','页面传入文档，save 用之前保留的函数完成写入。',['save','impl'],['execute'],[5,13]),
+          S('完成返回',choice==='file'?'文档写入文件':'文档写入内存','结果位置改变了，保存函数的调用方式没有改变。',['impl'],[],[5],{states:{impl:choice==='file'?'文件中有文档':'内存中有文档'},complete:['impl']})
+        ]
+      },
+      {
+        id:'registry', nav:'能力注册表 C', eyebrow:'03 / 新需求：功能自行连接', title:'让功能自己找依赖，<em>需要共同的表。</em>',
+        lead:'启动代码不想再逐个编写“谁需要谁”。因此存储登记写入函数，保存从同一张表里取出它，再建立自己的调用关系。',
+        reasons:['启动入口亲自传递每个依赖。','入口只选择功能，功能自行连接。','增加“能力 key → 实现”的查找表 C。'],
+        takeaway:'C 负责找到函数；取出以后，业务代码直接调用函数。', phase:'启动时登记与查询 / 运行时直接调用', codeName:'capabilities.ts', language:'TYPESCRIPT',
+        code:()=>`// 契约模块：创建一次，双方共享\nconst storageKey =\n  createServiceKey<WriteDocument>(\n    "document/write"\n  );\n\n// 存储登记实现\nC.register(storageKey, "storage", writeToFile);\n\n// 保存查询并保留实现\n${scenario==='different-key'?'const otherKey = createServiceKey<WriteDocument>(\n  "document/write"\n);\n':''}const write = C.get(${scenario==='different-key'?'otherKey':'storageKey'});\nconst save = createSave(write);\n\n// 运行时直接调用 save → write\nawait save(document);`,
+        footnote:'C 是 CapabilityRegistry 的图示简称；登记还记录提供者 ID。',
+        detail:'<p><strong>这张表从哪里来？</strong>先是一个 Map，提供者写入“标识 → 函数”，使用者按标识读取。后来为了处理缺失、冲突和按插件归属清理，将规则集中为 <code>CapabilityRegistry</code>，简称 C。最终由 Core 创建并持有。</p><p><strong>key 为什么要共享？</strong><code>ServiceKey&lt;T&gt;</code> 由契约模块创建：名称用于说明，唯一 <code>Symbol</code> 用于运行时匹配，泛型关联接口。两个分别创建的同名 key 不是同一项能力。两边必须导入同一个 key。</p><p>当前一个 key 只允许一个提供者，缺失或重复登记会报错。能力可以是函数，也可以是含多个相关方法的对象；C 不会把插件对象自动变成业务能力。</p>',
+        build:()=>({nodes:[N('storage','存储功能','writeToFile',15,27,'提供者'),N('registry','能力表 C','key → 实现 + 归属',50,48,'共同查找位置'),N('save','保存功能','createSave(write)',85,27,'使用者'),N('call','运行时','save → write',85,78,'直接调用')],links:[L('provide','storage','registry','登记', {fromPort:'bottom',toPort:'left'}),L('get','save','registry','查询',{fromPort:'bottom',toPort:'right'}),L('direct','save','call','取出后直接调用',{fromPort:'bottom',toPort:'top'})],annotation:'注册表交出引用，不代替函数执行保存'}),
+        steps:()=>scenario==='different-key'?[
+          S('登记实现','存储使用 storageKey 登记','能力表保存 token A → writeToFile；名称只是 document/write。',['storage','registry'],['provide'],[7],{states:{registry:'token A 已登记'}}),
+          S('另建同名 key','保存创建了另一个同名 key','otherKey 的名字相同，但 token B 与 token A 不同。名称相同不能替代共享标识。',['save'],[],[10,11,12],{states:{save:'使用 token B'}}),
+          S('查询失败','C 查不到 token B','立即报缺失；保存函数无法创建。两边应导入同一个 storageKey。',['save','registry'],['get'],[13],{error:['save','registry'],states:{registry:'能力缺失'}})
+        ]:[
+          S('登记实现','存储把写入函数登记到 C','输入是共享的 storageKey、提供者 ID 和函数引用；登记不执行写入。',['storage','registry'],['provide'],[7],{states:{registry:'storageKey → writeToFile'}}),
+          S('查询实现','保存按同一个 key 查询','C 找到并返回 writeToFile 的引用。',['save','registry'],['get'],[10],{states:{save:'取得 writeToFile'}}),
+          S('建立关系','保存创建并保留 save','保存功能自行调用 createSave(write)，启动入口不再亲自连接每个依赖。',['save'],[],[11],{states:{save:'save 已创建'}}),
+          S('直接调用','运行时不再经过 C 转发','点击后，save 直接调用已取得的 write；C 不规定业务步骤。',['save','call'],['direct'],[14],{states:{call:'文档已写入'}})
+        ]
+      },
+      {
+        id:'core', nav:'插件 P 与内核 Core', eyebrow:'04 / 新需求：功能能加入，也能移除', title:'功能要有生命周期，<em>所以才有插件。</em>',
+        lead:'只有初始化函数，无法找到某个功能或释放它的资源。给功能补上 ID 和清理方法，再由 Core 统一调用和记录。',
+        reasons:['各功能已经能登记、查询能力。','还要加入、移除，并清理归属。','统一插件格式，由 Core 管理生命周期。'],
+        takeaway:'Core 保存插件对象用于管理；C 保存能力实现用于业务调用。', phase:'启动时 / 一个 Core 为每个插件创建专用 context', codeName:'storage-plugin.ts', language:'TYPESCRIPT',
+        code:()=>`const storagePlugin = {\n  id: "file-storage",\n  requires: [],\n  provides: [storageKey],\n\n  activate(context) {\n    context.provide(storageKey, writeToFile);\n  },\n\n  deactivate() {\n    // 释放自己创建的句柄、定时器\n  },\n};\n\nconst core = new EngineCore();\nawait core.mount(storagePlugin);`,
+        footnote:'挂载：交给 Core 加入运行；激活：执行初始化；卸载：清理并移除。',
+        detail:'<p><strong>谁创建谁？</strong>应用启动入口创建一个 <code>EngineCore</code>，Core 创建并持有 C。功能作者编写插件对象 P：<code>id</code>、<code>requires</code>、<code>provides</code>、<code>activate</code> 和可选的 <code>deactivate</code>。</p><p><strong>context 为什么出现？</strong>卸载时需要按归属删除能力。Core 已经知道正在激活哪个插件，所以为它创建绑定该 ID 的 <code>PluginContext</code>。插件调用 <code>context.provide(key,value)</code> 时，Core 自动附上归属；<code>context.get(key)</code> 则查询同一个 C 并检查声明。</p><p>context 是插件操作内核的入口，不是一个新的业务层；每个插件都有自己的 context，但它们连接同一个 Core 和同一个 C。</p><p><strong>声明不等于实现：</strong><code>provides</code> 是激活前的承诺，<code>provide</code> 是激活中实际交出函数。<code>requires/provides</code> 没有内容也必须写 <code>[]</code>；下一章用这些声明推导启动顺序。</p>',
+        build:()=>({nodes:[N('core','内核 Core','EngineCore',16,48,'应用创建'),N('plugin','存储插件 P','file-storage',53,22,'统一生命周期'),N('context','专用 context','绑定 file-storage ID',53,72,'Core 创建'),N('registry','能力表 C','实现 + 提供者 ID',86,48,'Core 持有')],links:[L('activate','core','plugin','activate(ctx)',{fromPort:'top',toPort:'left'}),L('create','core','context','创建并绑定 ID',{fromPort:'bottom',toPort:'left'}),L('provide','context','registry','provide',{fromPort:'right',toPort:'bottom'})],annotation:'一个 Core · 一张 C · 每个插件一个 context'}),
+        steps:()=>[
+          S('创建内核','应用创建 Core，Core 持有 C','应用把 storagePlugin 交给 mount。Core 读取 ID 和能力声明。',['core','registry'],[],[14,15]),
+          S('创建 context','Core 为当前插件绑定归属','Core 创建专用 context，记住 file-storage，插件无需再次填写提供者 ID。',['core','context'],['create'],[15],{states:{context:'owner = file-storage'}}),
+          S('调用激活','Core 调用并等待 activate(context)','这是管理者触发初始化，不是用户在保存文档。',['core','plugin'],['activate'],[5],{states:{plugin:'激活中'}}),
+          S('交出能力','插件经 context 交出写入函数','能力先暂存；完整性检查通过后，Core 提交到 C，并记录插件挂载成功。',['context','registry','plugin'],['provide'],[6],{states:{registry:'writeToFile / file-storage',plugin:'已挂载'}})
+        ]
+      },
+      {
+        id:'dependencies', nav:'依赖、排序与激活', eyebrow:'05 / 新需求：输入顺序随意，启动仍然可靠', title:'谁先准备好，<em>由依赖来决定。</em>',
+        lead:'保存先启动会查不到写入。Core 不懂保存业务，因此插件必须声明“需要什么、提供什么”，让 Core 在运行前检查并排序。',
+        reasons:['保存必须先取得写入函数。','批量输入顺序不应决定成败。','先读声明、检查排序，再逐个激活提交。'],
+        takeaway:'声明决定顺序；激活真正交出实现。两者缺一不可。', phase:'启动时 / mountAll 整批预检', codeName:'bootstrap.ts', language:'TYPESCRIPT',
+        code:()=>scenario==='cycle'?`// A 需要 B，B 又需要 A\nconst A = {\n  requires: [writeKey],\n  provides: [saveKey],\n  /* ... */\n};\nconst B = {\n  requires: [saveKey],\n  provides: [writeKey],\n  /* ... */\n};\n\n// 预检拒绝，尚未激活任何插件\nawait core.mountAll([A, B]);`:scenario==='missing'?`const savePlugin = {\n  requires: [storageKey],\n  provides: [saveKey],\n  /* ... */\n};\n\n// 本批次与 C 都没有 storageKey\nawait core.mountAll([savePlugin]);`:scenario==='conflict'?`// 两个插件承诺同一项能力\nconst filePlugin = { provides: [storageKey], /* … */ };\nconst memoryPlugin = { provides: [storageKey], /* … */ };\n\n// 当前一个 key 只允许一个提供者\nawait core.mountAll([\n  savePlugin,\n  filePlugin,\n  memoryPlugin,\n]);`:`// 输入顺序：保存放在前面\nawait core.mountAll([\n  savePlugin,\n  storagePlugin,\n]);\n\n// 预检得到实际顺序\n// storage → save\n\n// 每个插件分别准备、检查、提交\n// await activate(context)\n// 检查 provides 是否完整\n// 一次提交该插件的全部能力`,
+        footnote:'mount 只接受已满足的依赖；mountAll 才对本批次进行排序。',
+        detail:'<p><strong>Core 如何找到提供者？</strong>先按 key 查已注册的 C；没有就查本批次谁在 <code>provides</code> 中承诺它。两个地方都没有则报缺失，多提供者则报冲突，不会自动搜索外部代码。</p><p><strong>怎样排顺序？</strong>每次从尚未排序的插件里，找出依赖已经满足的候选，并选择原输入顺序最靠前的一个。若剩余插件互相等待，就报告实际循环链；被环阻塞的下游不算环成员。</p><p><strong>为什么暂存？</strong>声明只是承诺。<code>activate</code> 中的能力先放到本插件暂存区，插件能读取自己已暂存的能力，其他插件看不到。等待激活结束、检查全部承诺已交出且没有冲突，才一次提交该插件的能力。整批仍逐个提交，不是整批一次公开。</p><p><strong>访问必须符合声明：</strong><code>get</code> 只能读声明的依赖或自身已提供的能力，<code>provide</code> 只能登记 <code>provides</code> 内的能力。重复 ID、重复声明、冲突、缺失和循环在批量激活前报错，此时不调用初始化或清理。</p><p>批量预检、激活和回滚期间拒绝其他挂载/卸载；能力查询仍可使用。实际提供者的依赖记录从激活前一直保留到清理完成，避免异步过程中提供者被提前移除。</p>',
+        build:()=>scenario==='cycle'?{nodes:[N('a','插件 A','需要 write / 提供 save',25,46,'互相等待'),N('b','插件 B','需要 save / 提供 write',75,46,'互相等待')],links:[L('ab','a','b','需要 write',{fromPort:'top',toPort:'top'}),L('ba','b','a','需要 save',{fromPort:'bottom',toPort:'bottom'})],annotation:'没有合法起点 → 整批尚未激活'}:{nodes:[N('save','保存插件','requires: storageKey',17,26,'输入第 1 项'),N('storage',scenario==='missing'?'提供者缺失':'存储插件','provides: storageKey',83,26,'输入第 2 项'),N('core','Core 预检','读取声明 / 排序',50,48,'不执行业务'),N('registry','能力表 C','激活后提交',50,81,'能力注册表')],links:[L('depends','save','storage','需要 storageKey'),L('s-core','core','storage','先激活',{fromPort:'top',toPort:'bottom'}),L('commit','core','registry','检查后提交',{fromPort:'bottom',toPort:'top'}),L('core-save','core','save','后激活',{fromPort:'top',toPort:'bottom'})],annotation:scenario==='missing'?'缺失依赖在任何 activate 之前发现':scenario==='conflict'?'文件与内存承诺同一 key → 必须先选一个提供者':'依赖箭头：保存 → 存储；激活顺序：存储 → 保存'},
+        steps:()=>{
+          if(scenario==='cycle') return [S('读取声明','Core 读出 A → B → A','A 需要 B 的 write，B 需要 A 的 save。',['a','b'],['ab','ba'],[2,3,7,8]),S('找不到起点','没有插件可以先启动','双方都在等对方；Core 在任何 activate 之前拒绝整个批次。',['a','b'],['ab','ba'],[13],{error:['a','b'],states:{a:'等待 B',b:'等待 A'}})];
+          if(scenario==='missing') return [S('读取声明','保存需要 storageKey','Core 先查 C，再查本批次的 provides。',['core','save'],[],[1]),S('预检拒绝','没有人提供写入能力','两处都查不到提供者。整批不激活，也不调用清理；应把存储插件加入批次。',['core','storage'],['depends'],[7],{error:['storage'],states:{storage:'能力缺失',core:'0 个插件激活'}})];
+          if(scenario==='conflict') return [S('读取声明','同一 key 出现两个提供者','filePlugin 和 memoryPlugin 都承诺提供 storageKey。',['core','storage'],[],[1,2]),S('预检拒绝','Core 不会替应用挑选实现','当前拒绝重复提供；应用先选择文件或内存，再交给 mountAll。',['core','storage'],[],[5,6,7,8],{error:['storage'],states:{storage:'提供冲突',core:'0 个插件激活'}})];
+          return [
+            S('整批预检','先查声明，尚未激活','保存虽然在输入前面，但它声明需要 storageKey；Core 找到存储提供者。',['save','storage','core'],['depends'],[1,2,3],{states:{core:'保存依赖存储'}}),
+            S('生成顺序','得到存储 → 保存','存储没有未满足的依赖，先排它；再排保存。这里只生成计划。',['core'],[],[7],{states:{core:'storage → save'}}),
+            S('暂存写入','Core 先等待存储 activate','provide 的实现先暂存。激活未结束，其他插件看不到半成品。',['core','storage'],['s-core'],[10],{states:{storage:'write 暂存中',registry:'仍为空'}}),
+            S('提交写入','检查承诺后，公开存储能力','确认 provides 都已注册，再提交 storageKey → writeToFile。',['core','registry'],['commit'],[11,12],{states:{storage:'已激活',registry:'write 已公开'},complete:['storage']}),
+            S('激活保存','保存现在可以取得 write','Core 调用保存 activate；保存取出 write，创建 save，再暂存 save。',['core','save'],['core-save'],[10],{states:{save:'save 暂存中',registry:'write 已公开'},complete:['storage']}),
+            S('提交保存','保存的承诺也完整，启动完成','Core 提交 save，页面才能按 saveKey 取得函数；业务仍尚未运行。',['registry','save'],['commit'],[11,12],{states:{save:'已激活',registry:'write + save'},complete:['storage','save']})
+          ];
+        }
+      },
+      {
+        id:'events', nav:'事件：谁通知谁', eyebrow:'06 / 新需求：日志独立启停', title:'保存只宣布结果，<em>监听者自己响应。</em>',
+        lead:'保存直接调用日志，每加入一个响应者都要改保存代码。改成日志先登记回调，保存写入成功后主动发布，便能独立启停日志。',
+        reasons:['保存完成后还要日志、统计。','响应者独立启停，保存流程稳定。','增加按事件 key 分组的监听列表。'],
+        takeaway:'能力调用是“请帮我做事”；事件通知是“这件事已经发生”。', phase:'先订阅 / 写入成功后主动发布', codeName:'events.ts', language:'TypeScript',
+        code:()=>`// 契约模块：共享同一个事件 key\nconst documentSaved = createEventKey<{\n  documentId: string;\n}>("document/saved");\n\n// 日志 activate 时登记，不立即运行\ncontext.on(documentSaved, ({ documentId }) => {\n  ${listener==='error'?'throw new Error("日志失败");':'console.log("已保存：" + documentId);'}\n});\n${listener==='stats'||listener==='error'?'\n// 统计随后订阅同一个事件\ncontext.on(documentSaved, recordStats);\n':''}\n// 保存函数运行时，先完成写入\nawait write(document);\ntry {\n  await context.emit(documentSaved, {\n    documentId: document.id,\n  });\n} catch (error) {\n  // 写入已成功，单独处理通知失败\n}`,
+        footnote:'EventKey、EventBus、on/emit 已在 src/plugin-core 实现；业务插件仍为教学示例。',
+        banner:'已实现：共享 EventKey 定义数据类型，首次 on 创建订阅列表，emit 无监听时正常完成。',
+        detail:'<p><strong>谁定义、谁产生？</strong>业务作者在契约模块定义 <code>documentSaved</code>：数据为文档 ID，含义是“写入已完成”。保存插件在 <code>await write(document)</code> 成功后显式调用 <code>emit</code>；写入失败就不发布。Core 不扫描代码、监视文件或自动判断保存完成。</p><p><strong>谁接收、怎么找到？</strong>由 Core 创建并持有 EventBus，各 context 的 <code>on</code> 连接同一订阅表，登记事件 key、回调和插件 ID；<code>emit</code> 按同一个 key 查找回调，传入 payload，按登记顺序逐个等待。</p><p>一次发布复制已生效的监听列表；新加或刚完成激活的监听下次发布才能收到通知，已取消且尚未执行的监听跳过，已开始的异步回调继续。一个监听失败也继续其他监听，最后抛出 <code>EventDispatchError</code>，保存事件名称、失败监听的插件 ID 和原始错误。没有监听则正常完成。</p><p><strong>通知错误不等于写入失败：</strong>示例保存函数捕获通知错误，因为文件已写入，监听出错不能自动撤回文件。这个错误处理由业务作者决定。</p><p>订阅不要求发布者先挂载，也不计入能力依赖；监听若要调用能力，仍需声明相应 <code>requires</code>。新事件不会让已有插件自动响应：作者必须了解公开含义、导入共享 key、编写 <code>on</code>。</p><p>保存后的通知不能阻止已经发生的写入。要校验、改参数或截断保存，流程作者需另行公开可介入的位置及返回值或 <code>next()</code> 协议；当前第一版不提供这些能力。共享状态仍由专门的能力负责，事件只负责通知变化。</p>',
+        build:()=>({nodes:[N('save','保存函数','await write → emit',16,52,'业务主动发布'),N('bus','EventBus','key → 回调列表',51,52,'Core 持有'),N('log','日志插件',listener==='off'?'未登记回调':'on(documentSaved)',85,25,listener==='off'?'未启用':'已订阅'),N('stats','统计插件',(listener==='stats'||listener==='error')?'on(documentSaved)':'未编写订阅',85,78,'可选监听')],links:[L('subscribe','log','bus','登记回调',{fromPort:'left',toPort:'top'}),L('subscribe-stats','stats','bus','登记回调',{fromPort:'left',toPort:'bottom'}),L('emit','save','bus','emit(key, data)'),L('notify','bus','log','调用监听',{fromPort:'top',toPort:'bottom'}),L('notify-stats','bus','stats','调用监听',{fromPort:'bottom',toPort:'left'})],annotation:'事件：document/saved · 数据：{ documentId: "doc-01" }'}),
+        steps:()=>{
+          const hasStats=listener==='stats'||listener==='error';
+          const base=[
+            S('订阅登记','启动时，监听者登记回调',listener==='off'?'本次关闭日志；订阅表为空。':hasStats?'日志与统计分别登记回调，激活成功后生效；此时不记录任何保存。':'日志在 activate 中登记回调，激活成功后生效；统计未订阅就不会响应。',listener==='off'?['bus']:hasStats?['log','stats','bus']:['log','bus'],listener==='off'?[]:hasStats?['subscribe','subscribe-stats']:['subscribe'],['context.on'],{states:{bus:listener==='off'?'0 个监听':hasStats?'2 个监听':'1 个监听'}}),
+            S('先完成写入','用户保存，先等待 write 完成','写入失败不会发布；本次模拟写入成功，文档已保存。',['save'],[],['await write'],{states:{save:'文件已写入',bus:listener==='off'?'0 个监听':hasStats?'2 个监听':'1 个监听'}}),
+            S('主动发布','保存函数明确调用 emit','传入共享事件 key 和文档 ID，EventBus 只按表查找，不猜测业务。',['save','bus'],['emit'],['await context.emit','documentId: document.id'],{states:{save:'发布保存完成'}})
+          ];
+          if(listener==='off')return [...base,S('空列表返回','没有监听，通知正常完成','保存不需要知道日志是否启用；查到空列表就结束。',['bus'],[],['await context.emit'],{states:{save:'写入成功',log:'未启用',stats:'无订阅',bus:'通知结束'}})];
+          if(listener==='error')return [...base,
+            S('日志失败','第一个监听报错，但分发继续','EventBus 记录日志的错误，继续等待后续已登记的监听。',['bus','log'],['notify'],['throw new Error'],{error:['log'],states:{log:'监听失败',stats:'等待轮到自己',save:'文件已写入'}}),
+            S('统计继续','再调用统计，正常收到 doc-01','监听按登记顺序逐个等待；日志失败没有阻止统计响应。',['bus','stats'],['notify-stats'],[],{error:['log'],states:{log:'监听失败',stats:'统计 +1',save:'文件已写入'}}),
+            S('汇总错误','全部通知结束，汇总抛错给保存','保存示例捕获通知错误，因为写入已经成功；不会把日志失败当成写入失败，也不会撤回文件。',['save','bus'],[],['catch (error)'],{error:['log'],states:{save:'写入成功，通知失败',bus:'通知错误已汇总',stats:'统计 +1'}})
+          ];
+          if(hasStats)return [...base,
+            S('通知日志','先调用日志，等待它完成','EventBus 把 doc-01 交给第一个监听。统计尚未被调用。',['bus','log'],['notify'],['console.log'],{states:{log:'记录 doc-01',stats:'等待日志完成',save:'文件已写入'}}),
+            S('再通知统计','再调用统计，最后 emit 返回','日志完成后才调用统计；所有监听都结束，发布者才继续返回。',['bus','stats'],['notify-stats'],['await context.emit'],{states:{log:'记录完成',stats:'统计 +1',bus:'通知结束',save:'写入成功'}})
+          ];
+          return [...base,S('分发通知','EventBus 调用并等待日志回调','日志收到 doc-01 并记录。统计没有订阅，因此不会收到；日志完成后 emit 返回。',['bus','log'],['notify'],['console.log','await context.emit'],{states:{save:'写入成功',log:'记录 doc-01',stats:'无订阅，不响应',bus:'通知结束'}})];
+        }
+      },
+      {
+        id:'cleanup', nav:'卸载与失败回滚', eyebrow:'07 / 新需求：移除后不留下坏关系', title:'先停使用者，<em>再移除提供者。</em>',
+        lead:'保存函数保留着存储实现。若先停存储，保存仍可能调用失效资源；Core 因此记录实际依赖，卸载前先检查。',
+        reasons:['保存插件仍持有写入函数。','停用后不能留下失效依赖。','先查依赖，再等待清理并撤销归属。'],
+        takeaway:'卸载不是删除一个名称，而是完成资源释放、登记撤销和依赖解除。', phase:'清理时 / 依赖保护直到清理完成', codeName:'cleanup.ts', language:'TYPESCRIPT',
+        code:()=>cleanup==='rollback'?`// 批次开始前：existing 已挂载\n// 本批次按 A → B → D 激活\nawait core.mountAll([A, B, D]);\n\n// D 激活失败时：\n// 1. 清理部分初始化的 D\n// 2. 逆序卸载 B\n// 3. 逆序卸载 A\n// existing 保留\n\n// 清理出错也继续其余回滚\n// 不自动撤回外部业务效果`:cleanup==='blocked'?`// 保存仍依赖存储\nawait core.unmount("file-storage");\n\n// 拒绝：document-save 仍在使用它\n// 正确顺序是：\nawait core.unmount("document-save");\nawait core.unmount("file-storage");`:`// 先停使用者\nawait core.unmount("document-save");\n\n// 等待 deactivate 完成\n// 撤销能力、挂载记录、依赖和订阅\n// 使旧 context 失效\n\n// 再停提供者\nawait core.unmount("file-storage");`,
+        footnote:'deactivate 释放插件自有资源；Core 负责清理自己的登记。',
+        detail:'<p><strong>正常卸载：</strong>应用调用 <code>unmount(id)</code> → Core 查实际依赖记录 → 有使用者就拒绝并列出它们 → 没有才等待 <code>deactivate</code> → 撤销能力、挂载、依赖和订阅记录 → 使旧 context 失效。即使停用函数抛错，Core 的登记仍会清理。</p><p><strong>激活失败：</strong>插件可能只初始化了一半，Core 仍调用 <code>deactivate</code>，丢弃暂存能力和订阅，撤销归属和依赖，使 context 失效。停用函数必须容忍部分初始化。</p><p><strong>批量失败：</strong>先清理失败插件，再逆序撤销本批次已成功的插件，批次开始前已有的插件保留。一个清理失败不阻止其余回滚；错误保留原始失败和清理失败。回滚处理生命周期和登记，不自动撤回任意外部业务效果。</p><p>卸载和激活失败时，Core 自动清理插件的订阅，并禁止旧 context 继续 on/emit。只监听通知、没有能力依赖的日志可以独立卸载。</p><p><strong>边界：</strong>撤销登记不会销毁已经取出的普通函数引用，也不会强制中断已开始的异步回调。调用方仍须遵守生命周期；插件的文件句柄和定时器由它自己释放。</p>',
+        build:()=>cleanup==='rollback'?{nodes:[N('existing','已有插件','批次开始前已挂载',15,24,'保留'),N('a','插件 A','本批次第 1 个成功',16,72,'待回滚'),N('b','插件 B','本批次第 2 个成功',50,72,'待回滚'),N('d','插件 D','本批次激活失败',84,72,'先清理')],links:[L('d-b','d','b','再撤销 B'),L('b-a','b','a','再撤销 A')],annotation:'失败插件先清理 · 本批次逆序回滚 · 已有插件保留'}:{nodes:[N('core','内核 Core','unmount(id)',15,48,'接收请求'),N('save','保存插件','依赖 file-storage',50,27,'使用者'),N('storage','存储插件','提供 write',85,48,'提供者'),N('registry','能力表 C','按归属撤销',50,78,'内核登记')],links:[L('request','core','storage','尝试卸载'),L('depends','save','storage','仍依赖',{fromPort:'right',toPort:'top'}),L('stop-save','core','save','deactivate',{fromPort:'top',toPort:'left'}),L('revoke','core','registry','撤销登记',{fromPort:'bottom',toPort:'left'})],annotation:'检查、停用、撤销完成之前，依赖关系一直保留'},
+        steps:()=>cleanup==='rollback'?[
+          S('激活失败','D 在部分初始化后失败','A、B 已提交；existing 在批次开始前就存在。回滚只处理本批次。',['d'],[],[2],{error:['d'],states:{existing:'继续保留',a:'已挂载',b:'已挂载',d:'激活失败'}}),
+          S('清理 D','先释放失败插件已建资源','Core 等待 D 的 deactivate，丢弃暂存能力、撤销 context 和依赖。',['d'],[],[5],{removed:['d'],states:{existing:'继续保留',d:'已清理'}}),
+          S('卸载 B','再撤销最后一个成功插件 B','逆序先移除使用者，避免提供者被提前撤掉。',['b'],['d-b'],[6],{removed:['d','b'],states:{existing:'继续保留',b:'已撤销'}}),
+          S('卸载 A','最后撤销 A，原有插件仍在','一个清理出错也继续；原始错误和额外清理错误都会保留。',['a','existing'],['b-a'],[7,8,10,11],{removed:['d','b','a'],states:{existing:'仍然已挂载',a:'已撤销'}})
+        ]:cleanup==='blocked'?[
+          S('请求卸载','应用想先卸载存储','Core 收到 file-storage 的卸载请求，尚未调用它的清理函数。',['core','storage'],['request'],[1]),
+          S('检查依赖','发现 document-save 仍依赖存储','依赖记录是使用者 → 实际提供者，当前保存插件还没停用。',['save','storage'],['depends'],[3],{states:{save:'仍在使用 write'}}),
+          S('拒绝卸载','存储保留，卸载被拒绝','先停 document-save，再停 file-storage。Core 不会擅自级联卸载依赖者。',['core','storage'],[],[3,5,6],{error:['storage'],states:{storage:'卸载拒绝',registry:'write + save 仍在'}})
+        ]:[
+          S('先停保存','等待保存插件 deactivate','没有插件依赖保存时，Core 允许停用保存。清理结束前仍保留它对存储的依赖。',['core','save'],['stop-save'],[1],{states:{save:'正在清理'}}),
+          S('撤销保存','清理完成，再撤销保存的登记','撤销 save 能力、挂载与依赖记录，旧保存 context 失效。',['core','registry'],['revoke'],[3,4,5],{removed:['save'],states:{save:'已停用',registry:'只剩 write'}}),
+          S('再停存储','存储已没有使用者','Core 再检查，允许停用存储，并等待它释放文件句柄等资源。',['core','storage'],['request'],[8],{removed:['save'],states:{storage:'正在清理',registry:'只剩 write'}}),
+          S('撤销存储','能力和挂载记录全部移除','旧 context 失效。已经取出的函数引用不会自动销毁，调用方必须遵守生命周期。',['registry'],['revoke'],[3,4,5,8],{removed:['save','storage'],states:{storage:'已停用',registry:'已清空'}})
+        ]
+      },
+      {
+        id:'overview', nav:'放回一次完整运行', eyebrow:'08 / 把前面的机制连起来', title:'启动时装配，<em>运行时直接协作。</em>',
+        lead:'现在才把整套关系放到同一张图里：应用创建 Core，Core 准备插件；用户操作后，能力函数真正工作，事件通知后续响应者。',
+        reasons:['所有机制都有对应的具体问题。','把准备过程与业务过程连成一条链。','启动看 Core，运行看函数与通知。'],
+        takeaway:'“一切皆插件”是主要功能遵守统一装配规则；插件内部仍然可以写普通函数。', phase:'完整场景 / 可切换启动与运行', codeName:'full-example.ts', language:'TypeScript',
+        code:()=>overview==='startup'?`// 使用已实现接口的教学例子\nconst core = new EngineCore();\n\nawait core.mountAll([\n  logPlugin,\n  savePlugin,\n  storagePlugin,\n]);\n\n// 实际激活顺序\n// log → storage → save\n\n// 宿主取得保存函数\nconst save = core.get(saveKey);`:`// 启动时已取得 save\nawait save(document);\n\n// save 函数内部：\nawait write(document);\ntry {\n  await context.emit(documentSaved, {\n    documentId: document.id,\n  });\n} catch (error) {\n  // 文件已写入，单独处理通知失败\n}\n\n// EventBus 等待日志监听结束\n// 最后 save 返回`,
+        footnote:'图中的事件部分为方案；具体存储、保存、日志也是教学示例。',
+        banner:'已实现：Core、C、依赖、生命周期，以及 EventBus、on/emit 与订阅清理；教学业务尚未接入应用。',
+        detail:'<table><thead><tr><th>部分</th><th>当前状态与职责</th></tr></thead><tbody><tr><td>Core / P / C / key / context</td><td>src/plugin-core 已实现；管理插件与能力登记。</td></tr><tr><td>声明 / 预检 / 排序 / 提交 / 回滚</td><td>已实现；保证准备与清理的关系正确。</td></tr><tr><td>EventKey / EventBus / on / emit</td><td>已实现；激活成功后订阅生效，失败或卸载时自动撤销。</td></tr><tr><td>存储 / 保存 / 日志插件</td><td>教学示例，尚未接入 Lodestory 业务。</td></tr><tr><td>外部发现和加载 / 多提供者选择 / 流程拦截</td><td>尚未实现。动态挂载首先管理已经编译进程序的实例。</td></tr></tbody></table><p><strong>Core 中保存什么？</strong>插件 ID → 原对象和 context 撤销入口；C 保存 key → 实现和提供者；依赖表保存使用者 → 提供者。EventBus 保存事件 token → 监听列表和归属。首次订阅创建条目，最后一条订阅取消后删除；发布者无需提前登记。</p><p><strong>它为什么叫“一切皆插件”？</strong>主要业务能力和流程都遵守统一的装配、协作和卸载规则，不要求每个函数都成为插件。内核理解标识、声明、函数、回调和归属，不需要理解文档业务。</p><p>本文也对照了 DSH，但其通知错误和等待规则与本方案不同。这里展示的是本项目文档的约定；具体参考链接见原文。</p>',
+        build:()=>({nodes:[N('page','页面','取得 save',14,25,'宿主'),N('core','内核 Core','管理插件与依赖',50,18,'生命周期管理'),N('registry','能力表 C','write + save',85,25,'已实现'),N('save','保存函数','save(doc)',15,71,'保存插件提供'),N('storage','写入函数','write(doc)',50,52,'存储插件提供'),N('bus','EventBus','documentSaved',51,84,'已实现'),N('log','日志监听','记录文档 ID',86,77,'已实现')],links:[L('lookup','page','core','core.get',{fromPort:'right',toPort:'left'}),L('core-c','core','registry','持有 / 查询',{fromPort:'right',toPort:'top'}),L('storage-c','storage','registry','提交 write',{fromPort:'right',toPort:'bottom'}),L('save-c','save','registry','提交 save',{fromPort:'top',toPort:'bottom'}),L('subscribe','log','bus','登记监听'),L('invoke','page','save','调用 save',{fromPort:'bottom',toPort:'top'}),L('write','save','storage','await write',{fromPort:'right',toPort:'left'}),L('emit','save','bus','emit',{fromPort:'bottom',toPort:'left'}),L('notify','bus','log','等待监听')],annotation:overview==='startup'?'Core 准备关系，业务尚未执行':'业务直接调用函数；Core 不逐次转发保存'}),
+        steps:()=>overview==='startup'?[
+          S('创建 Core','应用创建一个 Core','Core 持有 C、EventBus 和生命周期记录。',['core','registry','bus'],['core-c'],[1]),
+          S('订阅日志','日志先激活并登记监听','输入 [log, save, storage] 中，日志与存储都无能力依赖，先选原顺序靠前的日志。',['log','bus'],['subscribe'],[4],{states:{log:'已订阅',bus:'1 个监听'}}),
+          S('准备存储','存储激活成功，提交 write','随后选择存储，公开 storageKey → writeToFile。保存的必需能力这时才准备好。',['storage','registry'],['storage-c'],[6],{states:{storage:'已激活',registry:'write 已公开',log:'已订阅'}}),
+          S('准备保存','保存取得 write，再提交 save','Core 调用保存 activate；保存通过自身 context 查询 write、创建 save 并交出实现。',['save','registry'],['save-c'],[5],{states:{save:'已激活',registry:'write + save',log:'已订阅'}}),
+          S('交给页面','页面按 saveKey 取得保存函数','core.get 只返回函数引用，尚未保存。切换到“运行”查看真正的业务调用。',['page','core','registry'],['lookup','core-c'],[13],{states:{page:'已持有 save',save:'等待文档'}})
+        ]:[
+          S('页面调用','用户点击，页面调用已取得的 save','不需要重新挂载，也不需要 C 逐次转发。文档成为这次调用的输入。',['page','save'],['invoke'],[1]),
+          S('直接写入','save 调用并等待 write','保存函数使用启动时保留的写入实现。写入失败则不会进入后面的事件发布。',['save','storage'],['write'],[4],{states:{storage:'写入成功'}}),
+          S('发布结果','保存业务在成功位置调用 emit','保存插件把文档 ID 交给 EventBus；事件不是 Core 自动生成的。',['save','bus'],['emit'],[6,7,8],{states:{storage:'写入成功',bus:'查 documentSaved'}}),
+          S('执行监听','EventBus 查表并等待日志回调','日志按共享 key 接收 doc-01，记录完成后，emit 返回。',['bus','log'],['notify'],[13],{states:{log:'已记录 doc-01',storage:'写入成功'}}),
+          S('保存返回','save 返回，页面得到完成结果','整个业务链是页面 → save → write → emit → 日志 → 返回。生命周期由 Core 管，业务由函数完成。',['page','save'],['invoke'],[1,14],{states:{page:'保存完成',save:'返回',storage:'写入成功',log:'已记录'}})
+        ]
+      }
+    ];
+
+    function syntax(line) {
+      const tokens = line.match(/\/\/.*$|"[^"\\]*(?:\\.[^"\\]*)*"|'[^'\\]*(?:\\.[^'\\]*)*'|\b(?:async|await|function|const|return|type|try|catch|new|void)\b|[^"'\w/]+|\w+|./g) || [];
+      return tokens.map(token => {
+        const value = esc(token);
+        if(token.startsWith('//')) return `<span class="syntax-comment">${value}</span>`;
+        if(/^['"]/.test(token)) return `<span class="syntax-string">${value}</span>`;
+        if(/^(async|await|function|const|return|type|try|catch|new|void)$/.test(token)) return `<span class="syntax-keyword">${value}</span>`;
+        return value;
+      }).join('');
+    }
+
+    function options() {
+      const group = (name,values,current) => `<div class="choice-group" aria-label="${esc(name)}">${values.map(([value,label])=>`<button class="choice" data-option="${esc(value)}" aria-pressed="${current===value}">${esc(label)}</button>`).join('')}</div>`;
+      if(chapter===1) return group('写入实现',[['file','文件'],['memory','内存']],choice);
+      if(chapter===2) return group('能力标识',[['normal','共享 key'],['different-key','同名不同 key']],scenario);
+      if(chapter===4) return `<select class="scene-select" id="scenario-select" aria-label="依赖场景">${[['normal','正常装配'],['missing','缺少提供者'],['conflict','两个提供者冲突'],['cycle','循环依赖']].map(([value,label])=>`<option value="${value}" ${scenario===value?'selected':''}>${label}</option>`).join('')}</select>`;
+      if(chapter===5) return `<select class="scene-select" id="listener-select" aria-label="事件监听场景">${[['on','日志开启'],['off','日志关闭'],['stats','日志 + 统计订阅'],['error','日志失败，统计继续']].map(([value,label])=>`<option value="${value}" ${listener===value?'selected':''}>${label}</option>`).join('')}</select>`;
+      if(chapter===6) return `<select class="scene-select" id="cleanup-select" aria-label="卸载场景">${[['blocked','先卸载存储：被拒绝'],['ordered','先保存，再存储'],['rollback','激活失败：逆序回滚']].map(([value,label])=>`<option value="${value}" ${cleanup===value?'selected':''}>${label}</option>`).join('')}</select>`;
+      if(chapter===7) return group('完整运行时刻',[['startup','启动'],['runtime','运行']],overview);
+      return '';
+    }
+
+    function render() {
+      stop(); cursor=-1;
+      const lesson=lessons[chapter];
+      graph=lesson.build(); sequence=lesson.steps();
+      $('scene').className='scene '+(graph.nodes.length>5?'overview':graph.nodes.length>3?'complex':'simple');
+      $('eyebrow').textContent=lesson.eyebrow;
+      $('lesson-title').innerHTML=lesson.title;
+      $('lead').textContent=lesson.lead;
+      $('reasoning').innerHTML=lesson.reasons.map((text,i)=>`<div class="reason"><span class="reason-label">${['已有','目标','因此'][i]}</span><p>${esc(text)}</p></div>`).join('');
+      $('phase').textContent=lesson.phase;
+      $('lab-banner').textContent=lesson.banner||'';
+      $('scene-options').innerHTML=options();
+      $('code-name').textContent=lesson.codeName;
+      $('code-language').textContent=lesson.language;
+      $('code-footnote').textContent=lesson.footnote;
+      $('code').innerHTML=lesson.code().split('\n').map((line,i)=>`<span class="code-line" data-line="${i}">${syntax(line)||' '}</span>`).join('');
+      $('scene').innerHTML=`<svg class="wires" id="wires" aria-hidden="true"></svg>${graph.nodes.map(node=>`<div class="node ${node.future?'future':''}" id="node-${node.id}" style="left:${node.x}%;top:${node.y}%"><div class="node-kind">${esc(node.kind)}</div><div class="node-title">${esc(node.title)}</div><div class="node-sub">${esc(node.sub)}</div><div class="node-state" id="state-${node.id}"></div></div>`).join('')}<div class="scene-annotation">${esc(graph.annotation||'')}</div>`;
+      $('scene').setAttribute('aria-label',graph.nodes.map(node=>`${node.title}：${node.sub}`).join('；')+'。'+graph.annotation);
+      $('steps').innerHTML=sequence.map((step,i)=>`<button class="step" data-step="${i}" aria-label="第 ${i+1} 步：${esc(step.label)}"><span class="step-num">${String(i+1).padStart(2,'0')}</span><span class="step-name">${esc(step.label)}</span></button>`).join('');
+      $('takeaway').textContent=lesson.takeaway;
+      $('detail-content').innerHTML=lesson.detail;
+      $('deeper').open=false;
+      document.querySelectorAll('.chapter').forEach((button,i)=>{if(i===chapter) button.setAttribute('aria-current','step');else button.removeAttribute('aria-current');button.classList.toggle('done',visited.has(i));});
+      $('chapter-select').value=String(chapter);
+      $('previous').disabled=chapter===0;
+      $('next-label').textContent=chapter===lessons.length-1?'从头再看':`下一章：${lessons[chapter+1].nav}`;
+      $('chapter-counter').textContent=`${String(chapter+1).padStart(2,'0')} / ${String(lessons.length).padStart(2,'0')}`;
+      $('caption-no').textContent='00';
+      $('caption-title').textContent='关系已经画好，看看它怎样运行。';
+      $('caption-text').textContent='点击“播放演示”自动推演，或“单步执行”逐步查看谁调用谁。';
+      $('play-status').textContent='等待操作';
+      document.querySelector('.intro').classList.remove('enter');
+      void document.querySelector('.intro').offsetWidth;
+      document.querySelector('.intro').classList.add('enter');
+      drawWires();
+    }
+
+    function drawWires() {
+      const svg=$('wires'); if(!svg) return;
+      const sceneBox=$('scene').getBoundingClientRect(), width=sceneBox.width, height=sceneBox.height;
+      if(!width) return;
+      for(const node of graph.nodes){
+        const element=$('node-'+node.id),half=element.offsetWidth/2+2;
+        element.style.left=`clamp(${half}px,${node.x}%,calc(100% - ${half}px))`;
+      }
+      svg.setAttribute('viewBox',`0 0 ${width} ${height}`);
+      const step=sequence[cursor];
+      const active=new Set(step?.links||[]);
+      const overviewLinks=overview==='startup'?['lookup','core-c','storage-c','save-c','subscribe']:['invoke','write','emit','notify'];
+      let result=`<defs><marker id="arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 8 4 0 8Z" fill="#515f50"/></marker><marker id="arrow-active" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0 8 4 0 8Z" fill="#c0ec8b"/></marker></defs>`;
+      const point=(box,port)=>({left:[box.left,box.top+box.height/2],right:[box.right,box.top+box.height/2],top:[box.left+box.width/2,box.top],bottom:[box.left+box.width/2,box.bottom]}[port]);
+      for(const link of graph.links) {
+        if(chapter===7&&!overviewLinks.includes(link.id))continue;
+        const from=$('node-'+link.from).getBoundingClientRect(), to=$('node-'+link.to).getBoundingClientRect();
+        const dx=to.left+to.width/2-from.left-from.width/2,dy=to.top+to.height/2-from.top-from.height/2;
+        const horizontal=Math.abs(dx)>Math.abs(dy);
+        const fromPort=link.fromPort||(horizontal?(dx>0?'right':'left'):(dy>0?'bottom':'top'));
+        const toPort=link.toPort||(horizontal?(dx>0?'left':'right'):(dy>0?'top':'bottom'));
+        let [x1,y1]=point(from,fromPort),[x2,y2]=point(to,toPort);
+        x1-=sceneBox.left; x2-=sceneBox.left; y1-=sceneBox.top; y2-=sceneBox.top;
+        const offset=fromPort===toPort?Math.min(55,Math.abs(x2-x1)/3):Math.min(65,Math.max(23,Math.hypot(x2-x1,y2-y1)*.3));
+        const delta=port=>({left:[-offset,0],right:[offset,0],top:[0,-offset],bottom:[0,offset]}[port]);
+        const [a,b]=delta(fromPort),[c,d]=delta(toPort);
+        const path=`M ${x1} ${y1} C ${x1+a} ${y1+b},${x2+c} ${y2+d},${x2} ${y2}`;
+        const isActive=active.has(link.id);
+        result+=`<path id="path-${link.id}" class="wire ${link.future?'future':''} ${isActive?'active':''}" d="${path}" marker-end="url(#${isActive?'arrow-active':'arrow'})"/>`;
+        const labelX=(x1+x2)/2+(a+c)*.18, labelY=(y1+y2)/2+(b+d)*.38-8;
+        if(link.label && (width>470||isActive)) result+=`<text class="wire-label ${isActive?'active':''}" x="${labelX}" y="${labelY}" text-anchor="middle">${esc(link.label)}</text>`;
+        if(isActive && !reducedMotion.matches) result+=`<circle class="signal" r="3"><animateMotion dur="1.4s" repeatCount="1" path="${path}" fill="freeze"/></circle>`;
+      }
+      svg.innerHTML=result;
+    }
+
+    function showStep(index) {
+      cursor=Math.max(0,Math.min(index,sequence.length-1));
+      const step=sequence[cursor];
+      const nodes=new Set(step.nodes), complete=new Set(step.complete||[]),errors=new Set(step.error||[]),removed=new Set(step.removed||[]);
+      const states=Object.assign({},...sequence.slice(0,cursor+1).map(item=>item.states||{}));
+      for(const node of graph.nodes) {
+        const element=$('node-'+node.id);
+        element.classList.toggle('active',nodes.has(node.id)&&!errors.has(node.id)&&!removed.has(node.id));
+        element.classList.toggle('complete',complete.has(node.id));
+        element.classList.toggle('error',errors.has(node.id));
+        element.classList.toggle('removed',removed.has(node.id));
+        $('state-'+node.id).textContent=states[node.id]||'';
+      }
+      $('caption-no').textContent=String(cursor+1).padStart(2,'0');
+      $('caption-title').textContent=step.title;
+      $('caption-text').textContent=step.text;
+      $('scene').setAttribute('aria-label',step.title+'。'+step.text);
+      document.querySelectorAll('.code-line').forEach(line=>line.classList.toggle('highlight',step.lines.some(reference=>typeof reference==='string'?line.textContent.includes(reference):reference===Number(line.dataset.line))));
+      document.querySelectorAll('.step').forEach((button,i)=>{button.classList.toggle('completed',i<cursor);if(i===cursor)button.setAttribute('aria-current','step');else button.removeAttribute('aria-current');});
+      $('play-status').textContent=playing?'演示中':cursor===sequence.length-1?'推演完成':'已暂停';
+      if(cursor===sequence.length-1) visited.add(chapter);
+      drawWires();
+    }
+
+    function stop() {
+      if(timer!==null) clearTimeout(timer);
+      timer=null; playing=false;
+      $('play-label').textContent='播放演示';
+      $('play-state').classList.remove('running');
+      $('play').setAttribute('aria-label','播放演示');
+      $('play').querySelector('svg').innerHTML='<path d="M4 2.5 11 7 4 11.5Z" fill="currentColor"/>';
+    }
+
+    function play() {
+      if(playing) {stop();$('play-status').textContent='已暂停';return;}
+      playing=true;
+      $('play-label').textContent='暂停';
+      $('play').setAttribute('aria-label','暂停演示');
+      $('play').querySelector('svg').innerHTML='<path d="M4 3h2v8H4ZM8 3h2v8H8Z" fill="currentColor"/>';
+      $('play-state').classList.add('running');
+      if(cursor===sequence.length-1) cursor=-1;
+      const tick=()=>{
+        if(!playing)return;
+        showStep(cursor+1);
+        if(cursor===sequence.length-1){stop();$('play-status').textContent='推演完成';return;}
+        timer=setTimeout(tick,2900);
+      };
+      tick();
+    }
+
+    function go(index,scroll=true) {
+      chapter=Math.max(0,Math.min(index,lessons.length-1));
+      scenario='normal';
+      history.replaceState(null,'','#'+lessons[chapter].id);
+      render();
+      if(scroll)window.scrollTo({top:0,behavior:'instant'});
+    }
+
+    $('chapters').innerHTML=lessons.map((lesson,i)=>`<button class="chapter" data-chapter="${i}"><span class="chapter-no">${String(i+1).padStart(2,'0')}</span><span class="chapter-name">${lesson.nav}</span></button>`).join('');
+    $('chapter-select').innerHTML=lessons.map((lesson,i)=>`<option value="${i}">${String(i+1).padStart(2,'0')} · ${lesson.nav}</option>`).join('');
+    $('chapters').addEventListener('click',event=>{const button=event.target.closest('[data-chapter]');if(button)go(Number(button.dataset.chapter));});
+    $('chapter-select').addEventListener('change',event=>go(Number(event.target.value)));
+    $('steps').addEventListener('click',event=>{const button=event.target.closest('[data-step]');if(button){stop();showStep(Number(button.dataset.step));}});
+    $('scene-options').addEventListener('click',event=>{const button=event.target.closest('[data-option]');if(!button)return;const value=button.dataset.option;if(chapter===1)choice=value;if(chapter===2)scenario=value;if(chapter===7)overview=value;render();});
+    $('scene-options').addEventListener('change',event=>{if(event.target.id==='scenario-select')scenario=event.target.value;if(event.target.id==='listener-select')listener=event.target.value;if(event.target.id==='cleanup-select')cleanup=event.target.value;render();});
+    $('play').addEventListener('click',play);
+    $('single-step').addEventListener('click',()=>{stop();showStep(cursor===sequence.length-1?0:cursor+1);});
+    $('reset').addEventListener('click',render);
+    $('previous').addEventListener('click',()=>go(chapter-1));
+    $('next').addEventListener('click',()=>go(chapter===lessons.length-1?0:chapter+1));
+    $('source').addEventListener('click',()=>$('source-dialog').showModal());
+    $('close-dialog').addEventListener('click',()=>$('source-dialog').close());
+    $('jump-overview').addEventListener('click',()=>{$('source-dialog').close();go(7);$('deeper').open=true;});
+    $('source-dialog').addEventListener('click',event=>{if(event.target!==$('source-dialog'))return;const rect=$('source-dialog').getBoundingClientRect();if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)$('source-dialog').close();});
+    document.addEventListener('keydown',event=>{if($('source-dialog').open||event.altKey||event.ctrlKey||event.metaKey||event.target.closest('input,select,textarea'))return;if(event.key==='ArrowRight'){event.preventDefault();go(chapter===lessons.length-1?0:chapter+1);}if(event.key==='ArrowLeft'){event.preventDefault();go(chapter-1);}});
+    window.addEventListener('hashchange',()=>{const index=lessons.findIndex(lesson=>lesson.id===location.hash.slice(1));if(index>=0)go(index);});
+    const observer=new ResizeObserver(()=>drawWires());
+    observer.observe($('scene'));
+    window.addEventListener('pagehide',stop);
+    const initial=lessons.findIndex(lesson=>lesson.id===location.hash.slice(1));
+    go(initial<0?0:initial,false);
+  })();
+  </script>
+</body>
+</html>

@@ -2,24 +2,28 @@ import {CapabilityRegistry, type PendingRegistration} from "./CapabilityRegistry
 import type {Plugin, PluginContext} from "./Plugin";
 import {preparePlugin, sortPlugins, type PluginPlan} from "./PluginPlan";
 import type {ServiceKey} from "./ServiceKey";
+import {EventBus} from "./EventBus";
+import type {EventKey, EventListener} from "./EventKey";
 
 /** 已激活插件的记录，供 EngineCore 在卸载时执行停用和上下文清理。 */
 type MountedPlugin = {
   /** 插件实例；卸载时调用它的 deactivate 方法。 */
   plugin: Plugin;
-  /** 使该插件持有的上下文失效，阻止卸载后继续注册或查询能力。 */
+  /** 使上下文失效，阻止卸载后继续操作能力或订阅、发布事件。 */
   revokeContext(): void;
 };
 
 /**
  * 管理插件从挂载到卸载的过程：检查能力声明和必需依赖后调用 activate；成功后以插件 ID 为键，
  * 把插件对象和上下文撤销方法保存到 mounted Map，供之后卸载使用；
- * 无依赖者时才允许卸载，调用 deactivate、撤销能力并使插件上下文失效；
- * 激活失败时调用 deactivate 清理已初始化的资源。业务能力由插件自行调用。
+ * 无依赖者时才允许卸载，调用 deactivate、撤销能力和订阅并使插件上下文失效；
+ * 激活失败时调用 deactivate 清理已初始化的资源，丢弃暂存能力和订阅。业务能力由插件自行调用。
  */
 export class EngineCore {
     /** 保存已注册的能力，供插件和宿主按能力标识查询。 */
     private readonly capabilityRegistry = new CapabilityRegistry();
+    /** 保存所有插件的监听与归属，激活成功后生效，失败或卸载后撤销。 */
+    private readonly eventBus = new EventBus();
     /** 保存已成功激活的插件及其上下文撤销方法，供卸载时使用。 */
     private readonly mounted = new Map<string, MountedPlugin>();
     /** 标记正在挂载或卸载的插件，避免同一插件的生命周期操作重叠。 */
@@ -29,7 +33,7 @@ export class EngineCore {
     /** 批量装配独占生命周期操作，直到激活或回滚全部结束。 */
     private batchActive = false;
 
-    /** 激活插件；失败时停用已初始化部分并撤销它注册的能力。 */
+    /** 激活插件；失败时停用已初始化部分并撤销它注册的能力和订阅。 */
     async mount(plugin: Plugin): Promise<void> {
         this.checkBatchInactive();
         this.checkPluginAvailable(plugin.id);
@@ -131,6 +135,14 @@ export class EngineCore {
                 }
                 return this.capabilityRegistry.get(key);
             },
+            on: <T>(key: EventKey<T>, listener: EventListener<T>) => {
+                checkContext();
+                return this.eventBus.on(key, id, listener, !activated);
+            },
+            emit: async <T>(key: EventKey<T>, payload: T) => {
+                checkContext();
+                await this.eventBus.emit(key, payload);
+            },
         };
 
         try {
@@ -140,6 +152,7 @@ export class EngineCore {
                 throw new Error(`Plugin '${id}' did not provide declared services: ${missing.map(key => `'${key.id}'`).join(", ")}.`);
             }
             this.capabilityRegistry.registerBatch(id, [...pending.values()]);
+            this.eventBus.commitOwner(id);
             pending.clear();
             activated = true;
             this.mounted.set(id, {
@@ -159,6 +172,7 @@ export class EngineCore {
                 contextActive = false;
                 pending.clear();
                 this.capabilityRegistry.unregisterOwner(id);
+                this.eventBus.unregisterOwner(id);
                 this.dependencies.delete(id);
             }
             if (cleanupFailed) {
@@ -170,7 +184,7 @@ export class EngineCore {
         }
     }
 
-    /** 停用插件；即使停用逻辑失败，也会撤销能力并使旧 context 失效。 */
+    /** 停用插件；即使停用逻辑失败，也会撤销能力和订阅并使旧 context 失效。 */
     async unmount(id: string): Promise<void> {
         this.checkBatchInactive();
         await this.unmountPlugin(id);
@@ -194,6 +208,7 @@ export class EngineCore {
         } finally {
             entry.revokeContext();
             this.capabilityRegistry.unregisterOwner(id);
+            this.eventBus.unregisterOwner(id);
             this.mounted.delete(id);
             this.dependencies.delete(id);
             this.busy.delete(id);

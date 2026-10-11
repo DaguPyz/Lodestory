@@ -3,7 +3,7 @@ import test from "node:test";
 import { createMainFixture, deferred, flushStartup } from "./helpers/mainStartupFixture.mjs";
 
 function themeKey(fixture) {
-  return fixture.loadModule("theme/themeService.ts").themeKey;
+  return fixture.loadModule("plugins/theme/themeService.ts").themeKey;
 }
 
 function renderedTree(fixture) {
@@ -60,14 +60,15 @@ test("the entry delegates UI composition to the plugin catalog", async () => {
     "react",
     "react-dom/client",
     "./App",
-    "./components/context-menu",
-    "./theme/ThemeProvider",
-    "./theme/themeService",
+    "./plugins/context-menu",
+    "./plugins/theme/ThemeProvider",
+    "./plugins/theme/themePlugin",
+    "./plugins/theme/themeService",
     "./styles.css",
   ]) {
     assert.ok(!entryImports.includes(hardcodedUiImport), `main.tsx should not import ${hardcodedUiImport}`);
   }
-  assert.ok(fixture.moduleImports.some(({ from }) => from === "components/context-menu/contextMenuPlugin.tsx"),
+  assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/context-menu/contextMenuPlugin.tsx"),
     "the context-menu plugin source should run in the fixture");
   assert.equal(fixture.lifecycle.at(-1), "activate:app:complete");
   assert.ok(fixture.logs.indexOf("activate:app:complete") < fixture.logs.indexOf("plugins-ready.emit"));

@@ -12,7 +12,7 @@ import { ReferencePanel } from "./ReferencePanel";
 import { createDocument, documentErrorMessage, listDocuments, type TreeEntry } from "../../documents/documentApi";
 import { useDocumentWorkspace } from "../../documents/useDocumentWorkspace";
 import "../../styles/editor.css";
-import { useContextMenus } from "../../components/context-menu";
+import { useContextMenus } from "../../plugins/context-menu";
 
 type PanelPreference = "auto" | "open" | "closed";
 type EditorPageProps = {

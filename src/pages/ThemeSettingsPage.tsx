@@ -1,7 +1,7 @@
 import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
-import { retryTheme, setThemeMode, type ResolvedTheme, type ThemeMode } from "../theme/themeStore";
-import { useTheme } from "../theme/useTheme";
+import { retryTheme, setThemeMode, type ResolvedTheme, type ThemeMode } from "../plugins/theme/themeStore";
+import { useTheme } from "../plugins/theme/useTheme";
 
 const options: { mode: ThemeMode; label: string; description: string }[] = [
   { mode: "dark", label: "深色", description: "沉静柔和，让内容成为焦点。" },

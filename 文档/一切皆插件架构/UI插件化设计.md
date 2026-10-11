@@ -6,7 +6,7 @@
 
 ## 1. 从当前入口找到缺少的能力
 
-目前，[createAppRuntime.ts](/Users/yinzhenpu/projects/Lodestory/src/app/createAppRuntime.ts) 已经只接收插件列表，不依赖主题业务。[themePlugin.ts](/Users/yinzhenpu/projects/Lodestory/src/theme/themePlugin.ts) 在激活时初始化主题，并通过 `themeKey` 提供 `ThemeService`。
+目前，[createAppRuntime.ts](/Users/yinzhenpu/projects/Lodestory/src/app/createAppRuntime.ts) 已经只接收插件列表，不依赖主题业务。[themePlugin.ts](/Users/yinzhenpu/projects/Lodestory/src/plugins/theme/themePlugin.ts) 在激活时初始化主题，并通过 `themeKey` 提供 `ThemeService`。
 
 但 [main.tsx](/Users/yinzhenpu/projects/Lodestory/src/main.tsx) 仍直接导入 `ThemeProvider`、`ContextMenuProvider` 和 `App`，亲自决定它们的嵌套关系：
 
@@ -192,7 +192,7 @@ React 不会等待普通 Effect 清理函数中的异步工作。需要等待的
 | [PluginContext](/Users/yinzhenpu/projects/Lodestory/src/plugin-core/Plugin.ts) | 提供能力、查询能力、订阅和发布事件 | 提交归属插件的通用扩展项 |
 | [EngineCore](/Users/yinzhenpu/projects/Lodestory/src/plugin-core/EngineCore.ts) | 单插件能力与订阅暂存、批量回滚、逆序停止 | 扩展项批次提交、停用前撤回、撤回失败保留依赖 |
 | 通用 UI 插件 | 尚不存在 | 类型化位置、UI 登记表、快照校验、React 挂载及卸载确认 |
-| [themePlugin](/Users/yinzhenpu/projects/Lodestory/src/theme/themePlugin.ts) | 提供 `ThemeService` | 在插件内部绑定并贡献 `ThemeProvider` |
+| [themePlugin](/Users/yinzhenpu/projects/Lodestory/src/plugins/theme/themePlugin.ts) | 提供 `ThemeService` | 在插件内部绑定并贡献 `ThemeProvider` |
 | [main.tsx](/Users/yinzhenpu/projects/Lodestory/src/main.tsx) | 手工组装 Provider 和 `App` | 选择插件集合，调用通用 UI 挂载能力，统一处理失败 |
 | [createAppRuntime](/Users/yinzhenpu/projects/Lodestory/src/app/createAppRuntime.ts) | 通用创建与停止；停止 Promise 一直缓存 | 接入安全停止协议，区分并发清理与失败后的重试 |
 | 主题使用方 | `useTheme`、设置页面仍直接使用 `themeStore` | 改为使用主题插件公开的能力入口，并声明所属插件的依赖 |

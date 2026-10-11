@@ -1,5 +1,5 @@
 import {createElement} from "react";
-import type {Plugin} from "../plugin-core";
+import type {Plugin} from "../../plugin-core";
 import {uiKey} from "../ui";
 import {ThemeProvider} from "./ThemeProvider";
 import {themeKey, type ThemeService} from "./themeService";

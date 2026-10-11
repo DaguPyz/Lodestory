@@ -2,7 +2,7 @@ import React, { forwardRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { Dialog } from "@base-ui/react/dialog";
-import { ContextMenuProvider, ContextMenuRegion, useContextMenus, type MenuEntry } from "../../src/components/context-menu";
+import { ContextMenuProvider, ContextMenuRegion, useContextMenus, type MenuEntry } from "../../src/plugins/context-menu";
 import "../../src/styles.css";
 
 const CustomButton = forwardRef<HTMLButtonElement, React.ComponentProps<"button">>((props, ref) => <button {...props} ref={ref} className="button" />);

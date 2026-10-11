@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { WelcomePage, type WelcomeSection } from "./pages/WelcomePage";
 import { EditorPage } from "./pages/editor/EditorPage";
 import type { ProjectRecord } from "./projects/projectApi";
-import { useContextMenus } from "./components/context-menu";
+import { useContextMenus } from "./plugins/context-menu";
 
 export default function App() {
   const menus = useContextMenus();

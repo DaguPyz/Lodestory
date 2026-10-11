@@ -1,7 +1,7 @@
 import {StrictMode, type ReactNode} from "react";
 import {createRoot, type Root, type RootOptions} from "react-dom/client";
-import type {Plugin} from "../plugin-core";
-import {pluginsReady} from "../plugin-core";
+import type {Plugin} from "../../plugin-core";
+import {pluginsReady} from "../../plugin-core";
 import {uiKey, type UiService, type UiWrapper} from "./uiService";
 
 /**

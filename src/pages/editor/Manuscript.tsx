@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef } from "react";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import type { WorkspaceDocument } from "../../documents/documentApi";
-import { ContextMenuRegion } from "../../components/context-menu";
+import { ContextMenuRegion } from "../../plugins/context-menu";
 
 export function Manuscript({ document, projectName, visible, onChange, onSave }: {
   document: WorkspaceDocument;

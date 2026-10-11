@@ -1,5 +1,5 @@
 import type {ReactNode} from "react";
-import {createServiceKey} from "../plugin-core";
+import {createServiceKey} from "../../plugin-core";
 
 /** 一个插件提供的根包装层；数值较小的 order 在外层，相同值保持登记顺序。 */
 export type UiWrapper = {

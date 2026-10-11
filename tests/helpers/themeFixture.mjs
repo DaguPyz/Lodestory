@@ -133,9 +133,9 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
   }
   // Runtime imports resolve to this same cached export object, so its core is inspectable too.
   engine.EngineCore = TrackedEngineCore;
-  const contract = load(resolve(sourceRoot, "theme/themeService.ts"));
-  const uiContract = load(resolve(sourceRoot, "ui/uiService.ts"));
-  const themeStore = load(resolve(sourceRoot, "theme/themeStore.ts"));
+  const contract = load(resolve(sourceRoot, "plugins/theme/themeService.ts"));
+  const uiContract = load(resolve(sourceRoot, "plugins/ui/uiService.ts"));
+  const themeStore = load(resolve(sourceRoot, "plugins/theme/themeStore.ts"));
   const originalStartThemeSync = themeStore.startThemeSync;
   themeStore.startThemeSync = () => {
     const stop = originalStartThemeSync();
@@ -144,8 +144,8 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
       stop();
     };
   };
-  const themeUi = load(resolve(sourceRoot, "theme/ThemeProvider.tsx"));
-  const pluginModule = load(resolve(sourceRoot, "theme/themePlugin.ts"));
+  const themeUi = load(resolve(sourceRoot, "plugins/theme/ThemeProvider.tsx"));
+  const pluginModule = load(resolve(sourceRoot, "plugins/theme/themePlugin.ts"));
   let uiService;
   return {
     React,

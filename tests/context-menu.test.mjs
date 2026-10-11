@@ -5,7 +5,7 @@ import vm from "node:vm";
 import ts from "typescript";
 
 async function load(name) {
-  const source = await readFile(new URL(`../src/components/context-menu/${name}.ts`, import.meta.url), "utf8");
+  const source = await readFile(new URL(`../src/plugins/context-menu/${name}.ts`, import.meta.url), "utf8");
   const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS } }).outputText;
   const exports = {};
   vm.runInNewContext(compiled, { exports });

@@ -107,7 +107,7 @@ test("ready without a root fails, then closes registration for this startup", as
 test("wrappers are snapshotted, sorted outside-in, and pass ThemeService through ThemeProvider", async () => {
   const f = uiPluginFixture();
   const { service: ui } = await f.mountUi();
-  const { ThemeProvider, useThemeService } = f.loadSource("theme/ThemeProvider.tsx");
+  const { ThemeProvider, useThemeService } = f.loadSource("plugins/theme/ThemeProvider.tsx");
   const themeService = {
     getSnapshot: () => ({ mode: "dark", resolvedTheme: "dark", persistenceError: false, windowError: false }),
     subscribe: () => () => {},

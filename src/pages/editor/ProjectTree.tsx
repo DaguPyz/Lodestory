@@ -2,7 +2,7 @@ import { useEffect, useState, type CSSProperties } from "react";
 import { Button, IconButton } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import type { TreeEntry } from "../../documents/documentApi";
-import { ContextMenuRegion } from "../../components/context-menu";
+import { ContextMenuRegion } from "../../plugins/context-menu";
 
 type ProjectTreeProps = {
   projectName: string;

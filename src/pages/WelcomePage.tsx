@@ -6,7 +6,7 @@ import { NewProjectDialog } from "./NewProjectDialog";
 import { Button } from "../components/Button";
 import { Icon } from "../components/Icon";
 import { SearchField } from "../components/SearchField";
-import { ContextMenuRegion, useContextMenus, type MenuAction } from "../components/context-menu";
+import { ContextMenuRegion, useContextMenus, type MenuAction } from "../plugins/context-menu";
 import {
   createProject, isUnavailableError, listRecentProjects, openProject, pickProjectDirectory,
   projectErrorMessage, relocateProject, removeRecentProject,

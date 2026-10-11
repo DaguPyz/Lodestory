@@ -154,10 +154,11 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     if (cached) return cached;
     const relativePath = relative(sourceRoot, path);
     if (relativePath === "App.tsx") return { __esModule: true, default: components.App };
-    if (relativePath === "components/context-menu/ContextMenuProvider.tsx") {
+    if (relativePath === "plugins/context-menu/ContextMenuProvider.tsx") {
       return { __esModule: true, ContextMenuProvider: components.ContextMenuProvider };
     }
-    if (relativePath === "theme/ThemeProvider.tsx") {
+    if (relativePath === "plugins/context-menu/ContextMenuRegion.tsx") return {};
+    if (relativePath === "plugins/theme/ThemeProvider.tsx") {
       return { __esModule: true, ThemeProvider: components.ThemeProvider };
     }
     const source = readFileSync(path, "utf8");
@@ -224,7 +225,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         return emit.call(this, key, payload);
       };
     }
-    if (relativePath === "theme/themePlugin.ts") {
+    if (relativePath === "plugins/theme/themePlugin.ts") {
       const createThemePlugin = exports.createThemePlugin;
       exports.createThemePlugin = () => {
         const plugin = createThemePlugin();

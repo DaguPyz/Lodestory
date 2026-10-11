@@ -4,7 +4,7 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 
-const source = await readFile(new URL("../src/theme/themeStore.ts", import.meta.url), "utf8");
+const source = await readFile(new URL("../src/plugins/theme/themeStore.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;

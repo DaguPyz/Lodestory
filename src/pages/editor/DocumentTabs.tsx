@@ -1,7 +1,7 @@
 import { IconButton } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import type { WorkspaceDocument } from "../../documents/documentApi";
-import { ContextMenuRegion } from "../../components/context-menu";
+import { ContextMenuRegion } from "../../plugins/context-menu";
 
 type DocumentTabsProps = {
   documents: WorkspaceDocument[];

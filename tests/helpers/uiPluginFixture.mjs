@@ -100,8 +100,8 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
   };
   const { EngineCore } = load(resolve(sourceRoot, "plugin-core/EngineCore.ts"));
   const { pluginsReady } = load(resolve(sourceRoot, "plugin-core/runtimeEvents.ts"));
-  const { createUiPlugin } = load(resolve(sourceRoot, "ui/uiPlugin.tsx"));
-  const { uiKey } = load(resolve(sourceRoot, "ui/index.ts"));
+  const { createUiPlugin } = load(resolve(sourceRoot, "plugins/ui/uiPlugin.tsx"));
+  const { uiKey } = load(resolve(sourceRoot, "plugins/ui/index.ts"));
   const core = new EngineCore();
 
   return {

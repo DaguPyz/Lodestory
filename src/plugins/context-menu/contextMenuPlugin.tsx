@@ -1,5 +1,5 @@
 import type {Plugin} from "../../plugin-core";
-import {uiKey} from "../../ui";
+import {uiKey} from "../ui";
 import {ContextMenuProvider} from "./ContextMenuProvider";
 
 /** 把上下文菜单能力登记为启动期 UI 包装层。 */

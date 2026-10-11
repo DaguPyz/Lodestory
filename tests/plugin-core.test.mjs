@@ -27,7 +27,7 @@ function load(name) {
   return exports;
 }
 
-const { EngineCore, PluginActivationError, PluginBatchActivationError } = load("EngineCore");
+const { EngineCore, PluginActivationError, PluginBatchActivationError, PluginBatchDeactivationError } = load("EngineCore");
 const { createServiceKey } = load("ServiceKey");
 const { createEventKey } = load("EventKey");
 const { EventDispatchError } = load("EventBus");
@@ -756,6 +756,176 @@ test("batch rollback continues after cleanup failures and preserves all original
   for (const key of [first, second]) assert.throws(() => core.get(key), /not registered/);
   await core.mountAll([{ id: "retry", requires: [], provides: [], activate() {} }]);
   await core.unmount("retry");
+});
+
+test("unmountAll deactivates in reverse activation order and keeps providers available through consumer cleanup", async () => {
+  const service = createServiceKey("service");
+  const middleService = createServiceKey("middle-service");
+  const events = [];
+  const core = new EngineCore();
+  await core.mountAll([
+    {
+      id: "consumer",
+      requires: [middleService],
+      provides: [],
+      activate(context) { events.push("consumer:start"); assert.equal(context.get(middleService), 42); },
+      deactivate() {
+        events.push("consumer:stop");
+        assert.equal(core.get(service), 42);
+        assert.equal(core.isMounted("provider"), true);
+      },
+    },
+    {
+      id: "middle",
+      requires: [service],
+      provides: [middleService],
+      activate(context) { events.push("middle:start"); context.provide(middleService, context.get(service)); },
+      deactivate() { events.push("middle:stop"); },
+    },
+    {
+      id: "provider",
+      requires: [],
+      provides: [service],
+      activate(context) { events.push("provider:start"); context.provide(service, 42); },
+      deactivate() { events.push("provider:stop"); },
+    },
+  ]);
+
+  await core.unmountAll();
+
+  assert.deepEqual(events, [
+    "provider:start", "middle:start", "consumer:start",
+    "consumer:stop", "middle:stop", "provider:stop",
+  ]);
+  for (const id of ["consumer", "middle", "provider"]) assert.equal(core.isMounted(id), false);
+  assert.throws(() => core.get(service), /not registered/);
+});
+
+test("unmountAll continues after multiple deactivation failures and revokes subscriptions and contexts", async () => {
+  const service = createServiceKey("service");
+  const event = createEventKey("shutdown-check");
+  const core = new EngineCore();
+  const calls = [];
+  const listenerCalls = [];
+  const retainedContexts = [];
+  const firstError = new Error("third cleanup failed");
+  const secondError = new Error("second cleanup failed");
+  await core.mountAll([
+    {
+      id: "provider",
+      requires: [],
+      provides: [service],
+      activate(context) { context.provide(service, 42); retainedContexts.push(context); },
+      async deactivate() {
+        calls.push("provider");
+        // Earlier subscribers must already have been removed while this context is still active.
+        await retainedContexts[0].emit(event, "after subscribers stopped");
+      },
+    },
+    {
+      id: "second",
+      requires: [service],
+      provides: [],
+      activate(context) { retainedContexts.push(context); context.on(event, () => listenerCalls.push("second")); },
+      deactivate() { calls.push("second"); throw secondError; },
+    },
+    {
+      id: "third",
+      requires: [service],
+      provides: [],
+      activate(context) { retainedContexts.push(context); context.on(event, () => listenerCalls.push("third")); },
+      deactivate() { calls.push("third"); throw firstError; },
+    },
+  ]);
+
+  await assert.rejects(core.unmountAll(), (error) => {
+    assert.ok(error instanceof PluginBatchDeactivationError);
+    assert.deepEqual(Array.from(error.cleanupErrors, ({ pluginId }) => pluginId), ["third", "second"]);
+    assert.equal(error.cleanupErrors[0].error, firstError);
+    assert.equal(error.cleanupErrors[1].error, secondError);
+    return true;
+  });
+
+  assert.deepEqual(calls, ["third", "second", "provider"]);
+  assert.deepEqual(listenerCalls, []);
+  for (const id of ["provider", "second", "third"]) assert.equal(core.isMounted(id), false);
+  assert.throws(() => core.get(service), /not registered/);
+  for (const context of retainedContexts) {
+    assert.throws(() => context.get(service), /no longer active/);
+    assert.throws(() => context.on(event, () => {}), /no longer active/);
+  }
+});
+
+test("unmountAll is exclusive while batch deactivation is pending", async () => {
+  const core = new EngineCore();
+  const deactivation = deferred();
+  const cleaning = deferred();
+  let mountCalls = 0;
+  await core.mount({
+    id: "slow-stop",
+    requires: [],
+    provides: [],
+    activate() {},
+    async deactivate() { cleaning.resolve(); await deactivation.promise; },
+  });
+
+  const stopping = core.unmountAll();
+  await cleaning.promise;
+  try {
+    await assert.rejects(core.mount({ id: "new", requires: [], provides: [], activate() { mountCalls += 1; } }), /batch unmounting is in progress/);
+    await assert.rejects(core.mountAll([{ id: "new-batch", requires: [], provides: [], activate() { mountCalls += 1; } }]), /batch unmounting is in progress/);
+    await assert.rejects(core.unmount("slow-stop"), /batch unmounting is in progress/);
+    await assert.rejects(core.unmountAll(), /batch unmounting is in progress/);
+    assert.equal(mountCalls, 0);
+    assert.equal(core.isMounted("slow-stop"), true);
+  } finally {
+    deactivation.resolve();
+    await stopping;
+  }
+});
+
+test("unmountAll rejects while a single mount or unmount is changing state", async () => {
+  const mountingCore = new EngineCore();
+  const activation = deferred();
+  const starting = mountingCore.mount({ id: "slow-start", requires: [], provides: [], activate() { return activation.promise; } });
+  await assert.rejects(mountingCore.unmountAll(), /changing state/);
+  activation.resolve();
+  await starting;
+  await mountingCore.unmount("slow-start");
+
+  const unmountingCore = new EngineCore();
+  const deactivation = deferred();
+  const cleaning = deferred();
+  await unmountingCore.mount({
+    id: "slow-stop",
+    requires: [],
+    provides: [],
+    activate() {},
+    async deactivate() { cleaning.resolve(); await deactivation.promise; },
+  });
+  const stopping = unmountingCore.unmount("slow-stop");
+  await cleaning.promise;
+  try {
+    await assert.rejects(unmountingCore.unmountAll(), /changing state/);
+  } finally {
+    deactivation.resolve();
+    await stopping;
+  }
+});
+
+test("unmountAll rejects during batch mounting and succeeds for empty or already stopped batches", async () => {
+  const core = new EngineCore();
+  const activation = deferred();
+  const starting = core.mountAll([
+    { id: "slow-start", requires: [], provides: [], activate() { return activation.promise; } },
+  ]);
+  await assert.rejects(core.unmountAll(), /batch mounting is in progress/);
+  activation.resolve();
+  await starting;
+
+  await core.unmountAll();
+  await core.unmountAll();
+  assert.equal(core.isMounted("slow-start"), false);
 });
 
 test("batch mounting excludes other lifecycle operations while keeping existing capabilities readable", async () => {

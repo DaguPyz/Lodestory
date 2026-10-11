@@ -24,14 +24,14 @@ export class EngineCore {
     private readonly capabilityRegistry = new CapabilityRegistry();
     /** 保存所有插件的监听与归属，激活成功后生效，失败或卸载后撤销。 */
     private readonly eventBus = new EventBus();
-    /** 保存已成功激活的插件及其上下文撤销方法，供卸载时使用。 */
+    /** 按激活完成顺序保存插件，供单独卸载或整批逆序卸载时使用。 */
     private readonly mounted = new Map<string, MountedPlugin>();
     /** 标记正在挂载或卸载的插件，避免同一插件的生命周期操作重叠。 */
     private readonly busy = new Set<string>();
     /** 使用者 → 提供者；激活、失败清理和停用期间也保留依赖，防止提供者提前卸载。 */
     private readonly dependencies = new Map<string, ReadonlySet<string>>();
-    /** 批量装配独占生命周期操作，直到激活或回滚全部结束。 */
-    private batchActive = false;
+    /** 批量装配或停用独占生命周期操作，直到执行或失败清理全部结束。 */
+    private batchOperation: "mounting" | "unmounting" | undefined;
 
     /** 激活插件；失败时停用已初始化部分并撤销它注册的能力和订阅。 */
     async mount(plugin: Plugin): Promise<void> {
@@ -47,7 +47,7 @@ export class EngineCore {
             throw new Error(`Cannot mount plugin batch while plugins are changing state: ${[...this.busy].map(id => `'${id}'`).join(", ")}.`);
         }
 
-        this.batchActive = true;
+        this.batchOperation = "mounting";
         try {
             const plans = plugins.map(preparePlugin);
             for (const plan of plans) this.checkPluginAvailable(plan.id);
@@ -73,12 +73,12 @@ export class EngineCore {
                 }
             }
         } finally {
-            this.batchActive = false;
+            this.batchOperation = undefined;
         }
     }
 
     private checkBatchInactive(): void {
-        if (this.batchActive) throw new Error("Plugin batch mounting is in progress; other lifecycle operations are unavailable.");
+        if (this.batchOperation) throw new Error(`Plugin batch ${this.batchOperation} is in progress; other lifecycle operations are unavailable.`);
     }
 
     private checkPluginAvailable(id: string): void {
@@ -190,6 +190,30 @@ export class EngineCore {
         await this.unmountPlugin(id);
     }
 
+    /** 按实际激活顺序逆序停用所有插件；清理失败仍继续，最后汇总错误。 */
+    async unmountAll(): Promise<void> {
+        this.checkBatchInactive();
+        if (this.busy.size) {
+            throw new Error(`Cannot unmount plugin batch while plugins are changing state: ${[...this.busy].map(id => `'${id}'`).join(", ")}.`);
+        }
+
+        this.batchOperation = "unmounting";
+        try {
+            const cleanupErrors: {pluginId: string; error: unknown}[] = [];
+            // 提供者先激活、使用者后激活，因此先停用使用者，才能安全停用提供者。
+            for (const id of [...this.mounted.keys()].reverse()) {
+                try {
+                    await this.unmountPlugin(id);
+                } catch (error) {
+                    cleanupErrors.push({pluginId: id, error});
+                }
+            }
+            if (cleanupErrors.length) throw new PluginBatchDeactivationError(cleanupErrors);
+        } finally {
+            this.batchOperation = undefined;
+        }
+    }
+
     private async unmountPlugin(id: string): Promise<void> {
         if (this.busy.has(id)) throw new Error(`Plugin '${id}' is changing state.`);
         const entry = this.mounted.get(id);
@@ -246,5 +270,15 @@ export class PluginBatchActivationError extends Error {
     ) {
         super(`Plugin '${pluginId}' failed to activate and batch rollback failed for plugins: ${rollbackErrors.map(entry => `'${entry.pluginId}'`).join(", ")}.`);
         this.name = "PluginBatchActivationError";
+    }
+}
+
+/** 整批停用已完成，保留每个插件的清理错误。 */
+export class PluginBatchDeactivationError extends Error {
+    constructor(
+        readonly cleanupErrors: readonly {readonly pluginId: string; readonly error: unknown}[],
+    ) {
+        super(`Plugin batch cleanup failed for plugins: ${cleanupErrors.map(entry => `'${entry.pluginId}'`).join(", ")}.`);
+        this.name = "PluginBatchDeactivationError";
     }
 }

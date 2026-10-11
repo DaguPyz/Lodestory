@@ -1,4 +1,4 @@
-export { EngineCore, PluginActivationError, PluginBatchActivationError } from "./EngineCore";
+export { EngineCore, PluginActivationError, PluginBatchActivationError, PluginBatchDeactivationError } from "./EngineCore";
 export { CapabilityRegistry } from "./CapabilityRegistry";
 export { createServiceKey } from "./ServiceKey";
 export { EventBus, EventDispatchError } from "./EventBus";

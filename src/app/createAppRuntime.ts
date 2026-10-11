@@ -8,10 +8,10 @@ export type AppRuntime = {
   stop(): Promise<void>;
 };
 
-/** 创建内核并等待传入的插件全部装配完成；失败清理由内核负责。 */
+/** 创建内核并完成传入插件的初次启动；激活或启动通知失败时清理由内核负责。 */
 export async function createAppRuntime(plugins: readonly Plugin[]): Promise<AppRuntime> {
   const core = new EngineCore();
-  await core.mountAll(plugins);
+  await core.start(plugins);
   let stopping: Promise<void> | undefined;
 
   return {

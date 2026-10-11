@@ -5,6 +5,7 @@ import { deferred, fixture } from "./helpers/themeFixture.mjs";
 test("theme capability stays unavailable until native initialization finishes", async () => {
   const nativeReady = deferred();
   const f = fixture({ nativeSetGate: nativeReady.promise });
+  await f.provideUi();
   const plugin = f.createThemePlugin();
   const mounting = f.core.mount(plugin);
   await Promise.resolve();
@@ -14,10 +15,12 @@ test("theme capability stays unavailable until native initialization finishes", 
   await mounting;
   assert.equal(typeof f.core.get(f.themeKey).getSnapshot, "function");
   await f.core.unmount("theme");
+  await f.core.unmount("test-ui");
 });
 
 test("registered theme service switches, notifies, cancels, retries, and unmounts cleanly", async () => {
   const f = fixture();
+  await f.provideUi();
   const plugin = f.createThemePlugin();
   await f.core.mount(plugin);
   const service = f.core.get(f.themeKey);
@@ -43,6 +46,7 @@ test("registered theme service switches, notifies, cancels, retries, and unmount
 
   await f.core.unmount("theme");
   assert.throws(() => f.core.get(f.themeKey), /not registered/);
+  assert.equal(f.uiRegistrations.find(({ kind, wrapper }) => kind === "wrapper" && wrapper.id === "theme").active, false);
   assert.equal(f.mediaListeners.size, 0);
   assert.equal(f.windowListenerCount("storage"), 0);
   assert.equal(f.channels[0].closed, true);
@@ -58,10 +62,12 @@ test("registered theme service switches, notifies, cancels, retries, and unmount
   assert.equal(f.mediaListeners.size, 0);
   assert.equal(f.nativeListeners.size, 0);
   assert.equal(f.unlistenCalls, 2);
+  await f.core.unmount("test-ui");
 });
 
 test("capability commit conflict fails activation and cleans theme platform resources", async () => {
   const f = fixture();
+  await f.provideUi();
   const conflictingProvider = {
     id: "existing-theme",
     requires: [],
@@ -80,12 +86,17 @@ test("capability commit conflict fails activation and cleans theme platform reso
   assert.equal(f.windowListenerCount("storage"), 0);
   assert.equal(f.channels[0].closed, true);
   assert.equal(typeof f.core.get(f.themeKey).getSnapshot, "function");
+  const failedWrapper = f.uiRegistrations.find(({ kind, wrapper }) => kind === "wrapper" && wrapper.id === "theme");
+  assert.equal(failedWrapper.active, false, "commit failure removes the wrapper registered earlier in activation");
+  assert.deepEqual(f.uiLifecycle.slice(-2), ["remove:theme", "stop-theme-sync"]);
   await f.core.unmount("existing-theme");
+  await f.core.unmount("test-ui");
 });
 
 test("native listener resolving after unmount is immediately removed", async () => {
   const nativeRegistration = deferred();
   const f = fixture({ nativeListenerGate: nativeRegistration.promise });
+  await f.provideUi();
   await f.core.mount(f.createThemePlugin());
   assert.equal(f.nativeListeners.size, 0);
   await f.core.unmount("theme");
@@ -95,12 +106,59 @@ test("native listener resolving after unmount is immediately removed", async () 
   await Promise.resolve();
   assert.equal(f.nativeListeners.size, 0);
   assert.equal(f.unlistenCalls, 1);
+  await f.core.unmount("test-ui");
 });
 
 test("native setTheme failure is retained in the snapshot without failing plugin mount", async () => {
   const f = fixture({ nativeSetError: true });
+  await f.provideUi();
   await f.core.mount(f.createThemePlugin());
   assert.equal(f.core.isMounted("theme"), true);
   assert.equal(f.core.get(f.themeKey).getSnapshot().windowError, true);
   await f.core.unmount("theme");
+  await f.core.unmount("test-ui");
+});
+
+test("theme plugin registers the same ThemeService through the real ThemeProvider and removes it before stopping sync", async () => {
+  const f = fixture();
+  await f.provideUi();
+  const plugin = f.createThemePlugin();
+  assert.equal(plugin.requires[0], f.uiKey);
+  await f.core.mount(plugin);
+
+  const registration = f.uiRegistrations.find(({ kind, wrapper }) => kind === "wrapper" && wrapper.id === "theme");
+  assert.ok(registration);
+  assert.equal(registration.wrapper.order, 20);
+  const service = f.core.get(f.themeKey);
+  function Probe() {
+    return f.React.createElement("span", {
+      "data-same-service": String(f.useThemeService() === service),
+      children: "themed",
+    });
+  }
+  const wrapped = registration.wrapper.wrap(f.React.createElement(Probe));
+  assert.equal(wrapped.type, f.ThemeProvider);
+  assert.equal(wrapped.props.service, service);
+  assert.match(f.renderToStaticMarkup(wrapped), /data-same-service="true"/);
+
+  await f.core.unmount("theme");
+  assert.deepEqual(f.uiLifecycle.slice(-2), ["remove:theme", "stop-theme-sync"]);
+  await f.core.unmount("test-ui");
+});
+
+test("theme sync stops even when removing the mounted wrapper throws", async () => {
+  const f = fixture();
+  await f.provideUi();
+  await f.core.mount(f.createThemePlugin());
+  f.controls.uiDisposeError = true;
+
+  await assert.rejects(f.core.unmount("theme"), /UI wrapper disposer failed/);
+  assert.deepEqual(f.uiLifecycle.slice(-2), ["remove:theme", "stop-theme-sync"]);
+  assert.equal(f.mediaListeners.size, 0);
+  assert.equal(f.windowListenerCount("storage"), 0);
+  assert.equal(f.channels[0].closed, true);
+  assert.throws(() => f.core.get(f.themeKey), /not registered/);
+
+  f.controls.uiDisposeError = false;
+  await f.core.unmount("test-ui");
 });

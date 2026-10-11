@@ -4,6 +4,7 @@ import {preparePlugin, sortPlugins, type PluginPlan} from "./PluginPlan";
 import type {ServiceKey} from "./ServiceKey";
 import {EventBus} from "./EventBus";
 import type {EventKey, EventListener} from "./EventKey";
+import {pluginsReady} from "./runtimeEvents";
 
 /** 已激活插件的记录，供 EngineCore 在卸载时执行停用和上下文清理。 */
 type MountedPlugin = {
@@ -30,51 +31,98 @@ export class EngineCore {
     private readonly busy = new Set<string>();
     /** 使用者 → 提供者；激活、失败清理和停用期间也保留依赖，防止提供者提前卸载。 */
     private readonly dependencies = new Map<string, ReadonlySet<string>>();
-    /** 批量装配或停用独占生命周期操作，直到执行或失败清理全部结束。 */
-    private batchOperation: "mounting" | "unmounting" | undefined;
+    /** 批量装配、初次启动或停用独占生命周期操作，直到执行或失败清理全部结束。 */
+    private batchOperation: "mounting" | "starting" | "unmounting" | undefined;
+    /** 初次启动是一次性操作；失败后同一 Core 也不能再次发送 pluginsReady。 */
+    private startAttempted = false;
+    /** 普通挂载曾成功后，即使全部卸载，也不再允许把该 Core 当作初始启动实例。 */
+    private hasMountedPlugins = false;
 
     /** 激活插件；失败时停用已初始化部分并撤销它注册的能力和订阅。 */
     async mount(plugin: Plugin): Promise<void> {
         this.checkBatchInactive();
         this.checkPluginAvailable(plugin.id);
         await this.mountPrepared(preparePlugin(plugin));
+        this.hasMountedPlugins = true;
     }
 
     /** 整批预检和排序后逐个激活；失败时仅逆序撤销本批次已挂载的插件。 */
     async mountAll(plugins: readonly Plugin[]): Promise<void> {
         this.checkBatchInactive();
-        if (this.busy.size) {
-            throw new Error(`Cannot mount plugin batch while plugins are changing state: ${[...this.busy].map(id => `'${id}'`).join(", ")}.`);
-        }
-
         this.batchOperation = "mounting";
         try {
-            const plans = plugins.map(preparePlugin);
-            for (const plan of plans) this.checkPluginAvailable(plan.id);
-            const ordered = sortPlugins(plans, key => this.capabilityRegistry.getOwnerId(key));
-            const mountedIds: string[] = [];
-            for (const plan of ordered) {
-                try {
-                    await this.mountPrepared(plan);
-                    mountedIds.push(plan.id);
-                } catch (activationError) {
-                    const rollbackErrors: {pluginId: string; error: unknown}[] = [];
-                    for (const id of mountedIds.reverse()) {
-                        try {
-                            await this.unmountPlugin(id);
-                        } catch (error) {
-                            rollbackErrors.push({pluginId: id, error});
-                        }
-                    }
-                    if (rollbackErrors.length) {
-                        throw new PluginBatchActivationError(plan.id, activationError, rollbackErrors);
-                    }
-                    throw activationError;
+            await this.mountBatch(plugins);
+        } finally {
+            this.batchOperation = undefined;
+        }
+    }
+
+    /**
+     * 在全新 Core 上只执行一次初次启动：整批插件激活成功后通知 pluginsReady。
+     * 激活失败沿用 mountAll 的回滚语义；通知失败则逆序卸载本次插件，清理也失败时抛 StartupError。
+     */
+    async start(plugins: readonly Plugin[]): Promise<void> {
+        this.checkBatchInactive();
+        if (this.startAttempted) throw new Error("EngineCore.start can only be called once.");
+        if (this.hasMountedPlugins || this.mounted.size || this.busy.size) {
+            throw new Error("EngineCore.start is only available on a new core with no prior, mounted, or changing plugins.");
+        }
+
+        this.startAttempted = true;
+        this.batchOperation = "starting";
+        try {
+            const mountedIds = await this.mountBatch(plugins);
+            try {
+                await this.eventBus.emit(pluginsReady, undefined);
+            } catch (startupError) {
+                const cleanupErrors = await this.unmountBatch(mountedIds);
+                if (cleanupErrors.length) {
+                    throw new StartupError(startupError, new PluginBatchDeactivationError(cleanupErrors));
                 }
+                throw startupError;
             }
         } finally {
             this.batchOperation = undefined;
         }
+    }
+
+    /** 执行已经由调用者加锁的批量挂载；失败时只回滚本批次成功挂载的插件。 */
+    private async mountBatch(plugins: readonly Plugin[]): Promise<string[]> {
+        if (this.busy.size) {
+            throw new Error(`Cannot mount plugin batch while plugins are changing state: ${[...this.busy].map(id => `'${id}'`).join(", ")}.`);
+        }
+
+        const plans = plugins.map(preparePlugin);
+        for (const plan of plans) this.checkPluginAvailable(plan.id);
+        const ordered = sortPlugins(plans, key => this.capabilityRegistry.getOwnerId(key));
+        const mountedIds: string[] = [];
+        for (const plan of ordered) {
+            try {
+                await this.mountPrepared(plan);
+                mountedIds.push(plan.id);
+                this.hasMountedPlugins = true;
+            } catch (activationError) {
+                const rollbackErrors = await this.unmountBatch(mountedIds);
+                if (rollbackErrors.length) {
+                    throw new PluginBatchActivationError(plan.id, activationError, rollbackErrors);
+                }
+                throw activationError;
+            }
+        }
+        return mountedIds;
+    }
+
+    /** 按本批次激活顺序逆序清理，并在失败时继续处理其余插件。 */
+    private async unmountBatch(mountedIds: readonly string[]): Promise<{pluginId: string; error: unknown}[]> {
+        const cleanupErrors: {pluginId: string; error: unknown}[] = [];
+        for (const id of [...mountedIds].reverse()) {
+            try {
+                await this.unmountPlugin(id);
+            } catch (error) {
+                cleanupErrors.push({pluginId: id, error});
+            }
+        }
+        return cleanupErrors;
     }
 
     private checkBatchInactive(): void {
@@ -141,6 +189,9 @@ export class EngineCore {
             },
             emit: async <T>(key: EventKey<T>, payload: T) => {
                 checkContext();
+                if (key.token === pluginsReady.token) {
+                    throw new Error("The pluginsReady event is reserved for EngineCore.start.");
+                }
                 await this.eventBus.emit(key, payload);
             },
         };
@@ -199,15 +250,8 @@ export class EngineCore {
 
         this.batchOperation = "unmounting";
         try {
-            const cleanupErrors: {pluginId: string; error: unknown}[] = [];
             // 提供者先激活、使用者后激活，因此先停用使用者，才能安全停用提供者。
-            for (const id of [...this.mounted.keys()].reverse()) {
-                try {
-                    await this.unmountPlugin(id);
-                } catch (error) {
-                    cleanupErrors.push({pluginId: id, error});
-                }
-            }
+            const cleanupErrors = await this.unmountBatch([...this.mounted.keys()]);
             if (cleanupErrors.length) throw new PluginBatchDeactivationError(cleanupErrors);
         } finally {
             this.batchOperation = undefined;
@@ -280,5 +324,16 @@ export class PluginBatchDeactivationError extends Error {
     ) {
         super(`Plugin batch cleanup failed for plugins: ${cleanupErrors.map(entry => `'${entry.pluginId}'`).join(", ")}.`);
         this.name = "PluginBatchDeactivationError";
+    }
+}
+
+/** 初次启动通知失败且逆序清理也失败时，同时保留两类错误。 */
+export class StartupError extends Error {
+    constructor(
+        readonly startupError: unknown,
+        readonly cleanupError: PluginBatchDeactivationError,
+    ) {
+        super("EngineCore startup notification failed and plugin cleanup also failed.");
+        this.name = "StartupError";
     }
 }

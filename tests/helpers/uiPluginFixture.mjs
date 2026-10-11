@@ -89,6 +89,15 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
     return exports;
   }
 
+  const eventBusModule = load(resolve(sourceRoot, "plugin-core/EventBus.ts"));
+  const BaseEventBus = eventBusModule.EventBus;
+  let eventBus;
+  eventBusModule.EventBus = class TrackedEventBus extends BaseEventBus {
+    constructor(...args) {
+      super(...args);
+      eventBus = this;
+    }
+  };
   const { EngineCore } = load(resolve(sourceRoot, "plugin-core/EngineCore.ts"));
   const { pluginsReady } = load(resolve(sourceRoot, "plugin-core/runtimeEvents.ts"));
   const { createUiPlugin } = load(resolve(sourceRoot, "ui/uiPlugin.tsx"));
@@ -110,17 +119,9 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
       await core.mount(plugin);
       return { plugin, service: core.get(uiKey) };
     },
-    async addReadyPublisher() {
-      let emit;
-      await core.mount({
-        id: "ready-test-publisher",
-        requires: [],
-        provides: [],
-        activate(context) {
-          emit = (payload = undefined) => context.emit(pluginsReady, payload);
-        },
-      });
-      return (payload = undefined) => emit(payload);
+    notifyReady(payload = undefined) {
+      if (!eventBus) throw new Error("The EngineCore has not been created yet.");
+      return eventBus.emit(pluginsReady, payload);
     },
     loadSource(relativePath) {
       return load(resolve(sourceRoot, relativePath));

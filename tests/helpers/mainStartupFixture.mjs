@@ -16,6 +16,9 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const modules = new Map();
   const createdCores = [];
   const rootCalls = [];
+  const moduleImports = [];
+  const catalogPluginIds = [];
+  const lifecycle = [];
   const nativeCalls = [];
   const mediaListeners = new Set();
   const windowListeners = new Map();
@@ -89,7 +92,15 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     close() { this.closed = true; logs.push("channel.close"); }
   }
 
-  const React = { StrictMode: Symbol("StrictMode") };
+  const React = {
+    StrictMode: Symbol("StrictMode"),
+    createElement(type, props, ...children) {
+      const nextProps = { ...(props ?? {}) };
+      if (children.length === 1) nextProps.children = children[0];
+      else if (children.length > 1) nextProps.children = children;
+      return { type, props: nextProps };
+    },
+  };
   const ReactDOM = {
     createRoot(container, options) {
       rootCalls.push({ container, options });
@@ -98,6 +109,10 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         container,
         options,
         render(tree) {
+          logs.push("root.render");
+          if (faults.uncaughtErrorDuringRender) {
+            options?.onUncaughtError?.(faults.uncaughtErrorDuringRender);
+          }
           if (faults.renderError) throw faults.renderError;
           this.tree = tree;
         },
@@ -139,7 +154,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     if (cached) return cached;
     const relativePath = relative(sourceRoot, path);
     if (relativePath === "App.tsx") return { __esModule: true, default: components.App };
-    if (relativePath.startsWith("components/context-menu/")) {
+    if (relativePath === "components/context-menu/ContextMenuProvider.tsx") {
       return { __esModule: true, ContextMenuProvider: components.ContextMenuProvider };
     }
     if (relativePath === "theme/ThemeProvider.tsx") {
@@ -176,6 +191,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       Object,
       Array,
       require(specifier) {
+        moduleImports.push({ from: relativePath, specifier });
         if (specifier === "react") return React;
         if (specifier === "react-dom/client") return ReactDOM;
         if (specifier === "react/jsx-runtime") {
@@ -198,39 +214,64 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
           super(...args);
           createdCores.push(this);
         }
-        get(key) {
-          if (omitThemeService && key.id === "app/theme") throw new Error("Service 'app/theme' is not registered.");
-          return super.get(key);
-        }
       }
       exports.EngineCore = TrackedEngineCore;
+    }
+    if (relativePath === "plugin-core/EventBus.ts") {
+      const emit = exports.EventBus.prototype.emit;
+      exports.EventBus.prototype.emit = async function (key, payload) {
+        if (key.id === "runtime/plugins-ready") logs.push("plugins-ready.emit");
+        return emit.call(this, key, payload);
+      };
     }
     if (relativePath === "theme/themePlugin.ts") {
       const createThemePlugin = exports.createThemePlugin;
       exports.createThemePlugin = () => {
         const plugin = createThemePlugin();
-        if (cleanupError && !activationError) {
-          const deactivate = plugin.deactivate;
-          plugin.deactivate = () => {
-            deactivate?.();
-            throw cleanupError;
-          };
-        }
-        if (activationError) {
-          const activate = plugin.activate;
-          plugin.activate = async (context) => {
-            await activate(context);
-            if (cleanupError) {
-              const deactivate = plugin.deactivate;
-              plugin.deactivate = () => {
-                deactivate?.();
-                throw cleanupError;
-              };
-            }
-            throw activationError;
-          };
-        }
+        const activate = plugin.activate;
+        plugin.activate = async (context) => {
+          const pluginContext = omitThemeService
+            ? {
+                ...context,
+                provide(key, value) {
+                  if (key.id === "app/theme") return;
+                  return context.provide(key, value);
+                },
+              }
+            : context;
+          await activate(pluginContext);
+          if (activationError) throw activationError;
+        };
+        const deactivate = plugin.deactivate;
+        plugin.deactivate = () => {
+          deactivate?.();
+          if (cleanupError) throw cleanupError;
+        };
         return plugin;
+      };
+    }
+    if (relativePath === "app/appPlugins.ts") {
+      const createAppPlugins = exports.createAppPlugins;
+      exports.createAppPlugins = (...args) => {
+        const plugins = createAppPlugins(...args);
+        catalogPluginIds.push(...plugins.map(({ id }) => id));
+        return plugins.map((plugin) => ({
+          ...plugin,
+          async activate(context) {
+            lifecycle.push(`activate:${plugin.id}:begin`);
+            logs.push(`activate:${plugin.id}:begin`);
+            await plugin.activate(context);
+            lifecycle.push(`activate:${plugin.id}:complete`);
+            logs.push(`activate:${plugin.id}:complete`);
+          },
+          async deactivate() {
+            lifecycle.push(`deactivate:${plugin.id}:begin`);
+            logs.push(`deactivate:${plugin.id}:begin`);
+            await plugin.deactivate?.();
+            lifecycle.push(`deactivate:${plugin.id}:complete`);
+            logs.push(`deactivate:${plugin.id}:complete`);
+          },
+        }));
       };
     }
     return exports;
@@ -247,6 +288,9 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     ReactDOM,
     components,
     createdCores,
+    moduleImports,
+    catalogPluginIds,
+    lifecycle,
     rootCalls,
     roots,
     rootElement,

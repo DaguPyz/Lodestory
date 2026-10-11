@@ -1,6 +1,6 @@
 # 公共右键菜单
 
-在窗口入口挂载一次 `ContextMenuProvider`。页面通过 `ContextMenuRegion` 传入触发元素、菜单配置和可选上下文；组件不依赖项目、文档或 Tauri 业务接口。
+应用通过 `createContextMenuPlugin()` 登记 `ContextMenuProvider`，UI 装配插件收到 `pluginsReady` 后把它放在根视图外层。独立组件示例仍可以直接挂载一次 Provider。页面通过 `ContextMenuRegion` 传入触发元素、菜单配置和可选上下文；组件不依赖项目、文档或 Tauri 业务接口。
 
 ```tsx
 import { ContextMenuRegion, type MenuEntry } from "./components/context-menu";

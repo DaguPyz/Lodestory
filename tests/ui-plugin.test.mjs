@@ -48,21 +48,19 @@ test("activation registers uiKey but waits for pluginsReady and mounts only once
   await contributor(f, "app-root", (context) => {
     context.get(f.uiKey).setRoot(() => f.React.createElement("main", { children: "Lodestory" }));
   });
-  const emitReady = await f.addReadyPublisher();
   assert.equal(f.roots.length, 0, "the root is still deferred until ready");
 
-  await emitReady();
+  await f.notifyReady();
   assert.equal(f.roots.length, 1);
   assert.equal(f.roots[0].container, container);
   assert.equal(f.roots[0].options, rootOptions);
   assert.equal(f.roots[0].renderCalls.length, 1);
   assert.equal(f.roots[0].renderCalls[0].type, f.React.StrictMode);
 
-  await emitReady();
+  await f.notifyReady();
   assert.equal(f.roots.length, 1, "a repeated ready event must not create another root");
   assert.equal(f.roots[0].renderCalls.length, 1, "a repeated ready event must not render again");
 
-  await f.core.unmount("ready-test-publisher");
   await f.core.unmount("app-root");
   await f.core.unmount("ui");
 });
@@ -90,9 +88,8 @@ test("UI registration rejects missing, duplicate, and invalid contributions", as
 test("ready without a root fails, then closes registration for this startup", async () => {
   const f = uiPluginFixture();
   const { service } = await f.mountUi();
-  const emitReady = await f.addReadyPublisher();
 
-  await assert.rejects(emitReady(), (error) => {
+  await assert.rejects(f.notifyReady(), (error) => {
     assert.match(error.message, /runtime\/plugins-ready/);
     assert.equal(error.listenerErrors[0].pluginId, "ui");
     assert.match(error.listenerErrors[0].error.message, /UI root is not registered/);
@@ -101,10 +98,9 @@ test("ready without a root fails, then closes registration for this startup", as
   assert.equal(f.roots.length, 0);
   assert.throws(() => service.setRoot(() => f.React.createElement("main")), /before pluginsReady/);
   assert.throws(() => service.addWrapper({ id: "late", order: 1, wrap: (children) => children }), /before pluginsReady/);
-  await emitReady();
+  await f.notifyReady();
   assert.equal(f.roots.length, 0, "a failed ready notification is not retried in the same activation");
 
-  await f.core.unmount("ready-test-publisher");
   await f.core.unmount("ui");
 });
 
@@ -155,8 +151,7 @@ test("wrappers are snapshotted, sorted outside-in, and pass ThemeService through
   await contributor(f, "app-root", (context) => {
     context.get(f.uiKey).setRoot(() => f.React.createElement(App));
   });
-  const emitReady = await f.addReadyPublisher();
-  await emitReady();
+  await f.notifyReady();
 
   assert.deepEqual(calls, ["last", "theme-provider", "second", "first"], "reduceRight invokes wrappers inside-out");
   const strictTree = f.roots[0].renderCalls[0];
@@ -183,7 +178,6 @@ test("wrappers are snapshotted, sorted outside-in, and pass ThemeService through
   disposeFirst();
   assert.equal(f.roots[0].unmountCalls, 1);
 
-  await f.core.unmount("ready-test-publisher");
   await f.core.unmount("app-root");
   await f.core.unmount("ui");
 });
@@ -200,12 +194,10 @@ test("disposing a contribution before ready removes it from the assembled tree",
   dispose();
   dispose();
   ui.setRoot(() => f.React.createElement("main"));
-  const emitReady = await f.addReadyPublisher();
-  await emitReady();
+  await f.notifyReady();
 
   assert.equal(invoked, false);
   assert.equal(f.roots.length, 1);
-  await f.core.unmount("ready-test-publisher");
   await f.core.unmount("ui");
 });
 
@@ -215,8 +207,7 @@ test("deactivation revokes an old UiService and old disposers cannot affect a ne
   await f.core.mount(plugin);
   const oldUi = f.core.get(f.uiKey);
   const oldDispose = oldUi.setRoot(() => f.React.createElement("main", { children: "old" }));
-  const emitReady = await f.addReadyPublisher();
-  await emitReady();
+  await f.notifyReady();
   await f.core.unmount("ui");
   assert.equal(f.roots[0].unmountCalls, 1);
   assert.throws(() => oldUi.addWrapper({ id: "old", order: 1, wrap: (children) => children }), /no longer active/);
@@ -226,20 +217,18 @@ test("deactivation revokes an old UiService and old disposers cannot affect a ne
   assert.notEqual(newUi, oldUi);
   oldDispose();
   newUi.setRoot(() => f.React.createElement("main", { children: "new" }));
-  await emitReady();
+  await f.notifyReady();
   assert.equal(f.roots.length, 2);
   assert.equal(f.roots[1].renderCalls.length, 1);
   await f.core.unmount("ui");
-  await f.core.unmount("ready-test-publisher");
 });
 
 test("a synchronous render failure propagates and plugin shutdown unmounts the retained React root", async () => {
   const f = uiPluginFixture({ renderError: new Error("render failed") });
   const { service: ui } = await f.mountUi();
   ui.setRoot(() => f.React.createElement("main"));
-  const emitReady = await f.addReadyPublisher();
 
-  await assert.rejects(emitReady(), /runtime\/plugins-ready/);
+  await assert.rejects(f.notifyReady(), /runtime\/plugins-ready/);
   assert.equal(f.roots.length, 1);
   assert.equal(f.roots[0].renderCalls.length, 1);
   assert.equal(f.roots[0].unmountCalls, 0);
@@ -249,5 +238,4 @@ test("a synchronous render failure propagates and plugin shutdown unmounts the r
   assert.equal(f.roots[0].unmountCalls, 1);
   assert.throws(() => ui.setRoot(() => f.React.createElement("aside")), /no longer active/);
 
-  await f.core.unmount("ready-test-publisher");
 });

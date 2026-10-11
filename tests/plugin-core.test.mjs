@@ -27,10 +27,11 @@ function load(name) {
   return exports;
 }
 
-const { EngineCore, PluginActivationError, PluginBatchActivationError, PluginBatchDeactivationError } = load("EngineCore");
+const { EngineCore, PluginActivationError, PluginBatchActivationError, PluginBatchDeactivationError, StartupError } = load("EngineCore");
 const { createServiceKey } = load("ServiceKey");
 const { createEventKey } = load("EventKey");
 const { EventDispatchError } = load("EventBus");
+const { pluginsReady } = load("runtimeEvents");
 
 function deferred() {
   let resolve;
@@ -1388,4 +1389,165 @@ test("batch rollback clears new committed and pending listeners while preserving
   assert.equal(core.isMounted("existing"), true);
   assert.equal(core.isMounted("new"), false);
   assert.equal(core.isMounted("broken"), false);
+});
+
+test("start activates the full initial batch before one awaited ready event and holds the lifecycle lock", async () => {
+  const service = createServiceKey("startup/service");
+  const core = new EngineCore();
+  const listenerStarted = deferred();
+  const finishListener = deferred();
+  const calls = [];
+  let lateReadyCount = 0;
+  const consumer = {
+    id: "consumer",
+    requires: [service],
+    provides: [],
+    activate(context) {
+      calls.push(`activate consumer:${context.get(service)}`);
+      context.on(pluginsReady, async (payload) => {
+        assert.equal(payload, undefined);
+        calls.push("ready:start");
+        listenerStarted.resolve();
+        await finishListener.promise;
+        calls.push("ready:end");
+      });
+    },
+    deactivate() { calls.push("deactivate consumer"); },
+  };
+  const provider = {
+    id: "provider",
+    requires: [],
+    provides: [service],
+    activate(context) {
+      calls.push("activate provider");
+      context.provide(service, "available");
+    },
+    deactivate() { calls.push("deactivate provider"); },
+  };
+
+  const starting = core.start([consumer, provider]);
+  await listenerStarted.promise;
+  assert.deepEqual(calls, ["activate provider", "activate consumer:available", "ready:start"]);
+  await assert.rejects(core.mount({ id: "during-start", requires: [], provides: [], activate() {} }), /batch starting is in progress/);
+  await assert.rejects(core.mountAll([]), /batch starting is in progress/);
+  await assert.rejects(core.unmount("consumer"), /batch starting is in progress/);
+  await assert.rejects(core.unmountAll(), /batch starting is in progress/);
+
+  finishListener.resolve();
+  await starting;
+  assert.deepEqual(calls, ["activate provider", "activate consumer:available", "ready:start", "ready:end"]);
+  await assert.rejects(core.start([]), /can only be called once/);
+
+  await core.mountAll([{
+    id: "late-subscriber",
+    requires: [],
+    provides: [],
+    activate(context) { context.on(pluginsReady, () => { lateReadyCount++; }); },
+  }]);
+  assert.equal(lateReadyCount, 0, "later mountAll calls do not repeat the initial ready event");
+  await core.unmountAll();
+});
+
+test("start rejects a core that already mounted plugins through the ordinary lifecycle", async () => {
+  const core = new EngineCore();
+  await core.mount({ id: "ordinary", requires: [], provides: [], activate() {} });
+  await core.unmount("ordinary");
+
+  await assert.rejects(core.start([]), /only available on a new core/);
+});
+
+test("plugins cannot publish the reserved pluginsReady lifecycle event", async () => {
+  const core = new EngineCore();
+  let readyCount = 0;
+  await core.mount({
+    id: "reserved-event",
+    requires: [],
+    provides: [],
+    async activate(context) {
+      context.on(pluginsReady, () => { readyCount++; });
+      await assert.rejects(context.emit(pluginsReady, undefined), /reserved for EngineCore.start/);
+    },
+  });
+
+  assert.equal(readyCount, 0);
+  await core.unmount("reserved-event");
+});
+
+test("ready listener failure rolls back startup in reverse order and preserves its original error", async () => {
+  const service = createServiceKey("startup/rollback");
+  const core = new EngineCore();
+  const calls = [];
+  const listenerError = new Error("UI assembly failed");
+  let retainedPublisher;
+  const consumer = {
+    id: "consumer",
+    requires: [service],
+    provides: [],
+    activate(context) {
+      calls.push("activate consumer");
+      context.on(pluginsReady, () => { calls.push("ready consumer"); });
+    },
+    deactivate() { calls.push("deactivate consumer"); },
+  };
+  const provider = {
+    id: "provider",
+    requires: [],
+    provides: [service],
+    activate(context) {
+      calls.push("activate provider");
+      context.provide(service, 42);
+      retainedPublisher = context;
+      context.on(pluginsReady, () => { calls.push("ready provider"); throw listenerError; });
+    },
+    deactivate() { calls.push("deactivate provider"); },
+  };
+
+  await assert.rejects(core.start([consumer, provider]), (error) => {
+    assert.ok(error instanceof EventDispatchError);
+    assert.equal(error.eventId, pluginsReady.id);
+    assert.deepEqual([...error.listenerErrors].map((entry) => entry.error), [listenerError]);
+    return true;
+  });
+  assert.deepEqual(calls, [
+    "activate provider",
+    "activate consumer",
+    "ready provider",
+    "ready consumer",
+    "deactivate consumer",
+    "deactivate provider",
+  ]);
+  assert.equal(core.isMounted("provider"), false);
+  assert.equal(core.isMounted("consumer"), false);
+  assert.throws(() => core.get(service), /not registered/);
+  await assert.rejects(core.start([provider, consumer]), /can only be called once/);
+  await assert.rejects(retainedPublisher.emit(createEventKey("other"), undefined), /no longer active/);
+});
+
+test("start wraps ready and cleanup failures while retaining both errors", async () => {
+  const service = createServiceKey("startup/double-failure");
+  const core = new EngineCore();
+  const listenerError = new Error("ready failed");
+  const cleanupError = new Error("deactivate failed");
+  const plugin = {
+    id: "double-failure",
+    requires: [],
+    provides: [service],
+    activate(context) {
+      context.provide(service, 1);
+      context.on(pluginsReady, () => { throw listenerError; });
+    },
+    deactivate() { throw cleanupError; },
+  };
+
+  await assert.rejects(core.start([plugin]), (error) => {
+    assert.ok(error instanceof StartupError);
+    assert.ok(error.startupError instanceof EventDispatchError);
+    assert.equal(error.startupError.listenerErrors[0].error, listenerError);
+    assert.ok(error.cleanupError instanceof PluginBatchDeactivationError);
+    assert.equal(error.cleanupError.cleanupErrors[0].pluginId, "double-failure");
+    assert.equal(error.cleanupError.cleanupErrors[0].error, cleanupError);
+    return true;
+  });
+  assert.equal(core.isMounted("double-failure"), false);
+  assert.throws(() => core.get(service), /not registered/);
 });

@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -5,6 +6,10 @@ import vm from "node:vm";
 import ts from "typescript";
 
 const sourceRoot = fileURLToPath(new URL("../../src/", import.meta.url));
+const requireFromHere = createRequire(import.meta.url);
+const React = requireFromHere("react");
+const jsxRuntime = requireFromHere("react/jsx-runtime");
+const jsxDevRuntime = requireFromHere("react/jsx-dev-runtime");
 
 export function deferred() {
   let resolvePromise;
@@ -17,13 +22,15 @@ export function deferred() {
 export function fixture({ saved = null, system = "dark", nativeSetError = false, nativeSetGate = null, nativeListenerGate = null } = {}) {
   const storageKey = "lodestory.theme-mode";
   const values = new Map(saved === null ? [] : [[storageKey, saved]]);
-  const controls = { system, writeError: false, nativeSetError };
+  const controls = { system, writeError: false, nativeSetError, uiDisposeError: false };
   const windowListeners = new Map();
   const mediaListeners = new Set();
   const nativeListeners = new Set();
   const channels = [];
   const nativeCalls = [];
   const createdCores = [];
+  const uiRegistrations = [];
+  const uiLifecycle = [];
   let nativeTheme = system;
   let unlistenCalls = 0;
 
@@ -77,7 +84,7 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
   const modules = new Map();
   function resolveModule(fromPath, specifier) {
     const base = resolve(dirname(fromPath), specifier);
-    const candidates = [base, `${base}.ts`, resolve(base, "index.ts")];
+    const candidates = [base, `${base}.ts`, `${base}.tsx`, resolve(base, "index.ts"), resolve(base, "index.tsx")];
     const path = candidates.find((candidate) => {
       try { return readFileSync(candidate, "utf8") !== undefined; }
       catch { return false; }
@@ -90,7 +97,11 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
     if (cached) return cached;
     const source = readFileSync(path, "utf8");
     const compiled = ts.transpileModule(source, {
-      compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
+      compilerOptions: {
+        target: ts.ScriptTarget.ES2022,
+        module: ts.ModuleKind.CommonJS,
+        ...(path.endsWith(".tsx") ? { jsx: ts.JsxEmit.ReactJSX } : {}),
+      },
     }).outputText;
     const exports = {};
     modules.set(path, exports);
@@ -99,6 +110,10 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
       require(specifier) {
         if (specifier === "@tauri-apps/api/core") return { isTauri: () => true };
         if (specifier === "@tauri-apps/api/window") return { getCurrentWindow: () => appWindow };
+        if (specifier === "react") return React;
+        if (specifier === "react/jsx-runtime") return jsxRuntime;
+        if (specifier === "react/jsx-dev-runtime") return jsxDevRuntime;
+        if (specifier === "react-dom/client") return { createRoot() { throw new Error("Unexpected React root creation in theme fixture."); } };
         return load(resolveModule(path, specifier));
       },
       window,
@@ -119,8 +134,21 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
   // Runtime imports resolve to this same cached export object, so its core is inspectable too.
   engine.EngineCore = TrackedEngineCore;
   const contract = load(resolve(sourceRoot, "theme/themeService.ts"));
+  const uiContract = load(resolve(sourceRoot, "ui/uiService.ts"));
+  const themeStore = load(resolve(sourceRoot, "theme/themeStore.ts"));
+  const originalStartThemeSync = themeStore.startThemeSync;
+  themeStore.startThemeSync = () => {
+    const stop = originalStartThemeSync();
+    return () => {
+      uiLifecycle.push("stop-theme-sync");
+      stop();
+    };
+  };
+  const themeUi = load(resolve(sourceRoot, "theme/ThemeProvider.tsx"));
   const pluginModule = load(resolve(sourceRoot, "theme/themePlugin.ts"));
+  let uiService;
   return {
+    React,
     core: new TrackedEngineCore(),
     EngineCore: TrackedEngineCore,
     createdCores,
@@ -128,12 +156,54 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
     PluginBatchActivationError: engine.PluginBatchActivationError,
     createThemePlugin: pluginModule.createThemePlugin,
     themeKey: contract.themeKey,
+    uiKey: uiContract.uiKey,
+    ThemeProvider: themeUi.ThemeProvider,
+    useThemeService: themeUi.useThemeService,
     controls,
     values,
     channels,
     mediaListeners,
     nativeListeners,
     nativeCalls,
+    uiRegistrations,
+    uiLifecycle,
+    async provideUi() {
+      await this.core.mount({
+        id: "test-ui",
+        requires: [],
+        provides: [uiContract.uiKey],
+        activate(context) {
+          uiService = {
+            setRoot(render) {
+              const record = { kind: "root", render, active: true };
+              uiRegistrations.push(record);
+              uiLifecycle.push("add-root");
+              return () => {
+                if (!record.active) return;
+                record.active = false;
+                uiLifecycle.push("remove-root");
+              };
+            },
+            addWrapper(wrapper) {
+              const record = { kind: "wrapper", wrapper, active: true };
+              uiRegistrations.push(record);
+              uiLifecycle.push(`add:${wrapper.id}`);
+              return () => {
+                if (!record.active) return;
+                record.active = false;
+                uiLifecycle.push(`remove:${wrapper.id}`);
+                if (controls.uiDisposeError) throw new Error("UI wrapper disposer failed");
+              };
+            },
+          };
+          context.provide(uiContract.uiKey, uiService);
+        },
+      });
+      return uiService;
+    },
+    renderToStaticMarkup(element) {
+      return requireFromHere("react-dom/server").renderToStaticMarkup(element);
+    },
     loadModule(relativePath) { return load(resolve(sourceRoot, relativePath)); },
     get unlistenCalls() { return unlistenCalls; },
     windowListenerCount(name) { return windowListeners.get(name)?.size ?? 0; },

@@ -1,16 +1,10 @@
-import React from "react";
-import ReactDOM from "react-dom/client";
-import App from "./App";
 import {createAppRuntime, type AppRuntime} from "./app/createAppRuntime";
-import {ContextMenuProvider} from "./components/context-menu";
-import {ThemeProvider} from "./theme/ThemeProvider";
-import {createThemePlugin} from "./theme/themePlugin";
-import {themeKey} from "./theme/themeService";
-import "./styles.css";
+import {createAppPlugins} from "./app/appPlugins";
+import {StartupError} from "./plugin-core";
 
 const container = document.getElementById("root")!;
 let runtime: AppRuntime | undefined;
-let root: ReactDOM.Root | undefined;
+let starting: Promise<AppRuntime> | undefined;
 let failure: Promise<void> | undefined;
 
 function showStartupError() {
@@ -30,21 +24,32 @@ function showStartupError() {
     container.replaceChildren(page);
 }
 
-function failStartup(startupError: unknown): Promise<void> {
-    // React 的错误回调可能发生在渲染过程中；下一微任务再卸载，重复报错只清理一次。
+function failStartup(error: unknown): Promise<void> {
+    // 错误回调可能发生在渲染过程中；下一微任务再停用插件，重复报错只清理一次。
     failure ??= Promise.resolve().then(async () => {
         const cleanupErrors: unknown[] = [];
+        const startupError = error instanceof StartupError ? error.startupError : error;
+        if (error instanceof StartupError) cleanupErrors.push(error.cleanupError);
+
+        // ready 响应还没结束时，React 也可能报错；等待启动结果以取得需要停用的实例。
+        let activeRuntime = runtime;
+        if (!activeRuntime && starting) {
+            try {
+                activeRuntime = await starting;
+            } catch (startupFailure) {
+                // 启动失败由内核负责回滚；保留回滚错误，不再重复清理。
+                if (startupFailure instanceof StartupError && !cleanupErrors.includes(startupFailure.cleanupError)) {
+                    cleanupErrors.push(startupFailure.cleanupError);
+                }
+            }
+        }
         try {
-            root?.unmount();
+            await activeRuntime?.stop();
         } catch (error) {
             cleanupErrors.push(error);
         }
+        // root 由插件卸载后再显示错误页，避免卸载操作清掉这个回退页面。
         showStartupError();
-        try {
-            await runtime?.stop();
-        } catch (error) {
-            cleanupErrors.push(error);
-        }
         console.error("Application failed to start.", {startupError, cleanupErrors});
     });
     return failure;
@@ -52,20 +57,12 @@ function failStartup(startupError: unknown): Promise<void> {
 
 async function start() {
     try {
-        runtime = await createAppRuntime([createThemePlugin()]);
-        const theme = runtime.get(themeKey);
-        root = ReactDOM.createRoot(container, {
+        starting = createAppRuntime(createAppPlugins(container, {
             onUncaughtError(error) {
                 void failStartup(error);
             },
-        });
-        root.render(
-            <React.StrictMode>
-                <ContextMenuProvider>
-                    <ThemeProvider service={theme}><App/></ThemeProvider>
-                </ContextMenuProvider>
-            </React.StrictMode>,
-        );
+        }));
+        runtime = await starting;
     } catch (error) {
         await failStartup(error);
     }

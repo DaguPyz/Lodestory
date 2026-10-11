@@ -68,6 +68,41 @@ test("the returned promise waits until every plugin has finished activating", as
   await runtime.stop();
 });
 
+test("the app runtime waits for the initial pluginsReady listeners before resolving", async () => {
+  const f = loadAppRuntime();
+  const listenerStarted = deferred();
+  const finishListener = deferred();
+  const calls = [];
+  let resolved = false;
+  const active = plugin({
+    id: "ready-listener",
+    activate(context) {
+      calls.push("activate");
+      context.on(f.pluginsReady, async (payload) => {
+        assert.equal(payload, undefined);
+        calls.push("ready:start");
+        listenerStarted.resolve();
+        await finishListener.promise;
+        calls.push("ready:end");
+      });
+    },
+  });
+
+  const starting = f.createAppRuntime([active]).then((runtime) => {
+    resolved = true;
+    return runtime;
+  });
+  await listenerStarted.promise;
+  assert.equal(resolved, false);
+  assert.deepEqual(calls, ["activate", "ready:start"]);
+
+  finishListener.resolve();
+  const runtime = await starting;
+  assert.equal(resolved, true);
+  assert.deepEqual(calls, ["activate", "ready:start", "ready:end"]);
+  await runtime.stop();
+});
+
 test("plugins activate by dependency order and stop in reverse order", async () => {
   const f = loadAppRuntime();
   const key = serviceKey("storage/connection");

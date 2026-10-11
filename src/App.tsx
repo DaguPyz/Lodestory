@@ -1,6 +1,5 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
-import { startThemeSync, whenNativeThemeReady } from "./theme/themeStore";
 import { WelcomePage, type WelcomeSection } from "./pages/WelcomePage";
 import { EditorPage } from "./pages/editor/EditorPage";
 import type { ProjectRecord } from "./projects/projectApi";
@@ -8,27 +7,12 @@ import { useContextMenus } from "./components/context-menu";
 
 export default function App() {
   const menus = useContextMenus();
-  const [themeReady, setThemeReady] = useState(() => !isTauri());
   const [view, setView] = useState<"welcome" | "editor">("welcome");
   const [project, setProject] = useState<ProjectRecord | null>(null);
   const [welcomeSection, setWelcomeSection] = useState<WelcomeSection>("projects");
   const [settingsReturn, setSettingsReturn] = useState<"welcome" | "editor">("welcome");
 
   useEffect(() => { menus.closeAll(); }, [menus, view, welcomeSection, project]);
-
-  useEffect(() => {
-    let active = true;
-    const stop = startThemeSync();
-    void whenNativeThemeReady().then(() => {
-      if (active) setThemeReady(true);
-    });
-    return () => {
-      active = false;
-      stop();
-    };
-  }, []);
-
-  if (!themeReady) return null;
 
   function focusEditor() {
     requestAnimationFrame(() => {

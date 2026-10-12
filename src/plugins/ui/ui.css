@@ -1,0 +1,17 @@
+.ui-pages,
+.ui-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.ui-pages {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.ui-page[hidden] {
+  display: none;
+}

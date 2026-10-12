@@ -1,7 +1,7 @@
 import { Dialog } from "@base-ui/react/dialog";
 import { useRef, useState } from "react";
-import { Button } from "../components/Button";
-import { Icon } from "../components/Icon";
+import { Button } from "../../components/Button";
+import { Icon } from "../../components/Icon";
 
 type NewProjectDialogProps = {
   busy: boolean;

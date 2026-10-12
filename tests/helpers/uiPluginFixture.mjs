@@ -42,6 +42,24 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
   const modules = new Map();
   const roots = [];
   const controls = { renderError, createRootError: null, unmountError: null };
+  let hookRuntime;
+  const ReactWithHooks = {
+    ...React,
+    useState(initialValue) {
+      if (!hookRuntime) return React.useState(initialValue);
+      const { hooks, index } = hookRuntime;
+      hookRuntime.index += 1;
+      if (!(index in hooks)) hooks[index] = { value: typeof initialValue === "function" ? initialValue() : initialValue };
+      const hook = hooks[index];
+      return [hook.value, (nextValue) => {
+        hook.value = typeof nextValue === "function" ? nextValue(hook.value) : nextValue;
+      }];
+    },
+    useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot) {
+      if (hookRuntime) return getSnapshot();
+      return React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+    },
+  };
   const reactDomClient = {
     createRoot(target, options) {
       if (controls.createRootError) throw controls.createRootError;
@@ -63,6 +81,7 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
   };
 
   function load(path) {
+    if (path.endsWith(".css")) return {};
     const cached = modules.get(path);
     if (cached) return cached;
 
@@ -79,7 +98,7 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
     vm.runInNewContext(compiled, {
       exports,
       require(specifier) {
-        if (specifier === "react") return React;
+        if (specifier === "react") return ReactWithHooks;
         if (specifier === "react/jsx-runtime") return jsxRuntime;
         if (specifier === "react/jsx-dev-runtime") return jsxDevRuntime;
         if (specifier === "react-dom/client") return reactDomClient;
@@ -105,7 +124,7 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
   const core = new EngineCore();
 
   return {
-    React,
+    React: ReactWithHooks,
     core,
     container,
     controls,
@@ -114,10 +133,15 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
     roots,
     uiKey,
     rootOptions,
-    async mountUi(options = rootOptions) {
+    async mountUi(options = (rootOptions ? { rootOptions } : {})) {
       const plugin = createUiPlugin(container, options);
       await core.mount(plugin);
       return { plugin, service: core.get(uiKey) };
+    },
+    withHooks(instance, render) {
+      hookRuntime = { hooks: instance.hooks ?? (instance.hooks = []), index: 0 };
+      try { return render(); }
+      finally { hookRuntime = undefined; }
     },
     notifyReady(payload = undefined) {
       if (!eventBus) throw new Error("The EngineCore has not been created yet.");

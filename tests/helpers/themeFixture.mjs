@@ -93,6 +93,7 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
     return path;
   }
   function load(path) {
+    if (path.endsWith(".css")) return {};
     const cached = modules.get(path);
     if (cached) return cached;
     const source = readFileSync(path, "utf8");
@@ -174,16 +175,6 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
         provides: [uiContract.uiKey],
         activate(context) {
           uiService = {
-            setRoot(render) {
-              const record = { kind: "root", render, active: true };
-              uiRegistrations.push(record);
-              uiLifecycle.push("add-root");
-              return () => {
-                if (!record.active) return;
-                record.active = false;
-                uiLifecycle.push("remove-root");
-              };
-            },
             addWrapper(wrapper) {
               const record = { kind: "wrapper", wrapper, active: true };
               uiRegistrations.push(record);

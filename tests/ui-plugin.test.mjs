@@ -5,18 +5,43 @@ import ts from "typescript";
 import { uiPluginFixture } from "./helpers/uiPluginFixture.mjs";
 
 function contributor(f, id, activate, deactivate = () => {}) {
-  return f.core.mount({
-    id,
-    requires: [f.uiKey],
-    provides: [],
-    activate,
-    deactivate,
+  return f.core.mount({ id, requires: [f.uiKey], provides: [], activate, deactivate });
+}
+
+function page(id, render = () => null) {
+  return { id, render };
+}
+
+function startupError(errorPattern) {
+  return (error) => {
+    assert.match(error.message, /runtime\/plugins-ready/);
+    assert.match(error.listenerErrors[0].error.message, errorPattern);
+    return true;
+  };
+}
+
+function renderVisitedPages(f, service, instances) {
+  const { UiPages } = f.loadSource("plugins/ui/UiPages.tsx");
+  const tree = f.withHooks({}, () => UiPages({ service }));
+  const pageNodes = Array.isArray(tree.props.children) ? tree.props.children : [tree.props.children];
+  return Array.from(pageNodes, (pageNode) => {
+    const id = pageNode.key;
+    const component = pageNode.props.children;
+    let instance = instances.get(id);
+    if (!instance) {
+      instance = {};
+      instances.set(id, instance);
+    }
+    const output = f.withHooks(instance, () => component.type(component.props));
+    return { id, hidden: pageNode.props.hidden, output };
   });
 }
 
-test("UI plugin types connect PluginContext, uiKey, root views, and wrappers", () => {
+test("UI plugin types connect PluginContext, pages, navigation, and wrappers", () => {
   const fixture = fileURLToPath(new URL("./fixtures/ui-plugin-types.tsx", import.meta.url));
-  const program = ts.createProgram([fixture], {
+  const browserFixture = fileURLToPath(new URL("./fixtures/ui-pages.tsx", import.meta.url));
+  const viteTypes = fileURLToPath(new URL("../src/vite-env.d.ts", import.meta.url));
+  const program = ts.createProgram([fixture, browserFixture, viteTypes], {
     target: ts.ScriptTarget.ES2022,
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
@@ -32,11 +57,11 @@ test("UI plugin types connect PluginContext, uiKey, root views, and wrappers", (
   );
 });
 
-test("activation registers uiKey but waits for pluginsReady and mounts only once", async () => {
+test("activation waits for ready, mounts one page container, and allows navigation afterward", async () => {
   const container = {};
   const rootOptions = { identifierPrefix: "lodestory-" };
   const f = uiPluginFixture({ container, rootOptions });
-  const { plugin, service } = await f.mountUi();
+  const { plugin, service } = await f.mountUi({ initialPage: "home", rootOptions });
 
   assert.equal(f.core.get(f.uiKey), service);
   assert.equal(plugin.id, "ui");
@@ -44,34 +69,51 @@ test("activation registers uiKey but waits for pluginsReady and mounts only once
   assert.equal(plugin.provides.length, 1);
   assert.equal(plugin.provides[0], f.uiKey);
   assert.equal(f.roots.length, 0, "activation must not call createRoot");
+  assert.throws(() => service.openPage("home"), /navigation requires .*after pluginsReady/);
 
-  await contributor(f, "app-root", (context) => {
-    context.get(f.uiKey).setRoot(() => f.React.createElement("main", { children: "Lodestory" }));
+  await contributor(f, "home", (context) => {
+    context.get(f.uiKey).registerPage({
+      id: "home",
+      render: ({ params, active }) => f.React.createElement("main", {
+        "data-page": "home",
+        "data-active": String(active),
+        children: params === undefined ? "Lodestory" : String(params),
+      }),
+    });
   });
-  assert.equal(f.roots.length, 0, "the root is still deferred until ready");
+  assert.equal(f.roots.length, 0, "the root is deferred until ready");
 
   await f.notifyReady();
   assert.equal(f.roots.length, 1);
-  assert.equal(f.roots[0].container, container);
+  assert.equal(f.roots[0].container, f.container);
   assert.equal(f.roots[0].options, rootOptions);
   assert.equal(f.roots[0].renderCalls.length, 1);
   assert.equal(f.roots[0].renderCalls[0].type, f.React.StrictMode);
+  assert.equal(service.getSnapshot().current.id, "home");
+  assert.match(f.renderToStaticMarkup(f.roots[0].renderCalls[0]), /data-page="home"/);
+
+  service.openPage("home", { from: "ready" });
+  assert.equal(service.getSnapshot().current.params.from, "ready");
+  assert.equal(f.roots.length, 1, "navigation updates the mounted root instead of creating another one");
+  assert.equal(f.roots[0].renderCalls.length, 1, "navigation is handled by the mounted page container");
 
   await f.notifyReady();
   assert.equal(f.roots.length, 1, "a repeated ready event must not create another root");
   assert.equal(f.roots[0].renderCalls.length, 1, "a repeated ready event must not render again");
 
-  await f.core.unmount("app-root");
+  await f.core.unmount("home");
   await f.core.unmount("ui");
 });
 
-test("UI registration rejects missing, duplicate, and invalid contributions", async () => {
+test("page registration validates descriptors and wrappers remain unique", async () => {
   const f = uiPluginFixture();
   const { service } = await f.mountUi();
 
-  assert.throws(() => service.setRoot(undefined), /render function/);
-  const disposeRoot = service.setRoot(() => f.React.createElement("main"));
-  assert.throws(() => service.setRoot(() => f.React.createElement("aside")), /root is already registered/);
+  assert.throws(() => service.registerPage(undefined), /UI page must be an object/);
+  assert.throws(() => service.registerPage({ id: "  ", render() {} }), /page id cannot be empty/);
+  assert.throws(() => service.registerPage({ id: "missing-render" }), /render must be a function/);
+  const disposePage = service.registerPage(page("unique"));
+  assert.throws(() => service.registerPage(page("unique")), /already registered/);
 
   assert.throws(() => service.addWrapper({ id: "  ", order: 1, wrap: (children) => children }), /id cannot be empty/);
   assert.throws(() => service.addWrapper({ id: "nan", order: Number.NaN, wrap: (children) => children }), /order must be finite/);
@@ -79,34 +121,119 @@ test("UI registration rejects missing, duplicate, and invalid contributions", as
   const disposeWrapper = service.addWrapper({ id: "unique", order: 1, wrap: (children) => children });
   assert.throws(() => service.addWrapper({ id: "unique", order: 2, wrap: (children) => children }), /already registered/);
 
-  disposeRoot();
-  disposeRoot();
+  disposePage();
+  disposePage();
   disposeWrapper();
   await f.core.unmount("ui");
 });
 
-test("ready without a root fails, then closes registration for this startup", async () => {
+test("ready fails without a page and closes startup registration", async () => {
   const f = uiPluginFixture();
   const { service } = await f.mountUi();
 
-  await assert.rejects(f.notifyReady(), (error) => {
-    assert.match(error.message, /runtime\/plugins-ready/);
-    assert.equal(error.listenerErrors[0].pluginId, "ui");
-    assert.match(error.listenerErrors[0].error.message, /UI root is not registered/);
-    return true;
-  });
+  await assert.rejects(f.notifyReady(), startupError(/without registered pages/));
   assert.equal(f.roots.length, 0);
-  assert.throws(() => service.setRoot(() => f.React.createElement("main")), /before pluginsReady/);
-  assert.throws(() => service.addWrapper({ id: "late", order: 1, wrap: (children) => children }), /before pluginsReady/);
+  assert.throws(() => service.registerPage(page("late")), /before pluginsReady/);
+  assert.throws(() => service.openPage("late"), /navigation requires .*after pluginsReady/);
   await f.notifyReady();
   assert.equal(f.roots.length, 0, "a failed ready notification is not retried in the same activation");
 
   await f.core.unmount("ui");
 });
 
-test("wrappers are snapshotted, sorted outside-in, and pass ThemeService through ThemeProvider", async () => {
+test("ready rejects an unknown initial page without creating a React root", async () => {
   const f = uiPluginFixture();
-  const { service: ui } = await f.mountUi();
+  const { service } = await f.mountUi({ initialPage: "missing" });
+  service.registerPage(page("home"));
+
+  await assert.rejects(f.notifyReady(), startupError(/page 'missing' is not registered/));
+  assert.equal(f.roots.length, 0);
+  await f.core.unmount("ui");
+});
+
+test("visited A/B/C pages receive params, hide inactive views, and back restores the previous location", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "A" });
+  let bInitializations = 0;
+  let updateBDraft;
+  const PageA = ({ params, active }) => f.React.createElement("section", {
+    "data-page": "A", "data-active": String(active), children: `A:${params?.value ?? "initial"}`,
+  });
+  const PageB = ({ params, active }) => {
+    const [draft, setDraft] = f.React.useState(() => {
+      bInitializations += 1;
+      return "initial draft";
+    });
+    updateBDraft = setDraft;
+    return f.React.createElement("section", {
+      "data-page": "B",
+      "data-active": String(active),
+      "data-project": params?.value,
+      children: draft,
+    });
+  };
+  const PageC = ({ params, active }) => f.React.createElement("section", {
+    "data-page": "C", "data-active": String(active), children: `C:${params?.value ?? "initial"}`,
+  });
+  const pages = [
+    page("A", (props) => f.React.createElement(PageA, props)),
+    page("B", (props) => f.React.createElement(PageB, props)),
+    page("C", (props) => f.React.createElement(PageC, props)),
+  ];
+  const disposers = pages.map((entry) => service.registerPage(entry));
+  await f.notifyReady();
+
+  const instances = new Map();
+  let pageViews = renderVisitedPages(f, service, instances);
+  assert.deepEqual(pageViews.map(({ id, hidden }) => [id, hidden]), [["A", false]]);
+  assert.equal(service.getSnapshot().pages.length, 1);
+
+  service.openPage("B", { value: "project-b" });
+  assert.equal(service.getSnapshot().current.id, "B");
+  assert.equal(service.getSnapshot().current.params.value, "project-b");
+  pageViews = renderVisitedPages(f, service, instances);
+  assert.deepEqual(pageViews.map(({ id, hidden }) => [id, hidden]), [["A", true], ["B", false]]);
+  assert.equal(pageViews[1].output.props.children, "initial draft");
+  assert.equal(bInitializations, 1);
+  updateBDraft("edited draft");
+
+  service.openPage("C", { value: "preview-c" });
+  pageViews = renderVisitedPages(f, service, instances);
+  assert.deepEqual(pageViews.map(({ id, hidden }) => [id, hidden]), [["A", true], ["B", true], ["C", false]]);
+  assert.equal(pageViews[1].output.props.children, "edited draft");
+  assert.equal(bInitializations, 1, "the page keyed by B keeps its hook state while hidden");
+  assert.deepEqual(Array.from(service.getSnapshot().pages, ({ id, active }) => [id, active]), [
+    ["A", false], ["B", false], ["C", true],
+  ]);
+  const html = f.renderToStaticMarkup(f.roots[0].renderCalls[0]);
+  assert.match(html, /class="ui-page" hidden=""><section data-page="A"/);
+  assert.match(html, /class="ui-page" hidden=""><section data-page="B"/);
+  assert.match(html, /data-page="C" data-active="true">C:preview-c/);
+
+  service.back();
+  assert.equal(service.getSnapshot().current.id, "B");
+  assert.equal(service.getSnapshot().current.params.value, "project-b");
+  pageViews = renderVisitedPages(f, service, instances);
+  assert.equal(pageViews.find(({ id }) => id === "B").hidden, false);
+  assert.equal(pageViews.find(({ id }) => id === "B").output.props.children, "edited draft");
+  service.back();
+  assert.equal(service.getSnapshot().current.id, "A");
+  assert.equal(service.getSnapshot().current.params, undefined);
+  assert.equal(service.getSnapshot().canGoBack, false);
+  pageViews = renderVisitedPages(f, service, instances);
+  assert.equal(pageViews.find(({ id }) => id === "A").hidden, false);
+  assert.equal(f.roots.length, 1, "A/B/C navigation must reuse one React root");
+  assert.equal(f.roots[0].renderCalls.length, 1);
+
+  for (const dispose of disposers) dispose();
+  assert.equal(f.roots[0].unmountCalls, 1, "disposing a visited page first unmounts the whole tree");
+  assert.throws(() => service.openPage("C"), /navigation requires .*after pluginsReady/);
+  await f.core.unmount("ui");
+});
+
+test("wrappers surround the real UiPages tree and ThemeProvider receives its registered service", async () => {
+  const f = uiPluginFixture();
+  const { service: ui } = await f.mountUi({ initialPage: "home" });
   const { ThemeProvider, useThemeService } = f.loadSource("plugins/theme/ThemeProvider.tsx");
   const themeService = {
     getSnapshot: () => ({ mode: "dark", resolvedTheme: "dark", persistenceError: false, windowError: false }),
@@ -136,97 +263,81 @@ test("wrappers are snapshotted, sorted outside-in, and pass ThemeService through
   };
   ui.addWrapper(themeWrapper);
   ui.addWrapper(makeWrapper("last", 30));
+  ui.registerPage(page("home", () => f.React.createElement(Home)));
 
-  // Mutating the caller's descriptor after registration must not change its saved order or function.
+  // Mutating a caller descriptor after registration does not alter its saved rule.
   first.id = "changed-id";
   first.order = 100;
   first.wrap = () => { throw new Error("mutated wrapper must not run"); };
   themeWrapper.order = 0;
   themeWrapper.wrap = () => { throw new Error("mutated theme wrapper must not run"); };
 
-  function App() {
+  function Home() {
     const sameService = useThemeService() === themeService;
     return f.React.createElement("span", { "data-same-service": String(sameService), children: "ready" });
   }
-  await contributor(f, "app-root", (context) => {
-    context.get(f.uiKey).setRoot(() => f.React.createElement(App));
-  });
   await f.notifyReady();
 
   assert.deepEqual(calls, ["last", "theme-provider", "second", "first"], "reduceRight invokes wrappers inside-out");
   const strictTree = f.roots[0].renderCalls[0];
   assert.equal(strictTree.type, f.React.StrictMode);
-  let node = strictTree.props.children;
-  const outsideIn = [];
-  while (node?.props?.["data-ui-wrapper"]) {
-    outsideIn.push(node.props["data-ui-wrapper"]);
-    node = node.props.children;
-  }
-  assert.deepEqual(outsideIn, ["first", "second"]);
-  assert.equal(node.type, ThemeProvider);
-  node = node.props.children;
-  assert.equal(node.props["data-ui-wrapper"], "last");
-  node = node.props.children;
-  assert.equal(node.type, App);
-
   const markup = f.renderToStaticMarkup(strictTree);
+  assert.match(markup, /data-ui-wrapper="first"/);
+  assert.match(markup, /data-ui-wrapper="second"/);
+  assert.match(markup, /data-ui-wrapper="last"/);
   assert.match(markup, /data-same-service="true"/, "ThemeProvider exposes the exact service supplied by its plugin");
   assert.match(markup, />ready<\/span>/);
 
-  // Disposing a contribution after render first unmounts the whole tree; repeated disposal is harmless.
   disposeFirst();
   disposeFirst();
-  assert.equal(f.roots[0].unmountCalls, 1);
-
-  await f.core.unmount("app-root");
+  assert.equal(f.roots[0].unmountCalls, 1, "removing a rendered contribution unmounts the tree first");
   await f.core.unmount("ui");
 });
 
-test("disposing a contribution before ready removes it from the assembled tree", async () => {
+test("disposing an unvisited page before ready removes it from the initial snapshot", async () => {
   const f = uiPluginFixture();
-  const { service: ui } = await f.mountUi();
-  let invoked = false;
-  const dispose = ui.addWrapper({
-    id: "rolled-back",
-    order: 1,
-    wrap(children) { invoked = true; return children; },
-  });
+  const { service } = await f.mountUi({ initialPage: "home" });
+  let removedPageRendered = false;
+  service.registerPage(page("home"));
+  const dispose = service.registerPage(page("removed", () => {
+    removedPageRendered = true;
+    return null;
+  }));
   dispose();
   dispose();
-  ui.setRoot(() => f.React.createElement("main"));
   await f.notifyReady();
 
-  assert.equal(invoked, false);
-  assert.equal(f.roots.length, 1);
+  assert.equal(removedPageRendered, false);
+  assert.deepEqual(Array.from(service.getSnapshot().pages, ({ id }) => id), ["home"]);
   await f.core.unmount("ui");
 });
 
-test("deactivation revokes an old UiService and old disposers cannot affect a new activation", async () => {
+test("deactivation invalidates the previous service while a fresh activation gets a new registry", async () => {
   const f = uiPluginFixture();
   const plugin = f.createUiPlugin(f.container);
   await f.core.mount(plugin);
   const oldUi = f.core.get(f.uiKey);
-  const oldDispose = oldUi.setRoot(() => f.React.createElement("main", { children: "old" }));
+  const oldDispose = oldUi.registerPage(page("old"));
   await f.notifyReady();
   await f.core.unmount("ui");
   assert.equal(f.roots[0].unmountCalls, 1);
-  assert.throws(() => oldUi.addWrapper({ id: "old", order: 1, wrap: (children) => children }), /no longer active/);
+  assert.throws(() => oldUi.openPage("old"), /no longer active/);
 
   await f.core.mount(plugin);
   const newUi = f.core.get(f.uiKey);
   assert.notEqual(newUi, oldUi);
   oldDispose();
-  newUi.setRoot(() => f.React.createElement("main", { children: "new" }));
+  newUi.registerPage(page("new"));
   await f.notifyReady();
   assert.equal(f.roots.length, 2);
-  assert.equal(f.roots[1].renderCalls.length, 1);
+  assert.equal(newUi.getSnapshot().current.id, "new");
   await f.core.unmount("ui");
 });
 
-test("a synchronous render failure propagates and plugin shutdown unmounts the retained React root", async () => {
+test("a synchronous render failure propagates and shutdown unmounts the retained React root", async () => {
   const f = uiPluginFixture({ renderError: new Error("render failed") });
   const { service: ui } = await f.mountUi();
-  ui.setRoot(() => f.React.createElement("main"));
+  ui.registerPage(page("home"));
 
   await assert.rejects(f.notifyReady(), /runtime\/plugins-ready/);
   assert.equal(f.roots.length, 1);
@@ -236,6 +347,5 @@ test("a synchronous render failure propagates and plugin shutdown unmounts the r
   f.controls.renderError = null;
   await f.core.unmount("ui");
   assert.equal(f.roots[0].unmountCalls, 1);
-  assert.throws(() => ui.setRoot(() => f.React.createElement("aside")), /no longer active/);
-
+  assert.throws(() => ui.openPage("home"), /no longer active/);
 });

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { Button, IconButton } from "../../components/Button";
 import { Icon } from "../../components/Icon";
-import { useContextMenus } from "../../plugins/context-menu";
+import { useContextMenus } from "../context-menu";
 
 type EditorToolbarProps = {
   active: boolean;

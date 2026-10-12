@@ -1,0 +1,12 @@
+import type {ProjectRecord} from "../projects/projectApi";
+
+/** 应用页面之间共享的 ID 与参数约定；通用 UI 插件不依赖这些业务标识。 */
+export const appPages = {
+    welcome: "welcome",
+    editor: "editor",
+    settings: "settings",
+} as const;
+
+export type EditorPageParams = {
+    readonly project: ProjectRecord;
+};

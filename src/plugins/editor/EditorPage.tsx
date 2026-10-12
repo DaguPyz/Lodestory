@@ -12,7 +12,7 @@ import { ReferencePanel } from "./ReferencePanel";
 import { createDocument, documentErrorMessage, listDocuments, type TreeEntry } from "../../documents/documentApi";
 import { useDocumentWorkspace } from "../../documents/useDocumentWorkspace";
 import "../../styles/editor.css";
-import { useContextMenus } from "../../plugins/context-menu";
+import { useContextMenus } from "../context-menu";
 
 type PanelPreference = "auto" | "open" | "closed";
 type EditorPageProps = {
@@ -49,9 +49,24 @@ export function EditorPage({ projectName, projectPath, active, onBack, onOpenSet
   const [createError, setCreateError] = useState<string | null>(null);
   const treeSequence = useRef(0);
   const createPending = useRef(false);
+  const leaving = useRef(false);
   const workspace = useDocumentWorkspace(projectPath);
   const { documents, activeId, currentDocument } = workspace;
   const newDisabled = !isTauri() || treeLoading || creating;
+
+  useEffect(() => {
+    menus.closeAll();
+    if (!active) {
+      setCreateDialogOpen(false);
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      const title = root.current?.querySelector<HTMLElement>(".editor-document:not([hidden]) .manuscript-title")
+        ?? root.current?.querySelector<HTMLElement>("#editor-empty-title");
+      title?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [active, menus]);
 
   // These thresholds retain a 560px main workspace before folding docked panels.
   const treeDocked = viewport.width >= 54 * viewport.rem;
@@ -118,7 +133,13 @@ export function EditorPage({ projectName, projectPath, active, onBack, onOpenSet
   }
 
   async function leave(action: () => void) {
-    if (await workspace.saveAll()) action();
+    if (!active || leaving.current) return;
+    leaving.current = true;
+    try {
+      if (await workspace.saveAll()) action();
+    } finally {
+      leaving.current = false;
+    }
   }
 
   useLayoutEffect(() => {
@@ -234,7 +255,7 @@ export function EditorPage({ projectName, projectPath, active, onBack, onOpenSet
         <ReferencePanel visible={referenceVisible} overlay={!referenceDocked} onClose={closeReference} />
       </div>
       <EditorStatusBar document={currentDocument} />
-      {createDialogOpen && <NewDocumentDialog projectName={projectName} entries={entries} initialParent={selectedFolder}
+      {active && createDialogOpen && <NewDocumentDialog projectName={projectName} entries={entries} initialParent={selectedFolder}
         busy={creating} error={createError} onClose={() => setCreateDialogOpen(false)} onCreate={create} />}
     </div>
   );

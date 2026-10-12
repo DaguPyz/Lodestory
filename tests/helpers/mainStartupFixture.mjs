@@ -94,6 +94,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
 
   const React = {
     StrictMode: Symbol("StrictMode"),
+    useSyncExternalStore(_subscribe, getSnapshot) { return getSnapshot(); },
     createElement(type, props, ...children) {
       const nextProps = { ...(props ?? {}) };
       if (children.length === 1) nextProps.children = children[0];
@@ -128,10 +129,15 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const roots = [];
   const faults = {};
   const components = {
-    App: function App() {},
+    WelcomePage: function WelcomePage() {},
+    EditorPage: function EditorPage() {},
+    ThemeSettingsPage: function ThemeSettingsPage() {},
+    PageShell: function PageShell() {},
+    ProjectPageLayout: function ProjectPageLayout() {},
     ContextMenuProvider: function ContextMenuProvider() {},
     ThemeProvider: function ThemeProvider() {},
   };
+  let UiPages;
   let activationError;
   let cleanupError;
   let omitThemeService = false;
@@ -153,7 +159,11 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     const cached = modules.get(path);
     if (cached) return cached;
     const relativePath = relative(sourceRoot, path);
-    if (relativePath === "App.tsx") return { __esModule: true, default: components.App };
+    if (relativePath === "plugins/welcome/WelcomePage.tsx") return { __esModule: true, WelcomePage: components.WelcomePage };
+    if (relativePath === "plugins/editor/EditorPage.tsx") return { __esModule: true, EditorPage: components.EditorPage };
+    if (relativePath === "plugins/settings/ThemeSettingsPage.tsx") return { __esModule: true, ThemeSettingsPage: components.ThemeSettingsPage };
+    if (relativePath === "components/PageShell.tsx") return { __esModule: true, PageShell: components.PageShell };
+    if (relativePath === "components/ProjectPageLayout.tsx") return { __esModule: true, ProjectPageLayout: components.ProjectPageLayout };
     if (relativePath === "plugins/context-menu/ContextMenuProvider.tsx") {
       return { __esModule: true, ContextMenuProvider: components.ContextMenuProvider };
     }
@@ -207,6 +217,10 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         return load(resolveLocal(path, specifier));
       },
     }, { filename: path });
+
+    if (/^plugins\/ui\/[^/]*UiPages\.tsx$/i.test(relativePath)) {
+      UiPages = exports.UiPages ?? exports.default;
+    }
 
     if (relativePath === "plugin-core/EngineCore.ts") {
       const BaseEngineCore = exports.EngineCore;
@@ -288,6 +302,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     React,
     ReactDOM,
     components,
+    get UiPages() { return UiPages; },
     createdCores,
     moduleImports,
     catalogPluginIds,

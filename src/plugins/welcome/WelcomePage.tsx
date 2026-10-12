@@ -1,18 +1,18 @@
 import { Menu } from "@base-ui/react/menu";
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ThemeSettingsPage } from "./ThemeSettingsPage";
 import { NewProjectDialog } from "./NewProjectDialog";
-import { Button } from "../components/Button";
-import { Icon } from "../components/Icon";
-import { SearchField } from "../components/SearchField";
-import { ContextMenuRegion, useContextMenus, type MenuAction } from "../plugins/context-menu";
+import { ProjectPageLayout } from "../../components/ProjectPageLayout";
+import { Button } from "../../components/Button";
+import { Icon } from "../../components/Icon";
+import { SearchField } from "../../components/SearchField";
+import { ContextMenuRegion, useContextMenus, type MenuAction } from "../context-menu";
 import {
   createProject, isUnavailableError, listRecentProjects, openProject, pickProjectDirectory,
   projectErrorMessage, relocateProject, removeRecentProject,
   type OpenedProject, type ProjectRecord, type RecentProject,
-} from "../projects/projectApi";
-import { formatLastOpened, projectPathSeparator } from "../projects/projectDisplay";
+} from "../../projects/projectApi";
+import { formatLastOpened, projectPathSeparator } from "../../projects/projectDisplay";
 
 function ProjectPath({ path, id }: { path: string; id: string }) {
   const separator = projectPathSeparator(path);
@@ -25,20 +25,16 @@ function ProjectPath({ path, id }: { path: string; id: string }) {
   );
 }
 
-export type WelcomeSection = "projects" | "settings";
-
 type WelcomePageProps = {
   active: boolean;
-  section: WelcomeSection;
-  onSectionChange: (section: WelcomeSection) => void;
   onOpenProject: (project: ProjectRecord) => void;
-  onBackFromSettings?: () => void;
+  onOpenSettings: () => void;
 };
 
-export function WelcomePage({ active, section, onSectionChange, onOpenProject, onBackFromSettings }: WelcomePageProps) {
+export function WelcomePage({ active, onOpenProject, onOpenSettings }: WelcomePageProps) {
   const menus = useContextMenus();
+  const heading = useRef<HTMLHeadingElement>(null);
   const [moreProject, setMoreProject] = useState<string | null>(null);
-  const projectsButton = useRef<HTMLButtonElement>(null);
   const operationPending = useRef(false);
   const loadSequence = useRef(0);
   const [projects, setProjects] = useState<RecentProject[]>([]);
@@ -49,21 +45,32 @@ export function WelcomePage({ active, section, onSectionChange, onOpenProject, o
   const [search, setSearch] = useState("");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const desktop = isTauri();
-  const disabled = !desktop || busy || loading;
+  const disabled = !active || !desktop || busy || loading;
   const query = search.trim().toLocaleLowerCase();
   const matchingProjects = projects.filter((project) =>
     `${project.name}\n${project.path}`.toLocaleLowerCase().includes(query));
+
+  useEffect(() => {
+    if (active) heading.current?.focus({ preventScroll: true });
+  }, [active]);
 
   useEffect(() => {
     if (createDialogOpen) menus.closeAll();
   }, [createDialogOpen, menus]);
 
   useEffect(() => {
+    if (active) return;
+    setMoreProject(null);
+    setCreateDialogOpen(false);
+    menus.closeAll();
+  }, [active, menus]);
+
+  useEffect(() => {
     return () => { if (moreProject) menus.release(`recent-project-more:${moreProject}`); };
   }, [moreProject, menus]);
 
   const reload = useCallback(async () => {
-    if (operationPending.current) return;
+    if (!active || operationPending.current) return;
     const sequence = ++loadSequence.current;
     setLoading(true);
     setError(null);
@@ -79,7 +86,7 @@ export function WelcomePage({ active, section, onSectionChange, onOpenProject, o
     } finally {
       if (sequence === loadSequence.current) setLoading(false);
     }
-  }, []);
+  }, [active]);
 
   useEffect(() => {
     if (active) void reload();
@@ -87,7 +94,7 @@ export function WelcomePage({ active, section, onSectionChange, onOpenProject, o
   }, [active, reload]);
 
   async function runAction<T,>(action: () => Promise<T>): Promise<T | undefined> {
-    if (operationPending.current || loading) return undefined;
+    if (!active || operationPending.current || loading) return undefined;
     operationPending.current = true;
     setBusy(true);
     setError(null);
@@ -155,7 +162,7 @@ export function WelcomePage({ active, section, onSectionChange, onOpenProject, o
     const project = projects.find((record) => record.id === id);
     async function perform(targetId: string, action: "open" | "relocate" | "remove") {
       const target = projects.find((record) => record.id === targetId);
-      if (!target || disabled || !active || section !== "projects") return;
+      if (!target || disabled || !active) return;
       if (action === "open") { if (target.available) await openRecent(target); }
       else if (action === "relocate") await relocate(target);
       else await remove(target);
@@ -176,59 +183,17 @@ export function WelcomePage({ active, section, onSectionChange, onOpenProject, o
     });
   }
 
-  function returnToProjects() {
-    if (onBackFromSettings) {
-      onBackFromSettings();
-      return;
-    }
-    onSectionChange("projects");
-    projectsButton.current?.focus();
-  }
-
   return (
-    <div className="welcome-layout" data-ui-density="spacious">
-      <aside className="navigation-panel" aria-label="应用导航">
-        <div className="brand">
-          <Icon name="book" size="brand" />
-          <div className="brand-copy">
-            <span className="brand-name">Lodestory</span>
-            <span className="brand-caption">小说创作工作空间</span>
-          </div>
-        </div>
-
-        <nav className="navigation-items" aria-label="主导航">
-          <button
-            ref={projectsButton}
-            className="navigation-item"
-            type="button"
-            aria-current={section === "projects" ? "page" : undefined}
-            aria-label="作品"
-            title="作品"
-            onClick={() => onSectionChange("projects")}
-          >
-            <Icon name="folder" />
-            <span>作品</span>
-          </button>
-        </nav>
-
-        <button
-          className="navigation-item navigation-settings"
-          type="button"
-          aria-current={section === "settings" ? "page" : undefined}
-          aria-label="设置"
-          title="设置"
-          onClick={() => onSectionChange("settings")}
-        >
-          <Icon name="settings" />
-          <span>设置</span>
-        </button>
-      </aside>
-
-      <main className="welcome-workspace" hidden={section !== "projects"} aria-labelledby="welcome-page-heading">
+    <ProjectPageLayout
+      section="projects"
+      onOpenProjects={() => {}}
+      onOpenSettings={onOpenSettings}
+    >
+      <main className="welcome-workspace" aria-labelledby="welcome-page-heading">
         <div className="welcome-content">
           <header className="welcome-header">
             <div className="welcome-heading">
-              <h1 id="welcome-page-heading" tabIndex={-1}>欢迎使用 Lodestory</h1>
+              <h1 id="welcome-page-heading" ref={heading} tabIndex={-1}>欢迎使用 Lodestory</h1>
               <p>继续写作，或开始一个新故事。</p>
             </div>
             <div className="welcome-actions" aria-label="项目操作">
@@ -275,7 +240,7 @@ export function WelcomePage({ active, section, onSectionChange, onOpenProject, o
                     </span>
                     <time className="project-time" dateTime={project.lastOpenedAt}>{formatLastOpened(project.lastOpenedAt)}</time>
                   </button>
-                  <Menu.Root modal={false} open={moreProject === project.id} onOpenChange={(open) => {
+                  <Menu.Root modal={false} open={active && moreProject === project.id} onOpenChange={(open) => {
                     const id = `recent-project-more:${project.id}`;
                     if (open) { menus.activate(id, () => setMoreProject(null)); setMoreProject(project.id); }
                     else { menus.release(id); setMoreProject((current) => current === project.id ? null : current); }
@@ -305,9 +270,8 @@ export function WelcomePage({ active, section, onSectionChange, onOpenProject, o
 
         <footer className="welcome-footer">一个目录，一部小说。</footer>
       </main>
-      <ThemeSettingsPage visible={section === "settings"} onBack={returnToProjects} />
-      {createDialogOpen && <NewProjectDialog busy={busy} error={error} onClose={() => setCreateDialogOpen(false)}
+      {active && createDialogOpen && <NewProjectDialog busy={busy} error={error} onClose={() => setCreateDialogOpen(false)}
         onPickDirectory={() => runAction(() => pickProjectDirectory("选择项目保存位置"))} onCreate={create} />}
-    </div>
+    </ProjectPageLayout>
   );
 }

@@ -3,12 +3,21 @@ import {createRoot, type Root, type RootOptions} from "react-dom/client";
 import type {Plugin} from "../../plugin-core";
 import {pluginsReady} from "../../plugin-core";
 import {uiKey, type UiService, type UiWrapper} from "./uiService";
+import {createPageRegistry} from "./pageRegistry";
+import {UiPages} from "./UiPages";
+
+export type UiPluginOptions = {
+    /** 启动时显示的页面；省略时使用第一个登记的页面。 */
+    readonly initialPage?: string;
+    readonly rootOptions?: RootOptions;
+};
 
 /**
- * 宿主通过工厂参数给出挂载容器。插件只认识根视图和包装规则，不导入具体业务组件。
- * activate 创建登记表并订阅 ready；全部贡献登记完成后，ready 回调才组装和渲染。
+ * 合并页面管理与根装配；只认识页面登记和包装规则，不导入具体业务组件。
+ * ready 时选择初始页面并挂载通用页面容器，之后由页面状态驱动 React 更新。
  */
-export function createUiPlugin(container: Element | DocumentFragment, rootOptions?: RootOptions): Plugin {
+export function createUiPlugin(container: Element | DocumentFragment, options: UiPluginOptions = {}): Plugin {
+    const {initialPage, rootOptions} = options;
     let cleanup: (() => void) | undefined;
 
     return {
@@ -17,16 +26,16 @@ export function createUiPlugin(container: Element | DocumentFragment, rootOption
         provides: [uiKey],
 
         activate(context) {
-            // 每次激活使用独立的 C，旧服务和旧撤销函数不能影响下一次激活。
-            const C: {
-                root?: { render: () => ReactNode };
-                wrappers: Map<string, UiWrapper>;
-            } = {wrappers: new Map()};
+            // 每次激活使用独立登记和状态，旧服务和旧撤销函数不能影响下一次激活。
+            const pages = createPageRegistry();
+            const wrappers = new Map<string, UiWrapper>();
             let active = true;
             let mountAttempted = false;
+            let navigationAllowed = false;
             let reactRoot: Root | undefined;
 
             function unmount() {
+                navigationAllowed = false;
                 const root = reactRoot;
                 reactRoot = undefined;
                 root?.unmount();
@@ -37,31 +46,39 @@ export function createUiPlugin(container: Element | DocumentFragment, rootOption
                 try {
                     unmount();
                 } finally {
-                    C.root = undefined;
-                    C.wrappers.clear();
+                    pages.clear();
+                    wrappers.clear();
                 }
             };
 
-            function checkRegistrationAllowed() {
+            function checkActive() {
                 if (!active) throw new Error("UI service is no longer active.");
+            }
+
+            function checkRegistrationAllowed() {
+                checkActive();
                 if (mountAttempted) throw new Error("UI contributions must be registered before pluginsReady.");
             }
 
+            function checkNavigationAllowed() {
+                checkActive();
+                if (!navigationAllowed) throw new Error("UI navigation requires a mounted page container after pluginsReady.");
+            }
+
             const service: UiService = {
-                setRoot(render) {
+                registerPage(page) {
                     checkRegistrationAllowed();
-                    if (C.root) throw new Error("UI root is already registered.");
-                    if (typeof render !== "function") throw new Error("UI root must be a render function.");
-                    const entry = {render};
-                    C.root = entry;
+                    const remove = pages.registerPage(page);
+                    let registered = true;
 
                     return () => {
-                        if (C.root !== entry) return;
+                        if (!registered) return;
+                        registered = false;
                         // 在贡献者释放资源之前，先停止消费这些资源的 React 组件。
                         try {
                             unmount();
                         } finally {
-                            C.root = undefined;
+                            remove();
                         }
                     };
                 },
@@ -69,20 +86,36 @@ export function createUiPlugin(container: Element | DocumentFragment, rootOption
                     checkRegistrationAllowed();
                     // 固定本次登记的描述，后续修改调用方的对象不会改变装配规则。
                     const entry = {id: wrapper.id, order: wrapper.order, wrap: wrapper.wrap};
-                    if (!entry.id.trim()) throw new Error("UI wrapper id cannot be empty.");
+                    if (typeof entry.id !== "string" || !entry.id.trim()) throw new Error("UI wrapper id cannot be empty.");
                     if (!Number.isFinite(entry.order)) throw new Error("UI wrapper order must be finite.");
                     if (typeof entry.wrap !== "function") throw new Error("UI wrapper must have a wrap function.");
-                    if (C.wrappers.has(entry.id)) throw new Error(`UI wrapper '${entry.id}' is already registered.`);
-                    C.wrappers.set(entry.id, entry);
+                    if (wrappers.has(entry.id)) throw new Error(`UI wrapper '${entry.id}' is already registered.`);
+                    wrappers.set(entry.id, entry);
 
                     return () => {
-                        if (C.wrappers.get(entry.id) !== entry) return;
+                        if (wrappers.get(entry.id) !== entry) return;
                         try {
                             unmount();
                         } finally {
-                            C.wrappers.delete(entry.id);
+                            wrappers.delete(entry.id);
                         }
                     };
+                },
+                openPage(id, params) {
+                    checkNavigationAllowed();
+                    pages.openPage(id, params);
+                },
+                back() {
+                    checkNavigationAllowed();
+                    pages.back();
+                },
+                getSnapshot() {
+                    checkActive();
+                    return pages.getSnapshot();
+                },
+                subscribe(listener) {
+                    checkActive();
+                    return pages.subscribe(listener);
                 },
             };
 
@@ -90,13 +123,14 @@ export function createUiPlugin(container: Element | DocumentFragment, rootOption
             context.on(pluginsReady, () => {
                 if (mountAttempted) return;
                 mountAttempted = true;
-                if (!C.root) throw new Error("UI root is not registered.");
+                pages.start(initialPage);
+                navigationAllowed = true;
 
-                // 先得到根视图，再从内向外调用包装函数；最终最小 order 位于最外层。
-                const wrappers = [...C.wrappers.values()].sort((a, b) => a.order - b.order);
-                const tree = wrappers.reduceRight<ReactNode>(
+                // 根视图由本插件提供；按 order 从内向外包装，最小 order 位于最外层。
+                const sortedWrappers = [...wrappers.values()].sort((a, b) => a.order - b.order);
+                const tree = sortedWrappers.reduceRight<ReactNode>(
                     (children, entry) => entry.wrap(children),
-                    C.root.render(),
+                    <UiPages service={service}/>,
                 );
                 reactRoot = createRoot(container, rootOptions);
                 reactRoot.render(<StrictMode>{tree}</StrictMode>);

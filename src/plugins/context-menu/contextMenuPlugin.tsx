@@ -1,5 +1,5 @@
-import type {Plugin} from "../../plugin-core";
-import {uiKey} from "../ui";
+import type {Plugin} from "@lodestory/sdk";
+import {uiKey} from "@lodestory/sdk/ui";
 import {ContextMenuProvider} from "./ContextMenuProvider";
 
 /** 把上下文菜单能力登记为启动期 UI 包装层。 */

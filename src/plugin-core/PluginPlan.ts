@@ -1,5 +1,4 @@
-import type {Plugin} from "./Plugin";
-import type {CapabilityKey} from "./ServiceKey";
+import type {Plugin, CapabilityKey} from "@lodestory/sdk";
 
 /** 一次挂载使用的固定声明；保留原插件实例调用生命周期方法。 */
 export type PluginPlan = {

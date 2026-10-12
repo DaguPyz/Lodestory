@@ -1,6 +1,5 @@
 import { createAppRuntime } from "../../src/app/createAppRuntime";
-import { createServiceKey } from "../../src/plugin-core/ServiceKey";
-import type { Plugin } from "../../src/plugin-core/Plugin";
+import { createServiceKey, type Plugin } from "@lodestory/sdk";
 
 type Reader = { read(): number };
 const readerKey = createServiceKey<Reader>("example/reader");

@@ -2,6 +2,8 @@
 
 `createUiPlugin` 把页面导航和 React 根节点装配合并为一个插件，并提供 `uiKey`。页面插件与 Provider 插件在 `activate` 中通过 `uiKey` 登记页面或包装层；登记时只保存配置，不创建根节点。
 
+公共生命周期类型位于 [`@lodestory/sdk`](../../../packages/sdk/src/Plugin.ts)，UI 能力与页面类型位于 [`@lodestory/sdk/ui`](../../../packages/sdk/src/ui.ts)。`createUiPlugin` 与 `pluginsReady` 仍是宿主运行时实现；SDK 目前只提供同一 JavaScript realm 内的契约，不提供运行中热登记 API。
+
 启动到 `pluginsReady` 后，UI 插件选择 `initialPage`（未指定时用第一个登记页面），按包装层的 `order` 组装 Provider 与通用页面容器，再创建一个 React root。数值较小的 `order` 位于外层。页面调用 `openPage(id, params)` 切换并记录历史，页面收到自己的 `params`；`back()` 返回上一页并恢复它的参数。已访问页面继续留在树中，只隐藏非当前页面，因此切换时会保留其 React 组件实例和 Hook 状态。
 
 本版只允许在 `pluginsReady` 前登记贡献，运行中不支持增删或重新挂载：撤销任一已挂载页面或包装层都会先卸载整棵 UI 树，之后不会自动重建。贡献插件的 `deactivate` 应先调用登记时保存的 disposer，再释放它提供给组件使用的资源；整体停用时 UI 插件也先卸载 React root，再清理登记和导航状态。
@@ -10,8 +12,8 @@
 
 ```tsx
 import {useState} from "react";
-import type {Plugin} from "../../plugin-core";
-import {uiKey} from "../ui";
+import type {Plugin} from "@lodestory/sdk";
+import {uiKey} from "@lodestory/sdk/ui";
 
 function SettingsPage() {
     const [draft, setDraft] = useState("");

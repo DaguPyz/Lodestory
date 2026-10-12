@@ -1,4 +1,4 @@
-import {createEventKey} from "./EventKey";
+import {createEventKey} from "@lodestory/sdk";
 
 /**
  * 初始插件全部激活、能力和订阅全部生效后，仅由 EngineCore.start 发送一次；插件不能从 context.emit 发布此事件。

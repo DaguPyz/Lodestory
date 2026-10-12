@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
-import type { PluginContext } from "../../src/plugin-core/Plugin";
-import { uiKey } from "../../src/plugins/ui";
+import type { PluginContext } from "@lodestory/sdk";
+import { uiKey } from "@lodestory/sdk/ui";
 
 export function registerUi(context: PluginContext, root: ReactNode): void {
   const ui = context.get(uiKey);

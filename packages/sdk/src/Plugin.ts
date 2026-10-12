@@ -1,5 +1,5 @@
-import type { CapabilityKey, ServiceKey } from "./ServiceKey";
-import type { EventKey, EventListener } from "./EventKey";
+import type { EventKey, EventListener } from "./EventKey.js";
+import type { CapabilityKey, ServiceKey } from "./ServiceKey.js";
 
 /** EngineCore 提供给单个插件的能力和事件入口；能力与订阅自动记录归属。 */
 export type PluginContext = {

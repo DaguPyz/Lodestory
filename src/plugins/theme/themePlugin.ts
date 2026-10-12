@@ -1,8 +1,8 @@
 import {createElement} from "react";
-import type {Plugin} from "../../plugin-core";
-import {uiKey} from "../ui";
+import type {Plugin} from "@lodestory/sdk";
+import {uiKey} from "@lodestory/sdk/ui";
 import {ThemeProvider} from "./ThemeProvider";
-import {themeKey, type ThemeService} from "./themeService";
+import {themeKey, type ThemeService} from "@lodestory/sdk/theme";
 import {
     getThemeSnapshot,
     retryTheme,

@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import { createSdkLoader } from "./helpers/sdkFixture.mjs";
 
 const root = fileURLToPath(new URL("../src/plugin-core/", import.meta.url));
 const modules = new Map();
+const sdk = createSdkLoader({ modules });
 
 // Follow the existing test convention: compile the TypeScript source without adding a test runtime.
 function load(name) {
@@ -22,14 +24,16 @@ function load(name) {
   modules.set(path, exports);
   vm.runInNewContext(compiled, {
     exports,
-    require(specifier) { return load(resolve(dirname(path), specifier)); },
+    require(specifier) {
+      if (specifier.startsWith("@lodestory/sdk")) return sdk.requireSdk(specifier, relative(root, path));
+      return load(resolve(dirname(path), specifier));
+    },
   }, { filename: path });
   return exports;
 }
 
 const { EngineCore, PluginActivationError, PluginBatchActivationError, PluginBatchDeactivationError, StartupError } = load("EngineCore");
-const { createServiceKey } = load("ServiceKey");
-const { createEventKey } = load("EventKey");
+const { createServiceKey, createEventKey } = sdk.requireSdk("@lodestory/sdk");
 const { EventDispatchError } = load("EventBus");
 const { pluginsReady } = load("runtimeEvents");
 

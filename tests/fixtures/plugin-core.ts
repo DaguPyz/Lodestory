@@ -1,4 +1,5 @@
-import { EngineCore, createServiceKey, createEventKey, type Plugin } from "../../src/plugin-core";
+import { EngineCore } from "../../src/plugin-core";
+import { createServiceKey, createEventKey, type Plugin } from "@lodestory/sdk";
 
 const documentKey = createServiceKey<{ read(): string }>("document");
 const configKey = createServiceKey<{ fontSize: number }>("config");

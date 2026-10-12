@@ -3,7 +3,7 @@ import test from "node:test";
 import { createMainFixture, deferred, flushStartup } from "./helpers/mainStartupFixture.mjs";
 
 function themeKey(fixture) {
-  return fixture.loadModule("plugins/theme/themeService.ts").themeKey;
+  return fixture.requireSdk("@lodestory/sdk/theme").themeKey;
 }
 
 function renderedTree(fixture) {
@@ -70,7 +70,6 @@ test("the entry delegates UI composition and page registration to the plugin cat
     "./plugins/context-menu",
     "./plugins/theme/ThemeProvider",
     "./plugins/theme/themePlugin",
-    "./plugins/theme/themeService",
     "./plugins/welcome/welcomePlugin",
     "./plugins/editor/editorPlugin",
     "./plugins/settings/settingsPlugin",
@@ -103,7 +102,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.equal(themeProvider.props.children.type, fixture.UiPages);
   assert.equal(themeProvider.props.service, fixture.getService(themeKey(fixture)));
 
-  const uiService = fixture.getService(fixture.loadModule("plugins/ui/uiService.ts").uiKey);
+  const uiService = fixture.getService(fixture.requireSdk("@lodestory/sdk/ui").uiKey);
   const snapshot = uiService.getSnapshot();
   assert.equal(snapshot.current.id, "welcome");
   assert.deepEqual(Array.from(snapshot.pages, ({id, active}) => ({id, active})), [{id: "welcome", active: true}]);

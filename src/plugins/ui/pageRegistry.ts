@@ -1,4 +1,4 @@
-import type {UiLocation, UiPage, UiPageView, UiSnapshot} from "./uiService";
+import type {UiLocation, UiPage, UiPageView, UiSnapshot} from "@lodestory/sdk/ui";
 
 type Listener = () => void;
 

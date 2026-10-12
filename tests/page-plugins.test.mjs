@@ -3,7 +3,7 @@ import test from "node:test";
 import { createMainFixture, flushStartup } from "./helpers/mainStartupFixture.mjs";
 
 function getUi(fixture) {
-  const uiKey = fixture.loadModule("plugins/ui/uiService.ts").uiKey;
+  const uiKey = fixture.requireSdk("@lodestory/sdk/ui").uiKey;
   return fixture.getService(uiKey);
 }
 
@@ -113,7 +113,7 @@ test("welcome project navigation restores the editor after settings and creates 
 test("each page plugin revokes its page and the UI root unmounts only once", async () => {
   const fixture = await startFixture();
   const core = fixture.createdCores.at(-1);
-  const uiKey = fixture.loadModule("plugins/ui/uiService.ts").uiKey;
+  const uiKey = fixture.requireSdk("@lodestory/sdk/ui").uiKey;
   const ui = core.get(uiKey);
 
   ui.openPage("editor", { project: project("novel-1", "第一本", "/stories/first") });

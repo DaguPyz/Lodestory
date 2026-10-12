@@ -2,11 +2,8 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
 import { useThemeService } from "../theme/ThemeProvider";
-import type { ThemeService } from "../theme/themeService";
+import type { ThemeMode, ResolvedTheme } from "@lodestory/sdk/theme";
 import { ProjectPageLayout } from "../../components/ProjectPageLayout";
-
-type ThemeMode = Parameters<ThemeService["setMode"]>[0];
-type ResolvedTheme = ReturnType<ThemeService["getSnapshot"]>["resolvedTheme"];
 
 const options: { mode: ThemeMode; label: string; description: string }[] = [
   { mode: "dark", label: "深色", description: "沉静柔和，让内容成为焦点。" },

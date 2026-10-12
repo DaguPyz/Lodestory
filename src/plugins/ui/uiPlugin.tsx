@@ -1,8 +1,8 @@
 import {StrictMode, type ReactNode} from "react";
 import {createRoot, type Root, type RootOptions} from "react-dom/client";
-import type {Plugin} from "../../plugin-core";
+import type {Plugin} from "@lodestory/sdk";
 import {pluginsReady} from "../../plugin-core";
-import {uiKey, type UiService, type UiWrapper} from "./uiService";
+import {uiKey, type UiService, type UiWrapper} from "@lodestory/sdk/ui";
 import {createPageRegistry} from "./pageRegistry";
 import {UiPages} from "./UiPages";
 

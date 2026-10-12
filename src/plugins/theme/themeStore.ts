@@ -1,15 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-
-export type ThemeMode = "dark" | "light" | "system";
-export type ResolvedTheme = "dark" | "light";
-
-export type ThemeSnapshot = {
-  mode: ThemeMode;
-  resolvedTheme: ResolvedTheme;
-  persistenceError: boolean;
-  windowError: boolean;
-};
+import type { ThemeMode, ResolvedTheme, ThemeSnapshot } from "@lodestory/sdk/theme";
 
 export const THEME_STORAGE_KEY = "lodestory.theme-mode";
 const CHANNEL_NAME = "lodestory.appearance";

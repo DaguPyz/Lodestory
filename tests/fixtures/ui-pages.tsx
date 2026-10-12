@@ -1,6 +1,8 @@
 import {useState} from "react";
-import {EngineCore, type Plugin} from "../../src/plugin-core";
-import {createUiPlugin, uiKey, type UiService} from "../../src/plugins/ui";
+import {EngineCore} from "../../src/plugin-core";
+import type {Plugin} from "@lodestory/sdk";
+import {createUiPlugin} from "../../src/plugins/ui";
+import {uiKey, type UiService} from "@lodestory/sdk/ui";
 
 let ui: UiService | undefined;
 

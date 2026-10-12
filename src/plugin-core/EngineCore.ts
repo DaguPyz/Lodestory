@@ -1,9 +1,7 @@
 import {CapabilityRegistry, type PendingRegistration} from "./CapabilityRegistry";
-import type {Plugin, PluginContext} from "./Plugin";
+import type {Plugin, PluginContext, ServiceKey, EventKey, EventListener} from "@lodestory/sdk";
 import {preparePlugin, sortPlugins, type PluginPlan} from "./PluginPlan";
-import type {ServiceKey} from "./ServiceKey";
 import {EventBus} from "./EventBus";
-import type {EventKey, EventListener} from "./EventKey";
 import {pluginsReady} from "./runtimeEvents";
 
 /** 已激活插件的记录，供 EngineCore 在卸载时执行停用和上下文清理。 */

@@ -33,3 +33,5 @@ cargo test --manifest-path src-tauri/Cargo.toml
 The development-only `/tests/fixtures/project-index.html` page uses Tauri IPC mocks to verify project-entry UI without modifying real directories or the index. Add `?scenario=cancel` or `?scenario=corrupt` to check cancellation and error states. Native directory dialogs require separate desktop validation.
 
 The same fixture also supports document creation and writing; `?scenario=create-error`, `?scenario=save-error`, and `?scenario=slow-save` exercise document failure and pending-save flows without touching actual files.
+
+The public plugin contracts live in [`@lodestory/sdk`](packages/sdk/README.md), an independent ESM package with core, UI, and theme entry points. The app consumes it through the pnpm workspace. Dynamic plugin loading and marketplace installation are planned separately.

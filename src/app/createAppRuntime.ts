@@ -1,4 +1,5 @@
-import { EngineCore, type Plugin, type ServiceKey } from "../plugin-core";
+import type { Plugin, ServiceKey } from "@lodestory/sdk";
+import { EngineCore } from "../plugin-core";
 
 /** 一次插件装配的运行实例；具体插件和能力由调用方选择。 */
 export type AppRuntime = {

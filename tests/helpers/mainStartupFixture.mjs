@@ -3,6 +3,7 @@ import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import ts from "typescript";
+import { createSdkLoader } from "./sdkFixture.mjs";
 
 const sourceRoot = fileURLToPath(new URL("../../src/", import.meta.url));
 
@@ -14,6 +15,7 @@ export function deferred() {
 
 export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false } = {}) {
   const modules = new Map();
+  const sdk = createSdkLoader({ modules });
   const createdCores = [];
   const rootCalls = [];
   const moduleImports = [];
@@ -203,6 +205,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       Array,
       require(specifier) {
         moduleImports.push({ from: relativePath, specifier });
+        if (specifier.startsWith("@lodestory/sdk")) return sdk.requireSdk(specifier, relativePath);
         if (specifier === "react") return React;
         if (specifier === "react-dom/client") return ReactDOM;
         if (specifier === "react/jsx-runtime") {
@@ -299,6 +302,9 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   return {
     start,
     loadModule(relativePath) { return load(resolve(sourceRoot, relativePath)); },
+    requireSdk(specifier) { return sdk.requireSdk(specifier); },
+    sdkImports: sdk.imports,
+    sdkEvaluatedModules: sdk.evaluatedModules,
     React,
     ReactDOM,
     components,

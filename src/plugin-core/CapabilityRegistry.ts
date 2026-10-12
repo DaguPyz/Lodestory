@@ -1,4 +1,4 @@
-import type { CapabilityKey, ServiceKey } from "./ServiceKey";
+import type { CapabilityKey, ServiceKey } from "@lodestory/sdk";
 
 type Entry = {
   ownerId: string;

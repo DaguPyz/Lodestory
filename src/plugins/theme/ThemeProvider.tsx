@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from "react";
-import type { ThemeService } from "./themeService";
+import type { ThemeService } from "@lodestory/sdk/theme";
 
 const ThemeContext = createContext<ThemeService | null>(null);
 

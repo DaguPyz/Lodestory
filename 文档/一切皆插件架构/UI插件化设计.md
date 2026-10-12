@@ -191,7 +191,7 @@ React 不会等待普通 Effect 清理函数中的异步工作。需要等待的
 
 | 当前位置 | 已有行为 | 按本设计需要增加或改变的内容 |
 | --- | --- | --- |
-| [PluginContext](/Users/yinzhenpu/projects/Lodestory/src/plugin-core/Plugin.ts) | 提供能力、查询能力、订阅和发布事件 | 提交归属插件的通用扩展项 |
+| [PluginContext](/Users/yinzhenpu/projects/Lodestory/packages/sdk/src/Plugin.ts) | SDK 公开提供能力、查询能力、订阅和发布事件的契约 | 提交归属插件的通用扩展项 |
 | [EngineCore](/Users/yinzhenpu/projects/Lodestory/src/plugin-core/EngineCore.ts) | 单插件能力与订阅暂存、批量回滚、逆序停止 | 扩展项批次提交、停用前撤回、撤回失败保留依赖 |
 | 通用 UI 插件 | 尚不存在 | 类型化位置、UI 登记表、快照校验、React 挂载及卸载确认 |
 | [themePlugin](/Users/yinzhenpu/projects/Lodestory/src/plugins/theme/themePlugin.ts) | 提供 `ThemeService` | 在插件内部绑定并贡献 `ThemeProvider` |

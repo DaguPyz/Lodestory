@@ -1,9 +1,10 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import ts from "typescript";
+import { createSdkLoader } from "./sdkFixture.mjs";
 
 const sourceRoot = fileURLToPath(new URL("../../src/", import.meta.url));
 const requireFromHere = createRequire(import.meta.url);
@@ -82,6 +83,7 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
   }
 
   const modules = new Map();
+  const sdk = createSdkLoader({ modules });
   function resolveModule(fromPath, specifier) {
     const base = resolve(dirname(fromPath), specifier);
     const candidates = [base, `${base}.ts`, `${base}.tsx`, resolve(base, "index.ts"), resolve(base, "index.tsx")];
@@ -109,6 +111,7 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
     vm.runInNewContext(compiled, {
       exports,
       require(specifier) {
+        if (specifier.startsWith("@lodestory/sdk")) return sdk.requireSdk(specifier, relative(sourceRoot, path));
         if (specifier === "@tauri-apps/api/core") return { isTauri: () => true };
         if (specifier === "@tauri-apps/api/window") return { getCurrentWindow: () => appWindow };
         if (specifier === "react") return React;
@@ -134,8 +137,8 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
   }
   // Runtime imports resolve to this same cached export object, so its core is inspectable too.
   engine.EngineCore = TrackedEngineCore;
-  const contract = load(resolve(sourceRoot, "plugins/theme/themeService.ts"));
-  const uiContract = load(resolve(sourceRoot, "plugins/ui/uiService.ts"));
+  const contract = sdk.requireSdk("@lodestory/sdk/theme");
+  const uiContract = sdk.requireSdk("@lodestory/sdk/ui");
   const themeStore = load(resolve(sourceRoot, "plugins/theme/themeStore.ts"));
   const originalStartThemeSync = themeStore.startThemeSync;
   themeStore.startThemeSync = () => {
@@ -196,6 +199,9 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
       return requireFromHere("react-dom/server").renderToStaticMarkup(element);
     },
     loadModule(relativePath) { return load(resolve(sourceRoot, relativePath)); },
+    requireSdk(specifier) { return sdk.requireSdk(specifier); },
+    sdkImports: sdk.imports,
+    sdkEvaluatedModules: sdk.evaluatedModules,
     get unlistenCalls() { return unlistenCalls; },
     windowListenerCount(name) { return windowListeners.get(name)?.size ?? 0; },
   };

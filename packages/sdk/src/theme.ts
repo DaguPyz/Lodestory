@@ -1,5 +1,14 @@
-import { createServiceKey } from "../../plugin-core";
-import type { ThemeMode, ThemeSnapshot } from "./themeStore";
+import { createServiceKey } from "./ServiceKey.js";
+
+export type ThemeMode = "dark" | "light" | "system";
+export type ResolvedTheme = "dark" | "light";
+
+export type ThemeSnapshot = {
+  mode: ThemeMode;
+  resolvedTheme: ResolvedTheme;
+  persistenceError: boolean;
+  windowError: boolean;
+};
 
 /** 主题服务的能力契约；具体实现由主题插件提供。 */
 export type ThemeService = {

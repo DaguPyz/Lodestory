@@ -1,5 +1,5 @@
 import type {RootOptions} from "react-dom/client";
-import type {Plugin} from "../plugin-core";
+import type {Plugin} from "@lodestory/sdk";
 import {createUiPlugin} from "../plugins/ui";
 import {createThemePlugin} from "../plugins/theme/themePlugin";
 import {createContextMenuPlugin} from "../plugins/context-menu";

@@ -1,4 +1,4 @@
-import type { EventKey, EventListener } from "./EventKey";
+import type { EventKey, EventListener } from "@lodestory/sdk";
 
 type Subscription = {
   ownerId: string;

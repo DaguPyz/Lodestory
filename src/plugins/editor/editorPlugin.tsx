@@ -1,9 +1,9 @@
-import type {Plugin} from "../../plugin-core";
+import type {Plugin} from "@lodestory/sdk";
 import {appPages, type EditorPageParams} from "../../app/pages";
 import {PageShell} from "../../components/PageShell";
 import {EditorPage} from "./EditorPage";
-import {themeKey} from "../theme/themeService";
-import {uiKey} from "../ui";
+import {themeKey} from "@lodestory/sdk/theme";
+import {uiKey} from "@lodestory/sdk/ui";
 
 function editorParams(params: unknown): EditorPageParams {
     const project = (params as Partial<EditorPageParams> | null)?.project;

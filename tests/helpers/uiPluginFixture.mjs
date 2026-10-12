@@ -1,9 +1,10 @@
 import { createRequire } from "node:module";
 import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import ts from "typescript";
+import { createSdkLoader } from "./sdkFixture.mjs";
 
 const sourceRoot = fileURLToPath(new URL("../../src/", import.meta.url));
 const requireFromHere = createRequire(import.meta.url);
@@ -40,6 +41,7 @@ function findModule(fromPath, specifier) {
  */
 export function uiPluginFixture({ container = {}, rootOptions, renderError = null } = {}) {
   const modules = new Map();
+  const sdk = createSdkLoader({ modules });
   const roots = [];
   const controls = { renderError, createRootError: null, unmountError: null };
   let hookRuntime;
@@ -98,6 +100,7 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
     vm.runInNewContext(compiled, {
       exports,
       require(specifier) {
+        if (specifier.startsWith("@lodestory/sdk")) return sdk.requireSdk(specifier, relative(sourceRoot, path));
         if (specifier === "react") return ReactWithHooks;
         if (specifier === "react/jsx-runtime") return jsxRuntime;
         if (specifier === "react/jsx-dev-runtime") return jsxDevRuntime;
@@ -120,7 +123,7 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
   const { EngineCore } = load(resolve(sourceRoot, "plugin-core/EngineCore.ts"));
   const { pluginsReady } = load(resolve(sourceRoot, "plugin-core/runtimeEvents.ts"));
   const { createUiPlugin } = load(resolve(sourceRoot, "plugins/ui/uiPlugin.tsx"));
-  const { uiKey } = load(resolve(sourceRoot, "plugins/ui/index.ts"));
+  const { uiKey } = sdk.requireSdk("@lodestory/sdk/ui");
   const core = new EngineCore();
 
   return {
@@ -132,6 +135,9 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
     pluginsReady,
     roots,
     uiKey,
+    requireSdk(specifier) { return sdk.requireSdk(specifier); },
+    sdkImports: sdk.imports,
+    sdkEvaluatedModules: sdk.evaluatedModules,
     rootOptions,
     async mountUi(options = (rootOptions ? { rootOptions } : {})) {
       const plugin = createUiPlugin(container, options);

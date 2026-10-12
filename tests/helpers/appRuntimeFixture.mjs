@@ -4,6 +4,7 @@ import { dirname, isAbsolute, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import ts from "typescript";
+import { createSdkLoader } from "./sdkFixture.mjs";
 
 const sourceRoot = fileURLToPath(new URL("../../src/", import.meta.url));
 
@@ -13,9 +14,10 @@ export function deferred() {
   return { promise, resolve: resolvePromise };
 }
 
-/** Load only app and plugin-core source so an accidental business import fails immediately. */
+/** Load app/core source plus public SDK contracts; accidental business imports still fail immediately. */
 export function fixture() {
   const modules = new Map();
+  const sdk = createSdkLoader({ modules });
   const createdCores = [];
 
   function resolveModule(fromPath, specifier) {
@@ -54,7 +56,10 @@ export function fixture() {
     modules.set(path, exports);
     vm.runInNewContext(compiled, {
       exports,
-      require(specifier) { return load(resolveModule(path, specifier)); },
+      require(specifier) {
+        if (specifier.startsWith("@lodestory/sdk")) return sdk.requireSdk(specifier, relativePath);
+        return load(resolveModule(path, specifier));
+      },
     }, { filename: path });
     return exports;
   }
@@ -77,6 +82,7 @@ export function fixture() {
       const path = resolve(sourceRoot, relativePath);
       return load(path);
     },
+    requireSdk(specifier) { return sdk.requireSdk(specifier); },
   };
 }
 

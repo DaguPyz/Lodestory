@@ -8,7 +8,9 @@
 
 本版只允许在 `pluginsReady` 前登记贡献，运行中不支持增删或重新挂载：撤销任一已挂载页面或包装层都会先卸载整棵 UI 树，之后不会自动重建。贡献插件的 `deactivate` 应先调用登记时保存的 disposer，再释放它提供给组件使用的资源；正常整体停止时 UI 插件按生命周期卸载 React root，再清理登记和导航状态。
 
-UI 树发生未捕获的 React 渲染错误时，UI 插件会把同一个 root 切换到独立的 `UiErrorPage`，替换故障组件树并保留已激活插件及其服务。这个恢复只处理显示故障，不定位或停用某个业务插件；当前没有组件到插件的故障归属信息，边界插件后续再做。若真正的启动过程失败（例如插件激活或 `createRoot` 失败），内核会先回滚已激活插件，启动 Promise 拒绝后 `main.tsx` 调用 UI 模块的 `showUiStartupError` 显示 DOM 兜底页；该模块自行查找 `#root`，若根容器不存在则只报告原始启动错误与回滚错误，不会因再次渲染失败而抛错。正常停止、渲染恢复和启动失败因此走不同的处理路径。
+`error-ui` 插件通过 `errorUiKey` 提供稳定的 `ErrorBoundary` 错误边界和 `ErrorView`。UI 插件依赖该服务，并用 `ErrorBoundary` 包住根下的 Provider 与页面树；页面插件也可以在自己的页面内容周围使用 `ErrorBoundary`，让局部错误只替换对应页面内容。插件是否被卸载仍由运行时生命周期决定，错误边界只负责渲染错误视图。
+
+如果 React 的错误没有被 `ErrorBoundary` 捕获并到达根的 `onUncaughtError`，UI 插件会在同一个 root 用内置的简单错误界面替换当前树，不卸载 root 或已激活插件。这个最后兜底只恢复显示，不定位或停用某个业务插件。若真正的启动过程失败（例如插件激活或 `createRoot` 失败），内核会先回滚已激活插件，启动 Promise 拒绝后 `main.tsx` 调用 UI 模块的 `showUiStartupError` 显示 DOM 兜底页；该模块自行查找 `#root`，若根容器不存在则只报告原始启动错误与回滚错误，不会因再次渲染失败而抛错。正常停止、边界内错误、根级错误恢复和启动失败因此走不同的处理路径。
 
 页面的 `render` 回调应返回 React 元素；若页面组件使用 Hook，要通过 JSX 创建它，不要直接调用组件函数：
 
@@ -16,6 +18,7 @@ UI 树发生未捕获的 React 渲染错误时，UI 插件会把同一个 root �
 import {useState} from "react";
 import type {Plugin} from "@lodestory/sdk";
 import {uiKey} from "@lodestory/sdk/ui";
+import {errorUiKey} from "@lodestory/sdk/error";
 
 function SettingsPage() {
     const [draft, setDraft] = useState("");
@@ -27,12 +30,13 @@ export function createSettingsPlugin(): Plugin {
 
     return {
         id: "settings",
-        requires: [uiKey],
+        requires: [uiKey, errorUiKey],
         provides: [],
         activate(context) {
+            const {ErrorBoundary} = context.get(errorUiKey);
             removePage = context.get(uiKey).registerPage({
                 id: "settings",
-                render: () => <SettingsPage />,
+                render: () => <ErrorBoundary><SettingsPage /></ErrorBoundary>,
             });
         },
         deactivate() {

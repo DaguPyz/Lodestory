@@ -28,11 +28,17 @@ function errorPage(fixture) {
   return page;
 }
 
-function uiErrorPage(fixture) {
-  const UiErrorPage = fixture.loadModule("plugins/ui/UiErrorPage.tsx").UiErrorPage;
-  const tree = renderedTree(fixture);
-  assert.ok(containsType(tree, UiErrorPage), "the same React root should render UiErrorPage");
-  return tree;
+function rootRenderFallback(fixture) {
+  assert.equal(fixture.roots.length, 1);
+  const tree = fixture.roots[0].renderCalls.at(-1);
+  assert.equal(tree.type, fixture.React.StrictMode);
+  const fallback = tree.props.children;
+  assert.equal(fallback.type.name, "RootRenderFallback");
+  const page = fallback.type(fallback.props);
+  assert.equal(page.type, "main");
+  assert.equal(page.props.className, "app-startup-error");
+  assert.equal(page.props.role, "alert");
+  return fallback;
 }
 
 function reportedFailure(fixture) {
@@ -71,7 +77,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["ui", "theme", "context-menu", "welcome", "editor", "settings"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["error-ui", "ui", "theme", "context-menu", "welcome", "editor", "settings"]);
   assert.deepEqual(fixture.appPluginsCalls, [[]]);
   const entryImports = fixture.moduleImports
     .filter(({ from }) => from === "main.tsx")
@@ -96,6 +102,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
     "the legacy workspace page plugin should not be loaded");
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/context-menu/contextMenuPlugin.tsx"),
     "the context-menu plugin source should run in the fixture");
+  assert.ok(fixture.lifecycle.includes("activate:error-ui:complete"));
   for (const pagePlugin of ["welcome", "editor", "settings"]) {
     assert.ok(fixture.moduleImports.some(({ from }) => from === `plugins/${pagePlugin}/${pagePlugin}Plugin.tsx`),
       `the ${pagePlugin} page plugin source should run in the fixture`);
@@ -108,13 +115,18 @@ test("the entry delegates UI composition and page registration to the plugin cat
 
   const tree = renderedTree(fixture);
   assert.equal(tree.type, fixture.React.StrictMode);
-  const contextMenu = tree.props.children;
+  const errorUi = tree.props.children;
+  assert.equal(errorUi.type, fixture.components.ErrorBoundary);
+  const contextMenu = errorUi.props.children;
   assert.equal(contextMenu.type, fixture.components.ContextMenuProvider);
   const themeProvider = contextMenu.props.children;
   assert.equal(themeProvider.type, fixture.components.ThemeProvider);
   assert.equal(typeof fixture.UiPages, "function", "the real UI pages component should be loaded");
   assert.equal(themeProvider.props.children.type, fixture.UiPages);
   assert.equal(themeProvider.props.service, fixture.getService(themeKey(fixture)));
+  const errorUiService = fixture.getService(fixture.requireSdk("@lodestory/sdk/error").errorUiKey);
+  assert.equal(errorUiService.ErrorBoundary, fixture.components.ErrorBoundary);
+  assert.equal(errorUiService.ErrorView, fixture.components.ErrorView);
 
   const uiService = fixture.getService(fixture.requireSdk("@lodestory/sdk/ui").uiKey);
   const snapshot = uiService.getSnapshot();
@@ -135,12 +147,18 @@ test("the entry delegates UI composition and page registration to the plugin cat
   const visitedPageTree = fixture.UiPages(themeProvider.props.children.props);
   const renderedPages = visitedPageTree.props.children;
   const renderedPage = (id) => renderedPages.find((page) => page.key === id).props.children;
-  const welcomePage = renderedPage("welcome");
-  const editorShell = renderedPage("editor");
+  const welcomeBoundary = renderedPage("welcome");
+  assert.equal(welcomeBoundary.type, fixture.components.ErrorBoundary);
+  const welcomePage = welcomeBoundary.props.children;
+  const editorBoundary = renderedPage("editor");
+  assert.equal(editorBoundary.type, fixture.components.ErrorBoundary);
+  const editorShell = editorBoundary.props.children;
   assert.equal(editorShell.type, fixture.components.PageShell);
   assert.equal(editorShell.props.showBrowserTitlebar, false);
   const editorPage = editorShell.props.children;
-  const settingsPage = renderedPage("settings");
+  const settingsBoundary = renderedPage("settings");
+  assert.equal(settingsBoundary.type, fixture.components.ErrorBoundary);
+  const settingsPage = settingsBoundary.props.children;
   assert.equal(welcomePage.type, fixture.components.WelcomePage);
   assert.equal(welcomePage.props.active, false);
   assert.equal(typeof welcomePage.props.onOpenProject, "function");
@@ -185,8 +203,9 @@ test("browser startup remains asynchronous and retains both UI wrappers", async 
   assert.equal(fixture.nativeCalls.length, 0);
   const tree = renderedTree(fixture);
   assert.equal(tree.type, fixture.React.StrictMode);
-  assert.equal(tree.props.children.type, fixture.components.ContextMenuProvider);
-  assert.equal(tree.props.children.props.children.type, fixture.components.ThemeProvider);
+  assert.equal(tree.props.children.type, fixture.components.ErrorBoundary);
+  assert.equal(tree.props.children.props.children.type, fixture.components.ContextMenuProvider);
+  assert.equal(tree.props.children.props.children.props.children.type, fixture.components.ThemeProvider);
 });
 
 test("theme startup errors remain recoverable and the app still renders", async () => {
@@ -256,7 +275,7 @@ test("createRoot failures roll back startup, while render failures recover in th
     assert.equal(fixture.rootCalls.length, 1);
     assert.equal(fixture.roots.length, 1);
     assert.equal(fixture.roots[0].renderCalls.length, 2);
-    uiErrorPage(fixture);
+    rootRenderFallback(fixture);
     assert.equal(fixture.lifecycle.filter((entry) => entry.startsWith("activate:") && entry.endsWith(":complete")).length, fixture.catalogPluginIds.length);
     assert.equal(fixture.lifecycle.some((entry) => entry.startsWith("deactivate:")), false);
     assert.equal(fixture.channels[0].closed, false);
@@ -276,7 +295,7 @@ test("an asynchronous React error replaces the failed tree without stopping its 
   fixture.rootCalls[0].options.onUncaughtError(new Error("duplicate render error"));
   await flushStartup();
 
-  uiErrorPage(fixture);
+  rootRenderFallback(fixture);
   assert.equal(fixture.rootCalls.length, 1);
   assert.equal(fixture.roots[0].renderCalls.length, 2);
   assert.equal(fixture.logs.filter((entry) => entry === "root.unmount").length, 0);
@@ -295,7 +314,7 @@ test("an initial render error is recovered after React reports it", async () => 
   fixture.start();
   await flushStartup();
 
-  uiErrorPage(fixture);
+  rootRenderFallback(fixture);
   assert.equal(fixture.roots[0].renderCalls.length, 2);
   assert.equal(fixture.channels[0].closed, false);
   assert.equal(fixture.lifecycle.some((entry) => entry.startsWith("deactivate:")), false);
@@ -310,11 +329,11 @@ test("a persistent fallback render error is reported once without retrying or st
   await flushStartup();
   assert.equal(fixture.rootCalls.length, 1);
   assert.equal(fixture.roots[0].renderCalls.length, 2);
-  const entry = fixture.logs.find((value) => value?.level === "error" && value.args[0] === "UI error page rendering failed.");
+  const entry = fixture.logs.find((value) => value?.level === "error" && value.args[0] === "UI root fallback rendering failed.");
   assert.ok(entry);
   assert.equal(entry.args[1].renderError, renderError);
-  assert.equal(entry.args[1].errorPageError, renderError);
-  assert.equal(fixture.logs.filter((value) => value?.level === "error" && value.args[0] === "UI error page rendering failed.").length, 1);
+  assert.equal(entry.args[1].fallbackError, renderError);
+  assert.equal(fixture.logs.filter((value) => value?.level === "error" && value.args[0] === "UI root fallback rendering failed.").length, 1);
   assert.equal(fixture.logs.filter((value) => value === "root.unmount").length, 0);
   assert.equal(fixture.lifecycle.some((value) => value.startsWith("deactivate:")), false);
   assert.equal(fixture.channels[0].closed, false);

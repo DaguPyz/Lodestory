@@ -4,6 +4,7 @@ import {PageShell} from "../../components/PageShell";
 import {EditorPage} from "./EditorPage";
 import {themeKey} from "@lodestory/sdk/theme";
 import {uiKey} from "@lodestory/sdk/ui";
+import {errorUiKey} from "@lodestory/sdk/error";
 
 function editorParams(params: unknown): EditorPageParams {
     const project = (params as Partial<EditorPageParams> | null)?.project;
@@ -19,16 +20,17 @@ export function createEditorPlugin(): Plugin {
 
     return {
         id: "editor",
-        requires: [uiKey, themeKey],
+        requires: [uiKey, themeKey, errorUiKey],
         provides: [],
 
         activate(context) {
             const ui = context.get(uiKey);
+            const {ErrorBoundary} = context.get(errorUiKey);
             removePage = ui.registerPage({
                 id: appPages.editor,
                 render: ({params, active}) => {
                     const {project} = editorParams(params);
-                    return <PageShell showBrowserTitlebar={false}>
+                    return <ErrorBoundary><PageShell showBrowserTitlebar={false}>
                         <EditorPage
                             key={`${project.id}:${project.path}`}
                             projectName={project.name}
@@ -37,7 +39,7 @@ export function createEditorPlugin(): Plugin {
                             onBack={() => ui.back()}
                             onOpenSettings={() => ui.openPage(appPages.settings)}
                         />
-                    </PageShell>;
+                    </PageShell></ErrorBoundary>;
                 },
             });
         },

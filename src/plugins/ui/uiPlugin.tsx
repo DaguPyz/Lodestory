@@ -3,9 +3,9 @@ import {createRoot, type Root, type RootOptions} from "react-dom/client";
 import type {Plugin} from "@lodestory/sdk";
 import {pluginsReady} from "../../plugin-core";
 import {uiKey, type UiService, type UiWrapper} from "@lodestory/sdk/ui";
+import {errorUiKey} from "@lodestory/sdk/error";
 import {createPageRegistry} from "./pageRegistry";
 import {UiPages} from "./UiPages";
-import {UiErrorPage} from "./UiErrorPage";
 
 export type UiPluginOptions = {
     /** 启动时显示的页面；省略时使用第一个登记的页面。 */
@@ -23,10 +23,11 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
 
     return {
         id: "ui",
-        requires: [],
+        requires: [errorUiKey],
         provides: [uiKey],
 
         activate(context) {
+            const {ErrorBoundary} = context.get(errorUiKey);
             // 每次激活使用独立登记和状态，旧服务和旧撤销函数不能影响下一次激活。
             const pages = createPageRegistry();
             const wrappers = new Map<string, UiWrapper>();
@@ -36,8 +37,8 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
             let reactRoot: Root | undefined;
             let renderFailureHandled = false;
             let firstRenderError: unknown;
-            let errorPageRenderAttempted = false;
-            let errorPageFailureReported = false;
+            let rootFallbackRenderAttempted = false;
+            let rootFallbackFailureReported = false;
 
             function unmount() {
                 navigationAllowed = false;
@@ -84,25 +85,25 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                 void Promise.resolve().then(() => {
                     // A queued callback must never recreate UI after deactivation or contribution removal.
                     if (!active || reactRoot !== root) return;
-                    errorPageRenderAttempted = true;
+                    rootFallbackRenderAttempted = true;
                     try {
-                        root.render(<UiErrorPage/>);
-                    } catch (errorPageError) {
-                        reportErrorPageFailure(errorPageError);
+                        root.render(<StrictMode><RootRenderFallback/></StrictMode>);
+                    } catch (fallbackError) {
+                        reportRootFallbackFailure(fallbackError);
                     }
                 });
             }
 
-            function reportErrorPageFailure(errorPageError: unknown) {
-                if (errorPageFailureReported) return;
-                errorPageFailureReported = true;
-                // The fallback is terminal: report its failure without retrying or unmounting.
-                console.error("UI error page rendering failed.", {renderError: firstRenderError, errorPageError});
+            function reportRootFallbackFailure(fallbackError: unknown) {
+                if (rootFallbackFailureReported) return;
+                rootFallbackFailureReported = true;
+                // The root-level fallback is terminal: never call the same failing view again.
+                console.error("UI root fallback rendering failed.", {renderError: firstRenderError, fallbackError});
             }
 
             function handleUncaughtError(error: unknown, errorInfo: Parameters<NonNullable<RootOptions["onUncaughtError"]>>[1]) {
                 if (!active || !reactRoot) return;
-                if (errorPageRenderAttempted) reportErrorPageFailure(error);
+                if (rootFallbackRenderAttempted) reportRootFallbackFailure(error);
                 else recoverFromRenderError(error);
                 try {
                     rootOptions?.onUncaughtError?.(error, errorInfo);
@@ -133,7 +134,7 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                     checkRegistrationAllowed();
                     // 固定本次登记的描述，后续修改调用方的对象不会改变装配规则。
                     const entry = {id: wrapper.id, order: wrapper.order, wrap: wrapper.wrap};
-                    if (typeof entry.id !== "string" || !entry.id.trim()) throw new Error("UI wrapper id cannot be empty.");
+                    if (!entry.id.trim()) throw new Error("UI wrapper id cannot be empty.");
                     if (!Number.isFinite(entry.order)) throw new Error("UI wrapper order must be finite.");
                     if (typeof entry.wrap !== "function") throw new Error("UI wrapper must have a wrap function.");
                     if (wrappers.has(entry.id)) throw new Error(`UI wrapper '${entry.id}' is already registered.`);
@@ -188,7 +189,7 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
 
                 reactRoot = createRoot(rootContainer, managedRootOptions);
                 try {
-                    reactRoot.render(<StrictMode>{tree}</StrictMode>);
+                    reactRoot.render(<StrictMode><ErrorBoundary>{tree}</ErrorBoundary></StrictMode>);
                 } catch (error) {
                     // React can report through onUncaughtError, but a synchronous root.render
                     // exception also needs recovery and must not make pluginsReady roll back.
@@ -203,4 +204,11 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
             stop?.();
         },
     };
+}
+
+function RootRenderFallback() {
+    return <main className="app-startup-error" role="alert">
+        <p>界面显示失败，请重新加载应用。</p>
+        <button type="button" onClick={() => window.location.reload()}>重新加载</button>
+    </main>;
 }

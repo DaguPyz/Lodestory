@@ -11,7 +11,8 @@ function renderRegisteredPage(fixture, ui, id) {
   const tree = fixture.UiPages({ service: ui });
   const pageContainer = tree.props.children.find((page) => page.key === id);
   assert.ok(pageContainer, `page '${id}' should have been visited and registered`);
-  return pageContainer.props.children;
+  const page = pageContainer.props.children;
+  return page.type === fixture.components.ErrorBoundary ? page.props.children : page;
 }
 
 function renderEditor(fixture, ui) {

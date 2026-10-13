@@ -141,6 +141,8 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const roots = [];
   const faults = {};
   const components = {
+    ErrorBoundary: function ErrorBoundary({ children }) { return children; },
+    ErrorView: function ErrorView() {},
     WelcomePage: function WelcomePage() {},
     EditorPage: function EditorPage() {},
     ThemeSettingsPage: function ThemeSettingsPage() {},
@@ -182,6 +184,23 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     if (relativePath === "plugins/context-menu/ContextMenuRegion.tsx") return {};
     if (relativePath === "plugins/theme/ThemeProvider.tsx") {
       return { __esModule: true, ThemeProvider: components.ThemeProvider };
+    }
+    if (relativePath === "plugins/error-ui/errorUiPlugin.tsx") {
+      const { errorUiKey } = sdk.requireSdk("@lodestory/sdk/error", relativePath);
+      return {
+        __esModule: true,
+        createErrorUiPlugin() {
+          return {
+            id: "error-ui",
+            requires: [],
+            provides: [errorUiKey],
+            activate(context) {
+              context.provide(errorUiKey, { ErrorBoundary: components.ErrorBoundary, ErrorView: components.ErrorView });
+            },
+            deactivate() {},
+          };
+        },
+      };
     }
     const source = readFileSync(path, "utf8");
     const compiled = ts.transpileModule(source, {

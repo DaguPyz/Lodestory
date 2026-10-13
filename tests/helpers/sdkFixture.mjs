@@ -9,6 +9,7 @@ const sdkSourceRoot = resolve(repositoryRoot, "packages/sdk/src");
 const publicEntries = {
   "@lodestory/sdk": ["index.ts"],
   "@lodestory/sdk/ui": ["ui.ts", "ui/index.ts"],
+  "@lodestory/sdk/error": ["error.ts"],
   "@lodestory/sdk/theme": ["theme.ts", "theme/index.ts"],
 };
 

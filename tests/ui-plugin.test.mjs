@@ -19,10 +19,18 @@ async function flushUiMicrotasks() {
 }
 
 function renderedErrorPage(f, root) {
-  const { UiErrorPage } = f.loadSource("plugins/ui/UiErrorPage.tsx");
   const node = root.renderCalls.at(-1);
-  assert.equal(node.type, UiErrorPage);
-  return node.type(node.props);
+  assert.equal(node.type, f.React.StrictMode);
+  assert.equal(node.props.children.type.name, "RootRenderFallback");
+  const fallbackNode = node.props.children;
+  return fallbackNode.type(fallbackNode.props);
+}
+
+function renderedInitialBoundary(f, root, errorService) {
+  const node = root.renderCalls[0];
+  assert.equal(node.type, f.React.StrictMode);
+  assert.equal(node.props.children.type, errorService.ErrorBoundary);
+  return node.props.children;
 }
 
 function startupError(errorPattern) {
@@ -81,7 +89,8 @@ test("activation waits for ready, mounts one page container, and allows navigati
   assert.deepEqual(f.documentLookups, [], "an explicit container avoids document lookup");
   assert.equal(f.core.get(f.uiKey), service);
   assert.equal(plugin.id, "ui");
-  assert.equal(plugin.requires.length, 0);
+  assert.equal(plugin.requires.length, 1);
+  assert.equal(plugin.requires[0], f.errorUiKey);
   assert.equal(plugin.provides.length, 1);
   assert.equal(plugin.provides[0], f.uiKey);
   assert.equal(f.roots.length, 0, "activation must not call createRoot");
@@ -110,6 +119,7 @@ test("activation waits for ready, mounts one page container, and allows navigati
   assert.equal(typeof f.roots[0].options.onUncaughtError, "function");
   assert.equal(f.roots[0].renderCalls.length, 1);
   assert.equal(f.roots[0].renderCalls[0].type, f.React.StrictMode);
+  renderedInitialBoundary(f, f.roots[0], f.core.get(f.errorUiKey));
   assert.equal(service.getSnapshot().current.id, "home");
   assert.match(f.renderToStaticMarkup(f.roots[0].renderCalls[0]), /data-page="home"/);
 
@@ -131,6 +141,7 @@ test("a no-argument UI plugin resolves #root at ready and defaults to the first 
   const plugin = f.createUiPlugin();
 
   assert.deepEqual(f.documentLookups, [], "factory creation must not inspect the document");
+  await f.core.mount(f.createErrorUiPlugin());
   await f.core.mount(plugin);
   const service = f.core.get(f.uiKey);
   service.registerPage(page("first"));
@@ -159,7 +170,7 @@ test("a missing default #root fails EngineCore startup before createRoot and rol
   };
 
   await assert.rejects(
-    f.core.start([f.createUiPlugin(), pagePlugin]),
+    f.core.start([f.createErrorUiPlugin(), f.createUiPlugin(), pagePlugin]),
     startupError(/UI root container '#root' was not found/),
   );
 
@@ -297,7 +308,7 @@ test("visited A/B/C pages receive params, hide inactive views, and back restores
 
 test("wrappers surround the real UiPages tree and ThemeProvider receives its registered service", async () => {
   const f = uiPluginFixture();
-  const { service: ui } = await f.mountUi({ initialPage: "home" });
+  const { service: ui, errorService } = await f.mountUi({ initialPage: "home" });
   const { ThemeProvider, useThemeService } = f.loadSource("plugins/theme/ThemeProvider.tsx");
   const themeService = {
     getSnapshot: () => ({ mode: "dark", resolvedTheme: "dark", persistenceError: false, windowError: false }),
@@ -345,6 +356,9 @@ test("wrappers surround the real UiPages tree and ThemeProvider receives its reg
   assert.deepEqual(calls, ["last", "theme-provider", "second", "first"], "reduceRight invokes wrappers inside-out");
   const strictTree = f.roots[0].renderCalls[0];
   assert.equal(strictTree.type, f.React.StrictMode);
+  assert.equal(strictTree.props.children.type, errorService.ErrorBoundary);
+  assert.equal(strictTree.props.children.props.children.type, "div");
+  assert.equal(strictTree.props.children.props.children.props["data-ui-wrapper"], "first");
   const markup = f.renderToStaticMarkup(strictTree);
   assert.match(markup, /data-ui-wrapper="first"/);
   assert.match(markup, /data-ui-wrapper="second"/);
@@ -379,6 +393,7 @@ test("disposing an unvisited page before ready removes it from the initial snaps
 test("deactivation invalidates the previous service while a fresh activation gets a new registry", async () => {
   const f = uiPluginFixture();
   const plugin = f.createUiPlugin(f.container);
+  await f.core.mount(f.createErrorUiPlugin());
   await f.core.mount(plugin);
   const oldUi = f.core.get(f.uiKey);
   const oldDispose = oldUi.registerPage(page("old"));
@@ -422,9 +437,8 @@ test("a synchronous initial render failure replaces the tree in the same root an
   assert.equal(fallback.type, "main");
   assert.equal(fallback.props.className, "app-startup-error");
   assert.equal(fallback.props.role, "alert");
-  const [heading, description, reload] = fallback.props.children;
-  assert.equal(heading.props.children, "界面显示失败");
-  assert.equal(description.props.children, "无法显示当前界面，请重新加载应用。");
+  const [description, reload] = fallback.props.children;
+  assert.equal(description.props.children, "界面显示失败，请重新加载应用。");
   reload.props.onClick();
   assert.equal(f.window.location.reloadCalls, 1);
   assert.ok(f.logs.some(([message, detail]) => message === "UI rendering failed." && detail.error === renderError));
@@ -490,7 +504,7 @@ test("a persistent error page render failure is logged once without retrying or 
 
   assert.equal(f.roots[0].renderCalls.length, 2, "the failed fallback is not retried");
   assert.equal(f.roots[0].unmountCalls, 0);
-  assert.equal(f.logs.filter(([message]) => message === "UI error page rendering failed.").length, 1);
+  assert.equal(f.logs.filter(([message]) => message === "UI root fallback rendering failed.").length, 1);
   await f.core.unmount("ui");
   assert.equal(f.roots[0].unmountCalls, 1);
 });

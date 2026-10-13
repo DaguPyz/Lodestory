@@ -143,8 +143,10 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
   };
   const { EngineCore } = load(resolve(sourceRoot, "plugin-core/EngineCore.ts"));
   const { pluginsReady } = load(resolve(sourceRoot, "plugin-core/runtimeEvents.ts"));
+  const { createErrorUiPlugin } = load(resolve(sourceRoot, "plugins/error-ui/errorUiPlugin.tsx"));
   const { createUiPlugin } = load(resolve(sourceRoot, "plugins/ui/uiPlugin.tsx"));
   const { uiKey } = sdk.requireSdk("@lodestory/sdk/ui");
+  const { errorUiKey } = sdk.requireSdk("@lodestory/sdk/error");
   const core = new EngineCore();
 
   return {
@@ -153,6 +155,7 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
     container,
     controls,
     createUiPlugin,
+    createErrorUiPlugin,
     document,
     documentLookups,
     documentRoot,
@@ -160,15 +163,18 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
     roots,
     logs,
     uiKey,
+    errorUiKey,
     window,
     requireSdk(specifier) { return sdk.requireSdk(specifier); },
     sdkImports: sdk.imports,
     sdkEvaluatedModules: sdk.evaluatedModules,
     rootOptions,
     async mountUi(options = (rootOptions ? { rootOptions } : {})) {
+      const errorPlugin = createErrorUiPlugin();
+      await core.mount(errorPlugin);
       const plugin = createUiPlugin(container, options);
       await core.mount(plugin);
-      return { plugin, service: core.get(uiKey) };
+      return { plugin, service: core.get(uiKey), errorService: core.get(errorUiKey) };
     },
     withHooks(instance, render) {
       hookRuntime = { hooks: instance.hooks ?? (instance.hooks = []), index: 0 };

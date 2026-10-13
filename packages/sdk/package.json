@@ -19,6 +19,10 @@
       "types": "./dist/ui.d.ts",
       "import": "./dist/ui.js"
     },
+    "./error": {
+      "types": "./dist/error.d.ts",
+      "import": "./dist/error.js"
+    },
     "./theme": {
       "types": "./dist/theme.d.ts",
       "import": "./dist/theme.js"

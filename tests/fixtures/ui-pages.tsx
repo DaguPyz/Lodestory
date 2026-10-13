@@ -3,6 +3,8 @@ import {EngineCore} from "../../src/plugin-core";
 import type {Plugin} from "@lodestory/sdk";
 import {createUiPlugin} from "../../src/plugins/ui";
 import {uiKey, type UiService} from "@lodestory/sdk/ui";
+import {createErrorUiPlugin} from "../../src/plugins/error-ui";
+import {errorUiKey} from "@lodestory/sdk/error";
 
 let ui: UiService | undefined;
 
@@ -49,21 +51,22 @@ function PreviewPage({active}: {active: boolean}) {
 
 const pagesPlugin: Plugin = {
     id: "ui-pages-test",
-    requires: [uiKey],
+    requires: [uiKey, errorUiKey],
     provides: [],
     activate(context) {
         ui = context.get(uiKey);
-        ui.registerPage({id: "home", render: () => <HomePage/>});
+        const {ErrorBoundary} = context.get(errorUiKey);
+        ui.registerPage({id: "home", render: () => <ErrorBoundary><HomePage/></ErrorBoundary>});
         ui.registerPage({
             id: "project",
             render: ({params, active}) => {
                 const project = (params as {project?: string} | undefined)?.project ?? "(unknown)";
-                return <ProjectPage project={project} active={active}/>;
+                return <ErrorBoundary><ProjectPage project={project} active={active}/></ErrorBoundary>;
             },
         });
         ui.registerPage({
             id: "preview",
-            render: ({active}) => <PreviewPage active={active}/>,
+            render: ({active}) => <ErrorBoundary><PreviewPage active={active}/></ErrorBoundary>,
         });
     },
 };
@@ -72,7 +75,7 @@ const container = document.getElementById("app-root");
 if (!container) throw new Error("UI pages fixture root element was not found.");
 
 const core = new EngineCore();
-await core.start([createUiPlugin(container, {initialPage: "home"}), pagesPlugin]);
+await core.start([createErrorUiPlugin(), createUiPlugin(container, {initialPage: "home"}), pagesPlugin]);
 
 declare global {
     interface Window {

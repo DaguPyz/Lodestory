@@ -1,4 +1,4 @@
-export function UiErrorPage() {
+export function ErrorView() {
     return <main className="app-startup-error" role="alert">
         <h1>界面显示失败</h1>
         <p>无法显示当前界面，请重新加载应用。</p>

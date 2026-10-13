@@ -1,9 +1,11 @@
 import type { ReactNode } from "react";
 import type { PluginContext } from "@lodestory/sdk";
+import { errorUiKey } from "@lodestory/sdk/error";
 import { uiKey } from "@lodestory/sdk/ui";
 
 export function registerUi(context: PluginContext, root: ReactNode): void {
   const ui = context.get(uiKey);
+  const { ErrorBoundary } = context.get(errorUiKey);
   ui.registerPage({
     id: "fixture-page",
     render: ({ params, active }) => {
@@ -11,7 +13,7 @@ export function registerUi(context: PluginContext, root: ReactNode): void {
       const pageIsActive: boolean = active;
       void pageParams;
       void pageIsActive;
-      return root;
+      return <ErrorBoundary>{root}</ErrorBoundary>;
     },
   });
   ui.addWrapper({

@@ -5,17 +5,19 @@ import test from "node:test";
 import ts from "typescript";
 import * as packageRoot from "@lodestory/sdk";
 import * as packageUi from "@lodestory/sdk/ui";
+import * as packageError from "@lodestory/sdk/error";
 import * as packageTheme from "@lodestory/sdk/theme";
 import { createSdkLoader } from "./helpers/sdkFixture.mjs";
 
 const packageManifest = JSON.parse(readFileSync(new URL("../packages/sdk/package.json", import.meta.url), "utf8"));
 
-test("SDK package exposes ESM root, UI, and theme entry points", () => {
+test("SDK package exposes ESM root, UI, error, and theme entry points", () => {
   assert.equal(packageManifest.type, "module");
-  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./theme", "./ui"]);
+  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./error", "./theme", "./ui"]);
 
   for (const [specifier, target] of [
     [".", "index"],
+    ["./error", "error"],
     ["./ui", "ui"],
     ["./theme", "theme"],
   ]) {
@@ -25,8 +27,10 @@ test("SDK package exposes ESM root, UI, and theme entry points", () => {
 
   assert.deepEqual(Object.keys(packageRoot).sort(), ["createEventKey", "createServiceKey"]);
   assert.deepEqual(Object.keys(packageUi), ["uiKey"]);
+  assert.deepEqual(Object.keys(packageError), ["errorUiKey"]);
   assert.deepEqual(Object.keys(packageTheme), ["themeKey"]);
   assert.equal(packageUi.uiKey.id, "app/ui");
+  assert.equal(packageError.errorUiKey.id, "app/error-ui");
   assert.equal(packageTheme.themeKey.id, "app/theme");
   assert.ok(packageManifest.files.includes("dist"), "the packed package must include the runtime and declaration outputs");
 });

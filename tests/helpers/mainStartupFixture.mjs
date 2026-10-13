@@ -13,13 +13,14 @@ export function deferred() {
   return { promise, resolve: resolvePromise };
 }
 
-export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false } = {}) {
+export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false } = {}) {
   const modules = new Map();
   const sdk = createSdkLoader({ modules });
   const createdCores = [];
   const rootCalls = [];
   const moduleImports = [];
   const catalogPluginIds = [];
+  const appPluginsCalls = [];
   const lifecycle = [];
   const nativeCalls = [];
   const mediaListeners = new Set();
@@ -32,7 +33,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   rootElement.replaceChildren = (...children) => { rootElement.children = children; };
   const document = {
     documentElement: { dataset: {}, style: { removeProperty() {} } },
-    getElementById(id) { return id === "root" ? rootElement : null; },
+    getElementById(id) { return id === "root" && !missingRoot ? rootElement : null; },
     createElement(tagName) {
       return {
         tagName,
@@ -280,6 +281,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     if (relativePath === "app/appPlugins.ts") {
       const createAppPlugins = exports.createAppPlugins;
       exports.createAppPlugins = (...args) => {
+        appPluginsCalls.push(args);
         const plugins = createAppPlugins(...args);
         catalogPluginIds.push(...plugins.map(({ id }) => id));
         return plugins.map((plugin) => ({
@@ -321,6 +323,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     createdCores,
     moduleImports,
     catalogPluginIds,
+    appPluginsCalls,
     lifecycle,
     rootCalls,
     roots,

@@ -78,6 +78,7 @@ test("activation waits for ready, mounts one page container, and allows navigati
   const f = uiPluginFixture({ container, rootOptions });
   const { plugin, service } = await f.mountUi({ initialPage: "home", rootOptions });
 
+  assert.deepEqual(f.documentLookups, [], "an explicit container avoids document lookup");
   assert.equal(f.core.get(f.uiKey), service);
   assert.equal(plugin.id, "ui");
   assert.equal(plugin.requires.length, 0);
@@ -101,6 +102,7 @@ test("activation waits for ready, mounts one page container, and allows navigati
   await f.notifyReady();
   assert.equal(f.roots.length, 1);
   assert.equal(f.roots[0].container, f.container);
+  assert.deepEqual(f.documentLookups, [], "an explicit container remains the createRoot target");
   assert.notEqual(f.roots[0].options, rootOptions, "UI installs its own uncaught error handler");
   assert.equal(f.roots[0].options.identifierPrefix, rootOptions.identifierPrefix);
   assert.equal(f.roots[0].options.onCaughtError, onCaughtError);
@@ -122,6 +124,49 @@ test("activation waits for ready, mounts one page container, and allows navigati
 
   await f.core.unmount("home");
   await f.core.unmount("ui");
+});
+
+test("a no-argument UI plugin resolves #root at ready and defaults to the first registered page", async () => {
+  const f = uiPluginFixture();
+  const plugin = f.createUiPlugin();
+
+  assert.deepEqual(f.documentLookups, [], "factory creation must not inspect the document");
+  await f.core.mount(plugin);
+  const service = f.core.get(f.uiKey);
+  service.registerPage(page("first"));
+  service.registerPage(page("second"));
+  assert.deepEqual(f.documentLookups, [], "activation only registers the UI service");
+
+  await f.notifyReady();
+
+  assert.deepEqual(f.documentLookups, ["root"]);
+  assert.equal(f.roots.length, 1);
+  assert.equal(f.roots[0].container, f.documentRoot);
+  assert.equal(service.getSnapshot().current.id, "first");
+  assert.deepEqual(Array.from(service.getSnapshot().pages, ({ id }) => id), ["first"]);
+  await f.core.unmount("ui");
+});
+
+test("a missing default #root fails EngineCore startup before createRoot and rolls UI back", async () => {
+  const f = uiPluginFixture({ documentRoot: null });
+  const pagePlugin = {
+    id: "page-contributor",
+    requires: [f.uiKey],
+    provides: [],
+    activate(context) {
+      context.get(f.uiKey).registerPage(page("home"));
+    },
+  };
+
+  await assert.rejects(
+    f.core.start([f.createUiPlugin(), pagePlugin]),
+    startupError(/UI root container '#root' was not found/),
+  );
+
+  assert.deepEqual(f.documentLookups, ["root"]);
+  assert.equal(f.roots.length, 0);
+  assert.equal(f.core.isMounted("ui"), false);
+  assert.equal(f.core.isMounted("page-contributor"), false);
 });
 
 test("page registration validates descriptors and wrappers remain unique", async () => {

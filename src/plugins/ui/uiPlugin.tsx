@@ -17,7 +17,7 @@ export type UiPluginOptions = {
  * 合并页面管理与根装配；只认识页面登记和包装规则，不导入具体业务组件。
  * ready 时选择初始页面并挂载通用页面容器，之后由页面状态驱动 React 更新。
  */
-export function createUiPlugin(container: Element | DocumentFragment, options: UiPluginOptions = {}): Plugin {
+export function createUiPlugin(container?: Element | DocumentFragment, options: UiPluginOptions = {}): Plugin {
     const {initialPage, rootOptions} = options;
     let cleanup: (() => void) | undefined;
 
@@ -183,7 +183,10 @@ export function createUiPlugin(container: Element | DocumentFragment, options: U
                     ...rootOptions,
                     onUncaughtError: handleUncaughtError,
                 };
-                reactRoot = createRoot(container, managedRootOptions);
+                const rootContainer = container ?? (typeof document === "undefined" ? null : document.getElementById("root"));
+                if (!rootContainer) throw new Error("UI root container '#root' was not found.");
+
+                reactRoot = createRoot(rootContainer, managedRootOptions);
                 try {
                     reactRoot.render(<StrictMode>{tree}</StrictMode>);
                 } catch (error) {

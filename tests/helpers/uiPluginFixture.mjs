@@ -39,11 +39,18 @@ function findModule(fromPath, specifier) {
  * Load the real plugin core and UI plugin sources into an isolated CommonJS
  * graph, while retaining real React elements and replacing only createRoot.
  */
-export function uiPluginFixture({ container = {}, rootOptions, renderError = null, renderErrorOnce = null } = {}) {
+export function uiPluginFixture({ container = {}, documentRoot = { id: "root" }, rootOptions, renderError = null, renderErrorOnce = null } = {}) {
   const modules = new Map();
   const sdk = createSdkLoader({ modules });
   const roots = [];
   const logs = [];
+  const documentLookups = [];
+  const document = {
+    getElementById(id) {
+      documentLookups.push(id);
+      return id === "root" ? documentRoot : null;
+    },
+  };
   const window = { location: { reloadCalls: 0, reload() { this.reloadCalls += 1; } } };
   const controls = { renderError, renderErrorOnce, uncaughtErrorDuringRender: null, createRootError: null, unmountError: null };
   let hookRuntime;
@@ -111,6 +118,7 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
     vm.runInNewContext(compiled, {
       exports,
       console: { error(...args) { logs.push(args); } },
+      document,
       window,
       require(specifier) {
         if (specifier.startsWith("@lodestory/sdk")) return sdk.requireSdk(specifier, relative(sourceRoot, path));
@@ -145,6 +153,9 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
     container,
     controls,
     createUiPlugin,
+    document,
+    documentLookups,
+    documentRoot,
     pluginsReady,
     roots,
     logs,

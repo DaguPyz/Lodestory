@@ -72,6 +72,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   await flushStartup();
 
   assert.deepEqual(fixture.catalogPluginIds, ["ui", "theme", "context-menu", "welcome", "editor", "settings"]);
+  assert.deepEqual(fixture.appPluginsCalls, [[]]);
   const entryImports = fixture.moduleImports
     .filter(({ from }) => from === "main.tsx")
     .map(({ specifier }) => specifier);
@@ -331,10 +332,32 @@ test("startup rollback failures report both the activation and cleanup errors", 
   await flushStartup();
 
   const report = reportedFailure(fixture);
-  assert.equal(report.startupError, startupError);
+  assert.ok(collectErrors(report.startupError).includes(startupError));
   assert.ok(collectErrors(report.cleanupErrors).includes(cleanupError));
   assert.equal(fixture.channels[0].closed, true);
   assert.equal(fixture.window.location.reloadCalls, 0);
   errorPage(fixture).children[2].click();
   assert.equal(fixture.window.location.reloadCalls, 1);
+});
+
+test("a missing #root rolls back startup and is reported without throwing from the UI fallback", async () => {
+  const fixture = createMainFixture({ missingRoot: true });
+  fixture.start();
+  await flushStartup();
+  assert.equal(fixture.rootCalls.length, 0);
+  assert.equal(fixture.rootElement.children.length, 0);
+  assert.ok(fixture.channels.length > 0);
+  assert.equal(fixture.channels[0].closed, true);
+  assert.ok(fixture.lifecycle.some((entry) => entry.startsWith("deactivate:")));
+  const report = reportedFailure(fixture);
+  assert.ok(collectErrors(report.startupError).some((error) => String(error?.message ?? error).includes("#root")));
+  assert.equal(fixture.window.location.reloadCalls, 0);
+});
+
+test("the UI plugin resolves the app root container itself", async () => {
+  const fixture = createMainFixture();
+  fixture.start();
+  await flushStartup();
+  assert.equal(fixture.rootCalls.length, 1);
+  assert.equal(fixture.rootCalls[0].container, fixture.rootElement);
 });

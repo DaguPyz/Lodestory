@@ -39,11 +39,13 @@ function findModule(fromPath, specifier) {
  * Load the real plugin core and UI plugin sources into an isolated CommonJS
  * graph, while retaining real React elements and replacing only createRoot.
  */
-export function uiPluginFixture({ container = {}, rootOptions, renderError = null } = {}) {
+export function uiPluginFixture({ container = {}, rootOptions, renderError = null, renderErrorOnce = null } = {}) {
   const modules = new Map();
   const sdk = createSdkLoader({ modules });
   const roots = [];
-  const controls = { renderError, createRootError: null, unmountError: null };
+  const logs = [];
+  const window = { location: { reloadCalls: 0, reload() { this.reloadCalls += 1; } } };
+  const controls = { renderError, renderErrorOnce, uncaughtErrorDuringRender: null, createRootError: null, unmountError: null };
   let hookRuntime;
   const ReactWithHooks = {
     ...React,
@@ -69,6 +71,15 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
       const root = {
         render(node) {
           record.renderCalls.push(node);
+          if (controls.uncaughtErrorDuringRender) {
+            options?.onUncaughtError?.(controls.uncaughtErrorDuringRender, { componentStack: "" });
+            controls.uncaughtErrorDuringRender = null;
+          }
+          if (controls.renderErrorOnce) {
+            const error = controls.renderErrorOnce;
+            controls.renderErrorOnce = null;
+            throw error;
+          }
           if (controls.renderError) throw controls.renderError;
         },
         unmount() {
@@ -99,6 +110,8 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
     modules.set(path, exports);
     vm.runInNewContext(compiled, {
       exports,
+      console: { error(...args) { logs.push(args); } },
+      window,
       require(specifier) {
         if (specifier.startsWith("@lodestory/sdk")) return sdk.requireSdk(specifier, relative(sourceRoot, path));
         if (specifier === "react") return ReactWithHooks;
@@ -134,7 +147,9 @@ export function uiPluginFixture({ container = {}, rootOptions, renderError = nul
     createUiPlugin,
     pluginsReady,
     roots,
+    logs,
     uiKey,
+    window,
     requireSdk(specifier) { return sdk.requireSdk(specifier); },
     sdkImports: sdk.imports,
     sdkEvaluatedModules: sdk.evaluatedModules,

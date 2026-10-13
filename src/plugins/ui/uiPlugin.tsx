@@ -5,6 +5,7 @@ import {pluginsReady} from "../../plugin-core";
 import {uiKey, type UiService, type UiWrapper} from "@lodestory/sdk/ui";
 import {createPageRegistry} from "./pageRegistry";
 import {UiPages} from "./UiPages";
+import {UiErrorPage} from "./UiErrorPage";
 
 export type UiPluginOptions = {
     /** 启动时显示的页面；省略时使用第一个登记的页面。 */
@@ -33,6 +34,10 @@ export function createUiPlugin(container: Element | DocumentFragment, options: U
             let mountAttempted = false;
             let navigationAllowed = false;
             let reactRoot: Root | undefined;
+            let renderFailureHandled = false;
+            let firstRenderError: unknown;
+            let errorPageRenderAttempted = false;
+            let errorPageFailureReported = false;
 
             function unmount() {
                 navigationAllowed = false;
@@ -63,6 +68,48 @@ export function createUiPlugin(container: Element | DocumentFragment, options: U
             function checkNavigationAllowed() {
                 checkActive();
                 if (!navigationAllowed) throw new Error("UI navigation requires a mounted page container after pluginsReady.");
+            }
+
+            function recoverFromRenderError(error: unknown) {
+                const root = reactRoot;
+                if (!active || !root || renderFailureHandled) return;
+
+                // Keep the root and all plugin services alive, but prevent route actions from
+                // claiming the failed page tree is still mounted while recovery is pending.
+                renderFailureHandled = true;
+                firstRenderError = error;
+                navigationAllowed = false;
+                console.error("UI rendering failed.", {error});
+
+                void Promise.resolve().then(() => {
+                    // A queued callback must never recreate UI after deactivation or contribution removal.
+                    if (!active || reactRoot !== root) return;
+                    errorPageRenderAttempted = true;
+                    try {
+                        root.render(<UiErrorPage/>);
+                    } catch (errorPageError) {
+                        reportErrorPageFailure(errorPageError);
+                    }
+                });
+            }
+
+            function reportErrorPageFailure(errorPageError: unknown) {
+                if (errorPageFailureReported) return;
+                errorPageFailureReported = true;
+                // The fallback is terminal: report its failure without retrying or unmounting.
+                console.error("UI error page rendering failed.", {renderError: firstRenderError, errorPageError});
+            }
+
+            function handleUncaughtError(error: unknown, errorInfo: Parameters<NonNullable<RootOptions["onUncaughtError"]>>[1]) {
+                if (!active || !reactRoot) return;
+                if (errorPageRenderAttempted) reportErrorPageFailure(error);
+                else recoverFromRenderError(error);
+                try {
+                    rootOptions?.onUncaughtError?.(error, errorInfo);
+                } catch (observerError) {
+                    // The caller's hook observes the failure; its own exception must not fail startup.
+                    console.error("UI render error observer failed.", {error: observerError});
+                }
             }
 
             const service: UiService = {
@@ -132,8 +179,18 @@ export function createUiPlugin(container: Element | DocumentFragment, options: U
                     (children, entry) => entry.wrap(children),
                     <UiPages service={service}/>,
                 );
-                reactRoot = createRoot(container, rootOptions);
-                reactRoot.render(<StrictMode>{tree}</StrictMode>);
+                const managedRootOptions: RootOptions = {
+                    ...rootOptions,
+                    onUncaughtError: handleUncaughtError,
+                };
+                reactRoot = createRoot(container, managedRootOptions);
+                try {
+                    reactRoot.render(<StrictMode>{tree}</StrictMode>);
+                } catch (error) {
+                    // React can report through onUncaughtError, but a synchronous root.render
+                    // exception also needs recovery and must not make pluginsReady roll back.
+                    handleUncaughtError(error, {componentStack: ""});
+                }
             });
         },
 

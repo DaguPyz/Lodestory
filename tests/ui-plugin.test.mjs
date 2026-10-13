@@ -12,6 +12,19 @@ function page(id, render = () => null) {
   return { id, render };
 }
 
+async function flushUiMicrotasks() {
+  await Promise.resolve();
+  await new Promise((resolve) => setImmediate(resolve));
+  await Promise.resolve();
+}
+
+function renderedErrorPage(f, root) {
+  const { UiErrorPage } = f.loadSource("plugins/ui/UiErrorPage.tsx");
+  const node = root.renderCalls.at(-1);
+  assert.equal(node.type, UiErrorPage);
+  return node.type(node.props);
+}
+
 function startupError(errorPattern) {
   return (error) => {
     assert.match(error.message, /runtime\/plugins-ready/);
@@ -59,7 +72,9 @@ test("UI plugin types connect PluginContext, pages, navigation, and wrappers", (
 
 test("activation waits for ready, mounts one page container, and allows navigation afterward", async () => {
   const container = {};
-  const rootOptions = { identifierPrefix: "lodestory-" };
+  const onCaughtError = () => {};
+  const onRecoverableError = () => {};
+  const rootOptions = { identifierPrefix: "lodestory-", onCaughtError, onRecoverableError };
   const f = uiPluginFixture({ container, rootOptions });
   const { plugin, service } = await f.mountUi({ initialPage: "home", rootOptions });
 
@@ -86,7 +101,11 @@ test("activation waits for ready, mounts one page container, and allows navigati
   await f.notifyReady();
   assert.equal(f.roots.length, 1);
   assert.equal(f.roots[0].container, f.container);
-  assert.equal(f.roots[0].options, rootOptions);
+  assert.notEqual(f.roots[0].options, rootOptions, "UI installs its own uncaught error handler");
+  assert.equal(f.roots[0].options.identifierPrefix, rootOptions.identifierPrefix);
+  assert.equal(f.roots[0].options.onCaughtError, onCaughtError);
+  assert.equal(f.roots[0].options.onRecoverableError, onRecoverableError);
+  assert.equal(typeof f.roots[0].options.onUncaughtError, "function");
   assert.equal(f.roots[0].renderCalls.length, 1);
   assert.equal(f.roots[0].renderCalls[0].type, f.React.StrictMode);
   assert.equal(service.getSnapshot().current.id, "home");
@@ -334,18 +353,119 @@ test("deactivation invalidates the previous service while a fresh activation get
   await f.core.unmount("ui");
 });
 
-test("a synchronous render failure propagates and shutdown unmounts the retained React root", async () => {
-  const f = uiPluginFixture({ renderError: new Error("render failed") });
+test("a synchronous initial render failure replaces the tree in the same root and leaves peer plugins active", async () => {
+  const renderError = new Error("render failed");
+  const f = uiPluginFixture({ renderErrorOnce: renderError });
+  const { service: ui } = await f.mountUi();
+  let peerDeactivated = false;
+  await contributor(f, "page-contributor", (context) => {
+    context.get(f.uiKey).registerPage(page("home"));
+  }, () => { peerDeactivated = true; });
+
+  await f.notifyReady();
+  await flushUiMicrotasks();
+  assert.equal(f.roots.length, 1);
+  assert.equal(f.roots[0].renderCalls.length, 2);
+  assert.equal(f.roots[0].unmountCalls, 0);
+  assert.equal(f.core.isMounted("ui"), true);
+  assert.equal(f.core.isMounted("page-contributor"), true);
+  assert.equal(peerDeactivated, false);
+  assert.equal(ui.getSnapshot().current.id, "home");
+  assert.throws(() => ui.openPage("home"), /navigation requires .*after pluginsReady/);
+
+  const fallback = renderedErrorPage(f, f.roots[0]);
+  assert.equal(fallback.type, "main");
+  assert.equal(fallback.props.className, "app-startup-error");
+  assert.equal(fallback.props.role, "alert");
+  const [heading, description, reload] = fallback.props.children;
+  assert.equal(heading.props.children, "界面显示失败");
+  assert.equal(description.props.children, "无法显示当前界面，请重新加载应用。");
+  reload.props.onClick();
+  assert.equal(f.window.location.reloadCalls, 1);
+  assert.ok(f.logs.some(([message, detail]) => message === "UI rendering failed." && detail.error === renderError));
+
+  await f.core.unmountAll();
+  assert.equal(f.roots[0].unmountCalls, 1);
+  assert.throws(() => ui.openPage("home"), /no longer active/);
+});
+
+test("uncaught and early render callbacks recover once and preserve the caller observer", async () => {
+  const renderError = new Error("uncaught render error");
+  const callbackError = new Error("observer failed");
+  const observations = [];
+  const rootOptions = {
+    identifierPrefix: "observed-",
+    onUncaughtError(error, errorInfo) {
+      observations.push({ error, errorInfo });
+      throw callbackError;
+    },
+  };
+  const f = uiPluginFixture({ rootOptions });
+  const { service: ui } = await f.mountUi({ rootOptions });
+  ui.registerPage(page("home"));
+  await f.notifyReady();
+
+  const root = f.roots[0];
+  const errorInfo = { componentStack: "<Home />" };
+  root.options.onUncaughtError(renderError, errorInfo);
+  root.options.onUncaughtError(new Error("duplicate uncaught error"), errorInfo);
+  await flushUiMicrotasks();
+
+  assert.equal(root.renderCalls.length, 2, "duplicate uncaught errors schedule only one fallback render");
+  assert.equal(root.unmountCalls, 0);
+  assert.equal(f.core.isMounted("ui"), true);
+  assert.equal(ui.getSnapshot().current.id, "home");
+  assert.equal(observations.length, 2);
+  assert.equal(observations[0].error, renderError);
+  assert.equal(observations[0].errorInfo, errorInfo);
+  assert.equal(observations[1].errorInfo, errorInfo);
+  assert.ok(f.logs.some(([message, detail]) => message === "UI render error observer failed." && detail.error === callbackError));
+  assert.equal(renderedErrorPage(f, root).props.role, "alert");
+  await f.core.unmount("ui");
+
+  const early = uiPluginFixture({ renderErrorOnce: new Error("synchronous") });
+  const { service: earlyUi } = await early.mountUi();
+  earlyUi.registerPage(page("home"));
+  early.controls.uncaughtErrorDuringRender = new Error("uncaught during initial render");
+  await early.notifyReady();
+  await flushUiMicrotasks();
+  assert.equal(early.roots[0].renderCalls.length, 2, "an error raised during the initial render recovers after ready notification");
+  assert.equal(early.core.isMounted("ui"), true);
+  assert.equal(early.roots[0].unmountCalls, 0);
+  await early.core.unmount("ui");
+});
+
+test("a persistent error page render failure is logged once without retrying or unmounting", async () => {
+  const f = uiPluginFixture({ renderError: new Error("persistent failure") });
   const { service: ui } = await f.mountUi();
   ui.registerPage(page("home"));
+  await f.notifyReady();
+  await flushUiMicrotasks();
+  await flushUiMicrotasks();
 
-  await assert.rejects(f.notifyReady(), /runtime\/plugins-ready/);
-  assert.equal(f.roots.length, 1);
-  assert.equal(f.roots[0].renderCalls.length, 1);
+  assert.equal(f.roots[0].renderCalls.length, 2, "the failed fallback is not retried");
   assert.equal(f.roots[0].unmountCalls, 0);
-
-  f.controls.renderError = null;
+  assert.equal(f.logs.filter(([message]) => message === "UI error page rendering failed.").length, 1);
   await f.core.unmount("ui");
   assert.equal(f.roots[0].unmountCalls, 1);
+});
+
+test("deactivation cancels a pending recovery and ignores later uncaught callbacks", async () => {
+  const f = uiPluginFixture();
+  const { service: ui } = await f.mountUi();
+  ui.registerPage(page("home"));
+  await f.notifyReady();
+  const root = f.roots[0];
+  const onUncaughtError = root.options.onUncaughtError;
+
+  onUncaughtError(new Error("queued before stop"), { componentStack: "" });
+  await f.core.unmount("ui");
+  assert.equal(root.unmountCalls, 1);
+  await flushUiMicrotasks();
+  onUncaughtError(new Error("late after stop"), { componentStack: "" });
+  await flushUiMicrotasks();
+
+  assert.equal(root.renderCalls.length, 1, "neither the queued recovery nor a late callback revives the root");
+  assert.equal(root.unmountCalls, 1);
   assert.throws(() => ui.openPage("home"), /no longer active/);
 });

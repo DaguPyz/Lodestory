@@ -28,10 +28,23 @@ function errorPage(fixture) {
   return page;
 }
 
+function uiErrorPage(fixture) {
+  const UiErrorPage = fixture.loadModule("plugins/ui/UiErrorPage.tsx").UiErrorPage;
+  const tree = renderedTree(fixture);
+  assert.ok(containsType(tree, UiErrorPage), "the same React root should render UiErrorPage");
+  return tree;
+}
+
 function reportedFailure(fixture) {
   const entry = fixture.logs.find((value) => value?.level === "error");
   assert.ok(entry, "startup failure should be reported");
   assert.equal(entry.args[0], "Application failed to start.");
+  return entry.args[1];
+}
+
+function reportedUiRenderingError(fixture) {
+  const entry = fixture.logs.find((value) => value?.level === "error" && value.args[0] === "UI rendering failed.");
+  assert.ok(entry, "the UI render error should be reported");
   return entry.args[1];
 }
 
@@ -46,7 +59,7 @@ function collectErrors(value, found = [], seen = new Set()) {
   for (const key of ["startupError", "activationError", "cleanupError", "error"]) {
     collectErrors(value[key], found, seen);
   }
-  for (const key of ["listenerErrors", "rollbackErrors", "cleanupErrors"]) {
+  for (const key of ["errors", "listenerErrors", "rollbackErrors", "cleanupErrors"]) {
     for (const entry of value[key] ?? []) collectErrors(entry, found, seen);
   }
   return found;
@@ -217,7 +230,7 @@ test("a missing theme capability rolls back before page plugins register or rend
   assert.equal(fixture.createdCores.at(-1).isMounted("theme"), false);
 });
 
-test("createRoot and render failures stop the runtime", async (t) => {
+test("createRoot failures roll back startup, while render failures recover in the same root", async (t) => {
   await t.test("createRoot throws", async () => {
     const fixture = createMainFixture();
     fixture.faults.createRootError = new Error("createRoot failed");
@@ -231,21 +244,28 @@ test("createRoot and render failures stop the runtime", async (t) => {
     assert.ok(fixture.channels[0].closed);
   });
 
-  await t.test("render throws", async () => {
+  await t.test("the first render throws once", async () => {
     const fixture = createMainFixture();
-    fixture.faults.renderError = new Error("render failed");
+    const renderError = new Error("render failed");
+    fixture.faults.renderErrorOnce = renderError;
 
     fixture.start();
     await flushStartup();
 
+    assert.equal(fixture.rootCalls.length, 1);
     assert.equal(fixture.roots.length, 1);
-    errorPage(fixture);
-    assert.ok(fixture.logs.indexOf("root.unmount") < fixture.logs.indexOf("channel.close"));
-    assert.ok(fixture.channels[0].closed);
+    assert.equal(fixture.roots[0].renderCalls.length, 2);
+    uiErrorPage(fixture);
+    assert.equal(fixture.lifecycle.filter((entry) => entry.startsWith("activate:") && entry.endsWith(":complete")).length, fixture.catalogPluginIds.length);
+    assert.equal(fixture.lifecycle.some((entry) => entry.startsWith("deactivate:")), false);
+    assert.equal(fixture.channels[0].closed, false);
+    assert.ok(fixture.mediaListeners.size > 0);
+    assert.ok(fixture.nativeListeners.size > 0);
+    assert.equal(reportedUiRenderingError(fixture).error, renderError);
   });
 });
 
-test("an asynchronous React error unmounts the UI before stopping its providers", async () => {
+test("an asynchronous React error replaces the failed tree without stopping its providers", async () => {
   const fixture = createMainFixture();
   const renderError = new Error("uncaught render error");
 
@@ -255,15 +275,18 @@ test("an asynchronous React error unmounts the UI before stopping its providers"
   fixture.rootCalls[0].options.onUncaughtError(new Error("duplicate render error"));
   await flushStartup();
 
-  errorPage(fixture);
-  assert.equal(fixture.logs.filter((entry) => entry === "root.unmount").length, 1);
-  assert.equal(fixture.logs.filter((entry) => entry === "channel.close").length, 1);
-  assert.ok(fixture.logs.indexOf("root.unmount") < fixture.logs.indexOf("channel.close"));
-  assert.equal(fixture.channels[0].closed, true);
-  assert.equal(reportedFailure(fixture).startupError, renderError);
+  uiErrorPage(fixture);
+  assert.equal(fixture.rootCalls.length, 1);
+  assert.equal(fixture.roots[0].renderCalls.length, 2);
+  assert.equal(fixture.logs.filter((entry) => entry === "root.unmount").length, 0);
+  assert.equal(fixture.lifecycle.some((entry) => entry.startsWith("deactivate:")), false);
+  assert.equal(fixture.channels[0].closed, false);
+  assert.ok(fixture.mediaListeners.size > 0);
+  assert.ok(fixture.nativeListeners.size > 0);
+  assert.equal(reportedUiRenderingError(fixture).error, renderError);
 });
 
-test("an early asynchronous React error waits for the runtime before cleaning it up", async () => {
+test("an initial render error is recovered after React reports it", async () => {
   const fixture = createMainFixture();
   const renderError = new Error("uncaught during initial render");
   fixture.faults.uncaughtErrorDuringRender = renderError;
@@ -271,28 +294,44 @@ test("an early asynchronous React error waits for the runtime before cleaning it
   fixture.start();
   await flushStartup();
 
-  errorPage(fixture);
-  assert.equal(fixture.channels[0].closed, true);
-  assert.equal(fixture.logs.filter((entry) => entry === "root.unmount").length, 1);
-  assert.equal(reportedFailure(fixture).startupError, renderError);
+  uiErrorPage(fixture);
+  assert.equal(fixture.roots[0].renderCalls.length, 2);
+  assert.equal(fixture.channels[0].closed, false);
+  assert.equal(fixture.lifecycle.some((entry) => entry.startsWith("deactivate:")), false);
+  assert.equal(reportedUiRenderingError(fixture).error, renderError);
 });
 
-test("cleanup failures are reported with the original uncaught error", async () => {
+test("a persistent fallback render error is reported once without retrying or stopping plugins", async () => {
+  const fixture = createMainFixture();
+  const renderError = new Error("persistent render error");
+  fixture.faults.renderError = renderError;
+  fixture.start();
+  await flushStartup();
+  assert.equal(fixture.rootCalls.length, 1);
+  assert.equal(fixture.roots[0].renderCalls.length, 2);
+  const entry = fixture.logs.find((value) => value?.level === "error" && value.args[0] === "UI error page rendering failed.");
+  assert.ok(entry);
+  assert.equal(entry.args[1].renderError, renderError);
+  assert.equal(entry.args[1].errorPageError, renderError);
+  assert.equal(fixture.logs.filter((value) => value?.level === "error" && value.args[0] === "UI error page rendering failed.").length, 1);
+  assert.equal(fixture.logs.filter((value) => value === "root.unmount").length, 0);
+  assert.equal(fixture.lifecycle.some((value) => value.startsWith("deactivate:")), false);
+  assert.equal(fixture.channels[0].closed, false);
+});
+
+test("startup rollback failures report both the activation and cleanup errors", async () => {
   const fixture = createMainFixture();
   const cleanupError = new Error("theme cleanup failed");
-  const unmountError = new Error("React unmount failed");
-  const startupError = new Error("uncaught render error");
+  const startupError = new Error("createRoot failed");
   fixture.setCleanupError(cleanupError);
-  fixture.faults.unmountError = unmountError;
+  fixture.faults.createRootError = startupError;
 
   fixture.start();
   await flushStartup();
-  fixture.rootCalls[0].options.onUncaughtError(startupError);
   await flushStartup();
 
   const report = reportedFailure(fixture);
   assert.equal(report.startupError, startupError);
-  assert.ok(collectErrors(report.cleanupErrors).includes(unmountError));
   assert.ok(collectErrors(report.cleanupErrors).includes(cleanupError));
   assert.equal(fixture.channels[0].closed, true);
   assert.equal(fixture.window.location.reloadCalls, 0);

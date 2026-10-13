@@ -111,10 +111,19 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       const root = {
         container,
         options,
+        renderCalls: [],
         render(tree) {
           logs.push("root.render");
+          this.renderCalls.push(tree);
           if (faults.uncaughtErrorDuringRender) {
-            options?.onUncaughtError?.(faults.uncaughtErrorDuringRender);
+            const error = faults.uncaughtErrorDuringRender;
+            faults.uncaughtErrorDuringRender = undefined;
+            options?.onUncaughtError?.(error);
+          }
+          if (faults.renderErrorOnce) {
+            const error = faults.renderErrorOnce;
+            faults.renderErrorOnce = undefined;
+            throw error;
           }
           if (faults.renderError) throw faults.renderError;
           this.tree = tree;

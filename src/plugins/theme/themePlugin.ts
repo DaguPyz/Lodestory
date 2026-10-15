@@ -2,36 +2,32 @@ import {createElement} from "react";
 import type {Plugin} from "@lodestory/sdk";
 import {uiKey} from "@lodestory/sdk/ui";
 import {ThemeProvider} from "./ThemeProvider";
-import {themeKey, type ThemeService} from "@lodestory/sdk/theme";
-import {
-    getThemeSnapshot,
-    retryTheme,
-    setThemeMode,
-    startThemeSync,
-    subscribeTheme,
-    whenNativeThemeReady,
-} from "./themeStore";
+import {themeDefaultsKey, themeKey, type ThemeService} from "@lodestory/sdk/theme";
+import {createThemeStore} from "./themeStore";
 
-/** 创建主题插件；Core 挂载时启动同步，卸载或激活失败时停止同步。 */
+/** 主题管理插件：提供平级主题目录、选择与同步；配色由独立主题数据提供。 */
 export function createThemePlugin(): Plugin {
     let stopThemeSync: (() => void) | undefined;
     let removeUiWrapper: (() => void) | undefined;
 
     return {
         id: "theme",
-        requires: [uiKey],
+        requires: [uiKey, themeDefaultsKey],
         provides: [themeKey],
 
         async activate(context) {
             // 先保存清理函数，后续初始化失败时 Core 仍能调用 deactivate 清理。
-            stopThemeSync = startThemeSync();
-            await whenNativeThemeReady();
+            const store = createThemeStore(context.get(themeDefaultsKey));
+            stopThemeSync = store.dispose;
+            store.startThemeSync();
+            await store.whenNativeThemeReady();
 
             const service: ThemeService = {
-                getSnapshot: getThemeSnapshot,
-                subscribe: subscribeTheme,
-                setMode: setThemeMode,
-                retry: retryTheme,
+                getSnapshot: store.getThemeSnapshot,
+                subscribe: store.subscribeTheme,
+                registerTheme: store.registerTheme,
+                setPreference: store.setThemePreference,
+                retry: store.retryTheme,
             };
             context.provide(themeKey, service);
             removeUiWrapper = context.get(uiKey).addWrapper({

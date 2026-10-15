@@ -32,7 +32,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const rootElement = { children: [], textContent: "", innerHTML: "", append(child) { this.children.push(child); } };
   rootElement.replaceChildren = (...children) => { rootElement.children = children; };
   const document = {
-    documentElement: { dataset: {}, style: { removeProperty() {} } },
+    documentElement: { dataset: {}, style: { setProperty() {}, removeProperty() {} } },
     getElementById(id) { return id === "root" && !missingRoot ? rootElement : null; },
     createElement(tagName) {
       return {
@@ -203,6 +203,10 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       };
     }
     const source = readFileSync(path, "utf8");
+    if (path.endsWith(".json")) {
+      const data = JSON.parse(source);
+      return { ...data, __esModule: true, default: data };
+    }
     const compiled = ts.transpileModule(source, {
       fileName: path,
       compilerOptions: {

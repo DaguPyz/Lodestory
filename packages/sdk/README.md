@@ -6,7 +6,7 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 
 - `@lodestory/sdk`：`Plugin`、`PluginContext`、能力 key 与事件 key 类型和创建函数。
 - `@lodestory/sdk/ui`：UI 服务类型与共享单例 `uiKey`。
-- `@lodestory/sdk/theme`：主题服务、模式和快照类型与共享单例 `themeKey`。
+- `@lodestory/sdk/theme`：主题定义、默认配色贡献、选择策略、管理服务和快照类型，以及共享单例 `themeDefaultsKey`、`themeKey`。
 
 ## 生命周期与 key
 
@@ -91,23 +91,44 @@ export const pagePlugin: Plugin = {
 };
 ```
 
-主题插件和设置页共享 `themeKey`，由主题插件提供服务实现：
+主题管理器和其他插件共享 `themeKey`。内置与自定义主题在同一目录中按 ID 选择，`type` 只是深浅属性，用于原生窗口外观、标准缺省值及跟随系统时的匹配。注册返回清理函数，贡献主题的插件卸载时必须调用：
 
 ```ts
 import { type Plugin } from "@lodestory/sdk";
 import { themeKey } from "@lodestory/sdk/theme";
 
-export const settingsPlugin: Plugin = {
-  id: "example.settings",
+let removeTheme: (() => void) | undefined;
+export const inkThemePlugin: Plugin = {
+  id: "example.ink",
   requires: [themeKey],
   provides: [],
   activate(context) {
     const theme = context.get(themeKey);
-    theme.setMode("system");
-    console.log(theme.getSnapshot().resolvedTheme);
+    removeTheme = theme.registerTheme({
+      schemaVersion: 1,
+      id: "example.ink.dark",
+      name: "墨色写作",
+      type: "dark",
+      colors: { "surface.content": "#171A23", "text.reading": "#ECE2CE" },
+    });
+    // 在用户选择时调用；仅注册不会更改当前选择。
+    // theme.setPreference({ mode: "fixed", themeId: "example.ink.dark" });
+    console.log(theme.getSnapshot().themes);
+  },
+  deactivate() {
+    removeTheme?.();
+    removeTheme = undefined;
   },
 };
 ```
+
+`setPreference({ mode: "system", lightThemeId, darkThemeId })` 指定系统浅色和深色时各用哪套主题；两个 ID 必须已登记且属性匹配。`getSnapshot().theme` 是实际使用的主题，包含补齐后的 `colors` 与映射后的 `cssVariables`。缺省值来自标准登记表，不继承另一主题。已选主题被移除时保留选择并临时使用默认主题；重新登记后自动恢复，`unavailableThemeId` 用于显示提示。
+
+应用启动前另由一个配色插件提供 `themeDefaultsKey`，值为 `ThemeDefaults`（`dark`、`light` 两份普通主题定义）。管理器依赖这项能力，先按相同规则解析登记默认主题，再提供 `themeKey`；因此第一份快照已有可用配色，也不会与贡献插件形成循环依赖。默认配色提供者须在管理器停用后卸载，由内核的依赖规则保证。应用当前选择 [builtin-themes 插件](../../src/plugins/builtin-themes/builtinThemesPlugin.ts)；其他配色插件按上例使用 `registerTheme` 即可。
+
+设置页通过 `getSnapshot().defaultThemeIds` 读取默认系统槽位与回退主题 ID，不导入具体配色文件。默认职责只是启动配置，目录中的主题依然平级。
+
+当前注册处理同一进程中已加载的主题数据，检查格式、角色名称及透明度；主题包导入、持久化安装、B 对比度警告尚未接入。自定义主题须由插件在每次启动时重新登记。设计见[主题管理](../../文档/需求设计/主题管理.md)，数据契约见[主题标准 v1](../../文档/主题标准-v1.md)。
 
 ## 构建与打包
 

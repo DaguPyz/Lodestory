@@ -20,10 +20,15 @@ export function deferred() {
 
 // Each fixture gets a fresh module graph so EngineCore and themeKey share one identity,
 // while globals and module-level theme state remain isolated from other cases.
-export function fixture({ saved = null, system = "dark", nativeSetError = false, nativeSetGate = null, nativeListenerGate = null } = {}) {
+export function fixture({ saved = null, preference, system = "dark", desktop = true, readError = false, nativeSetError = false, nativeSetGate = null, nativeListenerGate = null } = {}) {
   const storageKey = "lodestory.theme-mode";
   const values = new Map(saved === null ? [] : [[storageKey, saved]]);
-  const controls = { system, writeError: false, nativeSetError, uiDisposeError: false };
+  if (preference !== undefined) values.set("lodestory.theme-preference", typeof preference === "string" ? preference : JSON.stringify(preference));
+  const controls = { system, writeError: false, readError, nativeSetError, nativeDelay: nativeSetGate, uiDisposeError: false };
+  const root = { dataset: {}, style: {
+    setProperty(name, value) { this[name] = value; },
+    removeProperty(name) { delete this[name]; },
+  } };
   const windowListeners = new Map();
   const mediaListeners = new Set();
   const nativeListeners = new Set();
@@ -36,7 +41,7 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
   let unlistenCalls = 0;
 
   const storage = {
-    getItem(key) { return values.get(key) ?? null; },
+    getItem(key) { if (controls.readError) throw new Error("storage unavailable"); return values.get(key) ?? null; },
     setItem(key, value) {
       if (controls.writeError) throw new Error("storage unavailable");
       values.set(key, value);
@@ -59,7 +64,7 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
   const appWindow = {
     async setTheme(mode) {
       nativeCalls.push(mode);
-      if (nativeSetGate) await nativeSetGate;
+      if (controls.nativeDelay) await controls.nativeDelay;
       if (controls.nativeSetError) throw new Error("native theme unavailable");
       nativeTheme = mode ?? controls.system;
     },
@@ -99,6 +104,10 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
     const cached = modules.get(path);
     if (cached) return cached;
     const source = readFileSync(path, "utf8");
+    if (path.endsWith(".json")) {
+      const data = JSON.parse(source);
+      return { ...data, __esModule: true, default: data };
+    }
     const compiled = ts.transpileModule(source, {
       compilerOptions: {
         target: ts.ScriptTarget.ES2022,
@@ -112,7 +121,7 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
       exports,
       require(specifier) {
         if (specifier.startsWith("@lodestory/sdk")) return sdk.requireSdk(specifier, relative(sourceRoot, path));
-        if (specifier === "@tauri-apps/api/core") return { isTauri: () => true };
+        if (specifier === "@tauri-apps/api/core") return { isTauri: () => desktop };
         if (specifier === "@tauri-apps/api/window") return { getCurrentWindow: () => appWindow };
         if (specifier === "react") return React;
         if (specifier === "react/jsx-runtime") return jsxRuntime;
@@ -121,7 +130,7 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
         return load(resolveModule(path, specifier));
       },
       window,
-      document: { documentElement: { dataset: {}, style: { removeProperty() {} } } },
+      document: { documentElement: root },
       BroadcastChannel: Channel,
     }, { filename: path });
     return exports;
@@ -140,25 +149,43 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
   const contract = sdk.requireSdk("@lodestory/sdk/theme");
   const uiContract = sdk.requireSdk("@lodestory/sdk/ui");
   const themeStore = load(resolve(sourceRoot, "plugins/theme/themeStore.ts"));
-  const originalStartThemeSync = themeStore.startThemeSync;
-  themeStore.startThemeSync = () => {
-    const stop = originalStartThemeSync();
-    return () => {
+  const builtin = load(resolve(sourceRoot, "plugins/builtin-themes/builtinThemesPlugin.ts"));
+  const originalCreateThemeStore = themeStore.createThemeStore;
+  let currentStore;
+  themeStore.createThemeStore = defaults => {
+    const store = originalCreateThemeStore(defaults);
+    const dispose = store.dispose;
+    store.dispose = () => {
       uiLifecycle.push("stop-theme-sync");
-      stop();
+      dispose();
     };
+    currentStore = store;
+    return store;
   };
   const themeUi = load(resolve(sourceRoot, "plugins/theme/ThemeProvider.tsx"));
   const pluginModule = load(resolve(sourceRoot, "plugins/theme/themePlugin.ts"));
   let uiService;
   return {
     React,
+    get api() { return currentStore ?? themeStore.createThemeStore(builtin.builtinThemeDefaults); },
+    root,
+    nativeTheme: () => nativeTheme,
+    changeSystem(type) {
+      controls.system = type;
+      mediaListeners.forEach(listener => listener());
+      nativeListeners.forEach(listener => listener({ payload: type }));
+    },
+    storageEvent(value, storageArea = storage) {
+      windowListeners.get("storage")?.forEach(listener => listener({ key: "lodestory.theme-preference", newValue: value, storageArea }));
+    },
     core: new TrackedEngineCore(),
     EngineCore: TrackedEngineCore,
     createdCores,
     PluginActivationError: engine.PluginActivationError,
     PluginBatchActivationError: engine.PluginBatchActivationError,
     createThemePlugin: pluginModule.createThemePlugin,
+    createBuiltinThemesPlugin: builtin.createBuiltinThemesPlugin,
+    themeDefaultsKey: contract.themeDefaultsKey,
     themeKey: contract.themeKey,
     uiKey: uiContract.uiKey,
     ThemeProvider: themeUi.ThemeProvider,
@@ -171,6 +198,12 @@ export function fixture({ saved = null, system = "dark", nativeSetError = false,
     nativeCalls,
     uiRegistrations,
     uiLifecycle,
+    async provideDefaults(defaults) {
+      await this.core.mount(defaults ? {
+        id: "test-defaults", requires: [], provides: [contract.themeDefaultsKey],
+        activate(context) { context.provide(contract.themeDefaultsKey, defaults); },
+      } : builtin.createBuiltinThemesPlugin());
+    },
     async provideUi() {
       await this.core.mount({
         id: "test-ui",

@@ -77,7 +77,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["error-ui", "ui", "theme", "context-menu", "welcome", "editor", "settings"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["error-ui", "ui", "builtin-themes", "theme", "context-menu", "welcome", "editor", "settings"]);
   assert.deepEqual(fixture.appPluginsCalls, [[]]);
   const entryImports = fixture.moduleImports
     .filter(({ from }) => from === "main.tsx")

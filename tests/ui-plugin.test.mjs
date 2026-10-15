@@ -311,9 +311,10 @@ test("wrappers surround the real UiPages tree and ThemeProvider receives its reg
   const { service: ui, errorService } = await f.mountUi({ initialPage: "home" });
   const { ThemeProvider, useThemeService } = f.loadSource("plugins/theme/ThemeProvider.tsx");
   const themeService = {
-    getSnapshot: () => ({ mode: "dark", resolvedTheme: "dark", persistenceError: false, windowError: false }),
+    getSnapshot: () => ({ preference: { mode: "fixed", themeId: "lodestory.builtin.dark" }, theme: { id: "lodestory.builtin.dark", type: "dark" }, themes: [], unavailableThemeId: null, persistenceError: false, windowError: false }),
     subscribe: () => () => {},
-    setMode() {},
+    setPreference() {},
+    registerTheme() {},
     retry() {},
   };
   const calls = [];

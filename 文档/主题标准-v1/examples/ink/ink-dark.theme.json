@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "example.ink.dark",
+  "name": "墨色写作",
+  "type": "dark",
+  "colors": {
+    "surface.content": "#171A23",
+    "text.primary": "#E8EAF0",
+    "accent.foreground": "#C9AAFF",
+    "text.reading": "#ECE2CE",
+    "state.selectedBackground": "#3B3158",
+    "state.selectedForeground": "#F5EDFF",
+    "status.warningBackground": "#352B1E",
+    "status.warningForeground": "#EBD3A2",
+    "highlight.background": "#40331F",
+    "highlight.foreground": "#F5E2BC",
+    "highlight.activeBackground": "#59451D",
+    "highlight.activeForeground": "#FFF3D6",
+    "drop.allowedBackground": "#30283F",
+    "drop.allowedForeground": "#E3D1FF",
+    "drop.allowedBorder": "#BFA0EC",
+    "link.foreground": "#C9AAFF",
+    "link.hoverForeground": "#DECCFF",
+    "link.pressedForeground": "#EDE2FF",
+    "link.visitedForeground": "#E0AED0",
+    "link.visitedHoverForeground": "#EFCAE3",
+    "link.visitedPressedForeground": "#F7DFEE",
+    "surface.inverse": "#ECE2CE",
+    "text.inverse": "#24202D",
+    "category.1.background": "#2E2840",
+    "category.1.foreground": "#C9AAFF"
+  }
+}

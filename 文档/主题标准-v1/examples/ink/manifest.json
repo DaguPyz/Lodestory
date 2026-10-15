@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "kind": "theme",
+  "id": "example.ink",
+  "name": "墨色主题",
+  "publisher": "example",
+  "version": "1.0.0",
+  "compatibility": {
+    "themeStandard": {
+      "min": "1.0.0",
+      "maxExclusive": "2.0.0"
+    },
+    "lodestory": {
+      "min": "0.1.0",
+      "maxExclusive": "0.2.0"
+    }
+  },
+  "contributes": {
+    "themes": [
+      {
+        "path": "ink-dark.theme.json"
+      }
+    ]
+  }
+}

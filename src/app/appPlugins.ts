@@ -2,6 +2,7 @@ import type {Plugin} from "@lodestory/sdk";
 import {createErrorUiPlugin} from "../plugins/error-ui";
 import {createUiPlugin} from "../plugins/ui";
 import {createThemePlugin} from "../plugins/theme/themePlugin";
+import {createBuiltinThemesPlugin} from "../plugins/builtin-themes";
 import {createContextMenuPlugin} from "../plugins/context-menu";
 import {createWelcomePlugin} from "../plugins/welcome/welcomePlugin";
 import {createEditorPlugin} from "../plugins/editor/editorPlugin";
@@ -12,6 +13,7 @@ export function createAppPlugins(): readonly Plugin[] {
     return [
         createErrorUiPlugin(),
         createUiPlugin(),
+        createBuiltinThemesPlugin(),
         createThemePlugin(),
         createContextMenuPlugin(),
         createWelcomePlugin(),

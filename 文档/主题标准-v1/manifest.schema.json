@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lodestory:theme-manifest:1",
+  "title": "Lodestory v1 主题包清单",
+  "description": "只贡献统一视觉用途与交互状态颜色的纯数据主题包；不接受组件专属配置或可执行入口。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "id",
+    "name",
+    "publisher",
+    "version",
+    "compatibility",
+    "contributes"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "maxLength": 256
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "kind": {
+      "const": "theme"
+    },
+    "id": {
+      "type": "string",
+      "maxLength": 96,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^(?=.*\\S)[^\\u0000-\\u001F\\u007F]+$"
+    },
+    "publisher": {
+      "type": "string",
+      "maxLength": 48,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+      "maxLength": 32
+    },
+    "compatibility": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "themeStandard",
+        "lodestory"
+      ],
+      "properties": {
+        "themeStandard": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "min",
+            "maxExclusive"
+          ],
+          "properties": {
+            "min": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+              "maxLength": 32
+            },
+            "maxExclusive": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+              "maxLength": 32
+            }
+          }
+        },
+        "lodestory": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "min",
+            "maxExclusive"
+          ],
+          "properties": {
+            "min": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+              "maxLength": 32
+            },
+            "maxExclusive": {
+              "type": "string",
+              "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$",
+              "maxLength": 32
+            }
+          }
+        }
+      }
+    },
+    "contributes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "themes"
+      ],
+      "properties": {
+        "themes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "path"
+            ],
+            "properties": {
+              "path": {
+                "type": "string",
+                "maxLength": 200,
+                "pattern": "^(?:[a-z0-9][a-z0-9_-]*/)*[a-z0-9][a-z0-9_-]*\\.theme\\.json$"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

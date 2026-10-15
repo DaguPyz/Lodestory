@@ -1,6 +1,6 @@
 # Lodestory · UI 设计系统规范
 
-**版本：2.1.0 ｜ 日期：2026-09-28 ｜ 状态：欢迎页、编辑页骨架与主题设置已接入，运行验收待完成**
+**版本：2.1.0 ｜ 日期：2026-10-15 ｜ 状态：欢迎页、编辑页骨架与主题设置已接入，运行验收待完成**
 
 适用范围：Lodestory 桌面应用的视觉语言、布局、公共组件、交互状态与页面验收。本规范定义产品的设计方向和可复用规则，不规定具体页面的内容清单、模块顺序或业务流程。
 
@@ -55,7 +55,7 @@
 
 本文件是现行设计规范。共享主题变量、组件实现与本规范应同步维护。现有代码中的旧尺寸不能反过来限制新版设计方向。
 
-采用“基础变量 → 语义变量 → 组件变量 → 页面组合”的结构。变量按用途命名，避免按页面名创建新的颜色、圆角或阴影体系。
+颜色采用[主题标准 v1](主题标准-v1.md)的单层通用角色，按视觉用途与交互状态命名；组件和页面引用这些角色，不另建专属颜色表。字体、密度、圆角、尺寸及布局继续由本规范管理。
 
 ### GOV-04｜单位与缩放
 
@@ -63,100 +63,31 @@
 
 ## 03. 配色与材质
 
-### COL-01｜当前默认主题
+颜色用途、状态搭配和对比度规则以[主题标准 v1](主题标准-v1.md)及[颜色角色登记表](主题标准-v1/颜色角色登记表.md)为准。本节规定视觉原则，不重复维护色值表。
 
-当前采用微冷中性深色主题，以清晰文字、柔和表面层级和克制的蓝色交互建立现代感。颜色应用于功能角色，业务模块不各自更换配色。
+### COL-01｜内置主题与通用角色
 
-| 语义角色 / Token | 默认值 | 用途 |
-| --- | --- | --- |
-| --ui-surface-root | #101419 | 应用底层 |
-| --ui-surface-workspace | #14181D | 主工作内容与文稿背景 |
-| --ui-surface-panel | #191E24 | 侧栏与停靠面板 |
-| --ui-surface-chrome | #20262D | 顶区与工具区域 |
-| --ui-surface-control | #222931 | 输入与中性控件 |
-| --ui-surface-overlay | #252D36 | 菜单与对话框 |
-| --ui-surface-hover | #29323C | 中性悬停反馈 |
-| --ui-surface-pressed | #303B46 | 中性按下反馈 |
-| --ui-surface-selected | #24394D | 持续选中背景 |
-| --ui-surface-selected-hover | #2B4258 | 选中与悬停叠加 |
-| --ui-surface-selected-inactive | #30363E | 失焦后的保留选中 |
-| --ui-text-primary | #E4E8ED | 主要文字 |
-| --ui-text-secondary | #B7C0CA | 说明、路径与一般图标 |
-| --ui-text-muted | #A4AEBA | 元信息 |
-| --ui-text-placeholder | #A4AEBA | 占位提示 |
-| --ui-text-disabled | #69737E | 不可用控件 |
-| --ui-text-document | #D9DFE7 | 创作文稿 |
-| --ui-text-on-action | #F6F8FC | 实色按钮文字 |
-| --ui-border-divider | #2D353F | 必要结构分隔 |
-| --ui-border-decoration | #3A4552 | 非必要内轮廓 |
-| --ui-border-control | #82909F | 识别控件所需边界 |
-| --ui-accent-foreground | #76B6F2 | 交互文字 |
-| --ui-accent-indicator | #3D9EFF | 活动与选中指示 |
-| --ui-focus-ring | #8CC6FF | 键盘焦点 |
-| --ui-text-selection-bg | #294B6E | 文稿与输入文字选区 |
+默认选择内置深色主题，采用微冷中性表面、清晰文字和克制的蓝色强调；内置浅色主题采用白色与微冷浅灰的连续表面。实际色值分别保存在[深色主题](../src/plugins/builtin-themes/dark.theme.json)和[浅色主题](../src/plugins/builtin-themes/light.theme.json)。
+
+这两套配色属于内置主题的设计，自定义主题可以采用其他色系。各 UI 实现按实际视觉用途取用同一套标准角色，不按页面或插件身份另建颜色，也不把历史 CSS 变量名当成组件专属规则。
 
 ### COL-02｜操作与状态颜色
 
-| Token | 默认 / 悬停 / 按下 |
-| --- | --- |
-| --ui-action-bg / --ui-action-bg-hover / --ui-action-bg-pressed | #286BB1 / #2F72B7 / #235D99 |
-| --ui-danger-bg / --ui-danger-bg-hover / --ui-danger-bg-pressed | #A73542 / #B63C49 / #8C2C38 |
+一个操作上下文最多有一个实色主操作，其余操作使用中性或轻量外观。主操作与危险操作分别使用 `action.*`、`danger.*` 的完整背景前景组合，不能交叉借色。
 
-成功、警告、失败、信息状态分别使用 #85C69A、#E3BC78、#EE9393、#76B6F2，并同时提供文字或图标。
+状态提示使用 `status.*`，同时提供文字或图标。分类使用中性样式或 `category.*` 的同槽组合，不借用成功、失败等状态含义。悬停、按下、选中、禁用和键盘焦点遵循登记表的组合及叠加规则，文字选区必须同时指定前景和背景。
 
-一个操作上下文最多有一个实色主操作。其余操作使用中性或轻量外观。状态色只表达状态，普通分类标签保持中性。
+### COL-03｜主题选择与明暗属性
 
-### COL-03｜主题模式与浅色配色
+所有主题按 ID 平级选择，深色和浅色仅为属性。“跟随系统”是一种选择策略，分别指定系统为浅色和深色时使用的主题，不构成第三套配色。设置与回退行为见[主题管理设计](需求设计/主题管理.md)。
 
-应用提供深色、浅色和跟随系统三种模式，首次启动默认深色；跟随系统只解析为深色或浅色，不形成第三套配色。切换规则见[主题切换需求](需求设计/主题切换.md)。
-
-浅色采用白色与微冷浅灰的连续表面，保持相同的布局、密度、字体、控件尺度和状态语义。两套主题共用 COL-02 的实色操作配色，浅色变量如下。
-
-| 语义变量 | 浅色值 |
-| --- | --- |
-| --ui-surface-root | #F3F5F8 |
-| --ui-surface-workspace | #FFFFFF |
-| --ui-surface-panel | #F7F9FC |
-| --ui-surface-chrome | #EDF1F6 |
-| --ui-surface-control | #FFFFFF |
-| --ui-surface-overlay | #FFFFFF |
-| --ui-surface-hover | #E8EDF4 |
-| --ui-surface-pressed | #DCE4EE |
-| --ui-surface-selected | #E4EFFB |
-| --ui-surface-selected-hover | #D6E7F8 |
-| --ui-surface-selected-inactive | #E8ECF1 |
-| --ui-text-primary | #18212D |
-| --ui-text-secondary | #465468 |
-| --ui-text-muted | #536277 |
-| --ui-text-placeholder | #536277 |
-| --ui-text-disabled | #929DAB |
-| --ui-text-document | #243144 |
-| --ui-text-on-action | #F6F8FC |
-| --ui-border-divider | #DCE2EA |
-| --ui-border-decoration | #CBD3DF |
-| --ui-border-control | #65768C |
-| --ui-accent-foreground | #245F9B |
-| --ui-accent-indicator | #286BB1 |
-| --ui-focus-ring | #286BB1 |
-| --ui-text-selection-bg | #C5DCF6 |
-| --ui-status-success | #23693D |
-| --ui-status-warning | #8A5A08 |
-| --ui-status-danger | #B12F40 |
-| --ui-status-info | #245F9B |
-
-深色状态变量 --ui-status-success / warning / danger / info 分别为 #85C69A / #E3BC78 / #EE9393 / #76B6F2，与 COL-02 的状态配色一致。根节点的 data-ui-theme 表示当前实际主题；密度容器不覆盖主题。
+根节点的 `data-ui-theme-id` 标识实际主题，`data-ui-theme` 与 `color-scheme` 表达明暗属性。切换保持布局、密度、字体、控件尺度和状态语义，密度容器不覆盖主题。
 
 ### MAT-01｜边界与阴影
 
 默认边线为 1px，相邻面板共享一条分隔线。必要控件边界保持可识别；已有明确图标、文字和布局识别的对象不额外增加亮色框线。
 
-停靠面板、列表与常规按钮不使用外投影。浮动菜单可以使用中性轻投影，对话框使用独立浮层投影；不使用彩色阴影和发光效果。
-
-| 浮层角色 / 变量 | 深色 | 浅色 |
-| --- | --- | --- |
-| 菜单 / Popover / --ui-shadow-popover | 0 8px 24px rgba(0,0,0,.32), 0 2px 6px rgba(0,0,0,.24) | 0 8px 24px rgba(24,33,45,.12), 0 2px 6px rgba(24,33,45,.08) |
-| 对话框 / --ui-shadow-dialog | 0 20px 64px rgba(0,0,0,.48), 0 2px 8px rgba(0,0,0,.24) | 0 20px 64px rgba(24,33,45,.16), 0 2px 8px rgba(24,33,45,.08) |
-| 模态遮罩 / --ui-overlay-scrim | rgba(0,0,0,.48) | rgba(24,33,45,.24) |
+停靠面板、列表与常规按钮不使用外投影。浮层可按用途选择柔和或较深阴影；几何由[阴影配方](主题标准-v1/颜色角色登记表.md#6-阴影配方)固定，颜色由主题的 `shadow.*` 提供，模态遮罩使用 `overlay.scrim`。内置主题不使用彩色阴影和发光效果。
 
 默认内容区不使用模糊、噪点、暗角与摄影式光照。系统窗口圆角、阴影与原生材质由平台管理。
 
@@ -413,13 +344,13 @@ macOS 与 Windows 分别核对。平台字体光栅化允许不同，但视觉�
 
 主题与用户偏好从应用根传播。默认 data-ui-theme="dark"、data-ui-density="comfortable"；欢迎页等入口容器采用已定义的 data-ui-density="spacious"，紧凑上下文使用 data-ui-density="compact"。
 
-密度容器只覆盖密度相关变量，不改变主题配色、状态语义或字体体系。组件通过 --cmp-* 别名消费 --ui-* 语义变量。
+密度容器只覆盖密度相关变量，不改变主题配色、状态语义或字体体系。组件消费标准映射的 --ui-* 变量，也可使用内部 --cmp-* 别名；主题文件只接受通用角色，不额外暴露组件专属颜色。
 
 ### TOK-02｜当前项目状态
 
-现有 [主题变量](../src/styles/tokens.css)、[页面样式](../src/styles.css)与[欢迎页](../src/plugins/welcome/WelcomePage.tsx)已按新版重构：应用默认采用 Comfortable，欢迎页采用 Spacious，并统一了标题尺度、留白、列表密度、图标与共享控件。
+现有[字体与密度变量](../src/styles/tokens.css)、[生成的内置主题变量](../src/styles/theme-colors.css)、[页面样式](../src/styles.css)与[欢迎页](../src/plugins/welcome/WelcomePage.tsx)已按新版重构：应用默认采用 Comfortable，欢迎页采用 Spacious，并统一了标题尺度、留白、列表密度、图标与共享控件。
 
-欢迎页已接入[主题设置页面](../src/plugins/settings/ThemeSettingsPage.tsx)与[共享主题管理](../src/plugins/theme/themeStore.ts)，支持深色、浅色、跟随系统、即时切换、本机偏好保存与失败重试。项目列表已接入[本机项目索引](需求设计/欢迎页/项目索引存储.md)，提供新建、打开、搜索、移除、重新定位及空列表/错误状态；菜单与新建对话框采用共享主题变量和 Base UI 的键盘、焦点管理。
+设置页已接入[平级主题目录](../src/plugins/settings/ThemeSettingsPage.tsx)与[主题管理器](../src/plugins/theme/themeManager.ts)，支持按 ID 切换、系统策略、本机偏好保存与失败重试；完整实现边界见[主题管理设计](需求设计/主题管理.md)。项目列表已接入[本机项目索引](需求设计/欢迎页/项目索引存储.md)，提供新建、打开、搜索、移除、重新定位及空列表/错误状态；菜单与新建对话框采用共享主题变量和 Base UI 的键盘、焦点管理。
 
 编辑工作空间已按[编辑页面设计稿](../设计稿/编辑页面.png)搭建[页面骨架](../src/plugins/editor/EditorPage.tsx)，通过欢迎页真实项目入口进入。工作空间采用 Comfortable，工具轨 / 文件区 / 参考区分别使用 48 / 256 / 320px 预设，正文使用 18 / 32px 与最大 720px 行宽。保留文稿标签与面板骨架、专注模式及外观设置的往返；各区域独立滚动，主题切换保留页面状态。
 
@@ -428,8 +359,6 @@ macOS 与 Windows 分别核对。平台字体光栅化允许不同，但视觉�
 项目索引的 Rust 自动检查、前端日期/路径与原有主题测试、类型检查和生产构建已接通。多平台原生目录选择、不同系统与缩放下的完整渲染验收仍需分别验证。
 
 [窗口配置](../src-tauri/tauri.conf.json)沿用现有项目设置；后续页面实现应以实际客户区验证，不能仅凭配置尺寸判定符合规范。
-
-2.0 改变默认视觉尺度与密度，属于主要版本升级。[1.1 历史规范](./历史/UI设计规范_v1.1_2026-09-28.md)仅用于对照，不参与当前页面验收。
 
 ## 12. 可访问性参考
 

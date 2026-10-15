@@ -9,7 +9,7 @@ import {
 } from "@lodestory/sdk";
 import { uiKey, type UiService } from "@lodestory/sdk/ui";
 import { errorUiKey, type ErrorUiService } from "@lodestory/sdk/error";
-import { themeKey, type ThemeService } from "@lodestory/sdk/theme";
+import { themeDefaultsKey, themeKey, type ThemeDefaults, type ThemeService } from "@lodestory/sdk/theme";
 
 type Document = { read(): string };
 type DocumentChanged = { documentId: string; revision: number };
@@ -39,7 +39,21 @@ const plugin: Plugin = {
     void ui;
     void errorUi.ErrorBoundary;
     void errorUi.ErrorView;
-    void theme;
+    const removeTheme: () => void = theme.registerTheme({
+      schemaVersion: 1, id: "example.test.ink", name: "Ink", type: "dark",
+      colors: { "surface.content": "#171A23" },
+    });
+    theme.setPreference({ mode: "fixed", themeId: "example.test.ink" });
+    theme.setPreference({ mode: "system", lightThemeId: "example.test.paper", darkThemeId: "example.test.ink" });
+    const color: string = theme.getSnapshot().theme.colors["surface.content"];
+    const fallbackId: string = theme.getSnapshot().defaultThemeIds.light;
+    void fallbackId;
+    void color;
+    // @ts-expect-error Only standard color names are accepted.
+    theme.registerTheme({ schemaVersion: 1, id: "example.test.invalid", name: "Invalid", type: "dark", colors: { "editor.background": "#FFFFFF" } });
+    // @ts-expect-error A theme's type is an attribute, not its selection identity.
+    theme.setPreference("dark");
+    removeTheme();
     void emitted;
     unsubscribe();
     // @ts-expect-error The event payload must match its public generic contract.
@@ -53,3 +67,15 @@ const plugin: Plugin = {
 const wrongDocument: number = context.get(documentKey);
 void plugin;
 void wrongDocument;
+
+const defaultsPlugin: Plugin = {
+  id: "example.defaults", requires: [], provides: [themeDefaultsKey],
+  activate(pluginContext) {
+    const defaults: ThemeDefaults = {
+      dark: { schemaVersion: 1, id: "example.defaults.dark", name: "Dark", type: "dark", colors: {} },
+      light: { schemaVersion: 1, id: "example.defaults.light", name: "Light", type: "light", colors: {} },
+    };
+    pluginContext.provide(themeDefaultsKey, defaults);
+  },
+};
+void defaultsPlugin;

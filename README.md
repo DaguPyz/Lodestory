@@ -35,3 +35,7 @@ The development-only `/tests/fixtures/project-index.html` page uses Tauri IPC mo
 The same fixture also supports document creation and writing; `?scenario=create-error`, `?scenario=save-error`, and `?scenario=slow-save` exercise document failure and pending-save flows without touching actual files.
 
 The public plugin contracts live in [`@lodestory/sdk`](packages/sdk/README.md), an independent ESM package with core, UI, and theme entry points. The app consumes it through the pnpm workspace. Dynamic plugin loading and marketplace installation are planned separately.
+
+Theme behavior and implementation boundaries are documented in [主题管理设计](文档/需求设计/主题管理.md). Theme authors and UI plugins share [主题标准 v1](文档/主题标准-v1.md) and its [颜色角色登记表](文档/主题标准-v1/颜色角色登记表.md). Regenerate the authoring reference with `pnpm generate:theme-docs` and verify the contract with `pnpm check:theme-standard`.
+
+The `theme` plugin owns the color standard, resolution, selection, and synchronization. The separate `builtin-themes` plugin contributes the default palettes through the SDK; both built-in and custom themes appear in the same catalog.

@@ -1,7 +1,8 @@
 import { useSyncExternalStore } from "react";
-import { getThemeSnapshot, subscribeTheme } from "./themeStore";
+import { useThemeService } from "./ThemeProvider";
 
 export function useTheme() {
-  return useSyncExternalStore(subscribeTheme, getThemeSnapshot, getThemeSnapshot);
+  const service = useThemeService();
+  return useSyncExternalStore(service.subscribe, service.getSnapshot, service.getSnapshot);
 }
 

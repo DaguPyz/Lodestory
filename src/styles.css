@@ -1,3 +1,4 @@
+@import "./styles/theme-colors.css";
 @import "./styles/tokens.css";
 
 :root {
@@ -828,7 +829,7 @@ p {
 
 @media (forced-colors: active) {
   :root {
-    --ui-focus-ring: Highlight;
+    --ui-focus-ring: Highlight !important;
   }
 
   .navigation-item[aria-current="page"] {
@@ -948,6 +949,7 @@ p {
 .theme-option-body {
   display: flex;
   flex-direction: column;
+  min-width: 0;
   gap: var(--ui-space-3);
   padding: var(--ui-space-5);
 }
@@ -960,16 +962,10 @@ p {
 }
 
 .theme-option-name {
+  overflow-wrap: anywhere;
   font-size: var(--ui-font-size-strong);
   line-height: var(--ui-line-height-strong);
   font-weight: 600;
-}
-
-.theme-option-default {
-  margin-left: auto;
-  color: var(--ui-text-muted);
-  font-size: var(--ui-font-size-caption);
-  line-height: var(--ui-line-height-caption);
 }
 
 .theme-radio {
@@ -1163,7 +1159,9 @@ p {
 
   .theme-preview,
   .theme-preview-split {
+    width: 100%;
     min-height: 10rem;
+    aspect-ratio: auto;
   }
 
   .theme-preview {
@@ -1217,4 +1215,35 @@ p {
 
 .app-view[hidden] {
   display: none;
+}
+
+.theme-system-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  margin-top: 20px;
+}
+
+.theme-system-choices label {
+  display: grid;
+  min-width: 0;
+  max-width: 100%;
+  gap: 8px;
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-label);
+}
+
+.theme-system-choices select {
+  max-width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-control);
+  font: inherit;
+}
+
+.theme-system-choices select:focus-visible {
+  outline: 2px solid var(--ui-focus-ring);
+  outline-offset: 2px;
 }

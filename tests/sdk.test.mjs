@@ -28,10 +28,11 @@ test("SDK package exposes ESM root, UI, error, and theme entry points", () => {
   assert.deepEqual(Object.keys(packageRoot).sort(), ["createEventKey", "createServiceKey"]);
   assert.deepEqual(Object.keys(packageUi), ["uiKey"]);
   assert.deepEqual(Object.keys(packageError), ["errorUiKey"]);
-  assert.deepEqual(Object.keys(packageTheme), ["themeKey"]);
+  assert.deepEqual(Object.keys(packageTheme).sort(), ["themeDefaultsKey", "themeKey"]);
   assert.equal(packageUi.uiKey.id, "app/ui");
   assert.equal(packageError.errorUiKey.id, "app/error-ui");
   assert.equal(packageTheme.themeKey.id, "app/theme");
+  assert.equal(packageTheme.themeDefaultsKey.id, "app/theme-defaults");
   assert.ok(packageManifest.files.includes("dist"), "the packed package must include the runtime and declaration outputs");
 });
 

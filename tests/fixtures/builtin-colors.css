@@ -1,0 +1,88 @@
+/* Lodestory UI 2.0: shared theme and density presets.
+   Source of truth: 文档/UI设计规范.md. */
+
+:root,
+[data-ui-theme="dark"] {
+  --ui-surface-root: #101419;
+  --ui-surface-workspace: #14181d;
+  --ui-surface-panel: #191e24;
+  --ui-surface-chrome: #20262d;
+  --ui-surface-control: #222931;
+  --ui-surface-overlay: #252d36;
+  --ui-surface-hover: #29323c;
+  --ui-surface-pressed: #303b46;
+  --ui-surface-selected: #24394d;
+  --ui-surface-selected-hover: #2b4258;
+  --ui-surface-selected-inactive: #30363e;
+  --ui-text-primary: #e4e8ed;
+  --ui-text-secondary: #b7c0ca;
+  --ui-text-muted: #a4aeba;
+  --ui-text-placeholder: #a4aeba;
+  --ui-text-disabled: #69737e;
+  --ui-text-document: #d9dfe7;
+  --ui-text-on-action: #f6f8fc;
+  --ui-border-divider: #2d353f;
+  --ui-border-decoration: #3a4552;
+  --ui-border-control: #82909f;
+  --ui-accent-foreground: #76b6f2;
+  --ui-accent-indicator: #3d9eff;
+  --ui-focus-ring: #8cc6ff;
+  --ui-text-selection-bg: #294b6e;
+  --ui-action-bg: #286bb1;
+  --ui-action-bg-hover: #2f72b7;
+  --ui-action-bg-pressed: #235d99;
+
+  --ui-color-scheme: dark;
+  --ui-danger-bg: #a73542;
+  --ui-danger-bg-hover: #b63c49;
+  --ui-danger-bg-pressed: #8c2c38;
+  --ui-status-success: #85c69a;
+  --ui-status-warning: #e3bc78;
+  --ui-status-danger: #ee9393;
+  --ui-status-info: #76b6f2;
+  --ui-shadow-popover: 0 8px 24px rgba(0, 0, 0, .32), 0 2px 6px rgba(0, 0, 0, .24);
+  --ui-shadow-dialog: 0 20px 64px rgba(0, 0, 0, .48), 0 2px 8px rgba(0, 0, 0, .24);
+  --ui-overlay-scrim: rgba(0, 0, 0, .48);
+}
+
+[data-ui-theme="light"] {
+  --ui-surface-root: #f3f5f8;
+  --ui-surface-workspace: #ffffff;
+  --ui-surface-panel: #f7f9fc;
+  --ui-surface-chrome: #edf1f6;
+  --ui-surface-control: #ffffff;
+  --ui-surface-overlay: #ffffff;
+  --ui-surface-hover: #e8edf4;
+  --ui-surface-pressed: #dce4ee;
+  --ui-surface-selected: #e4effb;
+  --ui-surface-selected-hover: #d6e7f8;
+  --ui-surface-selected-inactive: #e8ecf1;
+  --ui-text-primary: #18212d;
+  --ui-text-secondary: #465468;
+  --ui-text-muted: #536277;
+  --ui-text-placeholder: #536277;
+  --ui-text-disabled: #929dab;
+  --ui-text-document: #243144;
+  --ui-text-on-action: #f6f8fc;
+  --ui-border-divider: #dce2ea;
+  --ui-border-decoration: #cbd3df;
+  --ui-border-control: #65768c;
+  --ui-accent-foreground: #245f9b;
+  --ui-accent-indicator: #286bb1;
+  --ui-focus-ring: #286bb1;
+  --ui-text-selection-bg: #c5dcf6;
+  --ui-action-bg: #286bb1;
+  --ui-action-bg-hover: #2f72b7;
+  --ui-action-bg-pressed: #235d99;
+  --ui-color-scheme: light;
+  --ui-danger-bg: #a73542;
+  --ui-danger-bg-hover: #b63c49;
+  --ui-danger-bg-pressed: #8c2c38;
+  --ui-status-success: #23693d;
+  --ui-status-warning: #8a5a08;
+  --ui-status-danger: #b12f40;
+  --ui-status-info: #245f9b;
+  --ui-shadow-popover: 0 8px 24px rgba(24, 33, 45, .12), 0 2px 6px rgba(24, 33, 45, .08);
+  --ui-shadow-dialog: 0 20px 64px rgba(24, 33, 45, .16), 0 2px 8px rgba(24, 33, 45, .08);
+  --ui-overlay-scrim: rgba(24, 33, 45, .24);
+}

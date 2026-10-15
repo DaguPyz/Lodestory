@@ -1,0 +1,115 @@
+import { readFile, writeFile } from "node:fs/promises";
+
+const root = new URL("../文档/主题标准-v1/", import.meta.url);
+const registry = JSON.parse(await readFile(new URL("../src/plugins/theme/color-registry.json", import.meta.url), "utf8"));
+const segment = "[a-z][a-z0-9]*(?:-[a-z0-9]+)*";
+const schema = {
+  $schema: "https://json-schema.org/draft/2020-12/schema",
+  $id: "urn:lodestory:theme-file:1",
+  title: "Lodestory v1 主题文件",
+  type: "object",
+  additionalProperties: false,
+  required: ["schemaVersion", "id", "name", "type", "colors"],
+  properties: {
+    $schema: { type: "string", maxLength: 256 },
+    schemaVersion: { const: 1 },
+    id: { type: "string", maxLength: 144, pattern: `^${segment}\\.${segment}\\.${segment}$` },
+    name: { type: "string", minLength: 1, maxLength: 80, pattern: "^(?=.*\\S)[^\\u0000-\\u001F\\u007F]+$" },
+    type: { enum: ["light", "dark"] },
+    colors: {
+      type: "object",
+      additionalProperties: false,
+      properties: Object.fromEntries(registry.colors.map((entry) => [entry.id, {
+        type: "string",
+        description: entry.description,
+        pattern: entry.alphaAllowed ? "^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$" : "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$",
+      }])),
+    },
+  },
+};
+await writeFile(new URL("theme.schema.json", root), JSON.stringify(schema, null, 2) + "\n");
+
+const value = (fallback) => typeof fallback === "string" ? `\`${fallback}\`` : `引用 \`${fallback.ref}\``;
+const role = (reference) => reference === undefined ? "—" : typeof reference === "string" ? `\`${reference}\`` : `上下文 \`${reference.context}\``;
+const table = (entries) => [
+  "| 公开名称 | 用途 | CSS 变量 | 深色缺省 | 浅色缺省 | 透明度 |",
+  "| --- | --- | --- | --- | --- | --- |",
+  ...entries.map((entry) => `| \`${entry.id}\` | ${entry.description} | \`${entry.cssVariable}\` | ${value(entry.defaults.dark)} | ${value(entry.defaults.light)} | ${entry.alphaAllowed ? "允许" : "不允许"} |`),
+].join("\n");
+const markdown = [
+  "# 主题颜色角色登记表",
+  "",
+  `**状态：正式设计 ｜ 标准版本：${registry.standardVersion}**`,
+  "",
+  "由 [机器颜色登记表](../../src/plugins/theme/color-registry.json) 生成。修改源数据后运行 `pnpm generate:theme-docs`，不要直接修改本表。实现范围见 [主题管理设计](../需求设计/主题管理.md)。",
+  "",
+  `共 ${registry.colors.length} 项通用颜色，全部按视觉用途与交互状态命名。只有一层颜色值；下列搭配组合只引用颜色名，不能被主题覆盖，也不依赖插件身份或 HTML 结构。`,
+  "",
+  "缺项读取该类型的标准默认值；默认引用递归使用目标角色的最终值。历史 CSS 名称仅为兼容映射，不决定组件或区域的专属规则。",
+  "",
+  "## 1 视觉用途与交互状态（A）",
+  "",
+  table(registry.colors),
+  "",
+  "## 2 成对取色组合",
+  "",
+  "组合中的前景与背景必须一起取用。边界只在用途需要时绘制；选中指示同时配合非颜色的标记。上下文由实现传入允许的通用角色，不是新的可配置色值。",
+  "",
+  "| 组合 | 前景 | 背景 | 必要边界 | 状态或焦点指示 | 用途 |",
+  "| --- | --- | --- | --- | --- | --- |",
+  ...Object.entries(registry.paintSets).map(([id, paint]) => `| \`${id}\` | ${role(paint.foreground)} | ${role(paint.background)} | ${role(paint.border)} | ${role(paint.indicator)} | ${paint.description} |`),
+  "",
+  "## 3 允许的上下文角色",
+  "",
+  "| 上下文 | 允许角色 | 缺省规则 |",
+  "| --- | --- | --- |",
+  ...Object.entries(registry.contexts).map(([id, context]) => `| \`${id}\` | ${context.allowedRoles.map((name) => `\`${name}\``).join("、")} | ${context.required ? "必须显式指定" : `缺省引用 \`${context.defaultRole}\``} |`),
+  "",
+  "## 4 状态优先级",
+  "",
+  "按以下顺序匹配，第一项命中后采用完整配色组合。键盘可见焦点独立叠加，禁用但仍可聚焦的对象也保留焦点环。",
+  "",
+  "| 顺序 | 条件 | 采用组合 |",
+  "| --- | --- | --- |",
+  ...registry.stateRules.priority.map((rule, index) => `| ${index + 1} | ${Object.keys(rule.when).length ? Object.entries(rule.when).map(([name, expected]) => `\`${name}=${expected}\``).join(" 且 ") : "其余情况"} | ${rule.paint ? `\`${rule.paint}\`` : Object.entries(rule.paints).map(([intent, paint]) => `\`${intent}\` → \`${paint}\``).join("；")} |`),
+  "",
+  "### 4.1 六类扩展用途与组合规则",
+  "",
+  "以下规则由宿主标准维护；作者仅配置 A。组合表的背景字段也用于说明校验底色：链接只绘制前景，校验边界只绘制边界，焦点与插入线只绘制指示，不要求这些组合额外涂底。",
+  "",
+  ...Object.entries(registry.usageRules).flatMap(([id, usage]) => [
+    `#### ${usage.description}（${id}）`,
+    "",
+    ...(usage.paints ? [`使用组合：${usage.paints.map(name => `\`${name}\``).join("、")}。`, ""] : []),
+    ...(usage.defaults ? [
+      `状态缺省：${Object.entries(usage.defaults).map(([key, value]) => `\`${key}=${value}\``).join("、")}。`, "",
+      "| 顺序 | 条件 | 采用组合 |", "| --- | --- | --- |",
+      ...usage.priority.map((rule, index) => `| ${index + 1} | ${Object.keys(rule.when).length ? Object.entries(rule.when).map(([key, value]) => `\`${key}=${value}\``).join(" 且 ") : "其余情况"} | ${rule.paint === null ? "不绘制额外配色；按下述规则隐藏或继承" : `\`${rule.paint}\``} |`), "",
+    ] : []),
+    ...usage.rules.map(rule => `- ${rule}`), "",
+  ]),
+  "## 5 对比度配对（B）",
+  "",
+  "以下关系用于主题完整解析后的静态检查，包括补齐的默认值。必要控件边界、光标和焦点的目标为 3:1，普通文字为 4.5:1。未达标只报告可读性警告及实际色值，允许继续预览或使用，不修改作者配色；格式、未知名称等错误仍拒绝登记。这些关系不替代实际页面验收。",
+  "",
+  "| 检查项 | 前景 | 背景 | 最低对比度 | 用途 |",
+  "| --- | --- | --- | --- | --- |",
+  ...registry.contrastPairs.map((pair) => `| \`${pair.id}\` | \`${pair.foreground}\` | \`${pair.background}\` | ${pair.minRatio === null ? "禁用状态豁免" : `${pair.minRatio}:1`} | ${pair.description} |`),
+  "",
+  "### 5.1 分类辨识辅助检查",
+  "",
+  ...registry.distinctionChecks.map(check => `- \`${check.id}\`：检查 ${check.roles.map(role => `\`${role}\``).join("、")}。${check.description}`),
+  "",
+  "比较时将六位色值与末尾 FF 的八位色值归一化为 RGB，忽略字母大小写。完全重复只警告，不拒绝主题；颜色不同仍须在真实页面检查色觉差异、相邻类别与非颜色标记，不虚构统一的颜色差异阈值。",
+  "",
+  "## 6 阴影配方",
+  "",
+  "几何单位为 CSS px，固定由标准管理。宿主按颜色角色组装现有复合阴影变量，主题作者只调整颜色。",
+  "",
+  "| 浮层 | 横向偏移 | 纵向偏移 | 模糊 | 扩散 | 颜色角色 |",
+  "| --- | --- | --- | --- | --- | --- |",
+  ...registry.shadowRecipes.flatMap((recipe) => recipe.layers.map((layer) => `| ${recipe.id} | ${layer.x} | ${layer.y} | ${layer.blur} | ${layer.spread} | \`${layer.color}\` |`)),
+  "",
+].join("\n");
+await writeFile(new URL("颜色角色登记表.md", root), markdown);
+console.log(`已从登记表生成 theme.schema.json 与颜色角色登记表：${registry.colors.length} 项颜色。`);

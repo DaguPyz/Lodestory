@@ -1,0 +1,586 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:lodestory:theme-file:1",
+  "title": "Lodestory v1 主题文件",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "id",
+    "name",
+    "type",
+    "colors"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "maxLength": 256
+    },
+    "schemaVersion": {
+      "const": 1
+    },
+    "id": {
+      "type": "string",
+      "maxLength": 144,
+      "pattern": "^[a-z][a-z0-9]*(?:-[a-z0-9]+)*\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*\\.[a-z][a-z0-9]*(?:-[a-z0-9]+)*$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^(?=.*\\S)[^\\u0000-\\u001F\\u007F]+$"
+    },
+    "type": {
+      "enum": [
+        "light",
+        "dark"
+      ]
+    },
+    "colors": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "surface.root": {
+          "type": "string",
+          "description": "整个视图最底层的承载背景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "surface.content": {
+          "type": "string",
+          "description": "主要内容的中性承载背景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "surface.secondary": {
+          "type": "string",
+          "description": "辅助内容的中性承载背景，与主要内容形成层次",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "surface.tonal": {
+          "type": "string",
+          "description": "同层内容分组或操作上下文的中性色调变化背景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "surface.control": {
+          "type": "string",
+          "description": "可操作或可编辑对象的中性承载背景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "surface.floating": {
+          "type": "string",
+          "description": "覆盖在其他内容之上的浮动承载背景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "text.primary": {
+          "type": "string",
+          "description": "主要界面文字",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "text.secondary": {
+          "type": "string",
+          "description": "辅助说明与一般图标",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "text.muted": {
+          "type": "string",
+          "description": "弱化元信息",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "text.placeholder": {
+          "type": "string",
+          "description": "输入占位文字",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "text.disabled": {
+          "type": "string",
+          "description": "不可用状态文字",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "text.reading": {
+          "type": "string",
+          "description": "连续阅读的正文前景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "text.onAction": {
+          "type": "string",
+          "description": "实色操作表面上的文字",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "border.divider": {
+          "type": "string",
+          "description": "必要结构分隔线",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "border.decoration": {
+          "type": "string",
+          "description": "非必要装饰边界",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "border.strong": {
+          "type": "string",
+          "description": "识别可操作对象所需的必要边界",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "accent.foreground": {
+          "type": "string",
+          "description": "强调文字与图标",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "accent.indicator": {
+          "type": "string",
+          "description": "活动与选中指示",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "focus.ring": {
+          "type": "string",
+          "description": "键盘焦点环",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "caret.foreground": {
+          "type": "string",
+          "description": "文本输入位置指示前景，默认沿用阅读正文",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "selection.background": {
+          "type": "string",
+          "description": "文字选区底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "selection.foreground": {
+          "type": "string",
+          "description": "文字选区前景，默认沿用主要文字",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.hoverBackground": {
+          "type": "string",
+          "description": "悬停状态底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.hoverForeground": {
+          "type": "string",
+          "description": "悬停状态前景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.pressedBackground": {
+          "type": "string",
+          "description": "按下状态底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.pressedForeground": {
+          "type": "string",
+          "description": "按下状态前景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.selectedBackground": {
+          "type": "string",
+          "description": "选中状态底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.selectedForeground": {
+          "type": "string",
+          "description": "选中状态前景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.selectedHoverBackground": {
+          "type": "string",
+          "description": "悬停选中状态底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.selectedHoverForeground": {
+          "type": "string",
+          "description": "悬停选中状态前景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.selectedPressedBackground": {
+          "type": "string",
+          "description": "按下选中状态底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.selectedPressedForeground": {
+          "type": "string",
+          "description": "按下选中状态前景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.inactiveSelectedBackground": {
+          "type": "string",
+          "description": "失焦后的选中状态底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.inactiveSelectedForeground": {
+          "type": "string",
+          "description": "失焦后的选中状态前景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.disabledBackground": {
+          "type": "string",
+          "description": "禁用状态底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.disabledForeground": {
+          "type": "string",
+          "description": "禁用状态前景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.disabledSelectedBackground": {
+          "type": "string",
+          "description": "禁用且选中状态底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.disabledSelectedForeground": {
+          "type": "string",
+          "description": "禁用且选中状态前景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "state.disabledBorder": {
+          "type": "string",
+          "description": "禁用对象的边界",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "action.background": {
+          "type": "string",
+          "description": "主操作底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "action.hoverBackground": {
+          "type": "string",
+          "description": "主操作悬停底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "action.pressedBackground": {
+          "type": "string",
+          "description": "主操作按下底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "action.foreground": {
+          "type": "string",
+          "description": "主操作前景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "danger.background": {
+          "type": "string",
+          "description": "危险操作底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "danger.hoverBackground": {
+          "type": "string",
+          "description": "危险操作悬停底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "danger.pressedBackground": {
+          "type": "string",
+          "description": "危险操作按下底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "danger.foreground": {
+          "type": "string",
+          "description": "危险操作前景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.success": {
+          "type": "string",
+          "description": "成功状态文字与图标",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.warning": {
+          "type": "string",
+          "description": "警告状态文字与图标",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.danger": {
+          "type": "string",
+          "description": "失败状态文字与图标",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.info": {
+          "type": "string",
+          "description": "信息状态文字与图标",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "overlay.scrim": {
+          "type": "string",
+          "description": "模态浮层后方遮罩",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$"
+        },
+        "shadow.softAmbient": {
+          "type": "string",
+          "description": "柔和浮层的环境阴影颜色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$"
+        },
+        "shadow.softKey": {
+          "type": "string",
+          "description": "柔和浮层的近端阴影颜色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$"
+        },
+        "shadow.deepAmbient": {
+          "type": "string",
+          "description": "深层浮层的环境阴影颜色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$"
+        },
+        "shadow.deepKey": {
+          "type": "string",
+          "description": "深层浮层的近端阴影颜色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$"
+        },
+        "status.successBackground": {
+          "type": "string",
+          "description": "成功提示的柔和承载背景；不是操作或选中底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.successForeground": {
+          "type": "string",
+          "description": "成功提示背景上的文字与图标，必须与对应背景成对使用",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.successBorder": {
+          "type": "string",
+          "description": "成功提示或校验边界；与键盘焦点环独立",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.warningBackground": {
+          "type": "string",
+          "description": "警告提示的柔和承载背景；不是操作或选中底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.warningForeground": {
+          "type": "string",
+          "description": "警告提示背景上的文字与图标，必须与对应背景成对使用",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.warningBorder": {
+          "type": "string",
+          "description": "警告提示或校验边界；与键盘焦点环独立",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.dangerBackground": {
+          "type": "string",
+          "description": "错误提示的柔和承载背景；不是操作或选中底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.dangerForeground": {
+          "type": "string",
+          "description": "错误提示背景上的文字与图标，必须与对应背景成对使用",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.dangerBorder": {
+          "type": "string",
+          "description": "错误提示或校验边界；与键盘焦点环独立",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.infoBackground": {
+          "type": "string",
+          "description": "信息提示的柔和承载背景；不是操作或选中底色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.infoForeground": {
+          "type": "string",
+          "description": "信息提示背景上的文字与图标，必须与对应背景成对使用",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "status.infoBorder": {
+          "type": "string",
+          "description": "信息提示或校验边界；与键盘焦点环独立",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "highlight.background": {
+          "type": "string",
+          "description": "普通内容标记或非当前搜索命中的背景；不表示选中",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "highlight.foreground": {
+          "type": "string",
+          "description": "普通内容高亮上的文字与图标",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "highlight.activeBackground": {
+          "type": "string",
+          "description": "当前定位的内容高亮背景，例如当前搜索命中",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "highlight.activeForeground": {
+          "type": "string",
+          "description": "当前内容高亮上的文字与图标",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "highlight.activeBorder": {
+          "type": "string",
+          "description": "当前内容高亮的必要边界；另配当前标记，不充当键盘焦点",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "drop.allowedBackground": {
+          "type": "string",
+          "description": "允许放置反馈背景；用于独立放置提示区域",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "drop.allowedForeground": {
+          "type": "string",
+          "description": "允许放置反馈文字与图标；用于独立放置提示区域",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "drop.allowedBorder": {
+          "type": "string",
+          "description": "允许放置反馈边界；用于独立放置提示区域",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "drop.forbiddenBackground": {
+          "type": "string",
+          "description": "禁止放置反馈背景；用于独立放置提示区域",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "drop.forbiddenForeground": {
+          "type": "string",
+          "description": "禁止放置反馈文字与图标；用于独立放置提示区域",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "drop.forbiddenBorder": {
+          "type": "string",
+          "description": "禁止放置反馈边界；用于独立放置提示区域",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "drop.insertionIndicator": {
+          "type": "string",
+          "description": "允许放置时的精确插入位置线；配箭头或文字说明",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "link.foreground": {
+          "type": "string",
+          "description": "未访问链接默认前景；限中性承载面，始终配下划线",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "link.hoverForeground": {
+          "type": "string",
+          "description": "未访问链接悬停前景；限中性承载面，始终配下划线",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "link.pressedForeground": {
+          "type": "string",
+          "description": "未访问链接按下前景；限中性承载面，始终配下划线",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "link.visitedForeground": {
+          "type": "string",
+          "description": "已访问链接默认前景；限中性承载面，始终配下划线",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "link.visitedHoverForeground": {
+          "type": "string",
+          "description": "已访问链接悬停前景；限中性承载面，始终配下划线",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "link.visitedPressedForeground": {
+          "type": "string",
+          "description": "已访问链接按下前景；限中性承载面，始终配下划线",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "surface.inverse": {
+          "type": "string",
+          "description": "与当前主题中性表面形成明暗反差的承载背景；必须使用反色组合",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "text.inverse": {
+          "type": "string",
+          "description": "反色表面上的文字与图标；不继承普通文字色",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "border.inverse": {
+          "type": "string",
+          "description": "反色表面上的必要内部边界",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "focus.inverseRing": {
+          "type": "string",
+          "description": "邻接反色表面时的键盘焦点环；由实际邻接面决定",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.1.background": {
+          "type": "string",
+          "description": "无顺序类别槽 1 的柔和填充背景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.1.foreground": {
+          "type": "string",
+          "description": "类别槽 1 填充上的文字，或中性面上的分类文字、图形与数据线",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.1.border": {
+          "type": "string",
+          "description": "类别槽 1 的必要边界；不表达成功、失败或排序",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.2.background": {
+          "type": "string",
+          "description": "无顺序类别槽 2 的柔和填充背景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.2.foreground": {
+          "type": "string",
+          "description": "类别槽 2 填充上的文字，或中性面上的分类文字、图形与数据线",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.2.border": {
+          "type": "string",
+          "description": "类别槽 2 的必要边界；不表达成功、失败或排序",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.3.background": {
+          "type": "string",
+          "description": "无顺序类别槽 3 的柔和填充背景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.3.foreground": {
+          "type": "string",
+          "description": "类别槽 3 填充上的文字，或中性面上的分类文字、图形与数据线",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.3.border": {
+          "type": "string",
+          "description": "类别槽 3 的必要边界；不表达成功、失败或排序",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.4.background": {
+          "type": "string",
+          "description": "无顺序类别槽 4 的柔和填充背景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.4.foreground": {
+          "type": "string",
+          "description": "类别槽 4 填充上的文字，或中性面上的分类文字、图形与数据线",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.4.border": {
+          "type": "string",
+          "description": "类别槽 4 的必要边界；不表达成功、失败或排序",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.5.background": {
+          "type": "string",
+          "description": "无顺序类别槽 5 的柔和填充背景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.5.foreground": {
+          "type": "string",
+          "description": "类别槽 5 填充上的文字，或中性面上的分类文字、图形与数据线",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.5.border": {
+          "type": "string",
+          "description": "类别槽 5 的必要边界；不表达成功、失败或排序",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.6.background": {
+          "type": "string",
+          "description": "无顺序类别槽 6 的柔和填充背景",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.6.foreground": {
+          "type": "string",
+          "description": "类别槽 6 填充上的文字，或中性面上的分类文字、图形与数据线",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
+        "category.6.border": {
+          "type": "string",
+          "description": "类别槽 6 的必要边界；不表达成功、失败或排序",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        }
+      }
+    }
+  }
+}

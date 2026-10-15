@@ -1,227 +1,219 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { ThemeMode, ResolvedTheme, ThemeSnapshot } from "@lodestory/sdk/theme";
+import type { ResolvedTheme, ThemeDefaults, ThemePreference, ThemeType } from "@lodestory/sdk/theme";
+import { isThemeType } from "./resolveTheme";
+import { createThemeManager, isThemePreference } from "./themeManager";
 
-export const THEME_STORAGE_KEY = "lodestory.theme-mode";
+export const THEME_STORAGE_KEY = "lodestory.theme-preference";
+const LEGACY_STORAGE_KEY = "lodestory.theme-mode";
 const CHANNEL_NAME = "lodestory.appearance";
-const listeners = new Set<() => void>();
-let channel: BroadcastChannel | null = null;
+// 跨插件重挂载仍串行调用同一个原生窗口，避免旧请求晚完成后覆盖新外观。
 let nativeQueue: Promise<void> = Promise.resolve();
 
-export function isThemeMode(value: unknown): value is ThemeMode {
-  return value === "dark" || value === "light" || value === "system";
-}
+/** 每次插件激活创建独立状态；配色由默认主题提供者注入。 */
+export function createThemeStore(defaults: ThemeDefaults) {
+  const defaultThemeIds = Object.freeze({ dark: defaults.dark.id, light: defaults.light.id });
+  let stopSync: (() => void) | undefined;
+  const defaultPreference: ThemePreference = { mode: "fixed", themeId: defaultThemeIds.dark };
+  let channel: BroadcastChannel | null = null;
+  let syncGeneration = 0;
+  let syncing = false;
 
-function isResolvedTheme(value: unknown): value is ResolvedTheme {
-  return value === "dark" || value === "light";
-}
-
-function readThemeMode(): ThemeMode {
-  try {
-    const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
-    return isThemeMode(saved) ? saved : "dark";
-  } catch {
-    return "dark";
-  }
-}
-
-function readSystemTheme(): ResolvedTheme {
-  try {
-    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  } catch {
-    return "dark";
-  }
-}
-
-export function resolveTheme(mode: ThemeMode, systemTheme: ResolvedTheme): ResolvedTheme {
-  return mode === "system" ? systemTheme : mode;
-}
-
-function applyDocumentTheme(theme: ResolvedTheme) {
-  const root = document.documentElement;
-  root.dataset.uiTheme = theme;
-  root.style.colorScheme = theme;
-  root.style.removeProperty("background-color");
-}
-
-const initialMode = readThemeMode();
-let snapshot: ThemeSnapshot = {
-  mode: initialMode,
-  resolvedTheme: resolveTheme(initialMode, readSystemTheme()),
-  persistenceError: false,
-  windowError: false,
-};
-applyDocumentTheme(snapshot.resolvedTheme);
-
-function updateSnapshot(patch: Partial<ThemeSnapshot>) {
-  const next = { ...snapshot, ...patch };
-  if (
-    next.mode === snapshot.mode &&
-    next.resolvedTheme === snapshot.resolvedTheme &&
-    next.persistenceError === snapshot.persistenceError &&
-    next.windowError === snapshot.windowError
-  ) {
-    return;
-  }
-  if (next.resolvedTheme !== snapshot.resolvedTheme) {
-    applyDocumentTheme(next.resolvedTheme);
-  }
-  snapshot = next;
-  listeners.forEach((listener) => listener());
-}
-
-export function getThemeSnapshot(): ThemeSnapshot {
-  return snapshot;
-}
-
-export function subscribeTheme(listener: () => void) {
-  listeners.add(listener);
-  return () => { listeners.delete(listener); };
-}
-
-// Serialize native calls so a slower earlier request cannot overwrite a newer choice.
-function syncWindowTheme() {
-  if (!isTauri()) return;
-
-  const requestedMode = snapshot.mode;
-  nativeQueue = nativeQueue.then(async () => {
-    if (requestedMode !== snapshot.mode) return;
+  function readSystemTheme(): ThemeType {
     try {
-      const appWindow = getCurrentWindow();
-      await appWindow.setTheme(requestedMode === "system" ? null : requestedMode);
-      if (requestedMode !== snapshot.mode) return;
-
-      if (requestedMode === "system") {
-        const actual = await appWindow.theme();
-        if (snapshot.mode !== requestedMode) return;
-        updateSnapshot({
-          resolvedTheme: isResolvedTheme(actual) ? actual : readSystemTheme(),
-          windowError: false,
-        });
-      } else {
-        updateSnapshot({ windowError: false });
-      }
+      return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
     } catch {
-      if (requestedMode === snapshot.mode) {
-        updateSnapshot({ windowError: true });
+      return "dark";
+    }
+  }
+
+  const manager = createThemeManager([defaults.dark, defaults.light], defaultThemeIds, defaultPreference, readSystemTheme());
+  function parsePreference(saved: string | null): ThemePreference {
+    try {
+      const value: unknown = JSON.parse(saved ?? "null");
+      if (isThemePreference(value)) {
+        manager.checkPreference(value, false);
+        return value;
       }
+    } catch { /* Ignore invalid preferences without preventing startup. */ }
+    return defaultPreference;
+  }
+  function readPreference(): ThemePreference {
+    try {
+      const saved = window.localStorage.getItem(THEME_STORAGE_KEY);
+      if (saved !== null) return parsePreference(saved);
+      // Migrate the old selection in memory; the next successful save writes the new format.
+      const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (legacy === "light") return { mode: "fixed", themeId: defaultThemeIds.light };
+      if (legacy === "system") return { mode: "system", lightThemeId: defaultThemeIds.light, darkThemeId: defaultThemeIds.dark };
+    } catch { /* Storage is optional; the session can still switch themes. */ }
+    return defaultPreference;
+  }
+  manager.setPreference(readPreference());
+
+  function applyDocumentTheme(theme: ResolvedTheme) {
+    const root = document.documentElement;
+    root.dataset.uiTheme = theme.type;
+    root.dataset.uiThemeId = theme.id;
+    for (const [name, value] of Object.entries(theme.cssVariables)) root.style.setProperty(name, value);
+    root.style.colorScheme = theme.type;
+    root.style.removeProperty("background-color");
+  }
+  const getThemeSnapshot = manager.getSnapshot;
+  const subscribeTheme = manager.subscribe;
+  const registerTheme = manager.registerTheme;
+
+  // Only the native appearance depends on light/dark; DOM colors always follow the theme ID.
+  function nativeAppearance() {
+    const { preference, theme } = manager.getSnapshot();
+    return preference.mode === "system" ? null : theme.type;
+  }
+  let appliedTheme = getThemeSnapshot().theme;
+  let appliedNativeAppearance = nativeAppearance();
+  applyDocumentTheme(appliedTheme);
+  const unsubscribeDocument = manager.subscribe(() => {
+    const theme = getThemeSnapshot().theme;
+    if (theme !== appliedTheme) {
+      appliedTheme = theme;
+      applyDocumentTheme(theme);
+    }
+    const appearance = nativeAppearance();
+    if (appearance !== appliedNativeAppearance) {
+      appliedNativeAppearance = appearance;
+      if (syncing) syncWindowTheme();
     }
   });
-}
 
-function receiveMode(mode: ThemeMode, persistenceError = false) {
-  updateSnapshot({
-    mode,
-    resolvedTheme: resolveTheme(mode, readSystemTheme()),
-    persistenceError,
-  });
-  syncWindowTheme();
-}
-
-export function setThemeMode(mode: ThemeMode) {
-  if (!isThemeMode(mode)) return;
-
-  let persistenceError = false;
-  try {
-    window.localStorage.setItem(THEME_STORAGE_KEY, mode);
-  } catch {
-    persistenceError = true;
-  }
-  receiveMode(mode, persistenceError);
-
-  // Storage events cover saved preferences; the channel also shares a session-only choice.
-  try {
-    channel?.postMessage({ mode, persistenceError });
-  } catch {
-    // Live application changes still work if cross-window messaging is unavailable.
-  }
-}
-
-export function retryTheme() {
-  setThemeMode(snapshot.mode);
-}
-
-export function whenNativeThemeReady() {
-  return nativeQueue;
-}
-
-export function startThemeSync() {
-  let disposed = false;
-  let media: MediaQueryList | null = null;
-  let removeMediaListener: (() => void) | undefined;
-  let unlistenNative: (() => void) | undefined;
-  let localChannel: BroadcastChannel | null = null;
-
-  function handleSystemChange() {
-    if (snapshot.mode === "system") {
-      updateSnapshot({ resolvedTheme: readSystemTheme() });
-    }
-  }
-
-  function handleStorage(event: StorageEvent) {
-    if (event.key !== THEME_STORAGE_KEY && event.key !== null) return;
-    try {
-      if (event.storageArea !== window.localStorage) return;
-    } catch {
-      return;
-    }
-    receiveMode(isThemeMode(event.newValue) ? event.newValue : "dark");
-  }
-
-  try {
-    media = window.matchMedia("(prefers-color-scheme: light)");
-    if (typeof media.addEventListener === "function") {
-      media.addEventListener("change", handleSystemChange);
-      const observedMedia = media;
-      removeMediaListener = () => observedMedia.removeEventListener("change", handleSystemChange);
-    } else {
-      media.addListener(handleSystemChange);
-      const observedMedia = media;
-      removeMediaListener = () => observedMedia.removeListener(handleSystemChange);
-    }
-  } catch {
-    // A missing system appearance API resolves to the documented dark fallback.
-  }
-
-  window.addEventListener("storage", handleStorage);
-
-  try {
-    localChannel = new BroadcastChannel(CHANNEL_NAME);
-    channel = localChannel;
-    localChannel.onmessage = (event: MessageEvent<unknown>) => {
-      const data = event.data;
-      if (typeof data !== "object" || data === null) return;
-      const message = data as { mode?: unknown; persistenceError?: unknown };
-      if (isThemeMode(message.mode)) {
-        receiveMode(message.mode, message.persistenceError === true);
+  // Serialize native calls and invalidate obsolete completions, including after unmount.
+  function syncWindowTheme() {
+    if (!isTauri() || !syncing) return;
+    const generation = ++syncGeneration;
+    const appearance = nativeAppearance();
+    nativeQueue = nativeQueue.then(async () => {
+      if (!syncing || generation !== syncGeneration) return;
+      try {
+        const appWindow = getCurrentWindow();
+        await appWindow.setTheme(appearance);
+        if (!syncing || generation !== syncGeneration) return;
+        if (appearance === null) {
+          const actual = await appWindow.theme();
+          if (!syncing || generation !== syncGeneration) return;
+          manager.setSystemType(isThemeType(actual) ? actual : readSystemTheme());
+        }
+        manager.setErrors({ windowError: false });
+      } catch {
+        if (syncing && generation === syncGeneration) manager.setErrors({ windowError: true });
       }
-    };
-  } catch {
-    // Storage events remain available when BroadcastChannel is unsupported.
-  }
-
-  if (isTauri()) {
-    void getCurrentWindow().onThemeChanged(({ payload }) => {
-      if (!disposed && snapshot.mode === "system" && isResolvedTheme(payload)) {
-        updateSnapshot({ resolvedTheme: payload });
-      }
-    }).then((unlisten) => {
-      if (disposed) unlisten();
-      else unlistenNative = unlisten;
-    }).catch(() => {
-      // The media query listener remains the fallback for system appearance changes.
     });
   }
 
-  handleSystemChange();
-  syncWindowTheme();
+  function receivePreference(preference: ThemePreference, persistenceError = false) {
+    manager.setPreference(preference, { persistenceError });
+  }
+  function savePreference(preference: ThemePreference) {
+    let persistenceError = false;
+    try {
+      window.localStorage.setItem(THEME_STORAGE_KEY, JSON.stringify(preference));
+    } catch {
+      persistenceError = true;
+    }
+    receivePreference(preference, persistenceError);
+    try {
+      channel?.postMessage({ preference, persistenceError });
+    } catch { /* Storage events still synchronize successfully saved choices. */ }
+  }
+  function setThemePreference(preference: ThemePreference) {
+    manager.checkPreference(preference, true);
+    savePreference(preference);
+  }
+  function retryTheme() {
+    // Preserve an unavailable choice until its contributing plugin registers again.
+    savePreference(getThemeSnapshot().preference);
+    syncWindowTheme();
+  }
+  function whenNativeThemeReady() {
+    return nativeQueue;
+  }
 
-  return () => {
-    disposed = true;
-    removeMediaListener?.();
-    window.removeEventListener("storage", handleStorage);
-    unlistenNative?.();
-    localChannel?.close();
-    if (channel === localChannel) channel = null;
+  function startThemeSync() {
+    stopSync?.();
+    let disposed = false;
+    let removeMediaListener: (() => void) | undefined;
+    let unlistenNative: (() => void) | undefined;
+    let localChannel: BroadcastChannel | null = null;
+    syncing = true;
+    // 先登记清理函数，平台 API 在初始化中抛错时也能释放已取得的资源。
+    stopSync = () => {
+      if (disposed) return;
+      disposed = true;
+      syncing = false;
+      ++syncGeneration;
+      removeMediaListener?.();
+      window.removeEventListener("storage", handleStorage);
+      unlistenNative?.();
+      if (localChannel) localChannel.onmessage = null;
+      localChannel?.close();
+      if (channel === localChannel) channel = null;
+    };
+
+    function handleSystemChange() {
+      manager.setSystemType(readSystemTheme());
+    }
+    function handleStorage(event: StorageEvent) {
+      if (event.key !== THEME_STORAGE_KEY && event.key !== null) return;
+      try {
+        if (event.storageArea !== window.localStorage) return;
+      } catch { return; }
+      receivePreference(parsePreference(event.newValue));
+    }
+    try {
+      const media = window.matchMedia("(prefers-color-scheme: light)");
+      if (typeof media.addEventListener === "function") {
+        media.addEventListener("change", handleSystemChange);
+        removeMediaListener = () => media.removeEventListener("change", handleSystemChange);
+      } else {
+        media.addListener(handleSystemChange);
+        removeMediaListener = () => media.removeListener(handleSystemChange);
+      }
+    } catch { /* A missing system appearance API uses the dark fallback. */ }
+    window.addEventListener("storage", handleStorage);
+    try {
+      localChannel = new BroadcastChannel(CHANNEL_NAME);
+      channel = localChannel;
+      localChannel.onmessage = (event: MessageEvent<unknown>) => {
+        if (disposed) return;
+        const data = event.data;
+        if (typeof data !== "object" || data === null) return;
+        const message = data as { preference?: unknown; persistenceError?: unknown };
+        if (!isThemePreference(message.preference)) return;
+        try {
+          manager.checkPreference(message.preference, false);
+          receivePreference(message.preference, message.persistenceError === true);
+        } catch { /* A malformed preference from another window is ignored. */ }
+      };
+    } catch { /* Storage events work without BroadcastChannel. */ }
+    if (isTauri()) {
+      void getCurrentWindow().onThemeChanged(({ payload }) => {
+        if (!disposed && getThemeSnapshot().preference.mode === "system" && isThemeType(payload)) manager.setSystemType(payload);
+      }).then(unlisten => {
+        if (disposed) unlisten();
+        else unlistenNative = unlisten;
+      }).catch(() => { /* The media query remains the system appearance fallback. */ });
+    }
+    handleSystemChange();
+    syncWindowTheme();
+    return stopSync;
+  }
+
+  return {
+    getThemeSnapshot, subscribeTheme, registerTheme, setThemePreference, retryTheme,
+    whenNativeThemeReady, startThemeSync,
+    dispose() {
+      try {
+        stopSync?.();
+      } finally {
+        unsubscribeDocument();
+      }
+    },
   };
 }

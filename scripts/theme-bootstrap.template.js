@@ -1,0 +1,40 @@
+/* Resolve the initial theme before styles and React load. */
+(function () {
+  var catalog = /* THEME_CATALOG */ [];
+  var dark = catalog.find(function (theme) { return theme.type === "dark"; });
+  var light = catalog.find(function (theme) { return theme.type === "light"; });
+  var preference = { mode: "fixed", themeId: dark.id };
+  try {
+    var saved = window.localStorage.getItem("lodestory.theme-preference");
+    if (saved !== null) {
+      var value = JSON.parse(saved);
+      var id = function (v) { return typeof v === "string" && v.length > 0 && v.length <= 144; };
+      if (value && typeof value === "object" && (
+        (value.mode === "fixed" && Object.keys(value).length === 2 && id(value.themeId)) ||
+        (value.mode === "system" && Object.keys(value).length === 3 && id(value.lightThemeId) && id(value.darkThemeId))
+      )) preference = value;
+    } else {
+      var legacy = window.localStorage.getItem("lodestory.theme-mode");
+      if (legacy === "light") preference = { mode: "fixed", themeId: light.id };
+      if (legacy === "system") preference = { mode: "system", lightThemeId: light.id, darkThemeId: dark.id };
+    }
+  } catch (_) { /* Unavailable settings must not prevent startup. */ }
+
+  // Reject a known theme in the wrong system slot just as the runtime does.
+  if (preference.mode === "system" && catalog.some(function (theme) {
+    return (theme.id === preference.lightThemeId && theme.type !== "light") ||
+      (theme.id === preference.darkThemeId && theme.type !== "dark");
+  })) preference = { mode: "fixed", themeId: dark.id };
+  var type = "dark";
+  if (preference.mode === "system") {
+    try { type = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"; }
+    catch (_) { /* Dark is the fallback when system appearance is unavailable. */ }
+  }
+  var requested = preference.mode === "fixed" ? preference.themeId : type === "light" ? preference.lightThemeId : preference.darkThemeId;
+  var theme = catalog.find(function (item) { return item.id === requested; }) || (type === "light" ? light : dark);
+  var root = document.documentElement;
+  root.dataset.uiTheme = theme.type;
+  root.dataset.uiThemeId = theme.id;
+  root.style.colorScheme = theme.type;
+  root.style.backgroundColor = theme.background;
+})();

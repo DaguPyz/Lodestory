@@ -1,4 +1,4 @@
-import type { ResolvedTheme, ThemeDefinition, ThemePreference, ThemeSnapshot, ThemeType } from "@lodestory/sdk/theme";
+import type { ResolvedTheme, ThemeConfig, ThemeDefinition, ThemePreference, ThemeSnapshot, ThemeType } from "@lodestory/sdk/theme";
 import { resolveThemeDefinition } from "./resolveTheme";
 
 export function isThemePreference(value: unknown): value is ThemePreference {
@@ -11,8 +11,10 @@ export function isThemePreference(value: unknown): value is ThemePreference {
 }
 
 /** 纯主题目录与选择逻辑，不访问 DOM、存储或原生窗口。 */
-export function createThemeManager(definitions: readonly ThemeDefinition[], defaults: Readonly<Record<ThemeType, string>>, initialPreference: ThemePreference, initialSystemType: ThemeType) {
-  const defaultThemeIds = Object.freeze({ ...defaults });
+export function createThemeManager(config: ThemeConfig, initialPreference: ThemePreference, initialSystemType: ThemeType) {
+  const fallbackThemeIds = Object.freeze({ ...config.fallbackThemeIds });
+  const defaultThemeId = config.defaultThemeId;
+  let started = false;
   const themes = new Map<string, ResolvedTheme>();
   const listeners = new Set<() => void>();
   const rememberedTypes = new Map<string, ThemeType>();
@@ -23,10 +25,6 @@ export function createThemeManager(definitions: readonly ThemeDefinition[], defa
     themes.set(theme.id, theme);
     rememberedTypes.set(theme.id, theme.type);
     return theme;
-  }
-  definitions.forEach(add);
-  for (const type of ["dark", "light"] as const) {
-    if (themes.get(defaultThemeIds[type])?.type !== type) throw new Error(`Missing ${type} fallback theme.`);
   }
   function checkPreference(preference: ThemePreference, requireAvailable: boolean) {
     if (!isThemePreference(preference)) throw new Error("Invalid theme preference.");
@@ -41,11 +39,16 @@ export function createThemeManager(definitions: readonly ThemeDefinition[], defa
     const id = preference.mode === "fixed" ? preference.themeId : systemType === "light" ? preference.lightThemeId : preference.darkThemeId;
     const theme = themes.get(id);
     const type = preference.mode === "system" ? systemType : rememberedTypes.get(id) ?? "dark";
-    if (theme && (preference.mode === "fixed" || theme.type === type)) return { theme, unavailableThemeId: null };
-    return { theme: themes.get(defaultThemeIds[type])!, unavailableThemeId: id };
+    const selected = theme && (preference.mode === "fixed" || theme.type === type) ? theme : null;
+    const configured = themes.get(fallbackThemeIds[type]);
+    const fallback = (configured?.type === type ? configured : undefined)
+      ?? [...themes.values()].find(item => item.type === type)
+      ?? themes.values().next().value ?? null;
+    return { theme: started ? selected ?? fallback : null, unavailableThemeId: selected ? null : id };
   }
+
   checkPreference(initialPreference, false);
-  let snapshot: ThemeSnapshot = Object.freeze({ preference: Object.freeze({ ...initialPreference }), ...selection(initialPreference), themes: Object.freeze([...themes.values()]), defaultThemeIds, persistenceError: false, windowError: false });
+  let snapshot: ThemeSnapshot = Object.freeze({ preference: Object.freeze({ ...initialPreference }), ...selection(initialPreference), themes: Object.freeze([...themes.values()]), fallbackThemeIds, persistenceError: false, windowError: false });
   function update(patch: Partial<ThemeSnapshot> = {}, catalogChanged = false) {
     const preference = patch.preference ?? snapshot.preference;
     const next = { ...snapshot, ...patch, ...selection(preference), themes: catalogChanged ? Object.freeze([...themes.values()]) : snapshot.themes };
@@ -55,6 +58,15 @@ export function createThemeManager(definitions: readonly ThemeDefinition[], defa
   }
   return {
     getSnapshot: () => snapshot,
+    start() {
+      if (started) return;
+      if (!themes.has(defaultThemeId)) throw new Error(`Default theme '${defaultThemeId}' is not registered.`);
+      for (const type of ["dark", "light"] as const) {
+        if (themes.get(fallbackThemeIds[type])?.type !== type) throw new Error(`Missing ${type} fallback theme '${fallbackThemeIds[type]}'.`);
+      }
+      started = true;
+      update();
+    },
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     checkPreference,
     setPreference(preference: ThemePreference, errors: Partial<Pick<ThemeSnapshot, "persistenceError" | "windowError">> = {}) {

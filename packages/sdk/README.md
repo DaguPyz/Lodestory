@@ -6,7 +6,7 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 
 - `@lodestory/sdk`：`Plugin`、`PluginContext`、能力 key 与事件 key 类型和创建函数。
 - `@lodestory/sdk/ui`：UI 服务类型与共享单例 `uiKey`。
-- `@lodestory/sdk/theme`：主题定义、默认配色贡献、选择策略、管理服务和快照类型，以及共享单例 `themeDefaultsKey`、`themeKey`。
+- `@lodestory/sdk/theme`：主题定义、仅含 ID 的选择配置、选择策略、管理服务和快照类型，以及共享单例 `themeKey`。
 
 ## 生命周期与 key
 
@@ -91,6 +91,8 @@ export const pagePlugin: Plugin = {
 };
 ```
 
+`UiWrapper.prepare` 是可选的根视图准备回调：所有初始插件激活后，UI 按 `order` 依次执行并等待，再创建 React 根。准备失败使启动回滚；回调不能等待尚未创建的 UI，也不能依赖较晚的 `pluginsReady` 监听者完成。
+
 主题管理器和其他插件共享 `themeKey`。内置与自定义主题在同一目录中按 ID 选择，`type` 只是深浅属性，用于原生窗口外观、标准缺省值及跟随系统时的匹配。注册返回清理函数，贡献主题的插件卸载时必须调用：
 
 ```ts
@@ -122,11 +124,11 @@ export const inkThemePlugin: Plugin = {
 };
 ```
 
-`setPreference({ mode: "system", lightThemeId, darkThemeId })` 指定系统浅色和深色时各用哪套主题；两个 ID 必须已登记且属性匹配。`getSnapshot().theme` 是实际使用的主题，包含补齐后的 `colors` 与映射后的 `cssVariables`。缺省值来自标准登记表，不继承另一主题。已选主题被移除时保留选择并临时使用默认主题；重新登记后自动恢复，`unavailableThemeId` 用于显示提示。
+`setPreference({ mode: "system", lightThemeId, darkThemeId })` 指定系统浅色和深色时各用哪套主题；两个 ID 必须已登记且属性匹配。`getSnapshot().theme` 是实际使用的完整主题；启动准备前或目录为空时为 `null`，读取颜色前须判断。缺省颜色来自标准登记表，不继承另一主题。已选主题移除后保留选择并回退，重新登记后自动恢复，`unavailableThemeId` 用于显示提示。
 
-应用启动前另由一个配色插件提供 `themeDefaultsKey`，值为 `ThemeDefaults`（`dark`、`light` 两份普通主题定义）。管理器依赖这项能力，先按相同规则解析登记默认主题，再提供 `themeKey`；因此第一份快照已有可用配色，也不会与贡献插件形成循环依赖。默认配色提供者须在管理器停用后卸载，由内核的依赖规则保证。应用当前选择 [builtin-themes 插件](../../src/plugins/builtin-themes/builtinThemesPlugin.ts)；其他配色插件按上例使用 `registerTheme` 即可。
+主题管理插件自行读取 [theme-config.json](../../src/plugins/theme/theme-config.json)，按 `ThemeConfig` 处理；应用仅装配插件。其中 `defaultThemeId` 和 `fallbackThemeIds.dark/light` 都只是 ID。管理器先提供 `themeKey`，包括 [builtin-themes](../../src/plugins/builtin-themes/builtinThemesPlugin.ts) 在内的所有配色插件统一按上例登记。初始插件全部激活后，主题包装层的 `prepare` 校验默认与回退 ID，再应用配色、等待原生同步；UI 随后才挂载。缺失或属性不匹配会中止启动，没有内置配色专用入口。
 
-设置页通过 `getSnapshot().defaultThemeIds` 读取默认系统槽位与回退主题 ID，不导入具体配色文件。默认职责只是启动配置，目录中的主题依然平级。
+设置页读取 `getSnapshot().fallbackThemeIds` 初始化系统槽位，不导入具体配色文件。内置和自定义贡献都可撤销；若配置的回退项也缺失，则依次选择同属性的其他项、任一剩余项，目录为空时返回 `null`。默认职责是 ID 配置，所有主题仍平级。
 
 当前注册处理同一进程中已加载的主题数据，检查格式、角色名称及透明度；主题包导入、持久化安装、B 对比度警告尚未接入。自定义主题须由插件在每次启动时重新登记。设计见[主题管理](../../文档/需求设计/主题管理.md)，数据契约见[主题标准 v1](../../文档/主题标准-v1.md)。
 

@@ -1,9 +1,10 @@
 /* Resolve the initial theme before styles and React load. */
 (function () {
   var catalog = /* THEME_CATALOG */ [];
-  var dark = catalog.find(function (theme) { return theme.type === "dark"; });
-  var light = catalog.find(function (theme) { return theme.type === "light"; });
-  var preference = { mode: "fixed", themeId: dark.id };
+  var config = /* THEME_CONFIG */ {};
+  var dark = catalog.find(function (theme) { return theme.id === config.fallbackThemeIds.dark; });
+  var light = catalog.find(function (theme) { return theme.id === config.fallbackThemeIds.light; });
+  var preference = { mode: "fixed", themeId: config.defaultThemeId };
   try {
     var saved = window.localStorage.getItem("lodestory.theme-preference");
     if (saved !== null) {
@@ -15,6 +16,7 @@
       )) preference = value;
     } else {
       var legacy = window.localStorage.getItem("lodestory.theme-mode");
+      if (legacy === "dark") preference = { mode: "fixed", themeId: dark.id };
       if (legacy === "light") preference = { mode: "fixed", themeId: light.id };
       if (legacy === "system") preference = { mode: "system", lightThemeId: light.id, darkThemeId: dark.id };
     }
@@ -24,7 +26,7 @@
   if (preference.mode === "system" && catalog.some(function (theme) {
     return (theme.id === preference.lightThemeId && theme.type !== "light") ||
       (theme.id === preference.darkThemeId && theme.type !== "dark");
-  })) preference = { mode: "fixed", themeId: dark.id };
+  })) preference = { mode: "fixed", themeId: config.defaultThemeId };
   var type = "dark";
   if (preference.mode === "system") {
     try { type = window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"; }

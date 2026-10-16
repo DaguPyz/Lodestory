@@ -77,7 +77,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["error-ui", "ui", "builtin-themes", "theme", "context-menu", "welcome", "editor", "settings"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["error-ui", "ui", "theme", "builtin-themes", "context-menu", "welcome", "editor", "settings"]);
   assert.deepEqual(fixture.appPluginsCalls, [[]]);
   const entryImports = fixture.moduleImports
     .filter(({ from }) => from === "main.tsx")
@@ -230,9 +230,9 @@ test("a plugin activation failure rolls back resources and shows the native erro
   assert.equal(fixture.rootCalls.length, 0);
   errorPage(fixture);
   assert.ok(collectErrors(reportedFailure(fixture)).includes(activationError));
-  assert.equal(fixture.channels[0].closed, true);
+  assert.equal(fixture.channels.length, 0);
   assert.equal(fixture.mediaListeners.size, 0);
-  assert.equal(fixture.logs.filter((entry) => entry === "channel.close").length, 1);
+  assert.equal(fixture.logs.filter((entry) => entry === "channel.close").length, 0);
 });
 
 test("a missing theme capability rolls back before page plugins register or render", async () => {
@@ -245,7 +245,7 @@ test("a missing theme capability rolls back before page plugins register or rend
   assert.equal(fixture.rootCalls.length, 0);
   errorPage(fixture);
   assert.equal(fixture.lifecycle.some((entry) => /^activate:(welcome|editor|settings):complete$/.test(entry)), false);
-  assert.equal(fixture.channels[0].closed, true);
+  assert.equal(fixture.channels.length, 0);
   assert.equal(fixture.mediaListeners.size, 0);
   assert.equal(fixture.createdCores.at(-1).isMounted("theme"), false);
 });
@@ -379,4 +379,33 @@ test("the UI plugin resolves the app root container itself", async () => {
   await flushStartup();
   assert.equal(fixture.rootCalls.length, 1);
   assert.equal(fixture.rootCalls[0].container, fixture.rootElement);
+});
+
+test("all initial theme contributions are registered before the selected palette and native appearance are applied", async () => {
+  const gate = deferred();
+  const theme = { schemaVersion: 1, id: "example.initial.paper", name: "Paper", type: "light", colors: { "surface.content": "#EEDDCC" } };
+  const fixture = createMainFixture({ nativeSetGate: gate.promise, themeDefinitions: [theme], preference: { mode: "fixed", themeId: theme.id } });
+  fixture.start();
+  await flushStartup();
+  assert.ok(fixture.lifecycle.includes("activate:test-custom-themes:complete"));
+  assert.equal(fixture.rootCalls.length, 0);
+  assert.deepEqual(fixture.nativeCalls, ["light"]);
+  assert.deepEqual(fixture.themeApplications, [{ id: theme.id, value: "#EEDDCC" }]);
+  gate.resolve();
+  await flushStartup();
+  assert.equal(fixture.rootCalls.length, 1);
+  assert.equal(fixture.getService(themeKey(fixture)).getSnapshot().theme.id, theme.id);
+});
+
+test("missing configured themes abort startup and roll back all plugins before React mounts", async () => {
+  const fixture = createMainFixture({ omitBuiltinThemes: true });
+  fixture.start();
+  await flushStartup();
+  assert.equal(fixture.rootCalls.length, 0);
+  assert.equal(fixture.nativeCalls.length, 0);
+  assert.equal(fixture.channels.length, 0);
+  assert.deepEqual(fixture.themeApplications, []);
+  errorPage(fixture);
+  assert.ok(collectErrors(reportedFailure(fixture)).some(error => /Default theme.*not registered/.test(error.message ?? "")));
+  for (const id of fixture.catalogPluginIds) assert.equal(fixture.createdCores.at(-1).isMounted(id), false);
 });

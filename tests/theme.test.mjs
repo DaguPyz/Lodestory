@@ -89,7 +89,10 @@ test("missing colors come from standard defaults, never another theme's palette"
   const { createThemeManager } = f.loadModule("plugins/theme/themeManager.ts");
   const dark = custom("example.test.dark", "dark", { "surface.content": "#111111" });
   const light = custom("example.test.light", "light", {});
-  const manager = createThemeManager([dark, light], { dark: dark.id, light: light.id }, { mode: "fixed", themeId: dark.id }, "dark");
+  const manager = createThemeManager({ defaultThemeId: dark.id, fallbackThemeIds: { dark: dark.id, light: light.id } }, { mode: "fixed", themeId: dark.id }, "dark");
+  manager.registerTheme(dark);
+  manager.registerTheme(light);
+  manager.start();
   manager.registerTheme(custom());
   manager.setPreference({ mode: "fixed", themeId: custom().id });
   assert.equal(manager.getSnapshot().theme.colors["surface.content"], "#14181D");

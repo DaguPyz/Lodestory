@@ -1,0 +1,7 @@
+{
+  "defaultThemeId": "lodestory.builtin.dark",
+  "fallbackThemeIds": {
+    "dark": "lodestory.builtin.dark",
+    "light": "lodestory.builtin.light"
+  }
+}

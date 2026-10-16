@@ -133,10 +133,11 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                 addWrapper(wrapper) {
                     checkRegistrationAllowed();
                     // 固定本次登记的描述，后续修改调用方的对象不会改变装配规则。
-                    const entry = {id: wrapper.id, order: wrapper.order, wrap: wrapper.wrap};
+                    const entry = {id: wrapper.id, order: wrapper.order, wrap: wrapper.wrap, prepare: wrapper.prepare};
                     if (!entry.id.trim()) throw new Error("UI wrapper id cannot be empty.");
                     if (!Number.isFinite(entry.order)) throw new Error("UI wrapper order must be finite.");
                     if (typeof entry.wrap !== "function") throw new Error("UI wrapper must have a wrap function.");
+                    if (entry.prepare !== undefined && typeof entry.prepare !== "function") throw new Error("UI wrapper prepare must be a function.");
                     if (wrappers.has(entry.id)) throw new Error(`UI wrapper '${entry.id}' is already registered.`);
                     wrappers.set(entry.id, entry);
 
@@ -168,14 +169,19 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
             };
 
             context.provide(uiKey, service);
-            context.on(pluginsReady, () => {
+            context.on(pluginsReady, async () => {
                 if (mountAttempted) return;
                 mountAttempted = true;
+                const sortedWrappers = [...wrappers.values()].sort((a, b) => a.order - b.order);
+                for (const entry of sortedWrappers) {
+                    if (entry.prepare) await entry.prepare();
+                    // 准备期间若已停用或撤销贡献，不得再创建根视图。
+                    if (!active || sortedWrappers.some(wrapper => wrappers.get(wrapper.id) !== wrapper)) return;
+                }
                 pages.start(initialPage);
                 navigationAllowed = true;
 
                 // 根视图由本插件提供；按 order 从内向外包装，最小 order 位于最外层。
-                const sortedWrappers = [...wrappers.values()].sort((a, b) => a.order - b.order);
                 const tree = sortedWrappers.reduceRight<ReactNode>(
                     (children, entry) => entry.wrap(children),
                     <UiPages service={service}/>,

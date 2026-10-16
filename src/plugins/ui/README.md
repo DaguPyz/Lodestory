@@ -4,13 +4,15 @@
 
 公共生命周期类型位于 [`@lodestory/sdk`](../../../packages/sdk/src/Plugin.ts)，UI 能力与页面类型位于 [`@lodestory/sdk/ui`](../../../packages/sdk/src/ui.ts)。`createUiPlugin` 与 `pluginsReady` 仍是宿主运行时实现；SDK 目前只提供同一 JavaScript realm 内的契约，不提供运行中热登记 API。
 
-启动到 `pluginsReady` 后，UI 插件选择显式配置的 `initialPage`；未指定时用第一个登记页面。随后它按包装层的 `order` 组装 Provider 与通用页面容器，再创建一个 React root。数值较小的 `order` 位于外层。页面调用 `openPage(id, params)` 切换并记录历史，页面收到自己的 `params`；`back()` 返回上一页并恢复它的参数。已访问页面继续留在树中，只隐藏非当前页面，因此切换时会保留其 React 组件实例和 Hook 状态。
+启动到 `pluginsReady` 后，所有初始插件已完成登记。UI 插件先按包装层的 `order` 依次调用并等待可选的 `prepare` 回调，全部成功后才选择显式配置的 `initialPage`；未指定时用第一个登记页面。随后它按包装层的 `order` 组装 Provider 与通用页面容器，再创建一个 React root。数值较小的 `order` 位于外层。页面调用 `openPage(id, params)` 切换并记录历史，页面收到自己的 `params`；`back()` 返回上一页并恢复它的参数。已访问页面继续留在树中，只隐藏非当前页面，因此切换时会保留其 React 组件实例和 Hook 状态。
+
+`prepare` 用于渲染前准备资源，例如主题插件在所有配色登记后应用选择并等待原生窗口同步。回调失败会中止启动并回滚；等待期间若包装层被撤销或 UI 停用，不会继续创建根视图。该回调不能等待 UI 渲染，也不能依赖较晚执行的 `pluginsReady` 监听者。
 
 本版只允许在 `pluginsReady` 前登记贡献，运行中不支持增删或重新挂载：撤销任一已挂载页面或包装层都会先卸载整棵 UI 树，之后不会自动重建。贡献插件的 `deactivate` 应先调用登记时保存的 disposer，再释放它提供给组件使用的资源；正常整体停止时 UI 插件按生命周期卸载 React root，再清理登记和导航状态。
 
 `error-ui` 插件通过 `errorUiKey` 提供稳定的 `ErrorBoundary` 错误边界和 `ErrorView`。UI 插件依赖该服务，并用 `ErrorBoundary` 包住根下的 Provider 与页面树；页面插件也可以在自己的页面内容周围使用 `ErrorBoundary`，让局部错误只替换对应页面内容。插件是否被卸载仍由运行时生命周期决定，错误边界只负责渲染错误视图。
 
-如果 React 的错误没有被 `ErrorBoundary` 捕获并到达根的 `onUncaughtError`，UI 插件会在同一个 root 用内置的简单错误界面替换当前树，不卸载 root 或已激活插件。这个最后兜底只恢复显示，不定位或停用某个业务插件。若真正的启动过程失败（例如插件激活或 `createRoot` 失败），内核会先回滚已激活插件，启动 Promise 拒绝后 `main.tsx` 调用 UI 模块的 `showUiStartupError` 显示 DOM 兜底页；该模块自行查找 `#root`，若根容器不存在则只报告原始启动错误与回滚错误，不会因再次渲染失败而抛错。正常停止、边界内错误、根级错误恢复和启动失败因此走不同的处理路径。
+如果 React 的错误没有被 `ErrorBoundary` 捕获并到达根的 `onUncaughtError`，UI 插件会在同一个 root 用内置的简单错误界面替换当前树，不卸载 root 或已激活插件。这个最后兜底只恢复显示，不定位或停用某个业务插件。若真正的启动过程失败（例如插件激活、包装层准备或 `createRoot` 失败），内核会先回滚已激活插件，启动 Promise 拒绝后 `main.tsx` 调用 UI 模块的 `showUiStartupError` 显示 DOM 兜底页；该模块自行查找 `#root`，若根容器不存在则只报告原始启动错误与回滚错误，不会因再次渲染失败而抛错。正常停止、边界内错误、根级错误恢复和启动失败因此走不同的处理路径。
 
 页面的 `render` 回调应返回 React 元素；若页面组件使用 Hook，要通过 JSX 创建它，不要直接调用组件函数：
 

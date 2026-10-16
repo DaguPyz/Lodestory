@@ -5,6 +5,8 @@ import { createServiceKey } from "./ServiceKey.js";
 export type UiWrapper = {
   readonly id: string;
   readonly order: number;
+  /** 初始插件全部激活后、根视图创建前执行并等待；用于准备包装层依赖的状态。失败会中止启动并回滚。 */
+  readonly prepare?: () => void | Promise<void>;
   readonly wrap: (children: ReactNode) => ReactNode;
 };
 

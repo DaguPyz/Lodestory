@@ -13,8 +13,8 @@ export function createAppPlugins(): readonly Plugin[] {
     return [
         createErrorUiPlugin(),
         createUiPlugin(),
-        createBuiltinThemesPlugin(),
         createThemePlugin(),
+        createBuiltinThemesPlugin(),
         createContextMenuPlugin(),
         createWelcomePlugin(),
         createEditorPlugin(),

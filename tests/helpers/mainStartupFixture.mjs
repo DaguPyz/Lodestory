@@ -13,7 +13,7 @@ export function deferred() {
   return { promise, resolve: resolvePromise };
 }
 
-export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false } = {}) {
+export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, preference } = {}) {
   const modules = new Map();
   const sdk = createSdkLoader({ modules });
   const createdCores = [];
@@ -28,11 +28,12 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const nativeListeners = new Set();
   const channels = [];
   const logs = [];
-  const storage = new Map();
+  const storage = new Map(preference ? [["lodestory.theme-preference", JSON.stringify(preference)]] : []);
+  const themeApplications = [];
   const rootElement = { children: [], textContent: "", innerHTML: "", append(child) { this.children.push(child); } };
   rootElement.replaceChildren = (...children) => { rootElement.children = children; };
   const document = {
-    documentElement: { dataset: {}, style: { setProperty() {}, removeProperty() {} } },
+    documentElement: { dataset: {}, style: { setProperty(name, value) { if (name === "--ui-surface-workspace") themeApplications.push({ id: document.documentElement.dataset.uiThemeId, value }); }, removeProperty() {} } },
     getElementById(id) { return id === "root" && !missingRoot ? rootElement : null; },
     createElement(tagName) {
       return {
@@ -277,8 +278,8 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     }
     if (relativePath === "plugins/theme/themePlugin.ts") {
       const createThemePlugin = exports.createThemePlugin;
-      exports.createThemePlugin = () => {
-        const plugin = createThemePlugin();
+      exports.createThemePlugin = (...args) => {
+        const plugin = createThemePlugin(...args);
         const activate = plugin.activate;
         plugin.activate = async (context) => {
           const pluginContext = omitThemeService
@@ -305,7 +306,16 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       const createAppPlugins = exports.createAppPlugins;
       exports.createAppPlugins = (...args) => {
         appPluginsCalls.push(args);
-        const plugins = createAppPlugins(...args);
+        const plugins = createAppPlugins(...args).filter(plugin => !omitBuiltinThemes || plugin.id !== "builtin-themes");
+        if (themeDefinitions.length) {
+          const { themeKey } = sdk.requireSdk("@lodestory/sdk/theme");
+          const removers = [];
+          plugins.push({
+            id: "test-custom-themes", requires: [themeKey], provides: [],
+            activate(context) { for (const theme of themeDefinitions) removers.push(context.get(themeKey).registerTheme(theme)); },
+            deactivate() { for (const remove of removers.splice(0).reverse()) remove(); },
+          });
+        }
         catalogPluginIds.push(...plugins.map(({ id }) => id));
         return plugins.map((plugin) => ({
           ...plugin,
@@ -352,6 +362,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     roots,
     rootElement,
     nativeCalls,
+    themeApplications,
     channels,
     mediaListeners,
     nativeListeners,

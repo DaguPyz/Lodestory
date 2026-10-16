@@ -529,3 +529,71 @@ test("deactivation cancels a pending recovery and ignores later uncaught callbac
   assert.equal(root.unmountCalls, 1);
   assert.throws(() => ui.openPage("home"), /no longer active/);
 });
+
+test("UI waits for snapshotted wrapper preparation in order after contribution registration", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi();
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const calls = [];
+  await contributor(f, "prepared-page", context => {
+    const ui = context.get(f.uiKey);
+    ui.registerPage(page("home"));
+    ui.addWrapper({ id: "later", order: 20, wrap: child => child, prepare() { calls.push("later"); } });
+    const wrapper = { id: "earlier", order: 10, wrap: child => child, async prepare() { calls.push("earlier"); await gate; } };
+    ui.addWrapper(wrapper);
+    wrapper.prepare = () => { throw new Error("mutated descriptor"); };
+  });
+  const ready = f.notifyReady();
+  await flushUiMicrotasks();
+  assert.deepEqual(calls, ["earlier"]);
+  assert.equal(f.roots.length, 0);
+  assert.throws(() => service.openPage("home"), /navigation requires/);
+  release();
+  await ready;
+  assert.deepEqual(calls, ["earlier", "later"]);
+  assert.equal(f.roots.length, 1);
+  await f.notifyReady();
+  assert.deepEqual(calls, ["earlier", "later"]);
+  await f.core.unmountAll();
+});
+
+test("wrapper preparation failure rolls startup back without creating a React root", async () => {
+  const f = uiPluginFixture();
+  let removed = false;
+  let removePage;
+  let removeWrapper;
+  const contributorPlugin = {
+    id: "failing-prepare", requires: [f.uiKey], provides: [],
+    activate(context) {
+      const ui = context.get(f.uiKey);
+      removePage = ui.registerPage(page("home"));
+      removeWrapper = ui.addWrapper({ id: "fails", order: 0, wrap: child => child, prepare() { throw new Error("prepare failed"); } });
+    },
+    deactivate() { removeWrapper(); removePage(); removed = true; },
+  };
+  await assert.rejects(f.core.start([contributorPlugin, f.createUiPlugin(f.container), f.createErrorUiPlugin()]), startupError(/prepare failed/));
+  assert.equal(f.roots.length, 0);
+  assert.equal(removed, true);
+  assert.equal(f.core.isMounted("ui"), false);
+});
+
+test("removing a wrapper during its asynchronous preparation prevents a late root mount", async () => {
+  const f = uiPluginFixture();
+  await f.mountUi();
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  let remove;
+  await contributor(f, "preparing", context => {
+    const ui = context.get(f.uiKey);
+    ui.registerPage(page("home"));
+    remove = ui.addWrapper({ id: "pending", order: 0, wrap: child => child, prepare: () => gate });
+  });
+  const ready = f.notifyReady();
+  await flushUiMicrotasks();
+  remove();
+  release();
+  await ready;
+  assert.equal(f.roots.length, 0);
+  await f.core.unmountAll();
+});

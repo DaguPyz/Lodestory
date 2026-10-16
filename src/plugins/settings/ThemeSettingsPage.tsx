@@ -32,16 +32,16 @@ type ThemeSettingsPageProps = {
 export function ThemeSettingsPage({ active, onBack }: ThemeSettingsPageProps) {
   const service = useThemeService();
   const heading = useRef<HTMLHeadingElement>(null);
-  const { preference, theme, themes, defaultThemeIds, unavailableThemeId, persistenceError, windowError } = useSyncExternalStore(
+  const { preference, theme, themes, fallbackThemeIds, unavailableThemeId, persistenceError, windowError } = useSyncExternalStore(
     service.subscribe,
     service.getSnapshot,
     service.getSnapshot,
   );
   const systemPreference: Extract<ThemePreference, { mode: "system" }> = preference.mode === "system" ? preference : {
-    mode: "system", lightThemeId: defaultThemeIds.light, darkThemeId: defaultThemeIds.dark,
+    mode: "system", lightThemeId: fallbackThemeIds.light, darkThemeId: fallbackThemeIds.dark,
   };
-  const systemLight = themes.find(item => item.id === systemPreference.lightThemeId && item.type === "light") ?? themes.find(item => item.id === defaultThemeIds.light)!;
-  const systemDark = themes.find(item => item.id === systemPreference.darkThemeId && item.type === "dark") ?? themes.find(item => item.id === defaultThemeIds.dark)!;
+  const systemLight = themes.find(item => item.id === systemPreference.lightThemeId && item.type === "light") ?? themes.find(item => item.id === fallbackThemeIds.light && item.type === "light") ?? themes.find(item => item.type === "light");
+  const systemDark = themes.find(item => item.id === systemPreference.darkThemeId && item.type === "dark") ?? themes.find(item => item.id === fallbackThemeIds.dark && item.type === "dark") ?? themes.find(item => item.type === "dark");
 
   useEffect(() => {
     if (active) heading.current?.focus({ preventScroll: true });
@@ -94,12 +94,13 @@ export function ThemeSettingsPage({ active, onBack }: ThemeSettingsPageProps) {
                   <input
                     className="theme-option-input" type="radio" name="appearance-theme" value="system"
                     checked={preference.mode === "system"}
-                    onChange={() => service.setPreference({ mode: "system", lightThemeId: systemLight.id, darkThemeId: systemDark.id })}
+                    disabled={!systemLight || !systemDark}
+                    onChange={() => { if (systemLight && systemDark) service.setPreference({ mode: "system", lightThemeId: systemLight.id, darkThemeId: systemDark.id }); }}
                     aria-labelledby="theme-name-system" aria-describedby="theme-caption-system"
                   />
                   <span className="theme-preview-split" aria-hidden="true">
-                    <ThemePreview theme={systemLight} />
-                    <ThemePreview theme={systemDark} />
+                    {systemLight && <ThemePreview theme={systemLight} />}
+                    {systemDark && <ThemePreview theme={systemDark} />}
                     <span className="theme-preview-system-icon"><Icon name="monitor" size="small" /></span>
                   </span>
                   <span className="theme-option-body">
@@ -107,7 +108,7 @@ export function ThemeSettingsPage({ active, onBack }: ThemeSettingsPageProps) {
                       <span className="theme-radio" aria-hidden="true">{preference.mode === "system" && <Icon name="check" size="small" />}</span>
                       <span className="theme-option-name" id="theme-name-system">跟随系统</span>
                     </span>
-                    <span className="theme-option-description" id="theme-caption-system">随操作系统的外观自动切换。</span>
+                    <span className="theme-option-description" id="theme-caption-system">{systemLight && systemDark ? "随操作系统的外观自动切换。" : "需要已启用的深色和浅色主题。"}</span>
                   </span>
                 </label>
               </div>
@@ -118,7 +119,7 @@ export function ThemeSettingsPage({ active, onBack }: ThemeSettingsPageProps) {
                     return (
                       <label key={type}>
                         <span>系统为{type === "light" ? "浅色" : "深色"}时</span>
-                        <select value={preference[slot]} onChange={event => service.setPreference({ mode: "system", lightThemeId: systemLight.id, darkThemeId: systemDark.id, [slot]: event.target.value })}>
+                        <select value={preference[slot]} disabled={!systemLight || !systemDark} onChange={event => { if (systemLight && systemDark) service.setPreference({ mode: "system", lightThemeId: systemLight.id, darkThemeId: systemDark.id, [slot]: event.target.value }); }}>
                           {!themes.some(item => item.id === preference[slot] && item.type === type) && <option value={preference[slot]} disabled>主题暂不可用</option>}
                           {themes.filter(item => item.type === type).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
                         </select>
@@ -127,8 +128,8 @@ export function ThemeSettingsPage({ active, onBack }: ThemeSettingsPageProps) {
                   })}
                 </div>
               )}
-              <p className="theme-current" role="status">当前使用「{theme.name}」{preference.mode === "system" ? "，跟随系统外观" : ""}。</p>
-              {unavailableThemeId && <p className="theme-current" role="status">所选主题暂不可用，正在使用「{theme.name}」。主题恢复后会自动切回。</p>}
+              {theme ? <p className="theme-current" role="status">当前使用「{theme.name}」{preference.mode === "system" ? "，跟随系统外观" : ""}。</p> : <p className="theme-current" role="status">暂无可用主题，请启用主题插件。</p>}
+              {unavailableThemeId && theme && <p className="theme-current" role="status">所选主题暂不可用，正在使用「{theme.name}」。主题恢复后会自动切回。</p>}
             </fieldset>
             <p className="theme-saving-note">选择后自动保存，所有项目共用此设置。</p>
             {(persistenceError || windowError) && (

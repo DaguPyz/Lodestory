@@ -150,6 +150,7 @@ export function fixture({ saved = null, preference, system = "dark", desktop = t
   const uiContract = sdk.requireSdk("@lodestory/sdk/ui");
   const themeStore = load(resolve(sourceRoot, "plugins/theme/themeStore.ts"));
   const builtin = load(resolve(sourceRoot, "plugins/builtin-themes/builtinThemesPlugin.ts"));
+  const config = JSON.parse(readFileSync(resolve(sourceRoot, "plugins/theme/theme-config.json"), "utf8"));
   const originalCreateThemeStore = themeStore.createThemeStore;
   let currentStore;
   themeStore.createThemeStore = defaults => {
@@ -167,7 +168,14 @@ export function fixture({ saved = null, preference, system = "dark", desktop = t
   let uiService;
   return {
     React,
-    get api() { return currentStore ?? themeStore.createThemeStore(builtin.builtinThemeDefaults); },
+    get api() {
+      if (!currentStore) {
+        const store = themeStore.createThemeStore(config);
+        builtin.createBuiltinThemesPlugin().activate({ get: () => ({ registerTheme: store.registerTheme }) });
+        store.startThemeSync();
+      }
+      return currentStore;
+    },
     root,
     nativeTheme: () => nativeTheme,
     changeSystem(type) {
@@ -184,8 +192,8 @@ export function fixture({ saved = null, preference, system = "dark", desktop = t
     PluginActivationError: engine.PluginActivationError,
     PluginBatchActivationError: engine.PluginBatchActivationError,
     createThemePlugin: pluginModule.createThemePlugin,
+    config,
     createBuiltinThemesPlugin: builtin.createBuiltinThemesPlugin,
-    themeDefaultsKey: contract.themeDefaultsKey,
     themeKey: contract.themeKey,
     uiKey: uiContract.uiKey,
     ThemeProvider: themeUi.ThemeProvider,
@@ -198,11 +206,18 @@ export function fixture({ saved = null, preference, system = "dark", desktop = t
     nativeCalls,
     uiRegistrations,
     uiLifecycle,
-    async provideDefaults(defaults) {
-      await this.core.mount(defaults ? {
-        id: "test-defaults", requires: [], provides: [contract.themeDefaultsKey],
-        activate(context) { context.provide(contract.themeDefaultsKey, defaults); },
+    async provideThemes(definitions) {
+      const removers = [];
+      await this.core.mount(definitions ? {
+        id: "test-themes", requires: [contract.themeKey], provides: [],
+        activate(context) {
+          for (const definition of definitions) removers.push(context.get(contract.themeKey).registerTheme(definition));
+        },
+        deactivate() { for (const remove of removers.splice(0).reverse()) remove(); },
       } : builtin.createBuiltinThemesPlugin());
+    },
+    async prepareUi() {
+      for (const { wrapper } of uiRegistrations.filter(item => item.active).sort((a, b) => a.wrapper.order - b.wrapper.order)) await wrapper.prepare?.();
     },
     async provideUi() {
       await this.core.mount({

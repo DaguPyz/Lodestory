@@ -1,6 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import type { ResolvedTheme, ThemeDefaults, ThemePreference, ThemeType } from "@lodestory/sdk/theme";
+import type { ResolvedTheme, ThemeConfig, ThemePreference, ThemeType } from "@lodestory/sdk/theme";
 import { isThemeType } from "./resolveTheme";
 import { createThemeManager, isThemePreference } from "./themeManager";
 
@@ -10,11 +10,11 @@ const CHANNEL_NAME = "lodestory.appearance";
 // 跨插件重挂载仍串行调用同一个原生窗口，避免旧请求晚完成后覆盖新外观。
 let nativeQueue: Promise<void> = Promise.resolve();
 
-/** 每次插件激活创建独立状态；配色由默认主题提供者注入。 */
-export function createThemeStore(defaults: ThemeDefaults) {
-  const defaultThemeIds = Object.freeze({ dark: defaults.dark.id, light: defaults.light.id });
+/** 每次插件激活创建独立状态；只接收选择配置，配色全部通过 registerTheme 登记。 */
+export function createThemeStore(config: ThemeConfig) {
+  const fallbackThemeIds = Object.freeze({ ...config.fallbackThemeIds });
   let stopSync: (() => void) | undefined;
-  const defaultPreference: ThemePreference = { mode: "fixed", themeId: defaultThemeIds.dark };
+  const defaultPreference: ThemePreference = { mode: "fixed", themeId: config.defaultThemeId };
   let channel: BroadcastChannel | null = null;
   let syncGeneration = 0;
   let syncing = false;
@@ -27,7 +27,7 @@ export function createThemeStore(defaults: ThemeDefaults) {
     }
   }
 
-  const manager = createThemeManager([defaults.dark, defaults.light], defaultThemeIds, defaultPreference, readSystemTheme());
+  const manager = createThemeManager(config, defaultPreference, readSystemTheme());
   function parsePreference(saved: string | null): ThemePreference {
     try {
       const value: unknown = JSON.parse(saved ?? "null");
@@ -44,15 +44,23 @@ export function createThemeStore(defaults: ThemeDefaults) {
       if (saved !== null) return parsePreference(saved);
       // Migrate the old selection in memory; the next successful save writes the new format.
       const legacy = window.localStorage.getItem(LEGACY_STORAGE_KEY);
-      if (legacy === "light") return { mode: "fixed", themeId: defaultThemeIds.light };
-      if (legacy === "system") return { mode: "system", lightThemeId: defaultThemeIds.light, darkThemeId: defaultThemeIds.dark };
+      if (legacy === "dark") return { mode: "fixed", themeId: fallbackThemeIds.dark };
+      if (legacy === "light") return { mode: "fixed", themeId: fallbackThemeIds.light };
+      if (legacy === "system") return { mode: "system", lightThemeId: fallbackThemeIds.light, darkThemeId: fallbackThemeIds.dark };
     } catch { /* Storage is optional; the session can still switch themes. */ }
     return defaultPreference;
   }
   manager.setPreference(readPreference());
 
-  function applyDocumentTheme(theme: ResolvedTheme) {
+  function applyDocumentTheme(theme: ResolvedTheme | null) {
     const root = document.documentElement;
+    if (!theme) {
+      for (const name of Object.keys(appliedTheme?.cssVariables ?? {})) root.style.removeProperty(name);
+      delete root.dataset.uiTheme;
+      delete root.dataset.uiThemeId;
+      root.style.removeProperty("color-scheme");
+      return;
+    }
     root.dataset.uiTheme = theme.type;
     root.dataset.uiThemeId = theme.id;
     for (const [name, value] of Object.entries(theme.cssVariables)) root.style.setProperty(name, value);
@@ -66,23 +74,24 @@ export function createThemeStore(defaults: ThemeDefaults) {
   // Only the native appearance depends on light/dark; DOM colors always follow the theme ID.
   function nativeAppearance() {
     const { preference, theme } = manager.getSnapshot();
-    return preference.mode === "system" ? null : theme.type;
+    return preference.mode === "system" ? null : theme?.type ?? null;
   }
-  let appliedTheme = getThemeSnapshot().theme;
-  let appliedNativeAppearance = nativeAppearance();
-  applyDocumentTheme(appliedTheme);
-  const unsubscribeDocument = manager.subscribe(() => {
+  let appliedTheme: ResolvedTheme | null = null;
+  let appliedNativeAppearance: ThemeType | null = null;
+  function applySnapshot() {
+    if (!syncing) return;
     const theme = getThemeSnapshot().theme;
     if (theme !== appliedTheme) {
-      appliedTheme = theme;
       applyDocumentTheme(theme);
+      appliedTheme = theme;
     }
     const appearance = nativeAppearance();
     if (appearance !== appliedNativeAppearance) {
       appliedNativeAppearance = appearance;
-      if (syncing) syncWindowTheme();
+      syncWindowTheme();
     }
-  });
+  }
+  const unsubscribeDocument = manager.subscribe(applySnapshot);
 
   // Serialize native calls and invalidate obsolete completions, including after unmount.
   function syncWindowTheme() {
@@ -136,7 +145,12 @@ export function createThemeStore(defaults: ThemeDefaults) {
   }
 
   function startThemeSync() {
-    stopSync?.();
+    if (syncing) return stopSync!;
+    // 此时初始贡献已全部登记，才能校验保存的系统槽位及启动配置。
+    try { manager.checkPreference(getThemeSnapshot().preference, false); }
+    catch { manager.setPreference(defaultPreference); }
+    manager.setSystemType(readSystemTheme());
+    manager.start();
     let disposed = false;
     let removeMediaListener: (() => void) | undefined;
     let unlistenNative: (() => void) | undefined;
@@ -200,7 +214,9 @@ export function createThemeStore(defaults: ThemeDefaults) {
         else unlistenNative = unlisten;
       }).catch(() => { /* The media query remains the system appearance fallback. */ });
     }
-    handleSystemChange();
+    applyDocumentTheme(getThemeSnapshot().theme);
+    appliedTheme = getThemeSnapshot().theme;
+    appliedNativeAppearance = nativeAppearance();
     syncWindowTheme();
     return stopSync;
   }

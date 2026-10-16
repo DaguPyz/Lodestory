@@ -9,7 +9,7 @@ import {
 } from "@lodestory/sdk";
 import { uiKey, type UiService } from "@lodestory/sdk/ui";
 import { errorUiKey, type ErrorUiService } from "@lodestory/sdk/error";
-import { themeDefaultsKey, themeKey, type ThemeDefaults, type ThemeService } from "@lodestory/sdk/theme";
+import { themeKey, type ThemeConfig, type ThemeService } from "@lodestory/sdk/theme";
 
 type Document = { read(): string };
 type DocumentChanged = { documentId: string; revision: number };
@@ -45,8 +45,8 @@ const plugin: Plugin = {
     });
     theme.setPreference({ mode: "fixed", themeId: "example.test.ink" });
     theme.setPreference({ mode: "system", lightThemeId: "example.test.paper", darkThemeId: "example.test.ink" });
-    const color: string = theme.getSnapshot().theme.colors["surface.content"];
-    const fallbackId: string = theme.getSnapshot().defaultThemeIds.light;
+    const color: string = theme.getSnapshot().theme?.colors["surface.content"] ?? "";
+    const fallbackId: string = theme.getSnapshot().fallbackThemeIds.light;
     void fallbackId;
     void color;
     // @ts-expect-error Only standard color names are accepted.
@@ -68,14 +68,8 @@ const wrongDocument: number = context.get(documentKey);
 void plugin;
 void wrongDocument;
 
-const defaultsPlugin: Plugin = {
-  id: "example.defaults", requires: [], provides: [themeDefaultsKey],
-  activate(pluginContext) {
-    const defaults: ThemeDefaults = {
-      dark: { schemaVersion: 1, id: "example.defaults.dark", name: "Dark", type: "dark", colors: {} },
-      light: { schemaVersion: 1, id: "example.defaults.light", name: "Light", type: "light", colors: {} },
-    };
-    pluginContext.provide(themeDefaultsKey, defaults);
-  },
+const themeConfig: ThemeConfig = {
+  defaultThemeId: "example.ink.dark",
+  fallbackThemeIds: { dark: "example.ink.dark", light: "example.paper.light" },
 };
-void defaultsPlugin;
+void themeConfig;

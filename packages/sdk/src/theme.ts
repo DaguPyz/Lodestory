@@ -42,16 +42,12 @@ export type ThemeDefinition = Readonly<{
     colors: Readonly<Partial<Record<ThemeColorId, string>>>;
 }>;
 
-/**
- * 应用装配时由一个配色插件提供的默认主题，供管理器启动、旧偏好迁移和缺失回退使用。
- * 两项都按普通 ThemeDefinition 校验并进入平级目录；默认职责不形成另一种主题类型。
- * 提供者须先于管理器激活，并在管理器停用后卸载，避免运行中失去回退配色。
- */
-export type ThemeDefaults = Readonly<{
-    /** 首次启动及深色回退使用的主题，type 必须为 dark。 */
-    dark: ThemeDefinition;
-    /** 浅色回退及默认系统浅色槽位使用的主题，type 必须为 light。 */
-    light: ThemeDefinition;
+/** 主题管理插件使用的选择配置，只引用主题 ID，不携带配色或区分主题来源。 */
+export type ThemeConfig = Readonly<{
+    /** 没有有效偏好时首次选择的主题 ID；初始插件登记完成后必须能在目录中找到。 */
+    defaultThemeId: string;
+    /** 所选主题不可用时按明暗属性回退的主题 ID，同时作为默认系统槽位；须分别匹配 dark/light。 */
+    fallbackThemeIds: Readonly<Record<ThemeType, string>>;
 }>;
 
 /**
@@ -102,12 +98,12 @@ export type ResolvedTheme = Readonly<{
 export type ThemeSnapshot = Readonly<{
     /** 用户保存或本次会话选择的意图；所选主题暂不可用时仍保留，便于稍后恢复。 */
     preference: ThemePreference;
-    /** 当前真正用于绘制的完整主题；所选主题缺失时为回退主题，不能仅凭 preference 推断配色。 */
-    theme: ResolvedTheme;
+    /** 当前实际主题；初始登记期间或目录为空时为 null，UI 需处理空状态。所选主题缺失时为回退结果。 */
+    theme: ResolvedTheme | null;
     /** 已登记主题的平级列表，供设置页列出选项和预览；同时包含内置主题及自定义贡献。 */
     themes: readonly ResolvedTheme[];
-    /** 当前默认主题的 ID，供设置页初始化系统槽位与展示回退预览；无需导入任何配色插件。 */
-    defaultThemeIds: Readonly<Record<ThemeType, string>>;
+    /** 配置的回退主题 ID，供设置页初始化系统槽位；对应主题也可能被普通贡献者撤销。 */
+    fallbackThemeIds: Readonly<Record<ThemeType, string>>;
     /**
      * 当前请求但不可用的主题 ID，供界面解释回退原因；正常时为 null。
      * 系统策略只报告当前明暗槽位的结果，不表示另一个槽位也已可用。
@@ -140,18 +136,19 @@ export type ThemeService = {
     subscribe(listener: () => void): () => void;
 
     /**
-     * 贡献插件激活或运行中加载配色时，将定义加入当前会话的统一主题目录。
+     * 所有主题贡献插件（包括内置）在激活或运行中加载配色时，通过此入口加入统一目录。
      * 登记会校验并复制解析数据，不主动修改用户偏好；若偏好正等待该 ID，则恢复应用它。
      * 当前接口不安装或持久化主题包，也未执行运行时 B 对比度警告；每次启动须重新登记。
      * @param theme 作者提供的主题定义，内置与自定义配色使用相同结构。
      * @returns 撤销本次登记的函数；贡献者停用时调用，可重复调用，且不影响后来同 ID 的新登记。
-     * 撤销当前所选主题会触发回退并保留原偏好，重新登记后自动恢复。
+     * 撤销当前所选主题会触发回退并保留原偏好，重新登记后自动恢复；撤销最后一项后 theme 为 null。
      * @throws 定义格式、字段、颜色或默认引用无效，或 ID 已被登记时抛出错误。
      */
     registerTheme(theme: ThemeDefinition): () => void;
 
     /**
-     * 用户选择主题卡片或修改系统策略槽位时调用，立即应用结果并尝试保存、同步偏好。
+     * 用户选择主题卡片或修改系统策略槽位时调用，保存并同步偏好；界面启动后立即应用配色。
+     * 若在初始插件登记期间调用，实际配色会等到根视图准备阶段再应用。
      * 保存失败不撤销本次会话选择；原生同步异步完成，其结果通过快照中的错误状态报告。
      * @param preference 固定主题 ID，或系统浅色与深色时各自使用的主题 ID。
      * @throws 偏好结构无效、引用的 ID 未登记，或系统槽位与主题明暗属性不匹配时抛出错误。
@@ -172,10 +169,3 @@ export type ThemeService = {
  * 配色贡献者通过该服务登记主题，不替换全局管理服务；其停用时撤销自己的登记和订阅。
  */
 export const themeKey = createServiceKey<ThemeService>("app/theme");
-
-/**
- * 默认主题贡献的共享能力标识。应用选择一个提供者，主题管理器声明 requires 并读取其数据。
- * 用于管理器启动前的默认配色供应；其他配色插件在管理器启动后使用 themeKey 登记主题。
- * 提供者不依赖 themeKey，避免默认配色与管理器相互等待。
- */
-export const themeDefaultsKey = createServiceKey<ThemeDefaults>("app/theme-defaults");

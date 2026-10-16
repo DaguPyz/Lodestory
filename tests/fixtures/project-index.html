@@ -72,7 +72,22 @@
         const { available: _available, ...opened } = project;
         return { project: opened, projects: records };
       }, { shouldMockEvents: true });
-      await import("/src/main.tsx");
+      const layoutTest = new URLSearchParams(location.search).get("layout");
+      if (layoutTest === "alternative" || layoutTest === "probes") {
+        const {createAppRuntime} = await import("/src/app/createAppRuntime.ts");
+        const {createAppPlugins} = await import("/src/app/appPlugins.ts");
+        let plugins = createAppPlugins();
+        if (layoutTest === "alternative") {
+          const {createAlternativeLayoutPlugin} = await import("./alternativeLayout.tsx");
+          plugins = plugins.map(plugin => plugin.id === "default-layout" ? createAlternativeLayoutPlugin() : plugin);
+        } else {
+          const {createLayoutProbesPlugin} = await import("./layout-probes.tsx");
+          plugins = [...plugins, createLayoutProbesPlugin()];
+        }
+        await createAppRuntime(plugins);
+      } else {
+        await import("/src/main.tsx");
+      }
     </script>
   </body>
 </html>

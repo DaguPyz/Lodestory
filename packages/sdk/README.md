@@ -1,11 +1,13 @@
 # @lodestory/sdk
 
-Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及 UI 和主题服务契约。它不包含宿主实现。
+Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及 UI、主题和布局服务契约。它不包含宿主实现。
 
 ## 导出入口
 
 - `@lodestory/sdk`：`Plugin`、`PluginContext`、能力 key 与事件 key 类型和创建函数。
 - `@lodestory/sdk/ui`：UI 服务类型与共享单例 `uiKey`。
+- `@lodestory/sdk/error`：错误边界服务与共享单例 `errorUiKey`。
+- `@lodestory/sdk/layout`：内容用途、登记描述、布局视图、快照和服务类型，以及共享单例 `layoutKey`。
 - `@lodestory/sdk/theme`：主题定义、仅含 ID 的选择配置、选择策略、管理服务和快照类型，以及共享单例 `themeKey`。
 
 ## 生命周期与 key
@@ -131,6 +133,12 @@ export const inkThemePlugin: Plugin = {
 设置页读取 `getSnapshot().fallbackThemeIds` 初始化系统槽位，不导入具体配色文件。内置和自定义贡献都可撤销；若配置的回退项也缺失，则依次选择同属性的其他项、任一剩余项，目录为空时返回 `null`。默认职责是 ID 配置，所有主题仍平级。
 
 当前注册处理同一进程中已加载的主题数据，检查格式、角色名称及透明度；主题包导入、持久化安装、B 对比度警告尚未接入。自定义主题须由插件在每次启动时重新登记。设计见[主题管理](../../文档/需求设计/主题管理.md)，数据契约见[主题标准 v1](../../文档/主题标准-v1.md)。
+
+## 布局服务
+
+布局能力独立于页面导航。功能插件声明 `requires: [layoutKey]`，通过 `registerContent({id, title, role, order?, render})` 按用途登记；`role` 为 main、navigation、auxiliary、actions 或 status，不指定位置。工作台页面挂载服务的 `View`，布局实现决定如何显示这些内容。`show`/`hide` 控制展示，`getSnapshot`/`subscribe` 提供不可变目录和展示状态。完整接入与生命周期见[布局插件设计](../../文档/需求设计/布局插件.md)。
+
+隐藏内容保留组件实例，并传入 `active: false`；工作台切到后台时所有内容也收到 false。登记函数必须在启动准备前调用，并在插件停用时调用返回的撤销函数。当前 UI 不支持热卸载，撤销已准备好的布局贡献会先停止 UI；布局实现的替换发生在下一次装配。此入口也只有 React 类型依赖，不导入 React 运行时代码。
 
 ## 构建与打包
 

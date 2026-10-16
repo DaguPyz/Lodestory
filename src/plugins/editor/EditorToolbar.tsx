@@ -6,18 +6,12 @@ import { useContextMenus } from "../context-menu";
 type EditorToolbarProps = {
   active: boolean;
   projectName: string;
-  focusMode: boolean;
-  referenceVisible: boolean;
-  treeVisible: boolean;
-  onToggleTree: () => void;
-  onToggleFocus: () => void;
-  onToggleReference: () => void;
   onBack: () => void;
   onOpenSettings: () => void;
 };
 
 export function EditorToolbar({
-  active, projectName, focusMode, referenceVisible, treeVisible, onToggleTree, onToggleFocus, onToggleReference, onBack, onOpenSettings,
+  active, projectName, onBack, onOpenSettings,
 }: EditorToolbarProps) {
   const projectMenu = useRef<HTMLDetailsElement>(null);
   const menus = useContextMenus();
@@ -60,7 +54,7 @@ export function EditorToolbar({
   }
 
   return (
-    <header className="editor-toolbar">
+    <div className="editor-toolbar-content">
       <div className="editor-brand" aria-label="Lodestory">
         <Icon name="book" size="large" />
         <span>Lodestory</span>
@@ -83,31 +77,9 @@ export function EditorToolbar({
       </details>
 
       <div className="editor-toolbar-actions">
-        <button
-          type="button" className="icon-button editor-mobile-tree-toggle"
-          aria-label="项目文件" title="项目文件" aria-controls="editor-project-tree"
-          aria-pressed={treeVisible} disabled={focusMode} onClick={onToggleTree}
-        ><Icon name="file" /></button>
         <IconButton label="搜索项目" disabled><Icon name="search" /></IconButton>
-        <IconButton
-          id="editor-reference-toggle"
-          label={referenceVisible ? "收起参考资料" : "显示参考资料"}
-          aria-controls="editor-reference"
-          aria-pressed={referenceVisible}
-          onClick={onToggleReference}
-          disabled={focusMode}
-        >
-          <Icon name="split" />
-        </IconButton>
-        <Button variant="ghost" id="editor-focus-toggle" aria-pressed={focusMode}
-          aria-label={focusMode ? "退出专注模式" : "专注模式"}
-          title={focusMode ? "退出专注模式" : "专注模式"}
-          onClick={onToggleFocus}>
-          <Icon name="focus" />
-          <span>{focusMode ? "退出专注" : "专注模式"}</span>
-        </Button>
-        <IconButton label="更多工作空间操作" disabled><Icon name="more" /></IconButton>
+        <IconButton label="设置" onClick={openSettings}><Icon name="settings" /></IconButton>
       </div>
-    </header>
+    </div>
   );
 }

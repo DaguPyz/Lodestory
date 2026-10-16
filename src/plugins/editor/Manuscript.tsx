@@ -77,7 +77,7 @@ export function EmptyDocument({ projectPath, onCreate, disabled }: { projectPath
       <Icon name="book" size="brand" />
       <h1 id="editor-empty-title" tabIndex={-1}>作品已打开</h1>
       <p className="editor-project-path" title={projectPath}>{projectPath}</p>
-      <p>选择左侧文档，或新建文档开始写作。</p>
+      <p>选择文档，或新建文档开始写作。</p>
       <Button variant="primary" onClick={onCreate} disabled={disabled}><Icon name="plus" />新建文档</Button>
     </section>
     </ContextMenuRegion>

@@ -1,28 +1,3 @@
-/* Editing workspace: shared UI tokens, Comfortable density, independent scrolling. */
-.editor-layout {
-  container: editor / inline-size;
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-workspace);
-}
-
-.editor-toolbar {
-  position: relative;
-  z-index: 6;
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: var(--ui-space-5);
-  min-height: var(--ui-toolbar-height);
-  padding-inline: var(--ui-space-5);
-  background: var(--ui-surface-chrome);
-  border-bottom: 1px solid var(--ui-border-divider);
-}
-
 .editor-brand {
   display: flex;
   flex-shrink: 0;
@@ -114,117 +89,6 @@
   gap: var(--ui-space-3);
   min-width: 0;
   margin-left: auto;
-}
-
-.editor-toolbar-actions > .button[aria-pressed="true"],
-.editor-toolbar-actions > .icon-button[aria-pressed="true"] {
-  color: var(--ui-accent-foreground);
-  background: var(--ui-surface-selected);
-}
-
-.editor-toolbar-actions > .editor-mobile-tree-toggle {
-  display: none;
-}
-
-.editor-workspace {
-  --cmp-editor-rail-width: var(--ui-activitybar-width);
-  --cmp-editor-tree-width: 0px;
-  --cmp-editor-reference-width: 0px;
-  position: relative;
-  display: grid;
-  flex: 1;
-  grid-template-columns: var(--cmp-editor-rail-width) var(--cmp-editor-tree-width) minmax(0, 1fr) var(--cmp-editor-reference-width);
-  min-width: 0;
-  min-height: 0;
-}
-
-.editor-workspace[data-tree-docked="true"] {
-  --cmp-editor-tree-width: var(--ui-navigation-width);
-}
-
-.editor-workspace[data-reference-docked="true"] {
-  --cmp-editor-reference-width: var(--ui-inspector-width);
-}
-
-.editor-workspace[data-focus="true"] {
-  --cmp-editor-rail-width: 0px;
-}
-
-.editor-activitybar {
-  grid-column: 1;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 0;
-  padding-block: var(--ui-space-4);
-  background: var(--ui-surface-panel);
-  border-right: 1px solid var(--ui-border-divider);
-}
-
-.editor-activitybar-tools {
-  display: flex;
-  flex-direction: column;
-  gap: var(--ui-space-5);
-}
-
-.editor-activitybar-tools > .icon-button {
-  position: relative;
-}
-
-.editor-activitybar-tools > .icon-button[aria-pressed="true"] {
-  color: var(--ui-accent-foreground);
-  background: var(--ui-surface-selected);
-}
-
-.editor-activitybar-tools > .icon-button[aria-pressed="true"]::before {
-  position: absolute;
-  inset-block: 0;
-  left: calc(-1 * var(--ui-space-3));
-  width: var(--ui-indicator-width);
-  background: var(--ui-accent-indicator);
-  content: "";
-}
-
-.editor-project-panel,
-.editor-reference {
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  background: var(--ui-surface-panel);
-}
-
-.editor-project-panel {
-  grid-column: 2;
-  border-right: 1px solid var(--ui-border-divider);
-}
-
-.editor-reference {
-  grid-column: 4;
-  border-left: 1px solid var(--ui-border-divider);
-}
-
-.editor-project-panel[data-overlay="true"],
-.editor-reference[data-overlay="true"] {
-  position: absolute;
-  z-index: 4;
-  top: 0;
-  bottom: 0;
-  max-width: calc(100% - var(--cmp-editor-rail-width));
-  box-shadow: var(--ui-shadow-popover);
-}
-
-.editor-project-panel[data-overlay="true"] {
-  left: var(--cmp-editor-rail-width);
-  width: var(--ui-navigation-width);
-}
-
-.editor-reference[data-overlay="true"] {
-  right: 0;
-  width: var(--ui-inspector-width);
 }
 
 .editor-panel-header {
@@ -344,16 +208,6 @@
   flex-shrink: 0;
   color: var(--ui-text-muted);
   font-size: var(--ui-font-size-caption);
-}
-
-.editor-main {
-  grid-column: 3;
-  grid-row: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  min-height: 0;
-  background: var(--ui-surface-workspace);
 }
 
 .document-tabs {
@@ -636,81 +490,23 @@
   white-space: nowrap;
 }
 
-.editor-activitybar[hidden],
-.editor-project-panel[hidden],
-.editor-reference[hidden],
-.editor-document[hidden] {
-  display: none;
+/* Content-owned containers remain responsive under any layout implementation. */
+.editor-toolbar-content { display: flex; align-items: center; gap: var(--ui-space-5); min-width: 0; }
+.editor-project-panel, .editor-content-main { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.editor-content-main { container: editor-content / inline-size; }
+.editor-document[hidden] { display: none; }
+@container editor-content (max-width: 54rem) { .manuscript { padding: var(--ui-space-8); } }
+@container editor-content (max-width: 40rem) { .manuscript { padding: var(--ui-space-7); } }
+@container editor-content (max-width: 26rem) { .manuscript { padding: var(--ui-space-5); } }
+@media (max-width: 54rem) { .editor-brand > span { display: none; } }
+@media (max-width: 40rem) {
+  .editor-toolbar-actions > .icon-button:disabled, .editor-document-status > .editor-font-status { display: none; }
 }
-
-@container editor (max-width: 54rem) {
-  .editor-brand > span {
-    display: none;
-  }
-
-  .editor-project-menu {
-    flex: 1;
-  }
-
-  .manuscript {
-    padding: var(--ui-space-8);
-  }
-}
-
-@container editor (max-width: 40rem) {
-  .editor-toolbar-actions > .icon-button:disabled {
-    display: none;
-  }
-
-  .manuscript {
-    padding: var(--ui-space-7);
-  }
-
-  .editor-document-status > .editor-font-status {
-    display: none;
-  }
-}
-
-@container editor (max-width: 26rem) {
-  .editor-workspace {
-    --cmp-editor-rail-width: 0px;
-  }
-
-  .editor-activitybar,
-  .editor-brand,
-  .editor-toolbar-actions > .button > span {
-    display: none;
-  }
-
-  .editor-toolbar-actions > .editor-mobile-tree-toggle {
-    display: inline-flex;
-  }
-
-  .editor-toolbar {
-    gap: var(--ui-space-3);
-    padding-inline: var(--ui-space-3);
-  }
-
-  .manuscript {
-    padding: var(--ui-space-5);
-  }
-}
-
+@media (max-width: 26rem) { .editor-brand { display: none; } .editor-toolbar-content { gap: var(--ui-space-3); } }
 @media (forced-colors: active) {
-  .file-tree-entry[aria-current="page"],
-  .editor-activitybar-tools > .icon-button[aria-pressed="true"] {
-    color: HighlightText;
-    background: Highlight;
-  }
-
-  .document-tab[data-active="true"]::after,
-  .editor-activitybar-tools > .icon-button[aria-pressed="true"]::before {
-    background: Highlight;
-  }
-
-  .editor-project-popover {
-    border-color: ButtonText;
-  }
+  .file-tree-entry[aria-current="page"] { color: HighlightText; background: Highlight; }
+  .document-tab[data-active="true"]::after { background: Highlight; }
+  .editor-project-popover { border-color: ButtonText; }
 }
 /* Real project directories must not display the presentation sample documents. */
 .editor-project-path {

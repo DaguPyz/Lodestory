@@ -12,13 +12,10 @@ type ProjectTreeProps = {
   loading: boolean;
   error: string | null;
   newDisabled: boolean;
-  visible: boolean;
-  overlay: boolean;
   onOpenDocument: (path: string) => void | Promise<void>;
   onSelectFolder: (path: string) => void;
   onNewDocument: (parentPath?: string) => void;
   onReload: () => void;
-  onClose: () => void;
 };
 
 function TreeNode({
@@ -92,7 +89,7 @@ function TreeNode({
 }
 
 export function ProjectTree({ projectName, entries, activeDocument, openingPath, loading, error, newDisabled,
-  visible, overlay, onOpenDocument, onSelectFolder, onNewDocument, onReload, onClose }: ProjectTreeProps) {
+  onOpenDocument, onSelectFolder, onNewDocument, onReload }: ProjectTreeProps) {
   const [expanded, setExpanded] = useState(() => new Set([""]));
 
   useEffect(() => {
@@ -115,16 +112,12 @@ export function ProjectTree({ projectName, entries, activeDocument, openingPath,
     <aside
       className="editor-project-panel"
       id="editor-project-tree"
-      hidden={!visible}
-      data-overlay={overlay}
       aria-label="项目文件"
     >
       <div className="editor-panel-header">
-        <h2>项目</h2>
         <div className="editor-panel-actions">
           <IconButton id="editor-new-document" label="新建文档" disabled={newDisabled} onClick={() => onNewDocument()}><Icon name="plus" /></IconButton>
           <IconButton label="更多项目操作" disabled><Icon name="more" /></IconButton>
-          {overlay && <IconButton label="收起项目文件" onClick={onClose}><Icon name="collapseLeft" /></IconButton>}
         </div>
       </div>
       <ContextMenuRegion label="文件目录树操作" items={[

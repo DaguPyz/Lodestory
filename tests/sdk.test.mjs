@@ -6,19 +6,21 @@ import ts from "typescript";
 import * as packageRoot from "@lodestory/sdk";
 import * as packageUi from "@lodestory/sdk/ui";
 import * as packageError from "@lodestory/sdk/error";
+import * as packageLayout from "@lodestory/sdk/layout";
 import * as packageTheme from "@lodestory/sdk/theme";
 import { createSdkLoader } from "./helpers/sdkFixture.mjs";
 
 const packageManifest = JSON.parse(readFileSync(new URL("../packages/sdk/package.json", import.meta.url), "utf8"));
 
-test("SDK package exposes ESM root, UI, error, and theme entry points", () => {
+test("SDK package exposes ESM root, UI, error, theme, and layout entry points", () => {
   assert.equal(packageManifest.type, "module");
-  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./error", "./theme", "./ui"]);
+  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./error", "./layout", "./theme", "./ui"]);
 
   for (const [specifier, target] of [
     [".", "index"],
     ["./error", "error"],
     ["./ui", "ui"],
+    ["./layout", "layout"],
     ["./theme", "theme"],
   ]) {
     assert.equal(packageManifest.exports[specifier].import, `./dist/${target}.js`);
@@ -29,6 +31,8 @@ test("SDK package exposes ESM root, UI, error, and theme entry points", () => {
   assert.deepEqual(Object.keys(packageUi), ["uiKey"]);
   assert.deepEqual(Object.keys(packageError), ["errorUiKey"]);
   assert.deepEqual(Object.keys(packageTheme).sort(), ["themeKey"]);
+  assert.deepEqual(Object.keys(packageLayout), ["layoutKey"]);
+  assert.equal(packageLayout.layoutKey.id, "app/layout");
   assert.equal(packageUi.uiKey.id, "app/ui");
   assert.equal(packageError.errorUiKey.id, "app/error-ui");
   assert.equal(packageTheme.themeKey.id, "app/theme");
@@ -63,6 +67,8 @@ test("SDK subpaths share one key module and need no host imports or runtime APIs
   const hostThemeKey = sdk.requireSdk("@lodestory/sdk/theme").themeKey;
   const pluginThemeKey = sdk.requireSdk("@lodestory/sdk/theme").themeKey;
 
+  const hostLayoutKey = sdk.requireSdk("@lodestory/sdk/layout").layoutKey;
+  assert.strictEqual(sdk.requireSdk("@lodestory/sdk/layout").layoutKey, hostLayoutKey);
   assert.strictEqual(pluginUiKey, hostUiKey);
   assert.strictEqual(pluginThemeKey, hostThemeKey);
   assert.equal(sdk.evaluatedModules.filter((path) => path === "ServiceKey.ts").length, 1);

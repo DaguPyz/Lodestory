@@ -1,21 +1,15 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { IconButton } from "../../components/Button";
-import { Icon } from "../../components/Icon";
-import { DocumentTabs } from "./DocumentTabs";
-import { EditorStatusBar } from "./EditorStatusBar";
-import { EditorToolbar } from "./EditorToolbar";
-import { EmptyDocument, Manuscript } from "./Manuscript";
-import { NewDocumentDialog } from "./NewDocumentDialog";
-import { ProjectTree } from "./ProjectTree";
-import { ReferencePanel } from "./ReferencePanel";
+import { createContext, useContext, useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createDocument, documentErrorMessage, listDocuments, type TreeEntry } from "../../documents/documentApi";
 import { useDocumentWorkspace } from "../../documents/useDocumentWorkspace";
-import "../../styles/editor.css";
+import type {LayoutService} from "@lodestory/sdk/layout";
+import {editorContentIds} from "./editorContentIds";
+import "./editor.css";
+import {NewDocumentDialog} from "./NewDocumentDialog";
 import { useContextMenus } from "../context-menu";
 
-type PanelPreference = "auto" | "open" | "closed";
 type EditorPageProps = {
+  layout: LayoutService;
   projectName: string;
   projectPath: string;
   active: boolean;
@@ -33,13 +27,10 @@ function insertDocument(entries: TreeEntry[], path: string, name: string): TreeE
   });
 }
 
-export function EditorPage({ projectName, projectPath, active, onBack, onOpenSettings }: EditorPageProps) {
+function useEditorModel({ layout, projectName, projectPath, active, onBack, onOpenSettings }: EditorPageProps) {
   const menus = useContextMenus();
-  const root = useRef<HTMLDivElement>(null);
-  const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, rem: 16 }));
-  const [treePreference, setTreePreference] = useState<PanelPreference>("auto");
-  const [referencePreference, setReferencePreference] = useState<PanelPreference>("auto");
-  const [focusMode, setFocusMode] = useState(false);
+  const layoutSnapshot = useSyncExternalStore(layout.subscribe, layout.getSnapshot, layout.getSnapshot);
+  const mainActive = active && layoutSnapshot.shownIds.includes(editorContentIds.main);
   const [entries, setEntries] = useState<TreeEntry[]>([]);
   const [treeLoading, setTreeLoading] = useState(true);
   const [treeError, setTreeError] = useState<string | null>(null);
@@ -51,7 +42,6 @@ export function EditorPage({ projectName, projectPath, active, onBack, onOpenSet
   const createPending = useRef(false);
   const leaving = useRef(false);
   const workspace = useDocumentWorkspace(projectPath);
-  const { documents, activeId, currentDocument } = workspace;
   const newDisabled = !isTauri() || treeLoading || creating;
 
   useEffect(() => {
@@ -60,19 +50,7 @@ export function EditorPage({ projectName, projectPath, active, onBack, onOpenSet
       setCreateDialogOpen(false);
       return;
     }
-    const frame = requestAnimationFrame(() => {
-      const title = root.current?.querySelector<HTMLElement>(".editor-document:not([hidden]) .manuscript-title")
-        ?? root.current?.querySelector<HTMLElement>("#editor-empty-title");
-      title?.focus({ preventScroll: true });
-    });
-    return () => cancelAnimationFrame(frame);
   }, [active, menus]);
-
-  // These thresholds retain a 560px main workspace before folding docked panels.
-  const treeDocked = viewport.width >= 54 * viewport.rem;
-  const referenceDocked = viewport.width >= 74 * viewport.rem;
-  const treeVisible = !focusMode && (treePreference === "open" || (treePreference === "auto" && treeDocked));
-  const referenceVisible = !focusMode && (referencePreference === "open" || (referencePreference === "auto" && referenceDocked));
 
   const reloadTree = useCallback(async () => {
     const sequence = ++treeSequence.current;
@@ -94,7 +72,7 @@ export function EditorPage({ projectName, projectPath, active, onBack, onOpenSet
   }, [active, reloadTree]);
 
   useEffect(() => {
-    if (!active) return;
+    if (!mainActive) return;
     function saveShortcut(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s" && !event.isComposing) {
         event.preventDefault();
@@ -103,7 +81,7 @@ export function EditorPage({ projectName, projectPath, active, onBack, onOpenSet
     }
     window.addEventListener("keydown", saveShortcut);
     return () => window.removeEventListener("keydown", saveShortcut);
-  }, [active, workspace.saveAll]);
+  }, [mainActive, workspace.saveAll]);
 
   function showNewDocument(parentPath = selectedFolder) {
     menus.closeAll();
@@ -122,6 +100,7 @@ export function EditorPage({ projectName, projectPath, active, onBack, onOpenSet
       setEntries((previous) => insertDocument(previous, record.path, record.fileName));
       setCreateDialogOpen(false);
       setSelectedFolder(parentPath);
+      layout.show(editorContentIds.main);
       workspace.openCreated(record);
       await reloadTree();
     } catch (cause) {
@@ -137,126 +116,42 @@ export function EditorPage({ projectName, projectPath, active, onBack, onOpenSet
     leaving.current = true;
     try {
       if (await workspace.saveAll()) action();
+      else layout.show(editorContentIds.main);
     } finally {
       leaving.current = false;
     }
   }
 
-  useLayoutEffect(() => {
-    const element = root.current;
-    if (!element) return;
-
-    function measure() {
-      const width = element!.getBoundingClientRect().width;
-      if (width === 0) return;
-      const rem = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-      setViewport((previous) => previous.width === width && previous.rem === rem ? previous : { width, rem });
-    }
-    measure();
-    if (typeof ResizeObserver !== "undefined") {
-      const observer = new ResizeObserver(measure);
-      observer.observe(element);
-      return () => observer.disconnect();
-    }
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, []);
-
-  useEffect(() => {
-    if (!focusMode || !active) return;
-    function handleEscape(event: KeyboardEvent) {
-      if (event.key === "Escape" && !event.isComposing) {
-        setFocusMode(false);
-        document.getElementById("editor-focus-toggle")?.focus();
-      }
-    }
-    window.addEventListener("keydown", handleEscape);
-    return () => window.removeEventListener("keydown", handleEscape);
-  }, [focusMode, active]);
-
-  function toggleTree() {
-    setTreePreference(treeVisible ? "closed" : "open");
-    if (!treeVisible && !treeDocked) setReferencePreference("auto");
-  }
-
-  function toggleReference() {
-    setReferencePreference(referenceVisible ? "closed" : "open");
-    if (!referenceVisible && !referenceDocked && !treeDocked) setTreePreference("auto");
-  }
-
-  function closeReference() {
-    setReferencePreference("closed");
-    document.getElementById("editor-reference-toggle")?.focus();
-  }
-
-  function closeTree() {
-    setTreePreference("closed");
-    document.getElementById("editor-tree-toggle")?.focus();
-  }
-
   function openDocument(path: string) {
     setSelectedFolder(path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "");
-    if (!treeDocked) {
-      setTreePreference("auto");
-    }
+    layout.show(editorContentIds.main);
     return workspace.open(path);
   }
 
-  return (
-    <div className="editor-layout" data-ui-density="comfortable" ref={root}>
-      <EditorToolbar
-        active={active}
-        projectName={projectName} focusMode={focusMode} referenceVisible={referenceVisible}
-        treeVisible={treeVisible} onToggleTree={toggleTree}
-        onToggleFocus={() => setFocusMode((previous) => !previous)}
-        onToggleReference={toggleReference} onBack={() => void leave(onBack)} onOpenSettings={() => void leave(onOpenSettings)}
-      />
-      <div
-        className="editor-workspace"
-        data-tree-docked={treeVisible && treeDocked}
-        data-reference-docked={referenceVisible && referenceDocked}
-        data-focus={focusMode}
-      >
-        <aside className="editor-activitybar" hidden={focusMode} aria-label="工作空间工具">
-          <div className="editor-activitybar-tools">
-            <IconButton
-              id="editor-tree-toggle" label="项目文件"
-              aria-controls="editor-project-tree" aria-pressed={treeVisible} onClick={toggleTree}
-            ><Icon name="file" /></IconButton>
-            <IconButton label="版本管理" disabled><Icon name="history" /></IconButton>
-            <IconButton label="搜索" disabled><Icon name="search" /></IconButton>
-          </div>
-          <IconButton label="设置" onClick={() => void leave(onOpenSettings)}><Icon name="settings" /></IconButton>
-        </aside>
+  return {
+    projectName, projectPath, workspace, entries, treeLoading, treeError, newDisabled,
+    selectedFolder, setSelectedFolder, showNewDocument, reloadTree, openDocument,
+    createDialogOpen, creating, createError, create, closeCreateDialog: () => setCreateDialogOpen(false),
+    leaveProject: () => void leave(onBack), openSettings: () => void leave(onOpenSettings),
+  };
+}
 
-        <ProjectTree
-          projectName={projectName} entries={entries} activeDocument={activeId} openingPath={workspace.openingPath}
-          loading={treeLoading} error={treeError} newDisabled={newDisabled}
-          onNewDocument={showNewDocument} onReload={() => void reloadTree()} onSelectFolder={setSelectedFolder}
-          visible={treeVisible} overlay={!treeDocked} onOpenDocument={openDocument} onClose={closeTree}
-        />
+const EditorContext = createContext<ReturnType<typeof useEditorModel> | null>(null);
 
-        <main className="editor-main" aria-label="文稿工作区">
-          <DocumentTabs documents={documents} activeDocument={activeId} onSelect={workspace.select} onClose={workspace.close}
-            onSave={workspace.save} onNewDocument={() => showNewDocument()} newDisabled={newDisabled} />
-          {workspace.error && <div className="editor-document-feedback" role="alert">
-            <p className="project-error">{workspace.error}</p>
-            <IconButton label="关闭提示" onClick={workspace.clearError}><Icon name="close" size="small" /></IconButton>
-          </div>}
-          {workspace.openingPath && <p className="editor-document-feedback" role="status">正在打开文档…</p>}
-          <div className="editor-document-stack">
-            {documents.length > 0 ? documents.map((document) => (
-              <Manuscript key={document.id} document={document} projectName={projectName} visible={document.id === activeId}
-                onChange={(content) => workspace.update(document.id, content)} onSave={() => workspace.save(document.id)} />
-            )) : <EmptyDocument projectPath={projectPath} onCreate={() => showNewDocument()} disabled={newDisabled} />}
-          </div>
-        </main>
+/** 登记内容共享当前项目的会话；布局实现无需知道此 Context。 */
+export function useEditorContext() {
+  const model = useContext(EditorContext);
+  if (!model) throw new Error("Editor contents require an editor project context.");
+  return model;
+}
 
-        <ReferencePanel visible={referenceVisible} overlay={!referenceDocked} onClose={closeReference} />
-      </div>
-      <EditorStatusBar document={currentDocument} />
-      {active && createDialogOpen && <NewDocumentDialog projectName={projectName} entries={entries} initialParent={selectedFolder}
-        busy={creating} error={createError} onClose={() => setCreateDialogOpen(false)} onCreate={create} />}
-    </div>
-  );
+export function EditorPage(props: EditorPageProps) {
+  const model = useEditorModel(props);
+  const View = props.layout.View;
+  return <EditorContext.Provider value={model}>
+    <View active={props.active}/>
+    {props.active && model.createDialogOpen && <NewDocumentDialog projectName={model.projectName} entries={model.entries}
+      initialParent={model.selectedFolder} busy={model.creating} error={model.createError}
+      onClose={model.closeCreateDialog} onCreate={model.create}/>}
+  </EditorContext.Provider>;
 }

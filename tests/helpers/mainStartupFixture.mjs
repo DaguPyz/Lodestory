@@ -13,7 +13,7 @@ export function deferred() {
   return { promise, resolve: resolvePromise };
 }
 
-export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, preference } = {}) {
+export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, preference, layoutFactory } = {}) {
   const modules = new Map();
   const sdk = createSdkLoader({ modules });
   const createdCores = [];
@@ -306,7 +306,8 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       const createAppPlugins = exports.createAppPlugins;
       exports.createAppPlugins = (...args) => {
         appPluginsCalls.push(args);
-        const plugins = createAppPlugins(...args).filter(plugin => !omitBuiltinThemes || plugin.id !== "builtin-themes");
+        const plugins = createAppPlugins(...args).filter(plugin => !omitBuiltinThemes || plugin.id !== "builtin-themes")
+          .map(plugin => plugin.id === "default-layout" && layoutFactory ? layoutFactory(sdk.requireSdk("@lodestory/sdk/layout")) : plugin);
         if (themeDefinitions.length) {
           const { themeKey } = sdk.requireSdk("@lodestory/sdk/theme");
           const removers = [];

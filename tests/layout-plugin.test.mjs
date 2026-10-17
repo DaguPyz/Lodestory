@@ -188,10 +188,11 @@ test("partial editor feature activation revokes only its own contents after a co
   const {f, store} = registry();
   store.registerContent(content("editor.navigation", "navigation"));
   const plugin = f.loadModule("plugins/editor/editorPlugin.tsx").createEditorFeaturesPlugin();
-  assert.throws(() => plugin.activate({get(key) {
+  assert.throws(() => plugin.activate({on() { return () => {}; }, get(key) {
     if (key.id === "app/layout") return store;
     if (key.id === "app/error-ui") return {ErrorBoundary: f.components.ErrorBoundary};
     if (key.id === "app/ui") return {};
+    if (key.id === "app/documents") return {getWorkspace() { return null; }};
     if (key.id === "app/workbench") return {registerParticipant() { return async () => {}; }};
   }}), /already registered/);
   await plugin.deactivate(); await plugin.deactivate();

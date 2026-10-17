@@ -1,10 +1,10 @@
 import { IconButton } from "../../components/Button";
 import { Icon } from "../../components/Icon";
-import type { WorkspaceDocument } from "../../documents/documentApi";
+import type { OpenDocument } from "@lodestory/sdk/documents";
 import { ContextMenuRegion } from "../context-menu";
 
 type DocumentTabsProps = {
-  documents: readonly Readonly<WorkspaceDocument>[];
+  documents: readonly OpenDocument[];
   activeDocument: string | null;
   onSelect: (id: string) => void;
   onClose: (id: string) => unknown | Promise<unknown>;

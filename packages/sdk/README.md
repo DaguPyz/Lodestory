@@ -1,6 +1,6 @@
 # @lodestory/sdk
 
-Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及配置、UI、主题、布局和工作台服务契约。它不包含宿主实现。
+Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及配置、UI、主题、布局、工作台和文档服务契约。它不包含宿主实现。
 
 ## 导出入口
 
@@ -10,6 +10,7 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/error`：错误边界服务与共享单例 `errorUiKey`。
 - `@lodestory/sdk/layout`：内容用途、登记描述、布局视图、快照和服务类型，以及共享单例 `layoutKey`。
 - `@lodestory/sdk/workbench`：项目与工作台会话、参与者生命周期、快照和服务类型，以及共享单例 `workbenchKey`。
+- `@lodestory/sdk/documents`：打开文档、文档工作区与文档服务类型，以及 `documentsKey` 和新建/显示请求事件。
 - `@lodestory/sdk/theme`：主题定义、仅含 ID 的选择配置、选择策略、管理服务和快照类型，以及共享单例 `themeKey`。
 
 ## 生命周期与 key
@@ -190,6 +191,48 @@ export const inkThemePlugin: Plugin = {
 工作台通过 `workbenchKey` 提供项目会话服务。`openProject(project)` 创建会话或在异步离开检查通过后切换项目；`closeProject()` 检查并结束当前会话。两者以 `Promise<boolean>` 表示是否完成，离开被拒绝时返回 `false`，操作错误以 Promise rejection 报告。`getSnapshot()` 与 `subscribe()` 提供 `{session, active, busy}` 状态；`registerParticipant()` 登记应用级参与者并返回异步撤销函数 `() => Promise<void>`。工作台运行中撤销参与者会先停止 UI，并等待项目资源清理。
 
 项目会话由 `{id, project: {id, name, path}}` 构成。参与者在项目打开时按登记顺序执行 `start(session)`，返回 `beforeLeave(reason)` 和 `dispose()`；项目真正结束时按启动逆序清理。`suspend` 代表暂时离开工作台，检查通过后保留会话和资源；`switch`、`close`、`shutdown` 在检查通过后结束当前会话。`busy` 期间 UI 应阻止新的编辑操作，已有保存继续执行。统一离开检查覆盖 UI 页面 `open`、`back`、同页项目替换和原生窗口关闭。详细规则见[工作台插件设计](../../文档/需求设计/工作台插件.md)。
+
+## 文档服务
+
+`@lodestory/sdk/documents` 提供应用级 `documentsKey`，由文档管理插件实现。它按工作台会话返回同一个 `DocumentWorkspace`，负责打开、创建、选择、修改、关闭和保存文档。每个 workspace 的快照包含当前打开文档、选中文档、打开/创建状态和错误；正文插件可以订阅快照并从中派生当前文档。文档 ID 只在工作区内有效，文档路径相对于项目根目录。
+
+```ts
+import type { Plugin } from "@lodestory/sdk";
+import { documentsKey } from "@lodestory/sdk/documents";
+import { workbenchKey } from "@lodestory/sdk/workbench";
+
+let removeParticipant: (() => Promise<void>) | undefined;
+export const editorPlugin: Plugin = {
+  id: "example.editor",
+  requires: [documentsKey, workbenchKey],
+  provides: [],
+  activate(context) {
+    const documents = context.get(documentsKey);
+    const workbench = context.get(workbenchKey);
+    removeParticipant = workbench.registerParticipant({
+      id: "example.editor",
+      start(session) {
+        const workspace = documents.getWorkspace(session.id);
+        if (!workspace) throw new Error("The document workspace is unavailable.");
+        const stop = workspace.subscribe(() => {
+          const snapshot = workspace.getSnapshot();
+          const current = snapshot.documents.find(document => document.id === snapshot.activeId);
+          // 使用 current.content 和 current.saveState 更新正文与保存状态。
+        });
+        // 编辑时调用 workspace.update(document.id, nextContent)。
+        return { dispose: stop };
+      },
+    });
+  },
+  async deactivate() { await removeParticipant?.(); },
+};
+```
+
+`open(path)` 已打开时复用现有项；延迟完成的读取不得抢回后来选择的文档。`create(parentPath, name)` 创建文件并直接加入打开列表，返回落盘后的文件名和相对路径。`update` 更新共享内容并安排自动保存；调用方不另建保存副本或定时器。`close` 先保存，保存失败会保留文档并重新选择它。`save` 和 `saveAll` 返回布尔值表示是否保存成功；操作错误可从快照或具体文档的 `saveError` 读取。关闭工作区不会删除物理文件。
+
+SDK 还定义两个窄事件，避免文档服务依赖文件树和正文界面：`documentCreateRequested` 携带 `{ sessionId, parentPath? }`，由当前提供新建交互的插件接收并展示自己的对话框；确认后再调用 `workspace.create`。`documentRevealRequested` 携带 `{ sessionId, documentId }`，由正文插件核对当前会话并显示对应文档。文档插件在成功打开或创建文档、以及保存失败需要定位该文档时发布显示请求。事件监听失败会被报告，但不会撤销已提交的文档数据操作。
+
+文档插件作为工作台参与者，在每次 `start(session)` 创建工作区。离开时先阻止新的修改，等待已接受的打开、创建和保存操作完成，再执行 `saveAll` 覆盖所有已接收的编辑；失败会阻止离开并保留会话。项目结束且视图已停止使用后，工作区才释放，旧工作区句柄随后失效。文档插件的实现位于 `src/plugins/documents/`，编辑端通过 SDK 取得工作区；目录列表 API 和 `TreeEntry` 由编辑插件的 `projectFilesApi.ts` 管理。目录树、对话框、光标和布局状态不属于文档服务。详见[文档管理插件设计](../../文档/需求设计/文档管理插件.md)。
 
 ## 构建与打包
 

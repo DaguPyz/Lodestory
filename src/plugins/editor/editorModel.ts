@@ -1,9 +1,9 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { appPages } from "../../app/pages";
-import { createDocumentWorkspace, type DocumentWorkspace } from "../../documents/createDocumentWorkspace";
-import { createDocument, documentErrorMessage, listDocuments, type TreeEntry } from "../../documents/documentApi";
+import { projectFilesErrorMessage, listDocuments, type TreeEntry } from "./projectFilesApi";
+import type { DocumentWorkspace } from "@lodestory/sdk/documents";
 import type { LayoutService } from "@lodestory/sdk/layout";
-import type { LeaveReason, WorkbenchService, WorkbenchSession } from "@lodestory/sdk/workbench";
+import type { WorkbenchService, WorkbenchSession } from "@lodestory/sdk/workbench";
 import type { UiService } from "@lodestory/sdk/ui";
 import { editorContentIds } from "./editorContentIds";
 
@@ -13,10 +13,8 @@ export type EditorModelSnapshot = Readonly<{
   entries: readonly EditorTreeEntry[];
   treeLoading: boolean;
   treeError: string | null;
-  newDisabled: boolean;
   selectedFolder: string;
   createDialogOpen: boolean;
-  creating: boolean;
   createError: string | null;
   workspace: DocumentWorkspace;
 }>;
@@ -31,26 +29,19 @@ export type EditorModel = {
   getSnapshot: () => EditorModelSnapshot;
   subscribe: (listener: () => void) => () => void;
   setSelectedFolder: (path: string) => void;
+  /** 供插件级新建事件处理器调用，只负责显示已有新建交互。 */
   showNewDocument: (parentPath?: string) => void;
+  /** 所有界面入口通过共享事件请求新建交互。 */
+  requestNewDocument: (parentPath?: string) => void;
   reloadTree: () => Promise<void>;
   openDocument: (path: string) => Promise<boolean>;
   create: (parentPath: string, name: string) => Promise<void>;
+  revealDocument: (id: string) => boolean;
   closeCreateDialog: () => void;
   leaveProject: () => Promise<boolean>;
   openSettings: () => Promise<boolean>;
-  beforeLeave: (reason: LeaveReason) => Promise<boolean>;
-  dispose: () => Promise<void>;
+  dispose: () => void;
 };
-
-function insertDocument(entries: TreeEntry[], path: string, name: string): TreeEntry[] {
-  const parent = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
-  if (!parent) return [...entries.filter((entry) => entry.path !== path), { path, name }];
-  return entries.map((entry) => {
-    if (!entry.children) return entry;
-    if (entry.path === parent) return { ...entry, children: [...entry.children.filter((child) => child.path !== path), { path, name }] };
-    return { ...entry, children: insertDocument(entry.children, path, name) };
-  });
-}
 
 function immutableEntries(entries: TreeEntry[]): readonly EditorTreeEntry[] {
   return Object.freeze(entries.map((entry) => Object.freeze({
@@ -59,12 +50,8 @@ function immutableEntries(entries: TreeEntry[]): readonly EditorTreeEntry[] {
   })));
 }
 
-function mutableEntries(entries: readonly EditorTreeEntry[]): TreeEntry[] {
-  return entries.map((entry) => ({
-    path: entry.path,
-    name: entry.name,
-    ...(entry.children ? { children: mutableEntries(entry.children) } : {}),
-  }));
+function failureMessage(cause: unknown): string {
+  return cause instanceof Error ? cause.message : String(cause);
 }
 
 export function createEditorModel(
@@ -72,26 +59,19 @@ export function createEditorModel(
   workbench: WorkbenchService,
   layout: LayoutService,
   ui: UiService,
+  workspace: DocumentWorkspace,
+  emitCreateRequest: (parentPath?: string) => Promise<void>,
 ): EditorModel {
   const listeners = new Set<() => void>();
-  const pendingOpens = new Set<Promise<boolean>>();
   let entries: readonly EditorTreeEntry[] = Object.freeze([]);
   let treeLoading = true;
   let treeError: string | null = null;
   let selectedFolder = "";
   let createDialogOpen = false;
-  let creating = false;
   let createError: string | null = null;
   let treeSequence = 0;
-  let pendingCreate: Promise<void> | null = null;
-  let checkingLeave = false;
   let disposed = false;
-  let disposal: Promise<void> | null = null;
   let snapshot: EditorModelSnapshot;
-
-  const workspace = createDocumentWorkspace(session.project.path, {
-    canMutate: () => !disposed && !checkingLeave && !workbench.getSnapshot().busy,
-  });
 
   const notify = () => {
     for (const listener of [...listeners]) {
@@ -107,16 +87,15 @@ export function createEditorModel(
       entries,
       treeLoading,
       treeError,
-      newDisabled: !isTauri() || treeLoading || creating || checkingLeave || workbench.getSnapshot().busy,
       selectedFolder,
       createDialogOpen,
-      creating,
       createError,
       workspace,
     });
     notify();
   };
 
+  const canInteract = () => !disposed && !workspace.getSnapshot().blocked && !workbench.getSnapshot().busy;
   const safeShowMain = () => {
     try { layout.show(editorContentIds.main); } catch { /* Layout may already be shutting down. */ }
   };
@@ -127,10 +106,8 @@ export function createEditorModel(
     entries,
     treeLoading,
     treeError,
-    newDisabled: !isTauri() || treeLoading || creating || checkingLeave || workbench.getSnapshot().busy,
     selectedFolder,
     createDialogOpen,
-    creating,
     createError,
     workspace,
   });
@@ -145,18 +122,28 @@ export function createEditorModel(
     },
 
     setSelectedFolder(path) {
-      if (disposed || checkingLeave || workbench.getSnapshot().busy) return;
+      if (!canInteract()) return;
       selectedFolder = path;
       publish();
     },
 
     showNewDocument(parentPath = selectedFolder) {
-      if (disposed || checkingLeave || workbench.getSnapshot().busy || snapshot.newDisabled) return;
+      if (!canInteract() || !isTauri() || treeLoading || workspace.getSnapshot().creating) return;
       selectedFolder = parentPath;
       createError = null;
+      workspace.clearError();
       createDialogOpen = true;
       safeShowMain();
       publish();
+    },
+
+    requestNewDocument(parentPath = selectedFolder) {
+      if (!canInteract() || !isTauri() || treeLoading || workspace.getSnapshot().creating) return;
+      void emitCreateRequest(parentPath).catch((cause) => {
+        if (disposed) return;
+        createError = failureMessage(cause);
+        publish();
+      });
     },
 
     async reloadTree() {
@@ -169,7 +156,7 @@ export function createEditorModel(
         const records = await listDocuments(session.project.path);
         if (!disposed && sequence === treeSequence) entries = immutableEntries(records);
       } catch (cause) {
-        if (!disposed && sequence === treeSequence) treeError = documentErrorMessage(cause);
+        if (!disposed && sequence === treeSequence) treeError = projectFilesErrorMessage(cause);
       } finally {
         if (!disposed && sequence === treeSequence) {
           treeLoading = false;
@@ -179,53 +166,56 @@ export function createEditorModel(
     },
 
     openDocument(path) {
-      if (disposed || checkingLeave || workbench.getSnapshot().busy) return Promise.resolve(false);
+      if (!canInteract()) return Promise.resolve(false);
       selectedFolder = path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
       safeShowMain();
       publish();
-      const opening = workspace.open(path);
-      pendingOpens.add(opening);
-      void opening.finally(() => { pendingOpens.delete(opening); });
-      return opening;
+      return workspace.open(path);
     },
 
-    create(parentPath, name) {
-      if (disposed || checkingLeave || workbench.getSnapshot().busy || pendingCreate) return pendingCreate ?? Promise.resolve();
-      creating = true;
+    async create(parentPath, name) {
+      if (!canInteract() || workspace.getSnapshot().creating) return;
       createError = null;
+      workspace.clearError();
       publish();
-      const operation = (async () => {
-        try {
-          const record = await createDocument(session.project.path, parentPath, name);
-          if (disposed) return;
-          entries = immutableEntries(insertDocument(mutableEntries(entries), record.path, record.fileName));
-          createDialogOpen = false;
-          selectedFolder = parentPath;
-          safeShowMain();
-          workspace.openCreated(record, { internal: true });
+      try {
+        const created = await workspace.create(parentPath, name);
+        if (disposed) return;
+        if (!created) {
+          createError = workspace.getSnapshot().error;
           publish();
-          await model.reloadTree();
-        } catch (cause) {
-          if (!disposed) {
-            createError = documentErrorMessage(cause);
-            publish();
-          }
-        } finally {
-          if (!disposed) {
-            creating = false;
-            publish();
-          }
+          return;
         }
-      })();
-      pendingCreate = operation;
-      void operation.finally(() => { if (pendingCreate === operation) pendingCreate = null; });
-      return operation;
+        createDialogOpen = false;
+        selectedFolder = parentPath;
+        safeShowMain();
+        publish();
+        await model.reloadTree();
+      } catch (cause) {
+        if (!disposed) {
+          createError = failureMessage(cause);
+          publish();
+        }
+      }
+    },
+
+    revealDocument(id) {
+      if (disposed) return false;
+      const state = workspace.getSnapshot();
+      if (state.activeId !== id) return false;
+      const document = state.documents.find((item) => item.id === id);
+      if (!document) return false;
+      selectedFolder = document.path.includes("/") ? document.path.slice(0, document.path.lastIndexOf("/")) : "";
+      safeShowMain();
+      publish();
+      return true;
     },
 
     closeCreateDialog() {
-      if (disposed || creating || checkingLeave || workbench.getSnapshot().busy) return;
+      if (!canInteract() || workspace.getSnapshot().creating) return;
       createDialogOpen = false;
       createError = null;
+      workspace.clearError();
       publish();
     },
 
@@ -243,36 +233,12 @@ export function createEditorModel(
       return opened;
     },
 
-    async beforeLeave(_reason) {
-      if (disposed) return true;
-      if (checkingLeave) return false;
-      checkingLeave = true;
-      publish();
-      try {
-        const inFlight = [
-          ...pendingOpens,
-          ...(pendingCreate ? [pendingCreate] : []),
-        ];
-        await Promise.all(inFlight);
-        if (disposed) return true;
-        const allowed = await workspace.saveAll();
-        if (!allowed) safeShowMain();
-        return allowed;
-      } finally {
-        checkingLeave = false;
-        publish();
-      }
-    },
-
     dispose() {
-      if (disposal) return disposal;
-      if (disposed) return Promise.resolve();
+      if (disposed) return;
       disposed = true;
       treeSequence += 1;
       removeWorkbenchSubscription();
       listeners.clear();
-      disposal = workspace.dispose();
-      return disposal;
     },
   };
 

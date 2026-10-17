@@ -1,11 +1,11 @@
 import { useLayoutEffect, useRef } from "react";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
-import type { WorkspaceDocument } from "../../documents/documentApi";
+import type { OpenDocument } from "@lodestory/sdk/documents";
 import { ContextMenuRegion } from "../context-menu";
 
 export function Manuscript({ document, projectName, visible, readOnly = false, onChange, onSave }: {
-  document: WorkspaceDocument;
+  document: OpenDocument;
   projectName: string;
   visible: boolean;
   readOnly?: boolean;

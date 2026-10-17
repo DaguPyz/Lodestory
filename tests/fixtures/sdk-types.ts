@@ -14,6 +14,18 @@ import { errorUiKey, type ErrorUiService } from "@lodestory/sdk/error";
 import { themeKey, type ThemeConfig, type ThemeService } from "@lodestory/sdk/theme";
 import { workbenchKey, type LeaveReason, type WorkbenchProject, type WorkbenchService, type WorkbenchSession } from "@lodestory/sdk/workbench";
 import { configKey, type ConfigItem, type ConfigService, type ConfigValue } from "@lodestory/sdk/config";
+import {
+  documentsKey,
+  documentCreateRequested,
+  documentRevealRequested,
+  type DocumentCreateRequest,
+  type DocumentRevealRequest,
+  type DocumentSaveState,
+  type DocumentSnapshot,
+  type DocumentWorkspace,
+  type DocumentsService,
+  type OpenDocument,
+} from "@lodestory/sdk/documents";
 
 type Document = { read(): string };
 type DocumentChanged = { documentId: string; revision: number };
@@ -42,13 +54,51 @@ const listener: EventListener<DocumentChanged> = ({ documentId, revision }) => {
 declare const context: PluginContext;
 const plugin: Plugin = {
   id: "sdk-types",
-  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, workbenchKey, configKey],
+  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, workbenchKey, configKey, documentsKey],
   provides: [],
   activate(pluginContext) {
     const document = pluginContext.get(documentKey);
     const text: string = document.read();
     const ui: UiService = pluginContext.get(uiKey);
     const config: ConfigService = pluginContext.get(configKey);
+    const documents: DocumentsService = pluginContext.get(documentsKey);
+    const workspace: DocumentWorkspace | null = documents.getWorkspace("session-1");
+    if (workspace) {
+      const snapshot: DocumentSnapshot = workspace.getSnapshot();
+      const opened: Promise<boolean> = workspace.open("chapters/one.md");
+      const created: Promise<OpenDocument | null> = workspace.create("chapters", "新章节");
+      const selected: boolean = workspace.select("document-1");
+      const updated: boolean = workspace.update("document-1", "正文");
+      const closed: Promise<boolean> = workspace.close("document-1");
+      const saved: Promise<boolean> = workspace.save("document-1");
+      const savedAll: Promise<boolean> = workspace.saveAll();
+      const unsubscribeDocuments = workspace.subscribe(() => void workspace.getSnapshot());
+      workspace.clearError();
+      void snapshot;
+      void opened;
+      void created;
+      void selected;
+      void updated;
+      void closed;
+      void saved;
+      void savedAll;
+      unsubscribeDocuments();
+      // @ts-expect-error A document snapshot cannot be mutated by a consumer.
+      snapshot.documents.push({} as OpenDocument);
+    }
+    const saveState: DocumentSaveState = "saved";
+    const createRequest: DocumentCreateRequest = {sessionId: "session-1", parentPath: "chapters"};
+    const revealRequest: DocumentRevealRequest = {sessionId: "session-1", documentId: "document-1"};
+    const unsubscribeCreate = pluginContext.on(documentCreateRequested, (request) => {
+      const typedRequest: DocumentCreateRequest = request;
+      void typedRequest.parentPath;
+    });
+    const unsubscribeReveal = pluginContext.on(documentRevealRequested, (request) => {
+      const typedRequest: DocumentRevealRequest = request;
+      void typedRequest.documentId;
+    });
+    const emittedCreate: Promise<void> = pluginContext.emit(documentCreateRequested, createRequest);
+    const emittedReveal: Promise<void> = pluginContext.emit(documentRevealRequested, revealRequest);
     const removeConfig = config.register(testConfig);
     const enabled: boolean = config.getSnapshot(testConfig).enabled;
     const update: Promise<void> = config.set(testConfig, { enabled: false });
@@ -127,6 +177,11 @@ const plugin: Plugin = {
     removeTheme();
     void emitted;
     unsubscribe();
+    unsubscribeCreate();
+    unsubscribeReveal();
+    void emittedCreate;
+    void emittedReveal;
+    void saveState;
     removeGuard();
     void removeParticipant;
     // @ts-expect-error The event payload must match its public generic contract.

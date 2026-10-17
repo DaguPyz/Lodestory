@@ -8,6 +8,7 @@ import {createContextMenuPlugin} from "../plugins/context-menu";
 import {createWelcomePlugin} from "../plugins/welcome/welcomePlugin";
 import {createEditorFeaturesPlugin} from "../plugins/editor/editorPlugin";
 import {createWorkbenchPlugin} from "../plugins/workbench/workbenchPlugin";
+import {createDocumentsPlugin} from "../plugins/documents/documentsPlugin";
 import {createConfigPlugin} from "../plugins/config/configPlugin";
 import {createSettingsPlugin} from "../plugins/settings/settingsPlugin";
 
@@ -22,6 +23,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createContextMenuPlugin(),
         createDefaultLayoutPlugin(),
         createWorkbenchPlugin(),
+        createDocumentsPlugin(),
         createWelcomePlugin(),
         createEditorFeaturesPlugin(),
         createSettingsPlugin(),

@@ -8,6 +8,7 @@ const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 const sdkSourceRoot = resolve(repositoryRoot, "packages/sdk/src");
 const publicEntries = {
   "@lodestory/sdk/config": ["config.ts"],
+  "@lodestory/sdk/documents": ["documents.ts"],
   "@lodestory/sdk": ["index.ts"],
   "@lodestory/sdk/workbench": ["workbench.ts"],
   "@lodestory/sdk/layout": ["layout.ts"],

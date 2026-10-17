@@ -32,6 +32,17 @@ function renderWorkbenchView(fixture, editorPage) {
   return fixture.components.WorkbenchPage(editorPage.props);
 }
 
+function renderEditorModel(fixture, layout, sessionId) {
+  const main = layout.getSnapshot().contents.find(({id}) => id === "editor.main");
+  assert.ok(main, "the editor main contribution should be registered");
+  const provider = main.render({active: true});
+  assert.equal(provider.type, fixture.components.EditorContentProvider);
+  provider.type(provider.props);
+  const model = fixture.editorModels.get(sessionId);
+  assert.ok(model, "the editor model should be connected to the active document workspace");
+  return model;
+}
+
 function project(id, name, path) {
   return { id, name, path, lastOpenedAt: "2026-10-12T08:00:00.000Z" };
 }
@@ -239,6 +250,8 @@ test("page plugins revoke their route contributions and the UI root unmounts onl
   assert.deepEqual(Array.from(ui.getSnapshot().pages, ({ id }) => id), ["editor"]);
   await core.unmount("editor-features");
   assert.equal(core.isMounted("editor-features"), false);
+  await core.unmount("documents");
+  assert.equal(core.isMounted("documents"), false);
   await core.unmount("workbench");
   assert.equal(core.isMounted("workbench"), false);
   assert.deepEqual(Array.from(ui.getSnapshot().pages), []);
@@ -278,4 +291,129 @@ test("a cleanup failure after an approved native close does not leave an unmount
   assert.equal(workbench.getSnapshot().session, null);
   assert.equal(gate.disposed.length, 1);
   assert.ok(fixture.logs.some(entry => entry?.level === "error" && entry.args[0] === "Workbench could not close the application."));
+});
+
+test("editor create requests and document reveal requests connect through the SDK to the documents workspace", async () => {
+  const fixture = await startFixture();
+  const workbench = getWorkbench(fixture);
+  const layout = fixture.getService(fixture.requireSdk("@lodestory/sdk/layout").layoutKey);
+  const documents = fixture.getService(fixture.requireSdk("@lodestory/sdk/documents").documentsKey);
+  const activeProject = project("novel-documents", "文档集成", "/stories/documents");
+  assert.equal(await workbench.openProject(activeProject), true);
+  await flushStartup();
+  const sessionId = workbench.getSnapshot().session.id;
+  const workspace = documents.getWorkspace(sessionId);
+  assert.ok(workspace);
+
+  layout.hide("editor.main");
+  assert.ok(!layout.getSnapshot().shownIds.includes("editor.main"));
+  assert.equal(await workspace.open("chapters/第一章.md"), true);
+  await flushStartup();
+  assert.ok(layout.getSnapshot().shownIds.includes("editor.main"), "the documents plugin reveal event should show the editor main content");
+  assert.equal(workspace.getSnapshot().documents[0].path, "chapters/第一章.md");
+
+  const editorModel = renderEditorModel(fixture, layout, sessionId);
+  layout.hide("editor.main");
+  editorModel.requestNewDocument("chapters");
+  await flushStartup();
+  assert.equal(editorModel.getSnapshot().createDialogOpen, true, "the editor create request event should reach the current dialog provider");
+
+  await editorModel.create("chapters", "第二章.md");
+  await flushStartup();
+  const snapshot = workspace.getSnapshot();
+  assert.equal(snapshot.documents.length, 2);
+  assert.ok(snapshot.documents.some(document => document.path === "chapters/第二章.md"));
+  assert.equal(snapshot.activeId, encodeURIComponent("chapters/第二章.md"));
+  assert.ok(layout.getSnapshot().shownIds.includes("editor.main"), "creating a document should reveal the editor main content");
+  assert.ok(fixture.tauriCalls.some(({command, args}) => command === "create_document" && args.parentPath === "chapters" && args.name === "第二章.md"));
+});
+
+test("a failed document save blocks project close and keeps the draft available for retry", async () => {
+  let failWrites = true;
+  const fixture = await startFixture({
+    invokeHandler(command, args) {
+      if (command === "list_documents") return [];
+      if (command === "read_document") return {path: args.path, fileName: args.path.split("/").at(-1), content: "原文"};
+      if (command === "save_document") {
+        if (failWrites) throw new Error("磁盘写入失败");
+        return undefined;
+      }
+      if (command === "create_document") return {path: [args.parentPath, args.name].filter(Boolean).join("/"), fileName: args.name, content: ""};
+      throw new Error(`Unexpected command: ${command}`);
+    },
+  });
+  const workbench = getWorkbench(fixture);
+  const layout = fixture.getService(fixture.requireSdk("@lodestory/sdk/layout").layoutKey);
+  const documents = fixture.getService(fixture.requireSdk("@lodestory/sdk/documents").documentsKey);
+  await workbench.openProject(project("novel-save-failure", "保存保护", "/stories/save-failure"));
+  await flushStartup();
+  const sessionId = workbench.getSnapshot().session.id;
+  const workspace = documents.getWorkspace(sessionId);
+  assert.ok(workspace);
+  assert.equal(await workspace.open("第一章.md"), true);
+  await flushStartup();
+  const document = workspace.getSnapshot().documents[0];
+  assert.equal(workspace.update(document.id, "未保存的修改"), true);
+
+  assert.equal(await workbench.closeProject(), false);
+  await flushStartup();
+  assert.equal(workbench.getSnapshot().session.id, sessionId, "the project session must survive a failed leave check");
+  assert.equal(workspace.getSnapshot().documents[0].content, "未保存的修改");
+  assert.equal(workspace.getSnapshot().documents[0].saveError, "磁盘写入失败");
+  assert.ok(layout.getSnapshot().shownIds.includes("editor.main"), "the failed document should be revealed for recovery");
+
+  failWrites = false;
+  assert.equal(await workbench.closeProject(), true);
+  assert.equal(documents.getWorkspace(sessionId), null);
+});
+
+test("a delayed document reveal request cannot replace a newer selection or its creation directory", async () => {
+  let sender;
+  const fixture = await startFixture({additionalPlugins: () => [{
+    id: "document-event-sender", requires: [], provides: [],
+    activate(context) { sender = context; },
+  }]});
+  const workbench = getWorkbench(fixture);
+  const {documentsKey, documentRevealRequested} = fixture.requireSdk("@lodestory/sdk/documents");
+  const layout = fixture.getService(fixture.requireSdk("@lodestory/sdk/layout").layoutKey);
+  await workbench.openProject(project("delayed-reveal", "延迟通知", "/stories/delayed-reveal"));
+  await flushStartup();
+  const sessionId = workbench.getSnapshot().session.id;
+  const workspace = fixture.getService(documentsKey).getWorkspace(sessionId);
+  await workspace.open("old/第一章.md");
+  const oldId = workspace.getSnapshot().activeId;
+  await workspace.open("current/第二章.md");
+  const currentId = workspace.getSnapshot().activeId;
+  const model = renderEditorModel(fixture, layout, sessionId);
+  assert.equal(model.getSnapshot().selectedFolder, "current");
+  layout.hide("editor.main");
+
+  await sender.emit(documentRevealRequested, {sessionId, documentId: oldId});
+
+  assert.equal(workspace.getSnapshot().activeId, currentId);
+  assert.equal(model.getSnapshot().selectedFolder, "current");
+  assert.ok(!layout.getSnapshot().shownIds.includes("editor.main"));
+});
+
+test("project switching releases the old document handle and starts an isolated workspace", async () => {
+  const fixture = await startFixture();
+  const workbench = getWorkbench(fixture);
+  const documents = fixture.getService(fixture.requireSdk("@lodestory/sdk/documents").documentsKey);
+  assert.equal(await workbench.openProject(project("novel-first", "第一本", "/stories/first")), true);
+  const firstSessionId = workbench.getSnapshot().session.id;
+  const firstWorkspace = documents.getWorkspace(firstSessionId);
+  assert.ok(firstWorkspace);
+  const created = await firstWorkspace.create("", "第一章.md");
+  assert.ok(created);
+
+  assert.equal(await workbench.openProject(project("novel-second", "第二本", "/stories/second")), true);
+  const secondSessionId = workbench.getSnapshot().session.id;
+  const secondWorkspace = documents.getWorkspace(secondSessionId);
+  assert.ok(secondWorkspace);
+  assert.notEqual(secondWorkspace, firstWorkspace);
+  assert.equal(documents.getWorkspace(firstSessionId), null);
+  assert.equal(firstWorkspace.getSnapshot().documents.length, 0);
+  assert.equal(firstWorkspace.getSnapshot().blocked, true);
+  assert.equal(firstWorkspace.update(created.id, "旧会话修改"), false);
+  assert.equal(secondWorkspace.getSnapshot().documents.length, 0);
 });

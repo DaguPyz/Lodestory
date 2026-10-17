@@ -20,6 +20,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const rootCalls = [];
   const moduleImports = [];
   const catalogPluginIds = [];
+  const editorModels = new Map();
   const appPluginsCalls = [];
   const lifecycle = [];
   const nativeCalls = [];
@@ -178,7 +179,11 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     ErrorView: function ErrorView() {},
     WelcomePage: function WelcomePage() {},
     EditorPage: function EditorPage() {},
-    EditorContentProvider: function EditorContentProvider({ children }) { return children; },
+    EditorContentProvider: function EditorContentProvider({ workbench, models, children }) {
+      const session = workbench.getSnapshot().session;
+      if (session) editorModels.set(session.id, models.get(session.id));
+      return children;
+    },
     WorkbenchPage: function WorkbenchPage({ workbench, layout, active }) {
       const snapshot = workbench.getSnapshot();
       return snapshot.session ? React.createElement(layout.View, {
@@ -453,6 +458,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     setCleanupError(error) { cleanupError = error; },
     omitThemeService() { omitThemeService = true; },
     getService(key) { return createdCores.at(-1)?.get(key); },
+    editorModels,
     async requestWindowClose() {
       let prevented = false;
       const event = { preventDefault() { prevented = true; } };

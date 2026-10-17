@@ -1,4 +1,5 @@
 import type {Plugin} from "@lodestory/sdk";
+import {documentCreateRequested, documentRevealRequested, documentsKey} from "@lodestory/sdk/documents";
 import {workbenchKey} from "@lodestory/sdk/workbench";
 import {uiKey} from "@lodestory/sdk/ui";
 import {themeKey} from "@lodestory/sdk/theme";
@@ -16,21 +17,37 @@ export function createEditorFeaturesPlugin(): Plugin {
   let removeParticipant: (() => Promise<void>) | undefined;
   return {
     id: "editor-features",
-    requires: [workbenchKey, uiKey, layoutKey, themeKey],
+    requires: [workbenchKey, uiKey, layoutKey, themeKey, documentsKey],
     provides: [],
     activate(context) {
       const workbench = context.get(workbenchKey);
       const layout = context.get(layoutKey);
       const ui = context.get(uiKey);
+      const documents = context.get(documentsKey);
+      const removeCreateRequest = context.on(documentCreateRequested, (request) => {
+        const session = workbench.getSnapshot().session;
+        if (!session || session.id !== request.sessionId) return;
+        models.get(session.id)?.showNewDocument(request.parentPath);
+      });
+      const removeRevealRequest = context.on(documentRevealRequested, (request) => {
+        const session = workbench.getSnapshot().session;
+        if (!session || session.id !== request.sessionId) return;
+        models.get(session.id)?.revealDocument(request.documentId);
+      });
+      removeContents.push(removeCreateRequest, removeRevealRequest);
       removeParticipant = workbench.registerParticipant({
         id: "editor-features",
         start(session) {
-          const model = createEditorModel(session, workbench, layout, ui);
+          const workspace = documents.getWorkspace(session.id);
+          if (!workspace) throw new Error(`Documents workspace is unavailable for session '${session.id}'.`);
+          const model = createEditorModel(session, workbench, layout, ui, workspace, (parentPath) => context.emit(
+            documentCreateRequested,
+            parentPath === undefined ? {sessionId: session.id} : {sessionId: session.id, parentPath},
+          ));
           models.set(session.id, model);
           return {
-            beforeLeave: model.beforeLeave,
-            async dispose() {
-              try { await model.dispose(); }
+            dispose() {
+              try { model.dispose(); }
               finally { if (models.get(session.id) === model) models.delete(session.id); }
             },
           };

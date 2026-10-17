@@ -1,17 +1,10 @@
 import { invoke, isTauri } from "@tauri-apps/api/core";
 
 export type DocumentRecord = { path: string; fileName: string; content: string };
-export type TreeEntry = { path: string; name: string; children?: TreeEntry[] };
-export type SaveState = "saved" | "pending" | "saving" | "error";
-export type WorkspaceDocument = DocumentRecord & { id: string; saveState: SaveState; saveError: string | null };
 
 function desktopCommand<T>(command: string, args: Record<string, unknown>): Promise<T> {
   if (!isTauri()) return Promise.reject(new Error("请在桌面应用中操作作品文档。"));
   return invoke<T>(command, args);
-}
-
-export function listDocuments(projectPath: string): Promise<TreeEntry[]> {
-  return desktopCommand("list_documents", { projectPath });
 }
 
 export function createDocument(projectPath: string, parentPath: string, name: string): Promise<DocumentRecord> {

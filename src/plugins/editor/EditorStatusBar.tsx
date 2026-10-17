@@ -1,7 +1,7 @@
 import { Icon } from "../../components/Icon";
-import type { WorkspaceDocument } from "../../documents/documentApi";
+import type { OpenDocument } from "@lodestory/sdk/documents";
 
-export function EditorStatusBar({ document }: { document: WorkspaceDocument | undefined }) {
+export function EditorStatusBar({ document }: { document: OpenDocument | undefined }) {
   const status = document ? { saved: "已保存", pending: "等待保存…", saving: "正在保存…", error: "保存失败" }[document.saveState] : "未打开文稿";
   const count = document ? Array.from(document.content.replace(/\s/g, "")).length : 0;
   return (

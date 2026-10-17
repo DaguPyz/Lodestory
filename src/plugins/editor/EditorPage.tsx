@@ -1,6 +1,7 @@
 import {createContext, useContext, useEffect, useSyncExternalStore, type ReactNode} from "react";
+import {isTauri} from "@tauri-apps/api/core";
 import type {WorkbenchService} from "@lodestory/sdk/workbench";
-import {useDocumentWorkspace} from "../../documents/useDocumentWorkspace";
+import {useDocumentWorkspace} from "./useDocumentWorkspace";
 import {useContextMenus} from "../context-menu";
 import type {EditorModel} from "./editorModel";
 import "./editor.css";
@@ -9,8 +10,10 @@ function useEditorModel(model: EditorModel, workbench: WorkbenchService) {
   const data = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
   const workspace = useDocumentWorkspace(data.workspace);
-  return {...data, workspace, busy: state.busy,
-    setSelectedFolder: model.setSelectedFolder, showNewDocument: model.showNewDocument,
+  const busy = state.busy || workspace.blocked;
+  return {...data, workspace, busy,
+    newDisabled: !isTauri() || data.treeLoading || workspace.creating || workspace.blocked || state.busy,
+    setSelectedFolder: model.setSelectedFolder, requestNewDocument: model.requestNewDocument,
     reloadTree: model.reloadTree, openDocument: model.openDocument, create: model.create,
     closeCreateDialog: model.closeCreateDialog,
     leaveProject: () => { void model.leaveProject().catch(error => console.error("Could not close project.", {error})); },

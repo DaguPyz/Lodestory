@@ -77,7 +77,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "welcome", "editor-features", "settings"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "documents", "welcome", "editor-features", "settings"]);
   assert.deepEqual(fixture.appPluginsCalls, [[]]);
   const entryImports = fixture.moduleImports
     .filter(({ from }) => from === "main.tsx")
@@ -109,6 +109,10 @@ test("the entry delegates UI composition and page registration to the plugin cat
     assert.ok(fixture.lifecycle.includes(`activate:${pagePlugin}:complete`),
       `the ${pagePlugin} page plugin should activate`);
   }
+  assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/documents/documentsPlugin.ts"), "the documents plugin source should run in the fixture");
+  assert.ok(fixture.lifecycle.includes("activate:documents:complete"), "the documents service should activate");
+  assert.ok(fixture.logs.indexOf("activate:workbench:complete") < fixture.logs.indexOf("activate:documents:begin"));
+  assert.ok(fixture.logs.indexOf("activate:documents:complete") < fixture.logs.indexOf("activate:editor-features:begin"), "the document service must be available before editor activation");
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/editor/editorPlugin.tsx"),
     "the editor feature plugin source should run in the fixture");
   assert.ok(fixture.lifecycle.includes("activate:editor-features:complete"), "the editor features should activate");

@@ -230,9 +230,9 @@ export const editorPlugin: Plugin = {
 
 `open(path)` 已打开时复用现有项；延迟完成的读取不得抢回后来选择的文档。`create(parentPath, name)` 创建文件并直接加入打开列表，返回落盘后的文件名和相对路径。`update` 更新共享内容并安排自动保存；调用方不另建保存副本或定时器。`close` 先保存，保存失败会保留文档并重新选择它。`save` 和 `saveAll` 返回布尔值表示是否保存成功；操作错误可从快照或具体文档的 `saveError` 读取。关闭工作区不会删除物理文件。
 
-SDK 还定义两个窄事件，避免文档服务依赖文件树和正文界面：`documentCreateRequested` 携带 `{ sessionId, parentPath? }`，由当前提供新建交互的插件接收并展示自己的对话框；确认后再调用 `workspace.create`。`documentRevealRequested` 携带 `{ sessionId, documentId }`，由正文插件核对当前会话并显示对应文档。文档插件在成功打开或创建文档、以及保存失败需要定位该文档时发布显示请求。事件监听失败会被报告，但不会撤销已提交的文档数据操作。
+SDK 还定义两个窄事件，避免文档服务依赖文件树和正文界面：`documentCreateRequested` 携带 `{ sessionId, parentPath? }`，由当前提供新建交互的插件接收并展示自己的对话框；确认后再调用 `workspace.create`。`documentRevealRequested` 携带 `{ sessionId, documentId }`，由正文插件核对当前会话并显示对应文档；工程管理插件也监听它来同步文件树选择。文档插件在成功打开或创建文档、以及保存失败需要定位该文档时发布显示请求。事件监听失败会被报告，但不会撤销已提交的文档数据操作。
 
-文档插件作为工作台参与者，在每次 `start(session)` 创建工作区。离开时先阻止新的修改，等待已接受的打开、创建和保存操作完成，再执行 `saveAll` 覆盖所有已接收的编辑；失败会阻止离开并保留会话。项目结束且视图已停止使用后，工作区才释放，旧工作区句柄随后失效。文档插件的实现位于 `src/plugins/documents/`，编辑端通过 SDK 取得工作区；目录列表 API 和 `TreeEntry` 由编辑插件的 `projectFilesApi.ts` 管理。目录树、对话框、光标和布局状态不属于文档服务。详见[文档管理插件设计](../../文档/需求设计/文档管理插件.md)。
+文档插件作为工作台参与者，在每次 `start(session)` 创建工作区。离开时先阻止新的修改，等待已接受的打开、创建和保存操作完成，再执行 `saveAll` 覆盖所有已接收的编辑；失败会阻止离开并保留会话。项目结束且视图已停止使用后，工作区才释放，旧工作区句柄随后失效。文档插件的实现位于 `src/plugins/documents/`。独立的 `project-management` 插件在 `src/plugins/project-management/` 管理目录列表、文件树和新建对话框；它不新增 SDK 服务，通过 `documentsKey` 操作文档，并通过 `layoutKey` 登记导航内容。详见[文档管理插件设计](../../文档/需求设计/文档管理插件.md)和[工程管理插件设计](../../文档/需求设计/工程管理插件.md)。
 
 ## 构建与打包
 

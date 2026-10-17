@@ -1,11 +1,10 @@
 import {invoke, isTauri} from "@tauri-apps/api/core";
+import type {ProjectTreeEntry} from "./projectManagementModel";
 
-/** 文件树功能的私有目录记录，不属于文档工作区协议。 */
-export type TreeEntry = {path: string; name: string; children?: TreeEntry[]};
-
-export function listDocuments(projectPath: string): Promise<TreeEntry[]> {
+/** 文件树的目录记录属于工程管理插件，不属于文档工作区协议。 */
+export function listDocuments(projectPath: string): Promise<readonly ProjectTreeEntry[]> {
   if (!isTauri()) return Promise.reject(new Error("请在桌面应用中操作作品文档。"));
-  return invoke<TreeEntry[]>("list_documents", {projectPath});
+  return invoke<ProjectTreeEntry[]>("list_documents", {projectPath});
 }
 
 export function projectFilesErrorMessage(error: unknown): string {

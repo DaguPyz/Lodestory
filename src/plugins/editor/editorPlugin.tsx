@@ -5,7 +5,7 @@ import {uiKey} from "@lodestory/sdk/ui";
 import {themeKey} from "@lodestory/sdk/theme";
 import {layoutKey, type LayoutContent} from "@lodestory/sdk/layout";
 import {EditorContentProvider} from "./EditorPage";
-import {EditorActions, EditorMain, EditorNavigation, EditorStatus} from "./EditorContents";
+import {EditorActions, EditorMain, EditorStatus} from "./EditorContents";
 import {ReferencePanel} from "./ReferencePanel";
 import {editorContentIds} from "./editorContentIds";
 import {createEditorModel, type EditorModel} from "./editorModel";
@@ -24,17 +24,12 @@ export function createEditorFeaturesPlugin(): Plugin {
       const layout = context.get(layoutKey);
       const ui = context.get(uiKey);
       const documents = context.get(documentsKey);
-      const removeCreateRequest = context.on(documentCreateRequested, (request) => {
-        const session = workbench.getSnapshot().session;
-        if (!session || session.id !== request.sessionId) return;
-        models.get(session.id)?.showNewDocument(request.parentPath);
-      });
       const removeRevealRequest = context.on(documentRevealRequested, (request) => {
         const session = workbench.getSnapshot().session;
         if (!session || session.id !== request.sessionId) return;
         models.get(session.id)?.revealDocument(request.documentId);
       });
-      removeContents.push(removeCreateRequest, removeRevealRequest);
+      removeContents.push(removeRevealRequest);
       removeParticipant = workbench.registerParticipant({
         id: "editor-features",
         start(session) {
@@ -55,7 +50,6 @@ export function createEditorFeaturesPlugin(): Plugin {
       });
       const contents: LayoutContent[] = [
         {id: editorContentIds.main, title: "正文编辑", role: "main", render: props => <EditorMain {...props}/>},
-        {id: editorContentIds.navigation, title: "项目文件", role: "navigation", render: props => <EditorNavigation {...props}/>},
         {id: editorContentIds.auxiliary, title: "参考资料", role: "auxiliary", render: () => <ReferencePanel/>},
         {id: editorContentIds.actions, title: "项目操作", role: "actions", render: props => <EditorActions {...props}/>},
         {id: editorContentIds.status, title: "写作状态", role: "status", render: () => <EditorStatus/>},

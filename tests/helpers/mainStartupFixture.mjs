@@ -21,6 +21,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const moduleImports = [];
   const catalogPluginIds = [];
   const editorModels = new Map();
+  const projectManagementModels = new Map();
   const appPluginsCalls = [];
   const lifecycle = [];
   const nativeCalls = [];
@@ -184,6 +185,18 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       if (session) editorModels.set(session.id, models.get(session.id));
       return children;
     },
+    ProjectFiles: function ProjectFiles({ workbench, models, active }) {
+      const session = workbench.getSnapshot().session;
+      const model = session ? models.get(session.id) : undefined;
+      if (session && model) projectManagementModels.set(session.id, model);
+      return React.createElement("project-files", {active, model});
+    },
+    ProjectDialogs: function ProjectDialogs({ workbench, models, children }) {
+      const session = workbench.getSnapshot().session;
+      const model = session ? models.get(session.id) : undefined;
+      if (session && model) projectManagementModels.set(session.id, model);
+      return children ?? React.createElement("project-dialog", {model, open: model?.getSnapshot().dialogOpen ?? false});
+    },
     WorkbenchPage: function WorkbenchPage({ workbench, layout, active }) {
       const snapshot = workbench.getSnapshot();
       return snapshot.session ? React.createElement(layout.View, {
@@ -229,8 +242,12 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       __esModule: true,
       EditorActions() {},
       EditorMain() {},
-      EditorNavigation() {},
       EditorStatus() {},
+    };
+    if (relativePath === "plugins/project-management/ProjectManagementView.tsx") return {
+      __esModule: true,
+      ProjectFiles: components.ProjectFiles,
+      ProjectDialogs: components.ProjectDialogs,
     };
     if (relativePath === "plugins/workbench/WorkbenchPage.tsx") return { __esModule: true, WorkbenchPage: components.WorkbenchPage };
     if (relativePath === "plugins/settings/ThemeSettingsPage.tsx") return { __esModule: true, ThemeSettingsPage: components.ThemeSettingsPage };
@@ -459,6 +476,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     omitThemeService() { omitThemeService = true; },
     getService(key) { return createdCores.at(-1)?.get(key); },
     editorModels,
+    projectManagementModels,
     async requestWindowClose() {
       let prevented = false;
       const event = { preventDefault() { prevented = true; } };

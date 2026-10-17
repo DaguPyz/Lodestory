@@ -18,6 +18,13 @@ function containsType(value, expectedType) {
   return containsType(value.props?.children, expectedType);
 }
 
+function findElement(value, expectedType) {
+  if (Array.isArray(value)) return value.map(item => findElement(item, expectedType)).find(Boolean);
+  if (!value || typeof value !== "object") return undefined;
+  if (value.type === expectedType) return value;
+  return findElement(value.props?.children, expectedType);
+}
+
 function errorPage(fixture) {
   assert.equal(fixture.rootElement.children.length, 1);
   const page = fixture.rootElement.children[0];
@@ -77,7 +84,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "documents", "welcome", "editor-features", "settings"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "documents", "project-management", "welcome", "editor-features", "settings"]);
   assert.deepEqual(fixture.appPluginsCalls, [[]]);
   const entryImports = fixture.moduleImports
     .filter(({ from }) => from === "main.tsx")
@@ -92,6 +99,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
     "./plugins/theme/themePlugin",
     "./plugins/welcome/welcomePlugin",
     "./plugins/editor/editorPlugin",
+    "./plugins/project-management/projectManagementPlugin",
     "./plugins/settings/settingsPlugin",
     "./styles.css",
   ]) {
@@ -110,12 +118,15 @@ test("the entry delegates UI composition and page registration to the plugin cat
       `the ${pagePlugin} page plugin should activate`);
   }
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/documents/documentsPlugin.ts"), "the documents plugin source should run in the fixture");
+  assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/project-management/projectManagementPlugin.tsx"), "the project management plugin source should run in the fixture");
   assert.ok(fixture.lifecycle.includes("activate:documents:complete"), "the documents service should activate");
   assert.ok(fixture.logs.indexOf("activate:workbench:complete") < fixture.logs.indexOf("activate:documents:begin"));
-  assert.ok(fixture.logs.indexOf("activate:documents:complete") < fixture.logs.indexOf("activate:editor-features:begin"), "the document service must be available before editor activation");
+  assert.ok(fixture.logs.indexOf("activate:documents:complete") < fixture.logs.indexOf("activate:project-management:begin"), "the document service must be available before project management activation");
+  assert.ok(fixture.logs.indexOf("activate:project-management:complete") < fixture.logs.indexOf("activate:editor-features:begin"), "the project management plugin activates before editor consumers");
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/editor/editorPlugin.tsx"),
     "the editor feature plugin source should run in the fixture");
   assert.ok(fixture.lifecycle.includes("activate:editor-features:complete"), "the editor features should activate");
+  assert.ok(fixture.lifecycle.includes("activate:project-management:complete"), "the project management plugin should activate");
   assert.ok(fixture.logs.indexOf("activate:config:complete") < fixture.logs.indexOf("activate:ui:begin"), "the config service must be available before UI activation");
   assert.ok(fixture.logs.indexOf("activate:workbench:complete") < fixture.logs.indexOf("activate:welcome:begin"), "the workbench page registers before the welcome page");
   assert.equal(fixture.lifecycle.at(-1), "activate:settings:complete");
@@ -131,7 +142,8 @@ test("the entry delegates UI composition and page registration to the plugin cat
   const themeProvider = contextMenu.props.children;
   assert.equal(themeProvider.type, fixture.components.ThemeProvider);
   assert.equal(typeof fixture.UiPages, "function", "the real UI pages component should be loaded");
-  assert.equal(themeProvider.props.children.type, fixture.UiPages);
+  const pagesElement = findElement(themeProvider.props.children, fixture.UiPages);
+  assert.ok(pagesElement, "the project dialog wrapper should retain the UI pages below it");
   assert.equal(themeProvider.props.service, fixture.getService(themeKey(fixture)));
   const errorUiService = fixture.getService(fixture.requireSdk("@lodestory/sdk/error").errorUiKey);
   assert.equal(errorUiService.ErrorBoundary, fixture.components.ErrorBoundary);
@@ -141,7 +153,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   const snapshot = uiService.getSnapshot();
   assert.equal(snapshot.current.id, "welcome");
   assert.deepEqual(Array.from(snapshot.pages, ({id, active}) => ({id, active})), [{id: "welcome", active: true}]);
-  const initialPageTree = fixture.UiPages(themeProvider.props.children.props);
+  const initialPageTree = fixture.UiPages(pagesElement.props);
   assert.ok(containsType(initialPageTree, fixture.components.WelcomePage), "the welcome plugin should render its page");
 
   // Visiting each route proves that all three page plugins registered with the real UI service.
@@ -153,7 +165,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
     {id: "editor", active: false},
     {id: "settings", active: true},
   ]);
-  const visitedPageTree = fixture.UiPages(themeProvider.props.children.props);
+  const visitedPageTree = fixture.UiPages(pagesElement.props);
   const renderedPages = visitedPageTree.props.children;
   const renderedPage = (id) => renderedPages.find((page) => page.key === id).props.children;
   const welcomeBoundary = renderedPage("welcome");

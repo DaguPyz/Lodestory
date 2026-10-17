@@ -34,13 +34,11 @@
   list-style: none;
 }
 
-.editor-project-trigger::-webkit-details-marker,
-.file-tree-entry::-webkit-details-marker {
+.editor-project-trigger::-webkit-details-marker {
   display: none;
 }
 
-.editor-project-trigger::marker,
-.file-tree-entry::marker {
+.editor-project-trigger::marker {
   content: "";
 }
 
@@ -56,7 +54,6 @@
 }
 
 .editor-project-trigger:focus-visible,
-.file-tree-entry:focus-visible,
 .manuscript-title:focus-visible,
 .editor-empty h1:focus-visible {
   outline: var(--ui-focus-width) solid var(--ui-focus-ring);
@@ -91,117 +88,11 @@
   margin-left: auto;
 }
 
-.editor-panel-header {
-  display: flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--ui-space-3);
-  min-height: var(--ui-toolbar-height);
-  padding-inline: var(--ui-space-5);
-}
-
-.editor-panel-header h2 {
-  font-size: var(--ui-font-size-strong);
-  line-height: var(--ui-line-height-strong);
-  font-weight: 600;
-}
-
-.editor-panel-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-2);
-}
-
-.file-tree-scroll,
 .reference-scroll {
   flex: 1;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-}
-
-.file-tree {
-  margin: 0;
-  padding: var(--ui-space-2) var(--ui-space-3) var(--ui-space-5);
-  list-style: none;
-}
-
-.file-tree ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.file-tree-entry {
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-3);
-  width: 100%;
-  min-height: var(--ui-row-height);
-  padding-block: var(--ui-space-3);
-  padding-left: calc(var(--ui-space-3) + var(--cmp-tree-depth, 0) * var(--ui-space-4));
-  padding-right: var(--ui-space-3);
-  color: var(--ui-text-secondary);
-  background: transparent;
-  border: 0;
-  border-radius: var(--ui-radius-row);
-  font-size: var(--ui-font-size-label);
-  line-height: var(--ui-line-height-label);
-  text-align: left;
-  cursor: pointer;
-  list-style: none;
-}
-
-.file-tree-entry > span:last-child {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.file-tree-entry:hover {
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-hover);
-}
-
-.file-tree-entry:active {
-  background: var(--ui-surface-pressed);
-}
-
-.file-tree-entry[aria-current="page"] {
-  color: var(--ui-accent-foreground);
-  background: var(--ui-surface-selected);
-}
-
-.file-tree-entry[aria-current="page"]:hover {
-  background: var(--ui-surface-selected-hover);
-}
-
-.file-tree-folder-toggle[aria-expanded="true"] > .icon:first-child {
-  transform: rotate(90deg);
-}
-
-.file-tree-spacer {
-  flex-shrink: 0;
-  width: var(--ui-icon-small);
-}
-
-.file-tree-empty {
-  min-height: var(--ui-row-height);
-  padding-block: var(--ui-space-3);
-  padding-left: calc(var(--ui-space-3) + var(--cmp-tree-depth, 0) * var(--ui-space-4) + var(--ui-icon-small) + var(--ui-space-3));
-  color: var(--ui-text-muted);
-  font-size: var(--ui-font-size-caption);
-  line-height: var(--ui-line-height-caption);
-}
-
-.file-tree-message {
-  padding: var(--ui-space-3) var(--ui-space-5);
-  color: var(--ui-text-muted);
-  font-size: var(--ui-font-size-caption);
-  line-height: var(--ui-line-height-caption);
-  overflow-wrap: anywhere;
 }
 
 .document-tab-unsaved {
@@ -492,7 +383,7 @@
 
 /* Content-owned containers remain responsive under any layout implementation. */
 .editor-toolbar-content { display: flex; align-items: center; gap: var(--ui-space-5); min-width: 0; }
-.editor-project-panel, .editor-content-main { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.editor-content-main { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .editor-content-main { container: editor-content / inline-size; }
 .editor-document[hidden] { display: none; }
 @container editor-content (max-width: 54rem) { .manuscript { padding: var(--ui-space-8); } }
@@ -504,7 +395,6 @@
 }
 @media (max-width: 26rem) { .editor-brand { display: none; } .editor-toolbar-content { gap: var(--ui-space-3); } }
 @media (forced-colors: active) {
-  .file-tree-entry[aria-current="page"] { color: HighlightText; background: Highlight; }
   .document-tab[data-active="true"]::after { background: Highlight; }
   .editor-project-popover { border-color: ButtonText; }
 }

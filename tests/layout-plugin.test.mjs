@@ -138,19 +138,24 @@ test("layout cleanup still revokes a descriptor when stopping UI fails", () => {
   remove();
 });
 
-test("the app provides the default layout, registers five editor roles, and revokes them on editor shutdown", async () => {
+test("project management owns navigation while editor features own the other layout roles", async () => {
   const f = createMainFixture();
   f.start(); await flushStartup();
   const layoutKey = f.requireSdk("@lodestory/sdk/layout").layoutKey;
   const layout = f.getService(layoutKey);
   assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.role), ["main", "navigation", "auxiliary", "actions", "status"]);
+  assert.ok(layout.getSnapshot().contents.some(({id}) => id === "project-management.files"));
+  assert.equal(layout.getSnapshot().contents.filter(({id}) => id.startsWith("editor.")).length, 4);
   assert.ok(f.lifecycle.indexOf("activate:default-layout:complete") < f.lifecycle.indexOf("activate:editor-features:begin"));
+  assert.ok(f.lifecycle.indexOf("activate:project-management:complete") < f.lifecycle.indexOf("activate:editor-features:begin"));
   const before = layout.getSnapshot();
   const ui = f.getService(f.requireSdk("@lodestory/sdk/ui").uiKey);
   await ui.openPage("editor", {project: {id: "one", name: "one", path: "/one"}});
   await ui.openPage("settings"); await ui.back();
   assert.equal(layout.getSnapshot(), before, "page navigation does not reset layout selection");
   await f.createdCores.at(-1).unmount("editor-features");
+  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id), ["project-management.files"]);
+  await f.createdCores.at(-1).unmount("project-management");
   assert.equal(layout.getSnapshot().contents.length, 0);
   assert.equal(f.logs.filter(entry => entry === "root.unmount").length, 1);
   await f.createdCores.at(-1).unmountAll();
@@ -186,7 +191,7 @@ test("another provider of layoutKey receives unchanged editor contributions and 
 
 test("partial editor feature activation revokes only its own contents after a conflicting registration", async () => {
   const {f, store} = registry();
-  store.registerContent(content("editor.navigation", "navigation"));
+  store.registerContent(content("editor.main", "main"));
   const plugin = f.loadModule("plugins/editor/editorPlugin.tsx").createEditorFeaturesPlugin();
   assert.throws(() => plugin.activate({on() { return () => {}; }, get(key) {
     if (key.id === "app/layout") return store;
@@ -196,5 +201,5 @@ test("partial editor feature activation revokes only its own contents after a co
     if (key.id === "app/workbench") return {registerParticipant() { return async () => {}; }};
   }}), /already registered/);
   await plugin.deactivate(); await plugin.deactivate();
-  assert.deepEqual(Array.from(store.getSnapshot().contents, entry => entry.id), ["editor.navigation"]);
+  assert.deepEqual(Array.from(store.getSnapshot().contents, entry => entry.id), ["editor.main"]);
 });

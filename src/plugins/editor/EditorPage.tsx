@@ -12,10 +12,8 @@ function useEditorModel(model: EditorModel, workbench: WorkbenchService) {
   const workspace = useDocumentWorkspace(data.workspace);
   const busy = state.busy || workspace.blocked;
   return {...data, workspace, busy,
-    newDisabled: !isTauri() || data.treeLoading || workspace.creating || workspace.blocked || state.busy,
-    setSelectedFolder: model.setSelectedFolder, requestNewDocument: model.requestNewDocument,
-    reloadTree: model.reloadTree, openDocument: model.openDocument, create: model.create,
-    closeCreateDialog: model.closeCreateDialog,
+    newDisabled: !isTauri() || workspace.creating || workspace.blocked || state.busy || !state.active,
+    requestNewDocument: model.requestNewDocument,
     leaveProject: () => { void model.leaveProject().catch(error => console.error("Could not close project.", {error})); },
     openSettings: () => { void model.openSettings().catch(error => console.error("Could not open settings.", {error})); },
   };

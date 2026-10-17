@@ -43,6 +43,28 @@ function renderEditorModel(fixture, layout, sessionId) {
   return model;
 }
 
+function renderProjectManagementModel(fixture, layout, sessionId) {
+  const navigation = layout.getSnapshot().contents.find(({id}) => id === "project-management.files");
+  assert.ok(navigation, "the project management plugin should register its own navigation content");
+  const element = navigation.render({active: true});
+  assert.equal(element.type, fixture.components.ProjectFiles);
+  const view = element.type(element.props);
+  const model = view.props.model ?? fixture.projectManagementModels.get(sessionId);
+  assert.ok(model, "the project files view should be connected to this workbench session");
+  return model;
+}
+
+function findElement(value, expectedType) {
+  if (!value || typeof value !== "object") return undefined;
+  if (value.type === expectedType) return value;
+  const children = value.props?.children;
+  for (const child of Array.isArray(children) ? children : [children]) {
+    const match = findElement(child, expectedType);
+    if (match) return match;
+  }
+  return undefined;
+}
+
 function project(id, name, path) {
   return { id, name, path, lastOpenedAt: "2026-10-12T08:00:00.000Z" };
 }
@@ -250,6 +272,8 @@ test("page plugins revoke their route contributions and the UI root unmounts onl
   assert.deepEqual(Array.from(ui.getSnapshot().pages, ({ id }) => id), ["editor"]);
   await core.unmount("editor-features");
   assert.equal(core.isMounted("editor-features"), false);
+  await core.unmount("project-management");
+  assert.equal(core.isMounted("project-management"), false);
   await core.unmount("documents");
   assert.equal(core.isMounted("documents"), false);
   await core.unmount("workbench");
@@ -293,8 +317,12 @@ test("a cleanup failure after an approved native close does not leave an unmount
   assert.ok(fixture.logs.some(entry => entry?.level === "error" && entry.args[0] === "Workbench could not close the application."));
 });
 
-test("editor create requests and document reveal requests connect through the SDK to the documents workspace", async () => {
-  const fixture = await startFixture();
+test("project file UI and the independent dialog wrapper connect through the SDK to document workspaces", async () => {
+  let sender;
+  const fixture = await startFixture({additionalPlugins: () => [{
+    id: "project-management-event-sender", requires: [], provides: [],
+    activate(context) { sender = context; },
+  }]});
   const workbench = getWorkbench(fixture);
   const layout = fixture.getService(fixture.requireSdk("@lodestory/sdk/layout").layoutKey);
   const documents = fixture.getService(fixture.requireSdk("@lodestory/sdk/documents").documentsKey);
@@ -304,28 +332,32 @@ test("editor create requests and document reveal requests connect through the SD
   const sessionId = workbench.getSnapshot().session.id;
   const workspace = documents.getWorkspace(sessionId);
   assert.ok(workspace);
+  const projectModel = renderProjectManagementModel(fixture, layout, sessionId);
 
+  layout.hide("project-management.files");
   layout.hide("editor.main");
+  assert.ok(!layout.getSnapshot().shownIds.includes("project-management.files"));
   assert.ok(!layout.getSnapshot().shownIds.includes("editor.main"));
-  assert.equal(await workspace.open("chapters/第一章.md"), true);
+  const {documentCreateRequested} = fixture.requireSdk("@lodestory/sdk/documents");
+  await sender.emit(documentCreateRequested, {sessionId});
   await flushStartup();
-  assert.ok(layout.getSnapshot().shownIds.includes("editor.main"), "the documents plugin reveal event should show the editor main content");
-  assert.equal(workspace.getSnapshot().documents[0].path, "chapters/第一章.md");
+  assert.equal(projectModel.getSnapshot().dialogOpen, true, "the request should open the project-owned dialog while both layout contents are hidden");
 
-  const editorModel = renderEditorModel(fixture, layout, sessionId);
-  layout.hide("editor.main");
-  editorModel.requestNewDocument("chapters");
-  await flushStartup();
-  assert.equal(editorModel.getSnapshot().createDialogOpen, true, "the editor create request event should reach the current dialog provider");
+  const dialogElement = findElement(fixture.roots[0].tree, fixture.components.ProjectDialogs);
+  assert.ok(dialogElement, "the dialog provider should be mounted by the UI wrapper, outside the navigation content");
+  const dialogView = dialogElement.type(dialogElement.props);
+  assert.equal(dialogView.props.open, true);
+  assert.equal(dialogView.props.model, projectModel);
 
-  await editorModel.create("chapters", "第二章.md");
+  await projectModel.create("", "第二章.md");
   await flushStartup();
   const snapshot = workspace.getSnapshot();
-  assert.equal(snapshot.documents.length, 2);
-  assert.ok(snapshot.documents.some(document => document.path === "chapters/第二章.md"));
-  assert.equal(snapshot.activeId, encodeURIComponent("chapters/第二章.md"));
+  assert.equal(snapshot.documents.length, 1);
+  assert.ok(snapshot.documents.some(document => document.path === "第二章.md"));
+  assert.equal(snapshot.activeId, encodeURIComponent("第二章.md"));
   assert.ok(layout.getSnapshot().shownIds.includes("editor.main"), "creating a document should reveal the editor main content");
-  assert.ok(fixture.tauriCalls.some(({command, args}) => command === "create_document" && args.parentPath === "chapters" && args.name === "第二章.md"));
+  assert.ok(fixture.tauriCalls.some(({command, args}) => command === "create_document" && args.parentPath === "" && args.name === "第二章.md"));
+  assert.equal(projectModel.getSnapshot().activeDocumentPath, "第二章.md");
 });
 
 test("a failed document save blocks project close and keeps the draft available for retry", async () => {
@@ -372,7 +404,15 @@ test("a delayed document reveal request cannot replace a newer selection or its 
   const fixture = await startFixture({additionalPlugins: () => [{
     id: "document-event-sender", requires: [], provides: [],
     activate(context) { sender = context; },
-  }]});
+  }], invokeHandler(command, args) {
+    if (command === "list_documents") return [
+      {path: "old", name: "old", children: [{path: "old/第一章.md", name: "第一章.md"}]},
+      {path: "current", name: "current", children: [{path: "current/第二章.md", name: "第二章.md"}]},
+    ];
+    if (command === "read_document") return {path: args.path, fileName: args.path.split("/").at(-1), content: ""};
+    if (command === "save_document") return undefined;
+    return undefined;
+  }});
   const workbench = getWorkbench(fixture);
   const {documentsKey, documentRevealRequested} = fixture.requireSdk("@lodestory/sdk/documents");
   const layout = fixture.getService(fixture.requireSdk("@lodestory/sdk/layout").layoutKey);
@@ -384,14 +424,17 @@ test("a delayed document reveal request cannot replace a newer selection or its 
   const oldId = workspace.getSnapshot().activeId;
   await workspace.open("current/第二章.md");
   const currentId = workspace.getSnapshot().activeId;
-  const model = renderEditorModel(fixture, layout, sessionId);
+  await flushStartup();
+  const model = renderProjectManagementModel(fixture, layout, sessionId);
   assert.equal(model.getSnapshot().selectedFolder, "current");
   layout.hide("editor.main");
+  layout.hide("project-management.files");
 
   await sender.emit(documentRevealRequested, {sessionId, documentId: oldId});
 
   assert.equal(workspace.getSnapshot().activeId, currentId);
   assert.equal(model.getSnapshot().selectedFolder, "current");
+  assert.equal(model.getSnapshot().activeDocumentPath, "current/第二章.md");
   assert.ok(!layout.getSnapshot().shownIds.includes("editor.main"));
 });
 

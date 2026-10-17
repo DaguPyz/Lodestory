@@ -77,7 +77,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "welcome", "editor-features", "settings"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "welcome", "editor-features", "settings"]);
   assert.deepEqual(fixture.appPluginsCalls, [[]]);
   const entryImports = fixture.moduleImports
     .filter(({ from }) => from === "main.tsx")
@@ -112,6 +112,8 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/editor/editorPlugin.tsx"),
     "the editor feature plugin source should run in the fixture");
   assert.ok(fixture.lifecycle.includes("activate:editor-features:complete"), "the editor features should activate");
+  assert.ok(fixture.logs.indexOf("activate:config:complete") < fixture.logs.indexOf("activate:ui:begin"), "the config service must be available before UI activation");
+  assert.ok(fixture.logs.indexOf("activate:workbench:complete") < fixture.logs.indexOf("activate:welcome:begin"), "the workbench page registers before the welcome page");
   assert.equal(fixture.lifecycle.at(-1), "activate:settings:complete");
   assert.ok(fixture.logs.indexOf("activate:settings:complete") < fixture.logs.indexOf("plugins-ready.emit"));
   assert.ok(fixture.logs.indexOf("plugins-ready.emit") < fixture.logs.indexOf("root.render"));
@@ -175,6 +177,75 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.equal(settingsPage.type, fixture.components.ThemeSettingsPage);
   assert.equal(settingsPage.props.active, true);
   assert.equal(typeof settingsPage.props.onBack, "function");
+});
+
+test("the config service selects the configured welcome page after every page is registered", async () => {
+  const fixture = createMainFixture();
+  fixture.start();
+  await flushStartup();
+
+  const ui = fixture.getService(fixture.requireSdk("@lodestory/sdk/ui").uiKey);
+  assert.equal(ui.getSnapshot().current.id, "welcome", "config.json selects welcome even though workbench registered its page first");
+  assert.deepEqual(fixture.appPluginsCalls, [[]], "the app assembles the catalog without runtime configuration arguments");
+});
+
+test("a valid user startup-page override is applied after additional pages register", async () => {
+  const fixture = createMainFixture({
+    configOverrides: {"ui.initialPage": "launch-target"},
+    additionalPlugins: ({requireSdk}) => {
+      const {uiKey} = requireSdk("@lodestory/sdk/ui");
+      return [{
+        id: "test-launch-target",
+        requires: [uiKey],
+        provides: [],
+        activate(context) {
+          context.get(uiKey).registerPage({id: "launch-target", render: () => fixture.components.WelcomePage({})});
+        },
+        deactivate() {},
+      }];
+    },
+  });
+  fixture.start();
+  await flushStartup();
+
+  const ui = fixture.getService(fixture.requireSdk("@lodestory/sdk/ui").uiKey);
+  assert.equal(ui.getSnapshot().current.id, "launch-target");
+  assert.equal(fixture.roots.length, 1);
+});
+
+test("an invalid user startup-page value falls back to the base configuration", async () => {
+  const fixture = createMainFixture({configOverrides: {"ui.initialPage": false}});
+  fixture.start();
+  await flushStartup();
+
+  const ui = fixture.getService(fixture.requireSdk("@lodestory/sdk/ui").uiKey);
+  assert.equal(ui.getSnapshot().current.id, "welcome");
+  assert.ok(fixture.logs.some(entry => entry?.level === "warn" || entry?.level === "error"), "the invalid user override should be reported");
+});
+
+test("an unregistered configured startup page aborts startup and rolls back plugins", async () => {
+  const fixture = createMainFixture({configOverrides: {"ui.initialPage": "missing-page"}});
+  fixture.start();
+  await flushStartup();
+
+  assert.equal(fixture.rootCalls.length, 0);
+  errorPage(fixture);
+  assert.ok(collectErrors(reportedFailure(fixture)).some(error => /page.*missing-page|missing-page.*page/i.test(error.message ?? "")));
+  for (const id of fixture.catalogPluginIds) assert.equal(fixture.createdCores.at(-1).isMounted(id), false);
+});
+
+test("changing the restart-only startup page config does not navigate the running UI", async () => {
+  const fixture = createMainFixture();
+  fixture.start();
+  await flushStartup();
+  const ui = fixture.getService(fixture.requireSdk("@lodestory/sdk/ui").uiKey);
+  const config = fixture.getService(fixture.requireSdk("@lodestory/sdk/config").configKey);
+  const {uiInitialPageConfig} = fixture.requireSdk("@lodestory/sdk/ui");
+
+  await config.set(uiInitialPageConfig, "settings");
+
+  assert.equal(config.getSnapshot(uiInitialPageConfig), "settings");
+  assert.equal(ui.getSnapshot().current.id, "welcome", "the new initial page is applied on the next startup only");
 });
 
 test("the entry waits for native theme setup before the plugin catalog renders", async () => {

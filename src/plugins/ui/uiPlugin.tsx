@@ -3,14 +3,13 @@ import {createRoot, type Root, type RootOptions} from "react-dom/client";
 import {flushSync} from "react-dom";
 import type {Plugin} from "@lodestory/sdk";
 import {pluginsReady} from "../../plugin-core";
-import {uiKey, UiNavigationCompleteError, type UiNavigationApproval, type UiNavigationGuard, type UiNavigationRequest, type UiService, type UiWrapper} from "@lodestory/sdk/ui";
+import {configKey} from "@lodestory/sdk/config";
+import {uiInitialPageConfig, uiKey, UiNavigationCompleteError, type UiNavigationApproval, type UiNavigationGuard, type UiNavigationRequest, type UiService, type UiWrapper} from "@lodestory/sdk/ui";
 import {errorUiKey} from "@lodestory/sdk/error";
 import {createPageRegistry} from "./pageRegistry";
 import {UiPages} from "./UiPages";
 
 export type UiPluginOptions = {
-    /** 启动时显示的页面；省略时使用第一个登记的页面。 */
-    readonly initialPage?: string;
     readonly rootOptions?: RootOptions;
 };
 
@@ -19,16 +18,18 @@ export type UiPluginOptions = {
  * ready 时选择初始页面并挂载通用页面容器，之后由页面状态驱动 React 更新。
  */
 export function createUiPlugin(container?: Element | DocumentFragment, options: UiPluginOptions = {}): Plugin {
-    const {initialPage, rootOptions} = options;
+    const {rootOptions} = options;
     let cleanup: (() => void) | undefined;
 
     return {
         id: "ui",
-        requires: [errorUiKey],
+        requires: [errorUiKey, configKey],
         provides: [uiKey],
 
         activate(context) {
             const {ErrorBoundary} = context.get(errorUiKey);
+            const config = context.get(configKey);
+            const removeInitialPageConfig = config.register(uiInitialPageConfig);
             // 每次激活使用独立登记和状态，旧服务和旧撤销函数不能影响下一次激活。
             const pages = createPageRegistry();
             const wrappers = new Map<string, UiWrapper>();
@@ -57,9 +58,13 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                 try {
                     unmount();
                 } finally {
-                    pages.clear();
-                    wrappers.clear();
-                    navigationGuards.clear();
+                    try {
+                        pages.clear();
+                        wrappers.clear();
+                        navigationGuards.clear();
+                    } finally {
+                        removeInitialPageConfig();
+                    }
                 }
             };
 
@@ -337,7 +342,8 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                     // 准备期间若已停用或撤销贡献，不得再创建根视图。
                     if (!active || sortedWrappers.some(wrapper => wrappers.get(wrapper.id) !== wrapper)) return;
                 }
-                pages.start(initialPage);
+                // Read only after every wrapper has prepared; a prepare hook may update restart config.
+                pages.start(config.getSnapshot(uiInitialPageConfig) ?? undefined);
                 navigationAllowed = true;
 
                 // 根视图由本插件提供；按 order 从内向外包装，最小 order 位于最外层。

@@ -34,10 +34,12 @@ The development-only `/tests/fixtures/project-index.html` page uses Tauri IPC mo
 
 The same fixture also supports document creation and writing; `?scenario=create-error`, `?scenario=save-error`, and `?scenario=slow-save` exercise document failure and pending-save flows without touching actual files.
 
-The public plugin contracts live in [`@lodestory/sdk`](packages/sdk/README.md), an independent ESM package with core, UI, error, theme, layout, and workbench entry points. The app consumes it through the pnpm workspace. Dynamic plugin loading and marketplace installation are planned separately.
+The public plugin contracts live in [`@lodestory/sdk`](packages/sdk/README.md), an independent ESM package with core, UI, error, config, theme, layout, and workbench entry points. The app consumes it through the pnpm workspace. Dynamic plugin loading and marketplace installation are planned separately.
 
 The editor workbench provides `workbenchKey` for project sessions and coordinated leave checks; `default-layout` provides `layoutKey` for arranging the editor's main, navigation, auxiliary, actions, and status contents. See [工作台插件设计](文档/需求设计/工作台插件.md) and [布局插件设计](文档/需求设计/布局插件.md). The project fixture supports `?layout=alternative` for replacement verification and `?layout=probes` for multiple contributions and hidden-state checks.
 
 Theme behavior and implementation boundaries are documented in [主题管理设计](文档/需求设计/主题管理.md). Theme authors and UI plugins share [主题标准 v1](文档/主题标准-v1.md) and its [颜色角色登记表](文档/主题标准-v1/颜色角色登记表.md). Regenerate the authoring reference with `pnpm generate:theme-docs` and verify the contract with `pnpm check:theme-standard`.
+
+The `config` plugin provides typed application settings through `configKey`. It owns the base config file and local user overrides; the SDK contract does not prescribe a storage backend. The first integration selects the UI startup page through `ui.initialPage`. See [配置插件设计](文档/需求设计/配置插件.md). Existing theme preferences remain in the theme plugin and are not migrated by this change.
 
 The `theme` plugin owns the color standard, resolution, selection, and synchronization. The separate `builtin-themes` plugin uses the same `registerTheme` API and cleanup lifecycle as custom contributors. Default and fallback IDs are configured in `src/plugins/theme/theme-config.json`; UI mounting waits until initial contributions and theme preparation are complete.

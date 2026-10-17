@@ -152,8 +152,54 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
   const { createErrorUiPlugin } = load(resolve(sourceRoot, "plugins/error-ui/errorUiPlugin.tsx"));
   const { createUiPlugin } = load(resolve(sourceRoot, "plugins/ui/uiPlugin.tsx"));
   const { uiKey } = sdk.requireSdk("@lodestory/sdk/ui");
+  const { uiInitialPageConfig } = sdk.requireSdk("@lodestory/sdk/ui");
+  const { configKey } = sdk.requireSdk("@lodestory/sdk/config");
   const { errorUiKey } = sdk.requireSdk("@lodestory/sdk/error");
   const core = new EngineCore();
+
+  const configFaults = { readError: null };
+  const configItems = new Map();
+  const configValues = new Map();
+  const configListeners = new Map();
+  const configService = {
+    register(item) {
+      if (configItems.has(item.id)) throw new Error(`Configuration '${item.id}' is already registered.`);
+      if (!item.validate(item.defaultValue)) throw new TypeError(`Configuration '${item.id}' has an invalid default value.`);
+      configItems.set(item.id, item);
+      return () => {
+        if (configItems.get(item.id) === item) configItems.delete(item.id);
+      };
+    },
+    getSnapshot(item) {
+      if (configFaults.readError) throw configFaults.readError;
+      if (configItems.get(item.id) !== item) throw new Error(`Configuration '${item.id}' is not registered.`);
+      return configValues.has(item.id) ? configValues.get(item.id) : item.defaultValue;
+    },
+    async set(item, value) {
+      if (configItems.get(item.id) !== item) throw new Error(`Configuration '${item.id}' is not registered.`);
+      if (!item.validate(value)) throw new TypeError(`Configuration '${item.id}' has an invalid value.`);
+      configValues.set(item.id, value);
+      for (const listener of [...(configListeners.get(item.id) ?? [])]) listener();
+    },
+    async reset(item) {
+      if (configItems.get(item.id) !== item) throw new Error(`Configuration '${item.id}' is not registered.`);
+      configValues.delete(item.id);
+      for (const listener of [...(configListeners.get(item.id) ?? [])]) listener();
+    },
+    subscribe(item, listener) {
+      if (configItems.get(item.id) !== item) throw new Error(`Configuration '${item.id}' is not registered.`);
+      let listeners = configListeners.get(item.id);
+      if (!listeners) configListeners.set(item.id, listeners = new Set());
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+  };
+  const createConfigPlugin = () => ({
+    id: "test-config",
+    requires: [],
+    provides: [configKey],
+    activate(context) { context.provide(configKey, configService); },
+  });
 
   return {
     React: ReactWithHooks,
@@ -161,7 +207,11 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
     container,
     controls,
     createUiPlugin,
+    createConfigPlugin,
     createErrorUiPlugin,
+    config: configService,
+    configFaults,
+    configKey,
     document,
     documentLookups,
     documentRoot,
@@ -169,6 +219,7 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
     roots,
     logs,
     uiKey,
+    uiInitialPageConfig,
     errorUiKey,
     flushSyncEvents,
     window,
@@ -177,6 +228,7 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
     sdkEvaluatedModules: sdk.evaluatedModules,
     rootOptions,
     async mountUi(options = (rootOptions ? { rootOptions } : {})) {
+      await core.mount(createConfigPlugin());
       const errorPlugin = createErrorUiPlugin();
       await core.mount(errorPlugin);
       const plugin = createUiPlugin(container, options);

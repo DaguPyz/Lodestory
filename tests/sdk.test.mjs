@@ -9,13 +9,14 @@ import * as packageError from "@lodestory/sdk/error";
 import * as packageLayout from "@lodestory/sdk/layout";
 import * as packageTheme from "@lodestory/sdk/theme";
 import * as packageWorkbench from "@lodestory/sdk/workbench";
+import * as packageConfig from "@lodestory/sdk/config";
 import { createSdkLoader } from "./helpers/sdkFixture.mjs";
 
 const packageManifest = JSON.parse(readFileSync(new URL("../packages/sdk/package.json", import.meta.url), "utf8"));
 
 test("SDK package exposes ESM root and all public capability entry points", () => {
   assert.equal(packageManifest.type, "module");
-  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./error", "./layout", "./theme", "./ui", "./workbench"]);
+  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./config", "./error", "./layout", "./theme", "./ui", "./workbench"]);
 
   for (const [specifier, target] of [
     [".", "index"],
@@ -24,23 +25,27 @@ test("SDK package exposes ESM root and all public capability entry points", () =
     ["./layout", "layout"],
     ["./theme", "theme"],
     ["./workbench", "workbench"],
+    ["./config", "config"],
   ]) {
     assert.equal(packageManifest.exports[specifier].import, `./dist/${target}.js`);
     assert.equal(packageManifest.exports[specifier].types, `./dist/${target}.d.ts`);
   }
 
   assert.deepEqual(Object.keys(packageRoot).sort(), ["createEventKey", "createServiceKey"]);
-  assert.deepEqual(Object.keys(packageUi).sort(), ["UiNavigationCompleteError", "uiKey"]);
+  assert.deepEqual(Object.keys(packageUi).sort(), ["UiNavigationCompleteError", "uiInitialPageConfig", "uiKey"]);
   assert.equal(typeof packageUi.UiNavigationCompleteError, "function");
   assert.deepEqual(Object.keys(packageError), ["errorUiKey"]);
   assert.deepEqual(Object.keys(packageTheme).sort(), ["themeKey"]);
   assert.deepEqual(Object.keys(packageLayout), ["layoutKey"]);
   assert.deepEqual(Object.keys(packageWorkbench), ["workbenchKey"]);
+  assert.deepEqual(Object.keys(packageConfig), ["configKey"]);
   assert.equal(packageLayout.layoutKey.id, "app/layout");
   assert.equal(packageUi.uiKey.id, "app/ui");
   assert.equal(packageError.errorUiKey.id, "app/error-ui");
   assert.equal(packageTheme.themeKey.id, "app/theme");
   assert.equal(packageWorkbench.workbenchKey.id, "app/workbench");
+  assert.equal(packageConfig.configKey.id, "app/config");
+  assert.equal(packageUi.uiInitialPageConfig.id, "ui.initialPage");
   assert.ok(packageManifest.files.includes("dist"), "the packed package must include the runtime and declaration outputs");
 });
 
@@ -76,10 +81,13 @@ test("SDK subpaths share one key module and need no host imports or runtime APIs
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/layout").layoutKey, hostLayoutKey);
   const hostWorkbenchKey = sdk.requireSdk("@lodestory/sdk/workbench").workbenchKey;
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/workbench").workbenchKey, hostWorkbenchKey);
+  const hostConfigKey = sdk.requireSdk("@lodestory/sdk/config").configKey;
+  assert.strictEqual(sdk.requireSdk("@lodestory/sdk/config").configKey, hostConfigKey);
   assert.strictEqual(pluginUiKey, hostUiKey);
   assert.strictEqual(pluginThemeKey, hostThemeKey);
   assert.equal(sdk.evaluatedModules.filter((path) => path === "ServiceKey.ts").length, 1);
   assert.equal(hostWorkbenchKey.id, "app/workbench");
+  assert.equal(hostConfigKey.id, "app/config");
   assert.deepEqual(hostAccesses, []);
   assert.equal(sdk.imports.filter(({ from }) => from !== "fixture").every(({ specifier }) => specifier.startsWith(".")), true);
 });

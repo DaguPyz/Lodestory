@@ -13,12 +13,25 @@ import type { UiNavigationRequest } from "@lodestory/sdk/ui";
 import { errorUiKey, type ErrorUiService } from "@lodestory/sdk/error";
 import { themeKey, type ThemeConfig, type ThemeService } from "@lodestory/sdk/theme";
 import { workbenchKey, type LeaveReason, type WorkbenchProject, type WorkbenchService, type WorkbenchSession } from "@lodestory/sdk/workbench";
+import { configKey, type ConfigItem, type ConfigService, type ConfigValue } from "@lodestory/sdk/config";
 
 type Document = { read(): string };
 type DocumentChanged = { documentId: string; revision: number };
 
 const documentKey: ServiceKey<Document> = createServiceKey<Document>("example/document");
 const documentChanged: EventKey<DocumentChanged> = createEventKey<DocumentChanged>("example/document-changed");
+const welcomePage: ConfigItem<string | null> = {
+  id: "ui.initialPage",
+  defaultValue: null,
+  effect: "restart",
+  validate: (value): value is string | null => value === null || typeof value === "string",
+};
+const testConfig: ConfigItem<{ readonly enabled: boolean }> = {
+  id: "example.enabled",
+  defaultValue: { enabled: true },
+  effect: "live",
+  validate: (value): value is { readonly enabled: boolean } => typeof value === "object" && value !== null && "enabled" in value,
+};
 const listener: EventListener<DocumentChanged> = ({ documentId, revision }) => {
   const id: string = documentId;
   const currentRevision: number = revision;
@@ -29,12 +42,19 @@ const listener: EventListener<DocumentChanged> = ({ documentId, revision }) => {
 declare const context: PluginContext;
 const plugin: Plugin = {
   id: "sdk-types",
-  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, workbenchKey],
+  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, workbenchKey, configKey],
   provides: [],
   activate(pluginContext) {
     const document = pluginContext.get(documentKey);
     const text: string = document.read();
     const ui: UiService = pluginContext.get(uiKey);
+    const config: ConfigService = pluginContext.get(configKey);
+    const removeConfig = config.register(testConfig);
+    const enabled: boolean = config.getSnapshot(testConfig).enabled;
+    const update: Promise<void> = config.set(testConfig, { enabled: false });
+    const reset: Promise<void> = config.reset(testConfig);
+    const stopConfigListener = config.subscribe(testConfig, () => void config.getSnapshot(testConfig));
+    const stopConfigRegistration: () => void = config.register(welcomePage);
     const workbench: WorkbenchService = pluginContext.get(workbenchKey);
     const project: WorkbenchProject = {id: "project", name: "项目", path: "/projects/project"};
     const opening: Promise<boolean> = workbench.openProject(project);
@@ -76,6 +96,12 @@ const plugin: Plugin = {
     void shown;
     void layout.View;
     void ui;
+    void enabled;
+    void update;
+    void reset;
+    stopConfigListener();
+    removeConfig();
+    stopConfigRegistration();
     void opening;
     void closing;
     void active;
@@ -120,3 +146,5 @@ const themeConfig: ThemeConfig = {
   fallbackThemeIds: { dark: "example.ink.dark", light: "example.paper.light" },
 };
 void themeConfig;
+const jsonConfig: ConfigValue = { values: [null, true, 1, "ok"] };
+void jsonConfig;

@@ -1,10 +1,15 @@
 import type { ReactNode } from "react";
 import type { PluginContext } from "@lodestory/sdk";
+import { configKey } from "@lodestory/sdk/config";
 import { errorUiKey } from "@lodestory/sdk/error";
-import { uiKey, type UiNavigationRequest } from "@lodestory/sdk/ui";
+import { uiInitialPageConfig, uiKey, type UiNavigationRequest } from "@lodestory/sdk/ui";
 
 export function registerUi(context: PluginContext, root: ReactNode): void {
   const ui = context.get(uiKey);
+  const config = context.get(configKey);
+  const initialPage: string | null = config.getSnapshot(uiInitialPageConfig);
+  const updateInitialPage: Promise<void> = config.set(uiInitialPageConfig, initialPage);
+  void updateInitialPage;
   const { ErrorBoundary } = context.get(errorUiKey);
   ui.registerPage({
     id: "fixture-page",

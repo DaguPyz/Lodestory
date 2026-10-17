@@ -13,7 +13,7 @@ export function deferred() {
   return { promise, resolve: resolvePromise };
 }
 
-export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, preference, layoutFactory, additionalPlugins = [], invokeHandler } = {}) {
+export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, preference, configBaseValues, configOverrides, configStorageReadError, configStorageWriteError, layoutFactory, additionalPlugins = [], invokeHandler } = {}) {
   const modules = new Map();
   const sdk = createSdkLoader({ modules });
   const createdCores = [];
@@ -31,6 +31,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const channels = [];
   const logs = [];
   const storage = new Map(preference ? [["lodestory.theme-preference", JSON.stringify(preference)]] : []);
+  if (configOverrides !== undefined) storage.set("lodestory.config-overrides", JSON.stringify(configOverrides));
   const themeApplications = [];
   const rootElement = { children: [], textContent: "", innerHTML: "", append(child) { this.children.push(child); } };
   rootElement.replaceChildren = (...children) => { rootElement.children = children; };
@@ -52,8 +53,14 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   };
   const window = {
     localStorage: {
-      getItem(key) { return storage.get(key) ?? null; },
-      setItem(key, value) { storage.set(key, value); },
+      getItem(key) {
+        if (key === "lodestory.config-overrides" && configStorageReadError) throw configStorageReadError;
+        return storage.get(key) ?? null;
+      },
+      setItem(key, value) {
+        if (key === "lodestory.config-overrides" && configStorageWriteError) throw configStorageWriteError;
+        storage.set(key, value);
+      },
     },
     matchMedia() {
       return {
@@ -250,7 +257,9 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     }
     const source = readFileSync(path, "utf8");
     if (path.endsWith(".json")) {
-      const data = JSON.parse(source);
+      const data = relativePath === "plugins/config/config.json" && configBaseValues !== undefined
+        ? configBaseValues
+        : JSON.parse(source);
       return { ...data, __esModule: true, default: data };
     }
     const compiled = ts.transpileModule(source, {

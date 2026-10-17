@@ -1,5 +1,14 @@
 import type { ReactNode } from "react";
+import type { ConfigItem } from "./config.js";
 import { createServiceKey } from "./ServiceKey.js";
+
+/** UI 启动时选择的首页；null 表示沿用第一个登记页面。 */
+export const uiInitialPageConfig: ConfigItem<string | null> = Object.freeze({
+  id: "ui.initialPage",
+  defaultValue: null,
+  effect: "restart",
+  validate: (value: unknown): value is string | null => value === null || typeof value === "string",
+});
 
 /** 一个插件提供的根包装层；数值较小的 order 在外层，相同值保持登记顺序。 */
 export type UiWrapper = {

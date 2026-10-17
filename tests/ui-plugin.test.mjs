@@ -8,6 +8,12 @@ function contributor(f, id, activate, deactivate = () => {}) {
   return f.core.mount({ id, requires: [f.uiKey], provides: [], activate, deactivate });
 }
 
+async function mountUiAtPage(f, initialPage, options) {
+  const mounted = await f.mountUi(options);
+  await f.config.set(f.uiInitialPageConfig, initialPage);
+  return mounted;
+}
+
 function page(id, render = () => null) {
   return { id, render };
 }
@@ -89,13 +95,14 @@ test("activation waits for ready, mounts one page container, and allows navigati
   const onRecoverableError = () => {};
   const rootOptions = { identifierPrefix: "lodestory-", onCaughtError, onRecoverableError };
   const f = uiPluginFixture({ container, rootOptions });
-  const { plugin, service } = await f.mountUi({ initialPage: "home", rootOptions });
+  const { plugin, service } = await mountUiAtPage(f, "home", { rootOptions });
 
   assert.deepEqual(f.documentLookups, [], "an explicit container avoids document lookup");
   assert.equal(f.core.get(f.uiKey), service);
   assert.equal(plugin.id, "ui");
-  assert.equal(plugin.requires.length, 1);
+  assert.equal(plugin.requires.length, 2);
   assert.equal(plugin.requires[0], f.errorUiKey);
+  assert.equal(plugin.requires[1], f.configKey);
   assert.equal(plugin.provides.length, 1);
   assert.equal(plugin.provides[0], f.uiKey);
   assert.equal(f.roots.length, 0, "activation must not call createRoot");
@@ -146,6 +153,7 @@ test("a no-argument UI plugin resolves #root at ready and defaults to the first 
   const plugin = f.createUiPlugin();
 
   assert.deepEqual(f.documentLookups, [], "factory creation must not inspect the document");
+  await f.core.mount(f.createConfigPlugin());
   await f.core.mount(f.createErrorUiPlugin());
   await f.core.mount(plugin);
   const service = f.core.get(f.uiKey);
@@ -175,7 +183,7 @@ test("a missing default #root fails EngineCore startup before createRoot and rol
   };
 
   await assert.rejects(
-    f.core.start([f.createErrorUiPlugin(), f.createUiPlugin(), pagePlugin]),
+    f.core.start([f.createConfigPlugin(), f.createErrorUiPlugin(), f.createUiPlugin(), pagePlugin]),
     startupError(/UI root container '#root' was not found/),
   );
 
@@ -223,7 +231,7 @@ test("ready fails without a page and closes startup registration", async () => {
 
 test("ready rejects an unknown initial page without creating a React root", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "missing" });
+  const { service } = await mountUiAtPage(f, "missing");
   service.registerPage(page("home"));
 
   await assert.rejects(f.notifyReady(), startupError(/page 'missing' is not registered/));
@@ -231,9 +239,73 @@ test("ready rejects an unknown initial page without creating a React root", asyn
   await f.core.unmount("ui");
 });
 
+test("the configured page is read after every wrapper has prepared", async () => {
+  const f = uiPluginFixture();
+  const { service } = await mountUiAtPage(f, "first");
+  service.registerPage(page("first"));
+  service.registerPage(page("late"));
+  const preparationOrder = [];
+  service.addWrapper({
+    id: "prepare-initial-page-first",
+    order: 0,
+    wrap: children => children,
+    async prepare() {
+      preparationOrder.push("first");
+      await f.config.set(f.uiInitialPageConfig, "first");
+    },
+  });
+  service.addWrapper({
+    id: "prepare-initial-page-last",
+    order: 1,
+    wrap: children => children,
+    async prepare() {
+      preparationOrder.push("last");
+      await f.config.set(f.uiInitialPageConfig, "late");
+    },
+  });
+
+  await f.notifyReady();
+
+  assert.deepEqual(preparationOrder, ["first", "last"]);
+  assert.equal(service.getSnapshot().current.id, "late");
+  await f.core.unmount("ui");
+});
+
+test("initial page config validates its shape and runtime updates wait for restart", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi();
+  service.registerPage(page("home"));
+  service.registerPage(page("settings"));
+
+  assert.equal(f.uiInitialPageConfig.id, "ui.initialPage");
+  assert.equal(f.uiInitialPageConfig.defaultValue, null);
+  assert.equal(f.uiInitialPageConfig.effect, "restart");
+  await assert.rejects(f.config.set(f.uiInitialPageConfig, 12), /invalid value/);
+  assert.equal(f.config.getSnapshot(f.uiInitialPageConfig), null);
+
+  await f.config.set(f.uiInitialPageConfig, "home");
+  await f.notifyReady();
+  assert.equal(service.getSnapshot().current.id, "home");
+
+  await f.config.set(f.uiInitialPageConfig, "settings");
+  assert.equal(service.getSnapshot().current.id, "home", "a restart-only setting must not navigate the running UI");
+  await f.core.unmount("ui");
+});
+
+test("a config read error fails UI startup before creating the root", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi();
+  service.registerPage(page("home"));
+  f.configFaults.readError = new Error("configuration read failed");
+
+  await assert.rejects(f.notifyReady(), startupError(/configuration read failed/));
+  assert.equal(f.roots.length, 0);
+  await f.core.unmount("ui");
+});
+
 test("visited A/B/C pages receive params, hide inactive views, and back restores the previous location", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "A" });
+  const { service } = await mountUiAtPage(f, "A");
   let bInitializations = 0;
   let updateBDraft;
   const PageA = ({ params, active }) => f.React.createElement("section", {
@@ -313,7 +385,7 @@ test("visited A/B/C pages receive params, hide inactive views, and back restores
 
 test("navigation guards can reject open and back without changing the route or history", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "A" });
+  const { service } = await mountUiAtPage(f, "A");
   const requests = [];
   let rejectBack = true;
   service.registerNavigationGuard({
@@ -348,7 +420,7 @@ test("navigation guards can reject open and back without changing the route or h
 
 test("reset navigation clears history only after guard approval and does not push the prior page", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "welcome" });
+  const { service } = await mountUiAtPage(f, "welcome");
   let rejectReset = true;
   const requests = [];
   service.registerNavigationGuard({
@@ -381,7 +453,7 @@ test("reset navigation clears history only after guard approval and does not pus
 
 test("same-page reset is guarded and clears existing history", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "welcome" });
+  const { service } = await mountUiAtPage(f, "welcome");
   const requests = [];
   let rejectReset = true;
   service.registerNavigationGuard({
@@ -418,7 +490,7 @@ test("same-page reset is guarded and clears existing history", async () => {
 
 test("same-page parameter changes are guarded and rejected changes preserve the prior location", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "home" });
+  const { service } = await mountUiAtPage(f, "home");
   let reject = true;
   const requests = [];
   service.registerNavigationGuard({
@@ -451,7 +523,7 @@ test("same-page parameter changes are guarded and rejected changes preserve the 
 
 test("later guard rejection cancels earlier approvals in reverse order", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "home" });
+  const { service } = await mountUiAtPage(f, "home");
   const calls = [];
   for (const id of ["first", "second"]) {
     service.registerNavigationGuard({
@@ -485,7 +557,7 @@ test("later guard rejection cancels earlier approvals in reverse order", async (
 
 test("rollback restores synchronous guard state inside flushSync before async cleanup", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "home" });
+  const { service } = await mountUiAtPage(f, "home");
   let releaseCleanup;
   const cleanupGate = new Promise(resolve => { releaseCleanup = resolve; });
   service.registerNavigationGuard({
@@ -519,7 +591,7 @@ test("rollback restores synchronous guard state inside flushSync before async cl
 
 test("guard commits and route publication flush before completion cleanup", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "home" });
+  const { service } = await mountUiAtPage(f, "home");
   service.registerNavigationGuard({
     id: "session",
     prepare() {
@@ -542,7 +614,7 @@ test("guard commits and route publication flush before completion cleanup", asyn
 
 test("completion failures reject after route commit and do not skip remaining cleanup", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "home" });
+  const { service } = await mountUiAtPage(f, "home");
   const { UiNavigationCompleteError } = f.requireSdk("@lodestory/sdk/ui");
   const firstError = new Error("first cleanup failed");
   const secondError = new Error("second cleanup failed");
@@ -583,7 +655,7 @@ test("completion failures reject after route commit and do not skip remaining cl
 
 test("a throwing commit cancels every approval in reverse order, including prior commits", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "home" });
+  const { service } = await mountUiAtPage(f, "home");
   const calls = [];
   const commitError = new Error("commit failed");
   service.registerNavigationGuard({
@@ -632,7 +704,7 @@ test("a throwing commit cancels every approval in reverse order, including prior
 
 test("a throwing guard rejects the transition and cancels prior approvals", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "home" });
+  const { service } = await mountUiAtPage(f, "home");
   const calls = [];
   const guardError = new Error("guard failed");
   service.registerNavigationGuard({
@@ -657,7 +729,7 @@ test("a throwing guard rejects the transition and cancels prior approvals", asyn
 
 test("concurrent navigation requests return false while the first guard is pending", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "home" });
+  const { service } = await mountUiAtPage(f, "home");
   let release;
   const gate = new Promise(resolve => { release = resolve; });
   service.registerNavigationGuard({
@@ -680,7 +752,7 @@ test("concurrent navigation requests return false while the first guard is pendi
 
 test("deactivation during an awaited guard cancels its late approval without committing", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "home" });
+  const { service } = await mountUiAtPage(f, "home");
   let release;
   const gate = new Promise(resolve => { release = resolve; });
   const calls = [];
@@ -713,7 +785,7 @@ test("deactivation during an awaited guard cancels its late approval without com
 
 test("disposing an awaited guard invalidates its pending navigation before commit", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "home" });
+  const { service } = await mountUiAtPage(f, "home");
   let release;
   const gate = new Promise(resolve => { release = resolve; });
   const calls = [];
@@ -742,7 +814,7 @@ test("disposing an awaited guard invalidates its pending navigation before commi
 
 test("mid-commit invalidation cancels all approvals, including one already committed", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "home" });
+  const { service } = await mountUiAtPage(f, "home");
   const calls = [];
   let removeSecond;
   service.registerNavigationGuard({
@@ -777,7 +849,7 @@ test("mid-commit invalidation cancels all approvals, including one already commi
 
 test("wrappers surround the real UiPages tree and ThemeProvider receives its registered service", async () => {
   const f = uiPluginFixture();
-  const { service: ui, errorService } = await f.mountUi({ initialPage: "home" });
+  const { service: ui, errorService } = await mountUiAtPage(f, "home");
   const { ThemeProvider, useThemeService } = f.loadSource("plugins/theme/ThemeProvider.tsx");
   const themeService = {
     getSnapshot: () => ({ preference: { mode: "fixed", themeId: "lodestory.builtin.dark" }, theme: { id: "lodestory.builtin.dark", type: "dark" }, themes: [], unavailableThemeId: null, persistenceError: false, windowError: false }),
@@ -844,7 +916,7 @@ test("wrappers surround the real UiPages tree and ThemeProvider receives its reg
 
 test("disposing an unvisited page before ready removes it from the initial snapshot", async () => {
   const f = uiPluginFixture();
-  const { service } = await f.mountUi({ initialPage: "home" });
+  const { service } = await mountUiAtPage(f, "home");
   let removedPageRendered = false;
   service.registerPage(page("home"));
   const dispose = service.registerPage(page("removed", () => {
@@ -863,6 +935,7 @@ test("disposing an unvisited page before ready removes it from the initial snaps
 test("deactivation invalidates the previous service while a fresh activation gets a new registry", async () => {
   const f = uiPluginFixture();
   const plugin = f.createUiPlugin(f.container);
+  await f.core.mount(f.createConfigPlugin());
   await f.core.mount(f.createErrorUiPlugin());
   await f.core.mount(plugin);
   const oldUi = f.core.get(f.uiKey);
@@ -1041,7 +1114,7 @@ test("wrapper preparation failure rolls startup back without creating a React ro
     },
     deactivate() { removeWrapper(); removePage(); removed = true; },
   };
-  await assert.rejects(f.core.start([contributorPlugin, f.createUiPlugin(f.container), f.createErrorUiPlugin()]), startupError(/prepare failed/));
+  await assert.rejects(f.core.start([f.createConfigPlugin(), contributorPlugin, f.createUiPlugin(f.container), f.createErrorUiPlugin()]), startupError(/prepare failed/));
   assert.equal(f.roots.length, 0);
   assert.equal(removed, true);
   assert.equal(f.core.isMounted("ui"), false);

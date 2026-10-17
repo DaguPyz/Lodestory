@@ -1,10 +1,11 @@
 # @lodestory/sdk
 
-Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及 UI、主题、布局和工作台服务契约。它不包含宿主实现。
+Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及配置、UI、主题、布局和工作台服务契约。它不包含宿主实现。
 
 ## 导出入口
 
 - `@lodestory/sdk`：`Plugin`、`PluginContext`、能力 key 与事件 key 类型和创建函数。
+- `@lodestory/sdk/config`：JSON 配置值、配置项、配置服务类型，以及共享单例 `configKey`。
 - `@lodestory/sdk/ui`：UI 服务类型与共享单例 `uiKey`。
 - `@lodestory/sdk/error`：错误边界服务与共享单例 `errorUiKey`。
 - `@lodestory/sdk/layout`：内容用途、登记描述、布局视图、快照和服务类型，以及共享单例 `layoutKey`。
@@ -61,6 +62,49 @@ export const observer: Plugin = {
 // 保存方在自己的 activate(context) 中发布：
 // await context.emit(savedEvent, { documentId: "doc-1" });
 ```
+
+## 配置服务
+
+配置项由拥有它的功能插件声明，并导出给其他插件共用。配置服务通过 `configKey` 提供 `register`、`getSnapshot`、`set`、`reset` 和 `subscribe`；SDK 只定义类型与 key，不绑定文件、浏览器或系统设置存储。配置项 ID 使用稳定的 `插件名.配置名`，值限于 JSON 数据。
+
+```ts
+import type { Plugin } from "@lodestory/sdk";
+import { configKey, type ConfigItem } from "@lodestory/sdk/config";
+
+export const fontSizeConfig: ConfigItem<number> = {
+  id: "editor.fontSize",
+  defaultValue: 18,
+  effect: "live",
+  validate: (value): value is number => typeof value === "number" && Number.isInteger(value) && value >= 12 && value <= 40,
+};
+
+let removeConfig: (() => void) | undefined;
+let removeListener: (() => void) | undefined;
+export const editorPlugin: Plugin = {
+  id: "example.editor",
+  requires: [configKey],
+  provides: [],
+  activate(context) {
+    const config = context.get(configKey);
+    removeConfig = config.register(fontSizeConfig);
+    const apply = () => applyFontSize(config.getSnapshot(fontSizeConfig));
+    apply();
+    removeListener = config.subscribe(fontSizeConfig, apply);
+  },
+  deactivate() {
+    removeListener?.();
+    removeListener = undefined;
+    removeConfig?.();
+    removeConfig = undefined;
+  },
+};
+```
+
+所属插件在启动期登记配置项；使用者通过 `requires: [configKey]` 声明服务依赖，并导入同一个配置项声明。跨插件读取应声明对配置所属插件提供的能力的依赖，确保登记方先完成激活。`register` 与 `subscribe` 都返回幂等撤销函数；配置登记撤销不删除已保存值。`getSnapshot` 返回深只读的有效值，值未变时快照引用稳定。`set`、`reset` 都是异步操作：先校验并保存，只有保存成功后才更新快照和通知监听者；失败会拒绝且保留旧值。
+
+有效值优先级为**用户覆盖值 → 应用基础配置 → 声明默认值**。配置项的 `effect: "live" | "restart"` 只描述生效时机；配置服务不替插件应用配置。`live` 项由所属插件订阅并应用；`restart` 项由所属插件在启动时读取。本仓库首版由独立 `config` 插件读取 [`config.json`](../../src/plugins/config/config.json) 作为基础值，并用 `localStorage` 键 `lodestory.config-overrides` 保存用户覆盖。无效用户值会报告并回退到下一层；该存储策略属于应用实现，不是 SDK 协议。现有主题偏好仍由主题插件管理，本次不迁移。
+
+UI 插件声明并导出 `uiInitialPageConfig`（ID 为 `ui.initialPage`，默认值为 `null`，生效方式为 `restart`）。配置插件提供 `welcome` 基础值。UI 在全部页面完成登记后读取它并选择启动页；运行期间 `set` 此项只更新配置，不触发跳页。配置指向未登记页面会使启动失败并回滚插件。
 
 ## UI 与主题
 

@@ -7,12 +7,12 @@ const toolbarId = "workbench-toolbar.main";
 const entries = [
   {id: "body-editor.main", title: "正文", role: "main"},
   {id: "project-management.files", title: "工程文件", role: "navigation"},
-  {id: "editor.auxiliary", title: "参考资料", role: "auxiliary"},
+  {id: "example.auxiliary", title: "测试辅助内容", role: "auxiliary"},
   {id: toolbarId, title: "工作台工具栏", role: "actions"},
   {id: "body-editor.status", title: "写作状态", role: "status"},
 ];
 
-function createLayout({shownIds = ["body-editor.main", "project-management.files", "editor.auxiliary", toolbarId, "body-editor.status"], extraEntries = []} = {}) {
+function createLayout({shownIds = ["body-editor.main", "project-management.files", "example.auxiliary", toolbarId, "body-editor.status"], extraEntries = []} = {}) {
   let contents = [...entries, ...extraEntries].map(entry => Object.freeze({...entry, render: () => null}));
   let shown = [...shownIds];
   let snapshot = Object.freeze({contents: Object.freeze(contents), shownIds: Object.freeze(shown)});
@@ -117,8 +117,8 @@ test("focus mode is composed from public layout show and hide operations, with s
   assert.equal(model.enterFocus(), true);
   const focused = model.getSnapshot();
   assert.equal(focused.focusMode, true);
-  assert.deepEqual(Array.from(focused.restoreIds), ["project-management.files", "editor.auxiliary"]);
-  assert.deepEqual(layout.calls, [["hide", "project-management.files"], ["hide", "editor.auxiliary"]]);
+  assert.deepEqual(Array.from(focused.restoreIds), ["project-management.files", "example.auxiliary"]);
+  assert.deepEqual(layout.calls, [["hide", "project-management.files"], ["hide", "example.auxiliary"]]);
   assert.equal(layout.getSnapshot().shownIds.includes("body-editor.main"), true);
   assert.equal(layout.getSnapshot().shownIds.includes(toolbarId), true);
   assert.strictEqual(model.getSnapshot(), focused, "repeated reads reuse the immutable state object");
@@ -127,7 +127,7 @@ test("focus mode is composed from public layout show and hide operations, with s
   assert.equal(model.getSnapshot().focusMode, false);
   assert.deepEqual(Array.from(model.getSnapshot().restoreIds), []);
   assert.ok(layout.getSnapshot().shownIds.includes("project-management.files"));
-  assert.ok(layout.getSnapshot().shownIds.includes("editor.auxiliary"));
+  assert.ok(layout.getSnapshot().shownIds.includes("example.auxiliary"));
   model.dispose();
 });
 
@@ -138,10 +138,10 @@ test("focus restores only still-registered panels and an external panel show end
   const layout = createLayout();
   const {model} = makeModel(fixture, {session: activeSession, workbench, layout});
   model.enterFocus();
-  layout.removeContent("editor.auxiliary");
+  layout.removeContent("example.auxiliary");
   assert.equal(model.exitFocus(), true);
   assert.ok(layout.getSnapshot().shownIds.includes("project-management.files"));
-  assert.ok(!layout.calls.some(([operation, id]) => operation === "show" && id === "editor.auxiliary"));
+  assert.ok(!layout.calls.some(([operation, id]) => operation === "show" && id === "example.auxiliary"));
 
   model.enterFocus();
   layout.addContent("search.navigation", "navigation");
@@ -250,7 +250,7 @@ test("toolbar UI exposes project actions, layout toggles, focus, and disabled se
   assert.equal(button("搜索项目").props.disabled, true);
   assert.ok(button("设置"), "the common settings entry is available");
   assert.ok(button("工程文件"), "navigation contents receive their own toolbar toggles");
-  assert.ok(button("收起参考资料"), "auxiliary contents receive their own toolbar toggles");
+  assert.ok(button("收起测试辅助内容"), "auxiliary contents receive their own toolbar toggles");
   assert.ok(button("专注模式"), "focus mode is owned by the toolbar");
   assert.ok(collect(tree, value => value.props?.["aria-label"] === "布局内容").length, "the full layout directory remains available");
   assert.ok(button("返回欢迎页"));

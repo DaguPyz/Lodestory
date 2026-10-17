@@ -352,9 +352,9 @@ macOS 与 Windows 分别核对。平台字体光栅化允许不同，但视觉�
 
 设置页已接入[平级主题目录](../src/plugins/settings/ThemeSettingsPage.tsx)与[主题管理器](../src/plugins/theme/themeManager.ts)，支持按 ID 切换、系统策略、本机偏好保存与失败重试；完整实现边界见[主题管理设计](需求设计/主题管理.md)。项目列表已接入[本机项目索引](需求设计/欢迎页/项目索引存储.md)，提供新建、打开、搜索、移除、重新定位及空列表/错误状态；菜单与新建对话框采用共享主题变量和 Base UI 的键盘、焦点管理。
 
-编辑工作空间已按[编辑页面设计稿](../设计稿/编辑页面.png)由 [`WorkbenchPage`](../src/plugins/workbench/WorkbenchPage.tsx) 挂载默认布局，并组合正文编辑与工程管理插件。工作空间采用 Comfortable，工具轨 / 文件区 / 参考区分别使用 48 / 256 / 320px 预设，正文使用 18 / 32px 与最大 720px 行宽。正文、标签与状态由 [`body-editor`](../src/plugins/body-editor/BodyEditorView.tsx) 提供，顶部项目操作和布局按钮由 `workbench-toolbar` 提供，参考占位暂由 `editor-features` 提供；各区域独立滚动，主题切换保留页面状态。
+编辑工作空间由 [`WorkbenchPage`](../src/plugins/workbench/WorkbenchPage.tsx) 挂载默认布局，并组合正文编辑与工程管理插件。工作空间采用 Comfortable，工具轨与文件区分别使用 48 / 256px 预设，正文使用 18 / 32px 与最大 720px 行宽。正文、标签与状态由 [`body-editor`](../src/plugins/body-editor/BodyEditorView.tsx) 提供，顶部项目操作和布局按钮由 `workbench-toolbar` 提供；各区域独立滚动，主题切换保留页面状态。当前编辑页没有参考资料面板；参考资料功能尚未实现，形式待后续设计。
 
-真实项目进入编辑页时读取实际目录，支持[新建文档](需求设计/文件目录树.md)、正文读写、文稿标签和基础自动保存；首版正文继续使用 `textarea`。未打开文档时显示作品路径及新建入口，避免把示例文稿或参考资料当作真实内容。参考资料与 Git 业务尚未接入。
+真实项目进入编辑页时读取实际目录，支持[新建文档](需求设计/文件目录树.md)、正文读写、文稿标签和基础自动保存；首版正文继续使用 `textarea`。未打开文档时显示作品路径及新建入口，避免把示例文稿当作真实内容。Git 业务尚未接入。
 
 项目索引的 Rust 自动检查、前端日期/路径与原有主题测试、类型检查和生产构建已接通。多平台原生目录选择、不同系统与缩放下的完整渲染验收仍需分别验证。
 

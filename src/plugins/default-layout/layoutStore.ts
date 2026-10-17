@@ -13,13 +13,12 @@ export function createLayoutStore(beforeRemove: () => void) {
   const hidden = new Set<string>();
   let started = false;
   let alive = true;
-  let focusMode = false;
   let navigationDocked = true;
   let auxiliaryDocked = true;
   let lastPanel: PanelRole = "navigation";
   let snapshot: LayoutSnapshot = Object.freeze({contents: Object.freeze([]), shownIds: Object.freeze([])});
-  let state: Readonly<{snapshot: LayoutSnapshot; focusMode: boolean; navigationDocked: boolean; auxiliaryDocked: boolean}>
-    = Object.freeze({snapshot, focusMode, navigationDocked, auxiliaryDocked});
+  let state: Readonly<{snapshot: LayoutSnapshot; navigationDocked: boolean; auxiliaryDocked: boolean}>
+    = Object.freeze({snapshot, navigationDocked, auxiliaryDocked});
 
   function checkActive() {
     if (!alive) throw new Error("Layout service is no longer active.");
@@ -34,7 +33,7 @@ export function createLayoutStore(beforeRemove: () => void) {
         if (first) selected.set(role, first.id); else selected.delete(role);
       }
     }
-    const panelShown = (role: PanelRole, docked: boolean) => !focusMode && preferences[role] !== "closed"
+    const panelShown = (role: PanelRole, docked: boolean) => preferences[role] !== "closed"
       && (preferences[role] === "open" || docked);
     const shownIds = started ? contents.filter(entry => {
       if (entry.role === "actions" || entry.role === "status") return !hidden.has(entry.id);
@@ -46,8 +45,8 @@ export function createLayoutStore(beforeRemove: () => void) {
     const changed = contents.length !== snapshot.contents.length || contents.some((entry, i) => entry !== snapshot.contents[i])
       || shownIds.length !== snapshot.shownIds.length || shownIds.some((id, i) => id !== snapshot.shownIds[i]);
     if (changed) snapshot = Object.freeze({contents: Object.freeze(contents), shownIds: Object.freeze(shownIds)});
-    if (!changed && state.focusMode === focusMode && state.navigationDocked === navigationDocked && state.auxiliaryDocked === auxiliaryDocked) return;
-    state = Object.freeze({snapshot, focusMode, navigationDocked, auxiliaryDocked});
+    if (!changed && state.navigationDocked === navigationDocked && state.auxiliaryDocked === auxiliaryDocked) return;
+    state = Object.freeze({snapshot, navigationDocked, auxiliaryDocked});
     for (const listener of [...listeners]) listener();
   }
 
@@ -104,7 +103,6 @@ export function createLayoutStore(beforeRemove: () => void) {
       selected.set(entry.role, id);
       hidden.delete(id);
       if (entry.role === "navigation" || entry.role === "auxiliary") {
-        focusMode = false;
         preferences[entry.role] = "open";
         lastPanel = entry.role;
         preventOverlayOverlap();
@@ -135,7 +133,6 @@ export function createLayoutStore(beforeRemove: () => void) {
       preventOverlayOverlap();
       publish();
     },
-    setFocusMode(value: boolean) { checkActive(); focusMode = value; publish(); },
     dispose() {
       if (!alive) return;
       alive = false;

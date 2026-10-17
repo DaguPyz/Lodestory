@@ -272,6 +272,8 @@ test("page plugins revoke their route contributions and the UI root unmounts onl
   assert.deepEqual(Array.from(ui.getSnapshot().pages, ({ id }) => id), ["editor"]);
   await core.unmount("editor-features");
   assert.equal(core.isMounted("editor-features"), false);
+  await core.unmount("workbench-toolbar");
+  assert.equal(core.isMounted("workbench-toolbar"), false);
   await core.unmount("body-editor");
   assert.equal(core.isMounted("body-editor"), false);
   await core.unmount("project-management");

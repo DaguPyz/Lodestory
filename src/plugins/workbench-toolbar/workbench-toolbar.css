@@ -1,0 +1,116 @@
+.toolbar-brand {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--ui-icon-text-gap);
+  padding-right: var(--ui-space-5);
+  border-right: 1px solid var(--ui-border-decoration);
+  font-size: var(--ui-font-size-strong);
+  line-height: var(--ui-line-height-strong);
+  font-weight: 600;
+}
+
+.toolbar-brand > .icon {
+  color: var(--ui-accent-foreground);
+}
+
+.toolbar-project-menu {
+  position: relative;
+  min-width: 0;
+  max-width: var(--ui-navigation-width);
+}
+
+.toolbar-project-trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-icon-text-gap);
+  min-width: 0;
+  min-height: var(--ui-control-height);
+  padding-inline: var(--ui-space-4);
+  border-radius: var(--ui-radius-control);
+  font-size: var(--ui-font-size-label);
+  line-height: var(--ui-line-height-label);
+  cursor: pointer;
+  list-style: none;
+}
+
+.toolbar-project-trigger::-webkit-details-marker {
+  display: none;
+}
+
+.toolbar-project-trigger::marker {
+  content: "";
+}
+
+.toolbar-project-trigger > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolbar-project-trigger:hover {
+  background: var(--ui-surface-hover);
+}
+
+.toolbar-project-trigger:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: calc(-1 * var(--ui-focus-width));
+}
+
+.toolbar-project-popover {
+  position: absolute;
+  top: calc(100% + var(--ui-space-2));
+  left: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  width: 14rem;
+  max-width: calc(100vw - var(--ui-space-8));
+  padding: var(--ui-space-3);
+  background: var(--ui-surface-overlay);
+  border: 1px solid var(--ui-border-decoration);
+  border-radius: var(--ui-radius-overlay);
+  box-shadow: var(--ui-shadow-popover);
+}
+
+.toolbar-project-popover > .button {
+  justify-content: flex-start;
+}
+
+.workbench-toolbar {
+  container: workbench-toolbar / inline-size;
+  display: flex; flex: 1; align-items: center; gap: var(--ui-space-5); min-width: 0;
+}
+.toolbar-project-actions { display: flex; align-items: center; gap: var(--ui-space-5); min-width: 0; }
+.toolbar-common-actions, .toolbar-controls { display: flex; align-items: center; gap: var(--ui-space-3); min-width: 0; }
+.toolbar-controls { margin-left: auto; }
+.toolbar-navigation-toggle { display: none; }
+.toolbar-auxiliary-toggle { display: inline-flex; }
+.toolbar-controls [aria-pressed="true"] { color: var(--ui-accent-foreground); background: var(--ui-surface-selected); }
+.toolbar-project-trigger[aria-disabled="true"] { cursor: default; color: var(--ui-text-muted); }
+.toolbar-content-menu { position: relative; }
+.toolbar-content-menu > summary { list-style: none; }
+.toolbar-content-menu > summary::-webkit-details-marker { display: none; }
+.toolbar-content-options {
+  position: absolute; right: 0; top: calc(100% + var(--ui-space-2));
+  display: flex; flex-direction: column; gap: var(--ui-space-2);
+  width: max-content; max-width: calc(100vw - var(--ui-space-8)); max-height: 65vh; overflow: auto;
+  padding: var(--ui-space-3); border: 1px solid var(--ui-border-decoration);
+  border-radius: var(--ui-radius-overlay); background: var(--ui-surface-overlay); box-shadow: var(--ui-shadow-popover);
+}
+.toolbar-content-options > .button { justify-content: flex-start; }
+.toolbar-recovery { position: fixed; z-index: 10; top: var(--ui-space-3); right: var(--ui-space-5); }
+@container workbench-toolbar (max-width: 54rem) { .toolbar-brand > span { display: none; } }
+@container workbench-toolbar (max-width: 40rem) { .toolbar-common-actions > .icon-button:disabled { display: none; } }
+@container workbench-toolbar (max-width: 26rem) {
+  .toolbar-brand, .toolbar-focus-button > span, .toolbar-auxiliary-toggle { display: none; }
+  .toolbar-navigation-toggle { display: inline-flex; }
+  .toolbar-project-actions { flex: 1; gap: var(--ui-space-3); }
+  .toolbar-project-menu { min-width: 0; }
+}
+@container workbench-toolbar (max-width: 20rem) { .toolbar-common-actions { display: none; } }
+@media (forced-colors: active) {
+  .toolbar-controls [aria-pressed="true"] { color: HighlightText; background: Highlight; }
+  .toolbar-project-popover, .toolbar-content-options { border-color: ButtonText; }
+}

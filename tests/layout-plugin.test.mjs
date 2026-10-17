@@ -80,7 +80,7 @@ test("show and hide select by ID across all roles without losing descriptors or 
   assert.equal(changes, previousChanges);
 });
 
-test("responsive panels, focus mode, and main activation retain choices while preventing overlapping drawers", () => {
+test("responsive panels and main activation retain choices while preventing overlapping drawers", () => {
   const {store} = registry();
   for (const role of ["main", "navigation", "auxiliary", "actions", "status"]) store.registerContent(content(role, role));
   store.setViewport(400, 16);
@@ -96,13 +96,8 @@ test("responsive panels, focus mode, and main activation retain choices while pr
   store.setViewport(1400, 16);
   store.show("navigation");
   store.show("auxiliary");
-  store.setFocusMode(true);
-  assert.deepEqual(ids(store), ["main", "actions", "status"]);
-  store.setFocusMode(false);
   assert.ok(ids(store).includes("navigation") && ids(store).includes("auxiliary"));
-  store.setFocusMode(true);
   store.show("navigation");
-  assert.equal(store.getState().focusMode, false);
   store.setViewport(600, 16);
   assert.ok(ids(store).includes("navigation"));
   assert.ok(!ids(store).includes("auxiliary"));
@@ -138,7 +133,7 @@ test("layout cleanup still revokes a descriptor when stopping UI fails", () => {
   remove();
 });
 
-test("project management, body editor, and editor features contribute their own layout roles", async () => {
+test("project management, body editor, workbench toolbar, and editor features contribute their own layout roles", async () => {
   const f = createMainFixture();
   f.start(); await flushStartup();
   const layoutKey = f.requireSdk("@lodestory/sdk/layout").layoutKey;
@@ -146,16 +141,21 @@ test("project management, body editor, and editor features contribute their own 
   assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.role), ["main", "navigation", "auxiliary", "actions", "status"]);
   assert.ok(layout.getSnapshot().contents.some(({id}) => id === "project-management.files"));
   assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.id).sort(), [
-    "body-editor.main", "body-editor.status", "editor.actions", "editor.auxiliary", "project-management.files",
+    "body-editor.main", "body-editor.status", "editor.auxiliary", "project-management.files", "workbench-toolbar.main",
   ]);
   assert.ok(f.lifecycle.indexOf("activate:default-layout:complete") < f.lifecycle.indexOf("activate:body-editor:begin"));
   assert.ok(f.lifecycle.indexOf("activate:project-management:complete") < f.lifecycle.indexOf("activate:body-editor:begin"));
-  assert.ok(f.lifecycle.indexOf("activate:body-editor:complete") < f.lifecycle.indexOf("activate:editor-features:begin"));
+  assert.ok(f.lifecycle.indexOf("activate:body-editor:complete") < f.lifecycle.indexOf("activate:workbench-toolbar:begin"));
+  assert.ok(f.lifecycle.indexOf("activate:workbench-toolbar:complete") < f.lifecycle.indexOf("activate:editor-features:begin"));
   const before = layout.getSnapshot();
   const ui = f.getService(f.requireSdk("@lodestory/sdk/ui").uiKey);
   await ui.openPage("editor", {project: {id: "one", name: "one", path: "/one"}});
   await ui.openPage("settings"); await ui.back();
   assert.equal(layout.getSnapshot(), before, "page navigation does not reset layout selection");
+  await f.createdCores.at(-1).unmount("workbench-toolbar");
+  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
+    "body-editor.main", "body-editor.status", "editor.auxiliary", "project-management.files",
+  ]);
   await f.createdCores.at(-1).unmount("editor-features");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
     "body-editor.main", "body-editor.status", "project-management.files",
@@ -173,16 +173,47 @@ test("project management, body editor, and editor features contribute their own 
 test("another provider of layoutKey receives unchanged editor contributions and is injected into the editor page", async () => {
   const contributions = [];
   const removed = [];
-  const service = {View: function OtherLayout() {}, registerContent(entry) {
-    contributions.push(entry);
-    return () => removed.push(entry.id);
-  }};
+  const listeners = new Set();
+  let contents = [];
+  let snapshot = Object.freeze({contents: Object.freeze([]), shownIds: Object.freeze([])});
+  const publish = () => {
+    snapshot = Object.freeze({contents: Object.freeze([...contents]), shownIds: snapshot.shownIds});
+    for (const listener of [...listeners]) listener();
+  };
+  const service = {
+    View: function OtherLayout() {},
+    registerContent(entry) {
+      contributions.push(entry);
+      contents = [...contents, entry];
+      publish();
+      return () => {
+        removed.push(entry.id);
+        contents = contents.filter(current => current !== entry);
+        publish();
+      };
+    },
+    show(id) {
+      if (!contents.some(entry => entry.id === id)) throw new Error(`Layout content '${id}' is not registered.`);
+      snapshot = Object.freeze({contents: Object.freeze([...contents]), shownIds: Object.freeze([...new Set([...snapshot.shownIds, id])])});
+      for (const listener of [...listeners]) listener();
+    },
+    hide(id) {
+      if (!contents.some(entry => entry.id === id)) throw new Error(`Layout content '${id}' is not registered.`);
+      snapshot = Object.freeze({contents: Object.freeze([...contents]), shownIds: Object.freeze(snapshot.shownIds.filter(current => current !== id))});
+      for (const listener of [...listeners]) listener();
+    },
+    getSnapshot() { return snapshot; },
+    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+  };
   const f = createMainFixture({layoutFactory: ({layoutKey}) => ({
     id: "other-layout", requires: [], provides: [layoutKey],
     activate(context) { context.provide(layoutKey, service); },
   })});
   f.start(); await flushStartup();
   assert.equal(contributions.length, 5);
+  assert.deepEqual(contributions.map(({id}) => id).sort(), [
+    "body-editor.main", "body-editor.status", "editor.auxiliary", "project-management.files", "workbench-toolbar.main",
+  ]);
   const ui = f.getService(f.requireSdk("@lodestory/sdk/ui").uiKey);
   await ui.openPage("editor", {project: {id: "test", name: "test", path: "/test"}});
   const page = ui.getSnapshot().pages.find(page => page.id === "editor");
@@ -196,20 +227,14 @@ test("another provider of layoutKey receives unchanged editor contributions and 
   assert.equal(new Set(removed).size, 5);
 });
 
-test("partial editor feature activation revokes only its own contents after a conflicting registration", async () => {
+test("partial editor feature activation revokes only its reference contribution after a conflicting registration", async () => {
   const {f, store} = registry();
   const plugin = f.loadModule("plugins/editor/editorPlugin.tsx").createEditorFeaturesPlugin();
-  assert.deepEqual(Array.from(plugin.requires, key => key.id), ["app/workbench", "app/ui", "app/layout", "app/theme"]);
-  assert.ok(!plugin.requires.some(key => key.id === "app/documents"), "the remaining editor features do not depend on documents");
-  let participantRegistrations = 0;
-  store.registerContent(content("editor.actions", "actions"));
-  assert.throws(() => plugin.activate({on() { return () => {}; }, get(key) {
+  assert.deepEqual(Array.from(plugin.requires, key => key.id), ["app/layout"]);
+  store.registerContent(content("editor.auxiliary", "auxiliary"));
+  assert.throws(() => plugin.activate({get(key) {
     if (key.id === "app/layout") return store;
-    if (key.id === "app/ui") return {};
-    if (key.id === "app/workbench") return {registerParticipant() { participantRegistrations++; return async () => {}; }};
-    if (key.id === "app/theme") return {};
   }}), /already registered/);
-  assert.equal(participantRegistrations, 0, "editor features no longer joins workbench session lifecycle");
   await plugin.deactivate(); await plugin.deactivate();
-  assert.deepEqual(Array.from(store.getSnapshot().contents, entry => entry.id), ["editor.actions"]);
+  assert.deepEqual(Array.from(store.getSnapshot().contents, entry => entry.id), ["editor.auxiliary"]);
 });

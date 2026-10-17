@@ -13,7 +13,7 @@ export function deferred() {
   return { promise, resolve: resolvePromise };
 }
 
-export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, preference, configBaseValues, configOverrides, configStorageReadError, configStorageWriteError, layoutFactory, additionalPlugins = [], invokeHandler } = {}) {
+export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, preference, configBaseValues, configOverrides, configStorageReadError, configStorageWriteError, layoutFactory, additionalPlugins = [], invokeHandler, mockWorkbenchToolbar = true } = {}) {
   const modules = new Map();
   const sdk = createSdkLoader({ modules });
   const createdCores = [];
@@ -22,6 +22,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const catalogPluginIds = [];
   const bodyEditorModels = new Map();
   const projectManagementModels = new Map();
+  const workbenchToolbarModels = new Map();
   const appPluginsCalls = [];
   const lifecycle = [];
   const nativeCalls = [];
@@ -117,6 +118,9 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const React = {
     StrictMode: Symbol("StrictMode"),
     useSyncExternalStore(_subscribe, getSnapshot) { return getSnapshot(); },
+    useEffect() {},
+    useRef(initialValue) { return {current: initialValue}; },
+    useId() { return "fixture-id"; },
     createContext(defaultValue) {
       const context = { _currentValue: defaultValue };
       context.Provider = function Provider({ value, children }) {
@@ -199,6 +203,17 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       if (session && model) projectManagementModels.set(session.id, model);
       return children ?? React.createElement("project-dialog", {model, open: model?.getSnapshot().dialogOpen ?? false});
     },
+    WorkbenchToolbar: function WorkbenchToolbar({ workbench, models, active }) {
+      const session = workbench.getSnapshot().session;
+      const model = session ? models.get(session.id) : undefined;
+      if (session && model) workbenchToolbarModels.set(session.id, model);
+      return React.createElement("workbench-toolbar", {active, model});
+    },
+    ToolbarRecovery: function ToolbarRecovery({ workbench, models }) {
+      const session = workbench.getSnapshot().session;
+      const model = session ? models.get(session.id) : undefined;
+      return React.createElement("toolbar-recovery", {model});
+    },
     WorkbenchPage: function WorkbenchPage({ workbench, layout, active }) {
       const snapshot = workbench.getSnapshot();
       return snapshot.session ? React.createElement(layout.View, {
@@ -249,12 +264,21 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       ProjectFiles: components.ProjectFiles,
       ProjectDialogs: components.ProjectDialogs,
     };
+    if (relativePath === "plugins/workbench-toolbar/WorkbenchToolbar.tsx" && mockWorkbenchToolbar) return {
+      __esModule: true,
+      WorkbenchToolbar: components.WorkbenchToolbar,
+      ToolbarRecovery: components.ToolbarRecovery,
+    };
     if (relativePath === "plugins/workbench/WorkbenchPage.tsx") return { __esModule: true, WorkbenchPage: components.WorkbenchPage };
     if (relativePath === "plugins/settings/ThemeSettingsPage.tsx") return { __esModule: true, ThemeSettingsPage: components.ThemeSettingsPage };
     if (relativePath === "components/PageShell.tsx") return { __esModule: true, PageShell: components.PageShell };
     if (relativePath === "components/ProjectPageLayout.tsx") return { __esModule: true, ProjectPageLayout: components.ProjectPageLayout };
     if (relativePath === "plugins/context-menu/ContextMenuProvider.tsx") {
-      return { __esModule: true, ContextMenuProvider: components.ContextMenuProvider };
+      return {
+        __esModule: true,
+        ContextMenuProvider: components.ContextMenuProvider,
+        useContextMenus() { return {activate() {}, release() {}}; },
+      };
     }
     if (relativePath === "plugins/context-menu/ContextMenuRegion.tsx") return {};
     if (relativePath === "plugins/theme/ThemeProvider.tsx") {
@@ -477,6 +501,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     getService(key) { return createdCores.at(-1)?.get(key); },
     bodyEditorModels,
     projectManagementModels,
+    workbenchToolbarModels,
     async requestWindowClose() {
       let prevented = false;
       const event = { preventDefault() { prevented = true; } };

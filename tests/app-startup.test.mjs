@@ -84,7 +84,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "documents", "project-management", "body-editor", "welcome", "editor-features", "settings"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "documents", "project-management", "body-editor", "workbench-toolbar", "welcome", "editor-features", "settings"]);
   assert.deepEqual(fixture.appPluginsCalls, [[]]);
   const entryImports = fixture.moduleImports
     .filter(({ from }) => from === "main.tsx")
@@ -123,10 +123,14 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.ok(fixture.logs.indexOf("activate:workbench:complete") < fixture.logs.indexOf("activate:documents:begin"));
   assert.ok(fixture.logs.indexOf("activate:documents:complete") < fixture.logs.indexOf("activate:project-management:begin"), "the document service must be available before project management activation");
   assert.ok(fixture.logs.indexOf("activate:project-management:complete") < fixture.logs.indexOf("activate:body-editor:begin"), "documents and project management activate before the body editor");
-  assert.ok(fixture.logs.indexOf("activate:body-editor:complete") < fixture.logs.indexOf("activate:editor-features:begin"), "the body editor activates before the remaining editor features");
+  assert.ok(fixture.logs.indexOf("activate:body-editor:complete") < fixture.logs.indexOf("activate:workbench-toolbar:begin"), "the body editor activates before the workbench toolbar");
+  assert.ok(fixture.logs.indexOf("activate:workbench-toolbar:complete") < fixture.logs.indexOf("activate:editor-features:begin"), "the workbench toolbar activates before the remaining editor features");
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/body-editor/bodyEditorPlugin.tsx"),
     "the body editor plugin source should run in the fixture");
   assert.ok(fixture.lifecycle.includes("activate:body-editor:complete"), "the body editor plugin should activate");
+  assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/workbench-toolbar/workbenchToolbarPlugin.tsx"),
+    "the workbench toolbar plugin source should run in the fixture");
+  assert.ok(fixture.lifecycle.includes("activate:workbench-toolbar:complete"), "the workbench toolbar plugin should activate");
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/editor/editorPlugin.tsx"),
     "the editor feature plugin source should run in the fixture");
   assert.ok(fixture.lifecycle.includes("activate:editor-features:complete"), "the editor features should activate");
@@ -159,6 +163,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.deepEqual(Array.from(snapshot.pages, ({id, active}) => ({id, active})), [{id: "welcome", active: true}]);
   const initialPageTree = fixture.UiPages(pagesElement.props);
   assert.ok(containsType(initialPageTree, fixture.components.WelcomePage), "the welcome plugin should render its page");
+  assert.ok(findElement(themeProvider.props.children, fixture.components.ToolbarRecovery), "the toolbar recovery entry is mounted in the UI wrapper");
 
   // Visiting each route proves that all three page plugins registered with the real UI service.
   await uiService.openPage("editor", { project: { id: "novel-1", name: "Novel", path: "/novel" } });

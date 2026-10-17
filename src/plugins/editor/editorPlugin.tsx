@@ -1,72 +1,36 @@
 import type {Plugin} from "@lodestory/sdk";
-import {documentCreateRequested, documentRevealRequested, documentsKey} from "@lodestory/sdk/documents";
 import {workbenchKey} from "@lodestory/sdk/workbench";
 import {uiKey} from "@lodestory/sdk/ui";
 import {themeKey} from "@lodestory/sdk/theme";
-import {layoutKey, type LayoutContent} from "@lodestory/sdk/layout";
-import {EditorContentProvider} from "./EditorPage";
-import {EditorActions, EditorMain, EditorStatus} from "./EditorContents";
+import {layoutKey} from "@lodestory/sdk/layout";
+import {EditorActions} from "./EditorActions";
 import {ReferencePanel} from "./ReferencePanel";
 import {editorContentIds} from "./editorContentIds";
-import {createEditorModel, type EditorModel} from "./editorModel";
+import "./editor.css";
 
-/** 当前编辑功能先统一接入工作台协议，后续可继续逐个拆成独立功能插件。 */
+/** 暂留的项目操作与参考占位；正文和文档状态已由独立插件提供。 */
 export function createEditorFeaturesPlugin(): Plugin {
-  const models = new Map<string, EditorModel>();
   const removeContents: (() => void)[] = [];
-  let removeParticipant: (() => Promise<void>) | undefined;
   return {
     id: "editor-features",
-    requires: [workbenchKey, uiKey, layoutKey, themeKey, documentsKey],
+    requires: [workbenchKey, uiKey, layoutKey, themeKey],
     provides: [],
     activate(context) {
       const workbench = context.get(workbenchKey);
       const layout = context.get(layoutKey);
       const ui = context.get(uiKey);
-      const documents = context.get(documentsKey);
-      const removeRevealRequest = context.on(documentRevealRequested, (request) => {
-        const session = workbench.getSnapshot().session;
-        if (!session || session.id !== request.sessionId) return;
-        models.get(session.id)?.revealDocument(request.documentId);
-      });
-      removeContents.push(removeRevealRequest);
-      removeParticipant = workbench.registerParticipant({
-        id: "editor-features",
-        start(session) {
-          const workspace = documents.getWorkspace(session.id);
-          if (!workspace) throw new Error(`Documents workspace is unavailable for session '${session.id}'.`);
-          const model = createEditorModel(session, workbench, layout, ui, workspace, (parentPath) => context.emit(
-            documentCreateRequested,
-            parentPath === undefined ? {sessionId: session.id} : {sessionId: session.id, parentPath},
-          ));
-          models.set(session.id, model);
-          return {
-            dispose() {
-              try { model.dispose(); }
-              finally { if (models.get(session.id) === model) models.delete(session.id); }
-            },
-          };
-        },
-      });
-      const contents: LayoutContent[] = [
-        {id: editorContentIds.main, title: "正文编辑", role: "main", render: props => <EditorMain {...props}/>},
-        {id: editorContentIds.auxiliary, title: "参考资料", role: "auxiliary", render: () => <ReferencePanel/>},
-        {id: editorContentIds.actions, title: "项目操作", role: "actions", render: props => <EditorActions {...props}/>},
-        {id: editorContentIds.status, title: "写作状态", role: "status", render: () => <EditorStatus/>},
-      ];
-      for (const content of contents) {
-        removeContents.push(layout.registerContent({...content, render: props =>
-          <EditorContentProvider workbench={workbench} models={models}>{content.render(props)}</EditorContentProvider>}));
-      }
+      removeContents.push(layout.registerContent({
+        id: editorContentIds.auxiliary, title: "参考资料", role: "auxiliary", render: () => <ReferencePanel/>,
+      }));
+      removeContents.push(layout.registerContent({
+        id: editorContentIds.actions, title: "项目操作", role: "actions", render: props => <EditorActions workbench={workbench} ui={ui} {...props}/>,
+      }));
     },
-    async deactivate() {
+    deactivate() {
       const errors: unknown[] = [];
       for (const remove of removeContents.splice(0).reverse()) {
         try { remove(); } catch (error) { errors.push(error); }
       }
-      const remove = removeParticipant;
-      removeParticipant = undefined;
-      try { await remove?.(); } catch (error) { errors.push(error); }
       if (errors.length) throw Object.assign(new Error("Editor features failed to stop."), {errors});
     },
   };

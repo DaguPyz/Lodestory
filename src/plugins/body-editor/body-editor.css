@@ -1,0 +1,257 @@
+.manuscript-title:focus-visible,
+.editor-empty h1:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: calc(-1 * var(--ui-focus-width));
+}
+
+.document-tab-unsaved {
+  flex-shrink: 0;
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-caption);
+}
+
+.document-tabs {
+  display: flex;
+  flex-shrink: 0;
+  min-height: var(--ui-toolbar-height);
+  overflow-x: auto;
+  background: var(--ui-surface-chrome);
+  border-bottom: 1px solid var(--ui-border-divider);
+  scrollbar-width: thin;
+}
+
+.document-tab {
+  position: relative;
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--ui-space-2);
+  min-width: 12rem;
+  max-width: 20rem;
+  padding-right: var(--ui-space-3);
+}
+
+.document-tab[data-active="true"] {
+  background: var(--ui-surface-workspace);
+}
+
+.document-tab[data-active="true"]::after {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: var(--ui-indicator-width);
+  background: var(--ui-accent-indicator);
+  content: "";
+}
+
+.document-tab-select {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: var(--ui-icon-text-gap);
+  min-width: 0;
+  min-height: var(--ui-toolbar-height);
+  padding-inline: var(--ui-space-5);
+  color: var(--ui-text-secondary);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  font-size: var(--ui-font-size-label);
+  line-height: var(--ui-line-height-label);
+  text-align: left;
+}
+
+.document-tab-select > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.document-tab-select:hover {
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-hover);
+}
+
+.document-tab-select[aria-current="page"] {
+  color: var(--ui-text-primary);
+}
+
+.document-tab-select[aria-current="page"] > .icon {
+  color: var(--ui-accent-foreground);
+}
+
+.document-tab-select:focus-visible {
+  outline-offset: calc(-1 * var(--ui-focus-width));
+}
+
+.editor-document-stack {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.editor-document {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.manuscript {
+  width: 100%;
+  max-width: calc(45rem + 2 * var(--ui-content-padding));
+  margin-inline: auto;
+  padding: var(--ui-content-padding);
+}
+
+.manuscript-context {
+  margin-bottom: var(--ui-space-5);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+.manuscript-title {
+  color: var(--ui-text-primary);
+  font-family: var(--ui-font-document);
+  font-size: var(--ui-font-size-page-title);
+  line-height: var(--ui-line-height-page-title);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.manuscript-body {
+  margin-top: var(--ui-space-8);
+  color: var(--ui-text-document);
+  font-family: var(--ui-font-document);
+  font-size: var(--ui-font-size-document);
+  line-height: var(--ui-line-height-document);
+  overflow-wrap: anywhere;
+}
+
+.manuscript-body p + p {
+  margin-top: var(--ui-space-5);
+}
+
+.manuscript-input {
+  display: block;
+  width: 100%;
+  min-height: 20rem;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  resize: none;
+  overflow: hidden;
+}
+
+.manuscript-input::placeholder {
+  color: var(--ui-text-placeholder);
+}
+
+.manuscript-input:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: var(--ui-space-3);
+}
+
+.document-save-error,
+.editor-document-feedback {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+  padding: var(--ui-space-4) var(--ui-space-5);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+  overflow-wrap: anywhere;
+}
+
+.document-save-error {
+  margin-top: var(--ui-space-5);
+  padding-inline: 0;
+}
+
+.editor-save-status[data-state="error"] {
+  color: var(--ui-status-danger);
+}
+
+.manuscript[data-kind="chapter"] .manuscript-body p {
+  text-indent: 2em;
+}
+
+.editor-empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-5);
+  padding: var(--ui-panel-padding);
+  text-align: center;
+}
+
+.editor-empty > .icon {
+  color: var(--ui-text-secondary);
+}
+
+.editor-empty h1 {
+  font-size: var(--ui-font-size-title);
+  line-height: var(--ui-line-height-title);
+  font-weight: 600;
+}
+
+.editor-empty p {
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-body);
+  line-height: var(--ui-line-height-body);
+}
+
+.editor-statusbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ui-space-3) var(--ui-space-5);
+  min-height: var(--ui-statusbar-height);
+  padding: var(--ui-space-2) var(--ui-space-5);
+  color: var(--ui-text-secondary);
+  background: var(--ui-surface-chrome);
+  border-top: 1px solid var(--ui-border-divider);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+.editor-save-status,
+.editor-document-status {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-icon-text-gap);
+}
+
+.editor-document-status {
+  flex-wrap: wrap;
+  gap: var(--ui-space-5);
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-document-status > span {
+  white-space: nowrap;
+}
+
+/* Body-owned containers remain responsive under any layout implementation. */
+.editor-content-main { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
+.editor-content-main { container: editor-content / inline-size; }
+.editor-document[hidden] { display: none; }
+@container editor-content (max-width: 54rem) { .manuscript { padding: var(--ui-space-8); } }
+@container editor-content (max-width: 40rem) { .manuscript { padding: var(--ui-space-7); } }
+@container editor-content (max-width: 26rem) { .manuscript { padding: var(--ui-space-5); } }
+@media (max-width: 40rem) { .editor-document-status > .editor-font-status { display: none; } }
+@media (forced-colors: active) { .document-tab[data-active="true"]::after { background: Highlight; } }
+.editor-project-path {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}

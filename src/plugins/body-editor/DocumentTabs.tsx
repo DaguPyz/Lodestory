@@ -23,8 +23,8 @@ export function DocumentTabs({ documents, activeDocument, onSelect, onClose, onS
     <nav className="document-tabs" aria-label="已打开的文稿" tabIndex={0}>
       {documents.map((document) => (
         <ContextMenuRegion key={document.id} context={document.id} label={`${document.fileName}标签操作`} items={[
-          { id: "save", label: "保存", disabled: document.saveState === "saving",
-            onSelect: (id) => { if (documents.some((record) => record.id === id)) return onSave(id); } },
+          { id: "save", label: "保存", disabled: disabled || document.saveState === "saving",
+            onSelect: (id) => { if (!disabled && documents.some((record) => record.id === id)) return onSave(id); } },
           { id: "close", label: "关闭", icon: <Icon name="close" />, restoreFocus: false, disabled,
             onSelect: (id) => { if (!disabled && documents.some((record) => record.id === id)) return onClose(id); } },
         ]}>

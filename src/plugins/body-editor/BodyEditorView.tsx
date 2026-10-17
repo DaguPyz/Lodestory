@@ -29,7 +29,7 @@ export function BodyEditor({active}: {active: boolean}) {
       newDisabled={editor.newDisabled || !active} disabled={disabled}/>
     {workspace.error && <div className="editor-document-feedback" role="alert">
       <p className="project-error">{workspace.error}</p>
-      <IconButton label="关闭提示" onClick={workspace.clearError}><Icon name="close" size="small"/></IconButton>
+      <IconButton label="关闭提示" disabled={disabled} onClick={workspace.clearError}><Icon name="close" size="small"/></IconButton>
     </div>}
     {(workspace.openingPath || workspace.creating) && <p className="editor-document-feedback" role="status">
       {workspace.creating ? "正在创建文档…" : "正在打开文档…"}

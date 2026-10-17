@@ -10,6 +10,7 @@ import {createEditorFeaturesPlugin} from "../plugins/editor/editorPlugin";
 import {createWorkbenchPlugin} from "../plugins/workbench/workbenchPlugin";
 import {createDocumentsPlugin} from "../plugins/documents/documentsPlugin";
 import {createProjectManagementPlugin} from "../plugins/project-management/projectManagementPlugin";
+import {createBodyEditorPlugin} from "../plugins/body-editor/bodyEditorPlugin";
 import {createConfigPlugin} from "../plugins/config/configPlugin";
 import {createSettingsPlugin} from "../plugins/settings/settingsPlugin";
 
@@ -26,6 +27,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createWorkbenchPlugin(),
         createDocumentsPlugin(),
         createProjectManagementPlugin(),
+        createBodyEditorPlugin(),
         createWelcomePlugin(),
         createEditorFeaturesPlugin(),
         createSettingsPlugin(),

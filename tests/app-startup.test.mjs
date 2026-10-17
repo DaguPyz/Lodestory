@@ -84,7 +84,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "documents", "project-management", "welcome", "editor-features", "settings"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "documents", "project-management", "body-editor", "welcome", "editor-features", "settings"]);
   assert.deepEqual(fixture.appPluginsCalls, [[]]);
   const entryImports = fixture.moduleImports
     .filter(({ from }) => from === "main.tsx")
@@ -122,7 +122,11 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.ok(fixture.lifecycle.includes("activate:documents:complete"), "the documents service should activate");
   assert.ok(fixture.logs.indexOf("activate:workbench:complete") < fixture.logs.indexOf("activate:documents:begin"));
   assert.ok(fixture.logs.indexOf("activate:documents:complete") < fixture.logs.indexOf("activate:project-management:begin"), "the document service must be available before project management activation");
-  assert.ok(fixture.logs.indexOf("activate:project-management:complete") < fixture.logs.indexOf("activate:editor-features:begin"), "the project management plugin activates before editor consumers");
+  assert.ok(fixture.logs.indexOf("activate:project-management:complete") < fixture.logs.indexOf("activate:body-editor:begin"), "documents and project management activate before the body editor");
+  assert.ok(fixture.logs.indexOf("activate:body-editor:complete") < fixture.logs.indexOf("activate:editor-features:begin"), "the body editor activates before the remaining editor features");
+  assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/body-editor/bodyEditorPlugin.tsx"),
+    "the body editor plugin source should run in the fixture");
+  assert.ok(fixture.lifecycle.includes("activate:body-editor:complete"), "the body editor plugin should activate");
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/editor/editorPlugin.tsx"),
     "the editor feature plugin source should run in the fixture");
   assert.ok(fixture.lifecycle.includes("activate:editor-features:complete"), "the editor features should activate");

@@ -40,8 +40,8 @@ export function Manuscript({ document, projectName, visible, readOnly = false, o
   const folder = document.path.includes("/") ? document.path.slice(0, document.path.lastIndexOf("/")) : "";
   return (
     <ContextMenuRegion context={document.id} label={`${document.fileName}文稿操作`} items={[
-      { id: "save", label: "保存", disabled: document.saveState === "saving",
-        onSelect: (id) => { if (visible && document.id === id) return onSave(); } },
+      { id: "save", label: "保存", disabled: readOnly || document.saveState === "saving",
+        onSelect: (id) => { if (!readOnly && visible && document.id === id) return onSave(); } },
     ]}>
     <section
       className="editor-document"
@@ -57,7 +57,7 @@ export function Manuscript({ document, projectName, visible, readOnly = false, o
         </header>
         {document.saveError && <div className="document-save-error" role="alert">
           <p className="project-error">{document.saveError}</p>
-          <Button variant="ghost" onClick={onSave}>重试保存</Button>
+          <Button variant="ghost" disabled={readOnly || document.saveState === "saving"} onClick={onSave}>重试保存</Button>
         </div>}
         <textarea ref={input} id={`editor-document-input-${document.id}`} className="manuscript-body manuscript-input"
           aria-label={`${document.fileName} 正文`} placeholder="从这里开始写作…" value={document.content} readOnly={readOnly}

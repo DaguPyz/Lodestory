@@ -32,14 +32,14 @@ function renderWorkbenchView(fixture, editorPage) {
   return fixture.components.WorkbenchPage(editorPage.props);
 }
 
-function renderEditorModel(fixture, layout, sessionId) {
-  const main = layout.getSnapshot().contents.find(({id}) => id === "editor.main");
-  assert.ok(main, "the editor main contribution should be registered");
+function renderBodyEditorModel(fixture, layout, sessionId) {
+  const main = layout.getSnapshot().contents.find(({id}) => id === "body-editor.main");
+  assert.ok(main, "the body editor main contribution should be registered");
   const provider = main.render({active: true});
-  assert.equal(provider.type, fixture.components.EditorContentProvider);
+  assert.equal(provider.type, fixture.components.BodyEditorContentProvider);
   provider.type(provider.props);
-  const model = fixture.editorModels.get(sessionId);
-  assert.ok(model, "the editor model should be connected to the active document workspace");
+  const model = fixture.bodyEditorModels.get(sessionId);
+  assert.ok(model, "the body editor model should be connected to the active document workspace");
   return model;
 }
 
@@ -272,6 +272,8 @@ test("page plugins revoke their route contributions and the UI root unmounts onl
   assert.deepEqual(Array.from(ui.getSnapshot().pages, ({ id }) => id), ["editor"]);
   await core.unmount("editor-features");
   assert.equal(core.isMounted("editor-features"), false);
+  await core.unmount("body-editor");
+  assert.equal(core.isMounted("body-editor"), false);
   await core.unmount("project-management");
   assert.equal(core.isMounted("project-management"), false);
   await core.unmount("documents");
@@ -335,9 +337,9 @@ test("project file UI and the independent dialog wrapper connect through the SDK
   const projectModel = renderProjectManagementModel(fixture, layout, sessionId);
 
   layout.hide("project-management.files");
-  layout.hide("editor.main");
+  layout.hide("body-editor.main");
   assert.ok(!layout.getSnapshot().shownIds.includes("project-management.files"));
-  assert.ok(!layout.getSnapshot().shownIds.includes("editor.main"));
+  assert.ok(!layout.getSnapshot().shownIds.includes("body-editor.main"));
   const {documentCreateRequested} = fixture.requireSdk("@lodestory/sdk/documents");
   await sender.emit(documentCreateRequested, {sessionId});
   await flushStartup();
@@ -355,7 +357,7 @@ test("project file UI and the independent dialog wrapper connect through the SDK
   assert.equal(snapshot.documents.length, 1);
   assert.ok(snapshot.documents.some(document => document.path === "第二章.md"));
   assert.equal(snapshot.activeId, encodeURIComponent("第二章.md"));
-  assert.ok(layout.getSnapshot().shownIds.includes("editor.main"), "creating a document should reveal the editor main content");
+  assert.ok(layout.getSnapshot().shownIds.includes("body-editor.main"), "creating a document should reveal the body editor main content");
   assert.ok(fixture.tauriCalls.some(({command, args}) => command === "create_document" && args.parentPath === "" && args.name === "第二章.md"));
   assert.equal(projectModel.getSnapshot().activeDocumentPath, "第二章.md");
 });
@@ -392,7 +394,9 @@ test("a failed document save blocks project close and keeps the draft available 
   assert.equal(workbench.getSnapshot().session.id, sessionId, "the project session must survive a failed leave check");
   assert.equal(workspace.getSnapshot().documents[0].content, "未保存的修改");
   assert.equal(workspace.getSnapshot().documents[0].saveError, "磁盘写入失败");
-  assert.ok(layout.getSnapshot().shownIds.includes("editor.main"), "the failed document should be revealed for recovery");
+  assert.ok(layout.getSnapshot().shownIds.includes("body-editor.main"), "the failed document should be revealed for recovery");
+  assert.ok(renderBodyEditorModel(fixture, layout, sessionId).getSnapshot().revealVersion > 0,
+    "a rejected leave check still notifies the editor to restore focus after recovery");
 
   failWrites = false;
   assert.equal(await workbench.closeProject(), true);
@@ -427,7 +431,7 @@ test("a delayed document reveal request cannot replace a newer selection or its 
   await flushStartup();
   const model = renderProjectManagementModel(fixture, layout, sessionId);
   assert.equal(model.getSnapshot().selectedFolder, "current");
-  layout.hide("editor.main");
+  layout.hide("body-editor.main");
   layout.hide("project-management.files");
 
   await sender.emit(documentRevealRequested, {sessionId, documentId: oldId});
@@ -435,7 +439,7 @@ test("a delayed document reveal request cannot replace a newer selection or its 
   assert.equal(workspace.getSnapshot().activeId, currentId);
   assert.equal(model.getSnapshot().selectedFolder, "current");
   assert.equal(model.getSnapshot().activeDocumentPath, "current/第二章.md");
-  assert.ok(!layout.getSnapshot().shownIds.includes("editor.main"));
+  assert.ok(!layout.getSnapshot().shownIds.includes("body-editor.main"));
 });
 
 test("project switching releases the old document handle and starts an isolated workspace", async () => {

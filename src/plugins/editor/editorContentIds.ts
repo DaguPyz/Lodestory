@@ -1,7 +1,5 @@
-/** 编辑插件自己拥有的内容标识；布局实现只按用途处理，不依赖这些 ID。 */
+/** 剩余项目操作与参考占位的内容标识，不包含独立正文插件的内容。 */
 export const editorContentIds = {
-  main: "editor.main",
   auxiliary: "editor.auxiliary",
   actions: "editor.actions",
-  status: "editor.status",
 } as const;

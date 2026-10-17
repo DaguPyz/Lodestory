@@ -138,22 +138,29 @@ test("layout cleanup still revokes a descriptor when stopping UI fails", () => {
   remove();
 });
 
-test("project management owns navigation while editor features own the other layout roles", async () => {
+test("project management, body editor, and editor features contribute their own layout roles", async () => {
   const f = createMainFixture();
   f.start(); await flushStartup();
   const layoutKey = f.requireSdk("@lodestory/sdk/layout").layoutKey;
   const layout = f.getService(layoutKey);
   assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.role), ["main", "navigation", "auxiliary", "actions", "status"]);
   assert.ok(layout.getSnapshot().contents.some(({id}) => id === "project-management.files"));
-  assert.equal(layout.getSnapshot().contents.filter(({id}) => id.startsWith("editor.")).length, 4);
-  assert.ok(f.lifecycle.indexOf("activate:default-layout:complete") < f.lifecycle.indexOf("activate:editor-features:begin"));
-  assert.ok(f.lifecycle.indexOf("activate:project-management:complete") < f.lifecycle.indexOf("activate:editor-features:begin"));
+  assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.id).sort(), [
+    "body-editor.main", "body-editor.status", "editor.actions", "editor.auxiliary", "project-management.files",
+  ]);
+  assert.ok(f.lifecycle.indexOf("activate:default-layout:complete") < f.lifecycle.indexOf("activate:body-editor:begin"));
+  assert.ok(f.lifecycle.indexOf("activate:project-management:complete") < f.lifecycle.indexOf("activate:body-editor:begin"));
+  assert.ok(f.lifecycle.indexOf("activate:body-editor:complete") < f.lifecycle.indexOf("activate:editor-features:begin"));
   const before = layout.getSnapshot();
   const ui = f.getService(f.requireSdk("@lodestory/sdk/ui").uiKey);
   await ui.openPage("editor", {project: {id: "one", name: "one", path: "/one"}});
   await ui.openPage("settings"); await ui.back();
   assert.equal(layout.getSnapshot(), before, "page navigation does not reset layout selection");
   await f.createdCores.at(-1).unmount("editor-features");
+  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
+    "body-editor.main", "body-editor.status", "project-management.files",
+  ]);
+  await f.createdCores.at(-1).unmount("body-editor");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id), ["project-management.files"]);
   await f.createdCores.at(-1).unmount("project-management");
   assert.equal(layout.getSnapshot().contents.length, 0);
@@ -191,15 +198,18 @@ test("another provider of layoutKey receives unchanged editor contributions and 
 
 test("partial editor feature activation revokes only its own contents after a conflicting registration", async () => {
   const {f, store} = registry();
-  store.registerContent(content("editor.main", "main"));
   const plugin = f.loadModule("plugins/editor/editorPlugin.tsx").createEditorFeaturesPlugin();
+  assert.deepEqual(Array.from(plugin.requires, key => key.id), ["app/workbench", "app/ui", "app/layout", "app/theme"]);
+  assert.ok(!plugin.requires.some(key => key.id === "app/documents"), "the remaining editor features do not depend on documents");
+  let participantRegistrations = 0;
+  store.registerContent(content("editor.actions", "actions"));
   assert.throws(() => plugin.activate({on() { return () => {}; }, get(key) {
     if (key.id === "app/layout") return store;
-    if (key.id === "app/error-ui") return {ErrorBoundary: f.components.ErrorBoundary};
     if (key.id === "app/ui") return {};
-    if (key.id === "app/documents") return {getWorkspace() { return null; }};
-    if (key.id === "app/workbench") return {registerParticipant() { return async () => {}; }};
+    if (key.id === "app/workbench") return {registerParticipant() { participantRegistrations++; return async () => {}; }};
+    if (key.id === "app/theme") return {};
   }}), /already registered/);
+  assert.equal(participantRegistrations, 0, "editor features no longer joins workbench session lifecycle");
   await plugin.deactivate(); await plugin.deactivate();
-  assert.deepEqual(Array.from(store.getSnapshot().contents, entry => entry.id), ["editor.main"]);
+  assert.deepEqual(Array.from(store.getSnapshot().contents, entry => entry.id), ["editor.actions"]);
 });

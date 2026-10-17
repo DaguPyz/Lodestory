@@ -20,7 +20,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const rootCalls = [];
   const moduleImports = [];
   const catalogPluginIds = [];
-  const editorModels = new Map();
+  const bodyEditorModels = new Map();
   const projectManagementModels = new Map();
   const appPluginsCalls = [];
   const lifecycle = [];
@@ -180,11 +180,13 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     ErrorView: function ErrorView() {},
     WelcomePage: function WelcomePage() {},
     EditorPage: function EditorPage() {},
-    EditorContentProvider: function EditorContentProvider({ workbench, models, children }) {
+    BodyEditorContentProvider: function BodyEditorContentProvider({ workbench, models, children }) {
       const session = workbench.getSnapshot().session;
-      if (session) editorModels.set(session.id, models.get(session.id));
+      if (session) bodyEditorModels.set(session.id, models.get(session.id));
       return children;
     },
+    BodyEditor: function BodyEditor({active}) { return React.createElement("body-editor", {active}); },
+    WritingStatus: function WritingStatus() { return React.createElement("writing-status"); },
     ProjectFiles: function ProjectFiles({ workbench, models, active }) {
       const session = workbench.getSnapshot().session;
       const model = session ? models.get(session.id) : undefined;
@@ -233,16 +235,14 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     if (cached) return cached;
     const relativePath = relative(sourceRoot, path);
     if (relativePath === "plugins/welcome/WelcomePage.tsx") return { __esModule: true, WelcomePage: components.WelcomePage };
-    if (relativePath === "plugins/editor/EditorPage.tsx") return {
+    if (relativePath === "plugins/body-editor/BodyEditorContext.tsx") return {
       __esModule: true,
-      EditorContentProvider: components.EditorContentProvider,
-      useEditorContext() { throw new Error("The test fixture does not render editor content hooks."); },
+      BodyEditorContentProvider: components.BodyEditorContentProvider,
     };
-    if (relativePath === "plugins/editor/EditorContents.tsx") return {
+    if (relativePath === "plugins/body-editor/BodyEditorView.tsx") return {
       __esModule: true,
-      EditorActions() {},
-      EditorMain() {},
-      EditorStatus() {},
+      BodyEditor: components.BodyEditor,
+      WritingStatus: components.WritingStatus,
     };
     if (relativePath === "plugins/project-management/ProjectManagementView.tsx") return {
       __esModule: true,
@@ -475,7 +475,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     setCleanupError(error) { cleanupError = error; },
     omitThemeService() { omitThemeService = true; },
     getService(key) { return createdCores.at(-1)?.get(key); },
-    editorModels,
+    bodyEditorModels,
     projectManagementModels,
     async requestWindowClose() {
       let prevented = false;

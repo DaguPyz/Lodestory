@@ -1,7 +1,8 @@
 import {useEffect, useRef} from "react";
 import {IconButton} from "../../components/Button";
 import {Icon} from "../../components/Icon";
-import {useEditorContext} from "./EditorPage";
+import {NewDocumentDialog} from "./NewDocumentDialog";
+import {EditorInteractions, useEditorContext} from "./EditorPage";
 import {EditorToolbar} from "./EditorToolbar";
 import {ProjectTree} from "./ProjectTree";
 import {DocumentTabs} from "./DocumentTabs";
@@ -17,7 +18,7 @@ export function EditorNavigation(_props: {active: boolean}) {
   const editor = useEditorContext();
   return <>
     <ProjectTree projectName={editor.projectName} entries={editor.entries} activeDocument={editor.workspace.activeId}
-      openingPath={editor.workspace.openingPath} loading={editor.treeLoading} error={editor.treeError} newDisabled={editor.newDisabled}
+      openingPath={editor.workspace.openingPath} loading={editor.treeLoading || editor.busy} error={editor.treeError} newDisabled={editor.newDisabled}
       onNewDocument={editor.showNewDocument} onReload={() => void editor.reloadTree()} onSelectFolder={editor.setSelectedFolder}
       onOpenDocument={editor.openDocument}/>
   </>;
@@ -35,9 +36,18 @@ export function EditorMain({active}: {active: boolean}) {
     });
     return () => cancelAnimationFrame(frame);
   }, [active]);
-  return <div className="editor-content-main" ref={root}>
+  useEffect(() => {
+    if (!active || !workspace.activeId) return;
+    const frame = requestAnimationFrame(() => document.getElementById(`editor-document-input-${workspace.activeId}`)?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [active, workspace.activeId]);
+  return <div className="editor-content-main" ref={root} aria-busy={editor.busy}>
+    <EditorInteractions active={active}/>
+    {active && editor.createDialogOpen && <NewDocumentDialog projectName={editor.projectName} entries={editor.entries}
+      initialParent={editor.selectedFolder} busy={editor.creating || editor.busy} error={editor.createError}
+      onClose={editor.closeCreateDialog} onCreate={editor.create}/>}
     <DocumentTabs documents={workspace.documents} activeDocument={workspace.activeId} onSelect={workspace.select}
-      onClose={workspace.close} onSave={workspace.save} onNewDocument={() => editor.showNewDocument()} newDisabled={editor.newDisabled}/>
+      onClose={workspace.close} onSave={workspace.save} onNewDocument={() => editor.showNewDocument()} newDisabled={editor.newDisabled} disabled={editor.busy}/>
     {workspace.error && <div className="editor-document-feedback" role="alert">
       <p className="project-error">{workspace.error}</p>
       <IconButton label="关闭提示" onClick={workspace.clearError}><Icon name="close" size="small"/></IconButton>
@@ -45,7 +55,7 @@ export function EditorMain({active}: {active: boolean}) {
     {workspace.openingPath && <p className="editor-document-feedback" role="status">正在打开文档…</p>}
     <div className="editor-document-stack">
       {workspace.documents.length ? workspace.documents.map(document => <Manuscript key={document.id} document={document}
-        projectName={editor.projectName} visible={document.id === workspace.activeId}
+        projectName={editor.projectName} visible={document.id === workspace.activeId} readOnly={editor.busy || !active}
         onChange={content => workspace.update(document.id, content)} onSave={() => workspace.save(document.id)}/>)
         : <EmptyDocument projectPath={editor.projectPath} onCreate={() => editor.showNewDocument()} disabled={editor.newDisabled}/>}
     </div>

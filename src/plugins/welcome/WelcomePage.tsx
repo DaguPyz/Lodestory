@@ -27,7 +27,7 @@ function ProjectPath({ path, id }: { path: string; id: string }) {
 
 type WelcomePageProps = {
   active: boolean;
-  onOpenProject: (project: ProjectRecord) => void;
+  onOpenProject: (project: ProjectRecord) => void | Promise<unknown>;
   onOpenSettings: () => void;
 };
 
@@ -109,16 +109,16 @@ export function WelcomePage({ active, onOpenProject, onOpenSettings }: WelcomePa
     }
   }
 
-  function enterProject(opened: OpenedProject) {
+  async function enterProject(opened: OpenedProject) {
     setProjects(opened.projects);
     setLoadFailed(false);
-    onOpenProject(opened.project);
+    await onOpenProject(opened.project);
   }
 
   async function openDirectory() {
     await runAction(async () => {
       const path = await pickProjectDirectory("打开项目目录");
-      if (path) enterProject(await openProject(path));
+      if (path) await enterProject(await openProject(path));
     });
   }
 
@@ -129,7 +129,7 @@ export function WelcomePage({ active, onOpenProject, onOpenSettings }: WelcomePa
     }
     await runAction(async () => {
       try {
-        enterProject(await openProject(project.path));
+        await enterProject(await openProject(project.path));
       } catch (cause) {
         if (isUnavailableError(cause)) {
           setProjects((records) => records.map((record) => record.id === project.id ? { ...record, available: false } : record));
@@ -142,7 +142,7 @@ export function WelcomePage({ active, onOpenProject, onOpenSettings }: WelcomePa
   async function relocate(project: RecentProject) {
     await runAction(async () => {
       const path = await pickProjectDirectory(`重新定位 ${project.name}`);
-      if (path) enterProject(await relocateProject(project.id, path));
+      if (path) await enterProject(await relocateProject(project.id, path));
     });
   }
 
@@ -179,7 +179,7 @@ export function WelcomePage({ active, onOpenProject, onOpenSettings }: WelcomePa
       const opened = await createProject(parentPath, name);
       setCreateDialogOpen(false);
       setSearch("");
-      enterProject(opened);
+      await enterProject(opened);
     });
   }
 

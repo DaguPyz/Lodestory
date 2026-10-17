@@ -144,13 +144,13 @@ test("the app provides the default layout, registers five editor roles, and revo
   const layoutKey = f.requireSdk("@lodestory/sdk/layout").layoutKey;
   const layout = f.getService(layoutKey);
   assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.role), ["main", "navigation", "auxiliary", "actions", "status"]);
-  assert.ok(f.lifecycle.indexOf("activate:default-layout:complete") < f.lifecycle.indexOf("activate:editor:begin"));
+  assert.ok(f.lifecycle.indexOf("activate:default-layout:complete") < f.lifecycle.indexOf("activate:editor-features:begin"));
   const before = layout.getSnapshot();
   const ui = f.getService(f.requireSdk("@lodestory/sdk/ui").uiKey);
-  ui.openPage("editor", {project: {id: "one", name: "one", path: "/one"}});
-  ui.openPage("settings"); ui.back();
+  await ui.openPage("editor", {project: {id: "one", name: "one", path: "/one"}});
+  await ui.openPage("settings"); await ui.back();
   assert.equal(layout.getSnapshot(), before, "page navigation does not reset layout selection");
-  await f.createdCores.at(-1).unmount("editor");
+  await f.createdCores.at(-1).unmount("editor-features");
   assert.equal(layout.getSnapshot().contents.length, 0);
   assert.equal(f.logs.filter(entry => entry === "root.unmount").length, 1);
   await f.createdCores.at(-1).unmountAll();
@@ -172,24 +172,28 @@ test("another provider of layoutKey receives unchanged editor contributions and 
   f.start(); await flushStartup();
   assert.equal(contributions.length, 5);
   const ui = f.getService(f.requireSdk("@lodestory/sdk/ui").uiKey);
-  ui.openPage("editor", {project: {id: "test", name: "test", path: "/test"}});
+  await ui.openPage("editor", {project: {id: "test", name: "test", path: "/test"}});
   const page = ui.getSnapshot().pages.find(page => page.id === "editor");
-  const editor = page.render(page).props.children.props.children;
-  assert.equal(editor.props.layout, service);
-  assert.equal(editor.props.layout.View, service.View);
+  const boundary = page.render(page);
+  const shell = boundary.props.children;
+  const workbenchPage = shell.props.children;
+  assert.equal(workbenchPage.type, f.components.WorkbenchPage);
+  assert.equal(workbenchPage.props.layout, service);
+  assert.equal(workbenchPage.props.layout.View, service.View);
   await f.createdCores.at(-1).unmountAll();
   assert.equal(new Set(removed).size, 5);
 });
 
-test("partial editor activation revokes only its own contents after a conflicting registration", () => {
+test("partial editor feature activation revokes only its own contents after a conflicting registration", async () => {
   const {f, store} = registry();
   store.registerContent(content("editor.navigation", "navigation"));
-  const plugin = f.loadModule("plugins/editor/editorPlugin.tsx").createEditorPlugin();
+  const plugin = f.loadModule("plugins/editor/editorPlugin.tsx").createEditorFeaturesPlugin();
   assert.throws(() => plugin.activate({get(key) {
     if (key.id === "app/layout") return store;
     if (key.id === "app/error-ui") return {ErrorBoundary: f.components.ErrorBoundary};
-    if (key.id === "app/ui") return {registerPage() { throw new Error("must not register a page after a conflict"); }};
+    if (key.id === "app/ui") return {};
+    if (key.id === "app/workbench") return {registerParticipant() { return async () => {}; }};
   }}), /already registered/);
-  plugin.deactivate(); plugin.deactivate();
+  await plugin.deactivate(); await plugin.deactivate();
   assert.deepEqual(Array.from(store.getSnapshot().contents, entry => entry.id), ["editor.navigation"]);
 });

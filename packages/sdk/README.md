@@ -1,6 +1,6 @@
 # @lodestory/sdk
 
-Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及 UI、主题和布局服务契约。它不包含宿主实现。
+Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及 UI、主题、布局和工作台服务契约。它不包含宿主实现。
 
 ## 导出入口
 
@@ -8,6 +8,7 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/ui`：UI 服务类型与共享单例 `uiKey`。
 - `@lodestory/sdk/error`：错误边界服务与共享单例 `errorUiKey`。
 - `@lodestory/sdk/layout`：内容用途、登记描述、布局视图、快照和服务类型，以及共享单例 `layoutKey`。
+- `@lodestory/sdk/workbench`：项目与工作台会话、参与者生命周期、快照和服务类型，以及共享单例 `workbenchKey`。
 - `@lodestory/sdk/theme`：主题定义、仅含 ID 的选择配置、选择策略、管理服务和快照类型，以及共享单例 `themeKey`。
 
 ## 生命周期与 key
@@ -139,6 +140,12 @@ export const inkThemePlugin: Plugin = {
 布局能力独立于页面导航。功能插件声明 `requires: [layoutKey]`，通过 `registerContent({id, title, role, order?, render})` 按用途登记；`role` 为 main、navigation、auxiliary、actions 或 status，不指定位置。工作台页面挂载服务的 `View`，布局实现决定如何显示这些内容。`show`/`hide` 控制展示，`getSnapshot`/`subscribe` 提供不可变目录和展示状态。完整接入与生命周期见[布局插件设计](../../文档/需求设计/布局插件.md)。
 
 隐藏内容保留组件实例，并传入 `active: false`；工作台切到后台时所有内容也收到 false。登记函数必须在启动准备前调用，并在插件停用时调用返回的撤销函数。当前 UI 不支持热卸载，撤销已准备好的布局贡献会先停止 UI；布局实现的替换发生在下一次装配。此入口也只有 React 类型依赖，不导入 React 运行时代码。
+
+## 工作台服务
+
+工作台通过 `workbenchKey` 提供项目会话服务。`openProject(project)` 创建会话或在异步离开检查通过后切换项目；`closeProject()` 检查并结束当前会话。两者以 `Promise<boolean>` 表示是否完成，离开被拒绝时返回 `false`，操作错误以 Promise rejection 报告。`getSnapshot()` 与 `subscribe()` 提供 `{session, active, busy}` 状态；`registerParticipant()` 登记应用级参与者并返回异步撤销函数 `() => Promise<void>`。工作台运行中撤销参与者会先停止 UI，并等待项目资源清理。
+
+项目会话由 `{id, project: {id, name, path}}` 构成。参与者在项目打开时按登记顺序执行 `start(session)`，返回 `beforeLeave(reason)` 和 `dispose()`；项目真正结束时按启动逆序清理。`suspend` 代表暂时离开工作台，检查通过后保留会话和资源；`switch`、`close`、`shutdown` 在检查通过后结束当前会话。`busy` 期间 UI 应阻止新的编辑操作，已有保存继续执行。统一离开检查覆盖 UI 页面 `open`、`back`、同页项目替换和原生窗口关闭。详细规则见[工作台插件设计](../../文档/需求设计/工作台插件.md)。
 
 ## 构建与打包
 

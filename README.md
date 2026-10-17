@@ -34,9 +34,9 @@ The development-only `/tests/fixtures/project-index.html` page uses Tauri IPC mo
 
 The same fixture also supports document creation and writing; `?scenario=create-error`, `?scenario=save-error`, and `?scenario=slow-save` exercise document failure and pending-save flows without touching actual files.
 
-The public plugin contracts live in [`@lodestory/sdk`](packages/sdk/README.md), an independent ESM package with core, UI, error, theme, and layout entry points. The app consumes it through the pnpm workspace. Dynamic plugin loading and marketplace installation are planned separately.
+The public plugin contracts live in [`@lodestory/sdk`](packages/sdk/README.md), an independent ESM package with core, UI, error, theme, layout, and workbench entry points. The app consumes it through the pnpm workspace. Dynamic plugin loading and marketplace installation are planned separately.
 
-The `default-layout` plugin provides `layoutKey`. The editor registers its main, navigation, auxiliary, actions, and status contents through the SDK contract; layouts choose their positions without importing editor components. See [布局插件设计](文档/需求设计/布局插件.md). The project fixture supports `?layout=alternative` for replacement verification and `?layout=probes` for multiple contributions and hidden-state checks.
+The editor workbench provides `workbenchKey` for project sessions and coordinated leave checks; `default-layout` provides `layoutKey` for arranging the editor's main, navigation, auxiliary, actions, and status contents. See [工作台插件设计](文档/需求设计/工作台插件.md) and [布局插件设计](文档/需求设计/布局插件.md). The project fixture supports `?layout=alternative` for replacement verification and `?layout=probes` for multiple contributions and hidden-state checks.
 
 Theme behavior and implementation boundaries are documented in [主题管理设计](文档/需求设计/主题管理.md). Theme authors and UI plugins share [主题标准 v1](文档/主题标准-v1.md) and its [颜色角色登记表](文档/主题标准-v1/颜色角色登记表.md). Regenerate the authoring reference with `pnpm generate:theme-docs` and verify the contract with `pnpm check:theme-standard`.
 

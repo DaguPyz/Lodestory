@@ -44,6 +44,7 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
   const sdk = createSdkLoader({ modules });
   const roots = [];
   const logs = [];
+  const flushSyncEvents = [];
   const documentLookups = [];
   const document = {
     getElementById(id) {
@@ -125,6 +126,11 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
         if (specifier === "react") return ReactWithHooks;
         if (specifier === "react/jsx-runtime") return jsxRuntime;
         if (specifier === "react/jsx-dev-runtime") return jsxDevRuntime;
+        if (specifier === "react-dom") return { flushSync(callback) {
+          flushSyncEvents.push("start");
+          try { callback(); }
+          finally { flushSyncEvents.push("end"); }
+        } };
         if (specifier === "react-dom/client") return reactDomClient;
         return load(findModule(path, specifier));
       },
@@ -164,6 +170,7 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
     logs,
     uiKey,
     errorUiKey,
+    flushSyncEvents,
     window,
     requireSdk(specifier) { return sdk.requireSdk(specifier); },
     sdkImports: sdk.imports,

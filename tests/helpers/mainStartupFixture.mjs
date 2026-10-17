@@ -13,7 +13,7 @@ export function deferred() {
   return { promise, resolve: resolvePromise };
 }
 
-export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, preference, layoutFactory } = {}) {
+export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, preference, layoutFactory, additionalPlugins = [], invokeHandler } = {}) {
   const modules = new Map();
   const sdk = createSdkLoader({ modules });
   const createdCores = [];
@@ -23,8 +23,10 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const appPluginsCalls = [];
   const lifecycle = [];
   const nativeCalls = [];
+  const tauriCalls = [];
   const mediaListeners = new Set();
   const windowListeners = new Map();
+  const closeRequestListeners = new Set();
   const nativeListeners = new Set();
   const channels = [];
   const logs = [];
@@ -87,6 +89,13 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         nativeListeners.delete(listener);
       };
     },
+    async onCloseRequested(listener) {
+      closeRequestListeners.add(listener);
+      return () => {
+        closeRequestListeners.delete(listener);
+        logs.push("window.unlisten:close-requested");
+      };
+    },
   };
   class Channel {
     onmessage = null;
@@ -99,14 +108,30 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const React = {
     StrictMode: Symbol("StrictMode"),
     useSyncExternalStore(_subscribe, getSnapshot) { return getSnapshot(); },
+    createContext(defaultValue) {
+      const context = { _currentValue: defaultValue };
+      context.Provider = function Provider({ value, children }) {
+        context._currentValue = value;
+        return children;
+      };
+      return context;
+    },
+    useContext(context) { return context._currentValue; },
     createElement(type, props, ...children) {
       const nextProps = { ...(props ?? {}) };
+      const key = nextProps.key;
+      delete nextProps.key;
       if (children.length === 1) nextProps.children = children[0];
       else if (children.length > 1) nextProps.children = children;
-      return { type, props: nextProps };
+      return { type, props: nextProps, ...(key !== undefined ? { key } : {}) };
     },
   };
   const ReactDOM = {
+    flushSync(callback) {
+      logs.push("react-dom.flushSync:start");
+      try { return callback(); }
+      finally { logs.push("react-dom.flushSync:end"); }
+    },
     createRoot(container, options) {
       rootCalls.push({ container, options });
       if (faults.createRootError) throw faults.createRootError;
@@ -146,6 +171,14 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     ErrorView: function ErrorView() {},
     WelcomePage: function WelcomePage() {},
     EditorPage: function EditorPage() {},
+    EditorContentProvider: function EditorContentProvider({ children }) { return children; },
+    WorkbenchPage: function WorkbenchPage({ workbench, layout, active }) {
+      const snapshot = workbench.getSnapshot();
+      return snapshot.session ? React.createElement(layout.View, {
+        key: snapshot.session.id,
+        active: active && !snapshot.busy,
+      }) : null;
+    },
     ThemeSettingsPage: function ThemeSettingsPage() {},
     PageShell: function PageShell() {},
     ProjectPageLayout: function ProjectPageLayout() {},
@@ -175,7 +208,19 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     if (cached) return cached;
     const relativePath = relative(sourceRoot, path);
     if (relativePath === "plugins/welcome/WelcomePage.tsx") return { __esModule: true, WelcomePage: components.WelcomePage };
-    if (relativePath === "plugins/editor/EditorPage.tsx") return { __esModule: true, EditorPage: components.EditorPage };
+    if (relativePath === "plugins/editor/EditorPage.tsx") return {
+      __esModule: true,
+      EditorContentProvider: components.EditorContentProvider,
+      useEditorContext() { throw new Error("The test fixture does not render editor content hooks."); },
+    };
+    if (relativePath === "plugins/editor/EditorContents.tsx") return {
+      __esModule: true,
+      EditorActions() {},
+      EditorMain() {},
+      EditorNavigation() {},
+      EditorStatus() {},
+    };
+    if (relativePath === "plugins/workbench/WorkbenchPage.tsx") return { __esModule: true, WorkbenchPage: components.WorkbenchPage };
     if (relativePath === "plugins/settings/ThemeSettingsPage.tsx") return { __esModule: true, ThemeSettingsPage: components.ThemeSettingsPage };
     if (relativePath === "components/PageShell.tsx") return { __esModule: true, PageShell: components.PageShell };
     if (relativePath === "components/ProjectPageLayout.tsx") return { __esModule: true, ProjectPageLayout: components.ProjectPageLayout };
@@ -249,7 +294,22 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
             Fragment: Symbol("Fragment"),
           };
         }
-        if (specifier === "@tauri-apps/api/core") return { isTauri: () => tauri };
+        if (specifier === "@tauri-apps/api/core") return {
+          isTauri: () => tauri,
+          async invoke(command, args) {
+            tauriCalls.push({ command, args });
+            if (invokeHandler) return invokeHandler(command, args);
+            if (command === "list_documents") return [];
+            if (command === "create_document") {
+              const path = [args.parentPath, args.name].filter(Boolean).join("/");
+              return { path, fileName: args.name, content: "" };
+            }
+            if (command === "read_document") return { path: args.path, fileName: args.path.split("/").at(-1), content: "" };
+            if (command === "save_document") return undefined;
+            throw new Error(`Unexpected Tauri command '${command}'.`);
+          },
+        };
+        if (specifier === "react-dom") return ReactDOM;
         if (specifier === "@tauri-apps/api/window") return { getCurrentWindow: () => appWindow };
         return load(resolveLocal(path, specifier));
       },
@@ -308,6 +368,10 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         appPluginsCalls.push(args);
         const plugins = createAppPlugins(...args).filter(plugin => !omitBuiltinThemes || plugin.id !== "builtin-themes")
           .map(plugin => plugin.id === "default-layout" && layoutFactory ? layoutFactory(sdk.requireSdk("@lodestory/sdk/layout")) : plugin);
+        const injectedPlugins = typeof additionalPlugins === "function"
+          ? additionalPlugins({ requireSdk: (specifier) => sdk.requireSdk(specifier) })
+          : additionalPlugins;
+        plugins.push(...injectedPlugins);
         if (themeDefinitions.length) {
           const { themeKey } = sdk.requireSdk("@lodestory/sdk/theme");
           const removers = [];
@@ -363,11 +427,13 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     roots,
     rootElement,
     nativeCalls,
+    tauriCalls,
     themeApplications,
     channels,
     mediaListeners,
     nativeListeners,
     windowListeners,
+    closeRequestListeners,
     logs,
     faults,
     window,
@@ -378,6 +444,12 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     setCleanupError(error) { cleanupError = error; },
     omitThemeService() { omitThemeService = true; },
     getService(key) { return createdCores.at(-1)?.get(key); },
+    async requestWindowClose() {
+      let prevented = false;
+      const event = { preventDefault() { prevented = true; } };
+      for (const listener of [...closeRequestListeners]) await listener(event);
+      return { prevented, listenerCount: closeRequestListeners.size };
+    },
   };
 }
 

@@ -1,11 +1,11 @@
 import { Dialog } from "@base-ui/react/dialog";
 import { useRef, useState } from "react";
 import { Button } from "../../components/Button";
-import type { TreeEntry } from "../../documents/documentApi";
+import type { EditorTreeEntry as TreeEntry } from "./editorModel";
 
 type NewDocumentDialogProps = {
   projectName: string;
-  entries: TreeEntry[];
+  entries: readonly TreeEntry[];
   initialParent: string;
   busy: boolean;
   error: string | null;
@@ -13,7 +13,7 @@ type NewDocumentDialogProps = {
   onCreate: (parentPath: string, name: string) => Promise<void>;
 };
 
-function folders(entries: TreeEntry[]): TreeEntry[] {
+function folders(entries: readonly TreeEntry[]): TreeEntry[] {
   return entries.flatMap((entry) => entry.children ? [entry, ...folders(entry.children)] : []);
 }
 

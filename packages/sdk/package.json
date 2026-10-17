@@ -30,6 +30,10 @@
     "./layout": {
       "types": "./dist/layout.d.ts",
       "import": "./dist/layout.js"
+    },
+    "./workbench": {
+      "types": "./dist/workbench.d.ts",
+      "import": "./dist/workbench.js"
     }
   },
   "scripts": {

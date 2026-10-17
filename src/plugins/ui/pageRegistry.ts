@@ -1,12 +1,13 @@
-import type {UiLocation, UiPage, UiPageView, UiSnapshot} from "@lodestory/sdk/ui";
+import type {UiLocation, UiNavigationRequest, UiPage, UiPageView, UiSnapshot} from "@lodestory/sdk/ui";
 
 type Listener = () => void;
 
 type PageRegistry = {
     registerPage(page: UiPage): () => void;
     start(initialPage?: string): void;
-    openPage(id: string, params?: unknown): void;
-    back(): void;
+    previewOpen(id: string, params?: unknown, historyMode?: "push" | "reset"): UiNavigationRequest | null;
+    previewBack(): UiNavigationRequest | null;
+    commitNavigation(request: UiNavigationRequest): void;
     getSnapshot(): UiSnapshot;
     subscribe(listener: Listener): () => void;
     clear(): void;
@@ -52,7 +53,14 @@ export function createPageRegistry(): PageRegistry {
         });
         if (!force && sameSnapshot(snapshot, next)) return;
         snapshot = next;
-        for (const subscription of [...listeners]) subscription.listener();
+        for (const subscription of [...listeners]) {
+            try {
+                subscription.listener();
+            } catch (error) {
+                // One broken observer must not leave the committed route half-published.
+                console.error("UI page listener failed.", error);
+            }
+        }
     }
 
     return {
@@ -96,25 +104,44 @@ export function createPageRegistry(): PageRegistry {
             publish(true);
         },
 
-        openPage(id, params) {
+        previewOpen(id, params, historyMode = "push") {
             if (!started) throw new Error("UI page registry must be started before navigation");
             if (!pages.has(id)) throw new Error(`UI page '${id}' is not registered`);
-            if (current?.id === id && Object.is(current.params, params)) return;
+            if (historyMode !== "push" && historyMode !== "reset") {
+                throw new TypeError("UI navigation history must be 'push' or 'reset'.");
+            }
+            if (current?.id === id && Object.is(current.params, params)
+                && (historyMode !== "reset" || history.length === 0)) return null;
 
-            if (current) history.push(current);
-            current = makeLocation(id, params);
-            visited.add(id);
-            pageParams.set(id, params);
-            publish();
+            return Object.freeze({
+                from: current,
+                to: makeLocation(id, params),
+                kind: "open" as const,
+                ...(historyMode === "reset" ? {history: historyMode} : {}),
+            });
         },
 
-        back() {
+        previewBack() {
             if (!started) throw new Error("UI page registry must be started before navigation");
-            const previous = history.pop();
-            if (!previous) return;
-            current = previous;
-            visited.add(previous.id);
-            pageParams.set(previous.id, previous.params);
+            const previous = history[history.length - 1];
+            if (!previous) return null;
+            return Object.freeze({from: current, to: previous, kind: "back" as const});
+        },
+
+        commitNavigation(request) {
+            if (!started) throw new Error("UI page registry must be started before navigation");
+            if (request.kind === "open") {
+                if (!pages.has(request.to.id)) throw new Error(`UI page '${request.to.id}' is not registered`);
+                if (request.history === "reset") history.length = 0;
+                else if (current) history.push(current);
+                current = request.to;
+            } else {
+                const previous = history.pop();
+                if (!previous || previous !== request.to) throw new Error("UI back target changed before navigation committed");
+                current = previous;
+            }
+            visited.add(request.to.id);
+            pageParams.set(request.to.id, request.to.params);
             publish();
         },
 

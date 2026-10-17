@@ -61,11 +61,16 @@ function renderVisitedPages(f, service, instances) {
 test("UI plugin types connect PluginContext, pages, navigation, and wrappers", () => {
   const fixture = fileURLToPath(new URL("./fixtures/ui-plugin-types.tsx", import.meta.url));
   const browserFixture = fileURLToPath(new URL("./fixtures/ui-pages.tsx", import.meta.url));
+  const uiImplementation = fileURLToPath(new URL("../src/plugins/ui/uiPlugin.tsx", import.meta.url));
   const viteTypes = fileURLToPath(new URL("../src/vite-env.d.ts", import.meta.url));
-  const program = ts.createProgram([fixture, browserFixture, viteTypes], {
+  const program = ts.createProgram([fixture, browserFixture, uiImplementation, viteTypes], {
     target: ts.ScriptTarget.ES2022,
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
+    paths: {
+      "@lodestory/sdk": [fileURLToPath(new URL("../packages/sdk/src/index.ts", import.meta.url))],
+      "@lodestory/sdk/*": [`${fileURLToPath(new URL("../packages/sdk/src/", import.meta.url))}*.ts`],
+    },
     jsx: ts.JsxEmit.ReactJSX,
     strict: true,
     noEmit: true,
@@ -123,7 +128,7 @@ test("activation waits for ready, mounts one page container, and allows navigati
   assert.equal(service.getSnapshot().current.id, "home");
   assert.match(f.renderToStaticMarkup(f.roots[0].renderCalls[0]), /data-page="home"/);
 
-  service.openPage("home", { from: "ready" });
+  assert.equal(await service.openPage("home", { from: "ready" }), true);
   assert.equal(service.getSnapshot().current.params.from, "ready");
   assert.equal(f.roots.length, 1, "navigation updates the mounted root instead of creating another one");
   assert.equal(f.roots[0].renderCalls.length, 1, "navigation is handled by the mounted page container");
@@ -263,7 +268,7 @@ test("visited A/B/C pages receive params, hide inactive views, and back restores
   assert.deepEqual(pageViews.map(({ id, hidden }) => [id, hidden]), [["A", false]]);
   assert.equal(service.getSnapshot().pages.length, 1);
 
-  service.openPage("B", { value: "project-b" });
+  assert.equal(await service.openPage("B", { value: "project-b" }), true);
   assert.equal(service.getSnapshot().current.id, "B");
   assert.equal(service.getSnapshot().current.params.value, "project-b");
   pageViews = renderVisitedPages(f, service, instances);
@@ -272,7 +277,7 @@ test("visited A/B/C pages receive params, hide inactive views, and back restores
   assert.equal(bInitializations, 1);
   updateBDraft("edited draft");
 
-  service.openPage("C", { value: "preview-c" });
+  assert.equal(await service.openPage("C", { value: "preview-c" }), true);
   pageViews = renderVisitedPages(f, service, instances);
   assert.deepEqual(pageViews.map(({ id, hidden }) => [id, hidden]), [["A", true], ["B", true], ["C", false]]);
   assert.equal(pageViews[1].output.props.children, "edited draft");
@@ -285,13 +290,13 @@ test("visited A/B/C pages receive params, hide inactive views, and back restores
   assert.match(html, /class="ui-page" hidden=""><section data-page="B"/);
   assert.match(html, /data-page="C" data-active="true">C:preview-c/);
 
-  service.back();
+  assert.equal(await service.back(), true);
   assert.equal(service.getSnapshot().current.id, "B");
   assert.equal(service.getSnapshot().current.params.value, "project-b");
   pageViews = renderVisitedPages(f, service, instances);
   assert.equal(pageViews.find(({ id }) => id === "B").hidden, false);
   assert.equal(pageViews.find(({ id }) => id === "B").output.props.children, "edited draft");
-  service.back();
+  assert.equal(await service.back(), true);
   assert.equal(service.getSnapshot().current.id, "A");
   assert.equal(service.getSnapshot().current.params, undefined);
   assert.equal(service.getSnapshot().canGoBack, false);
@@ -303,6 +308,470 @@ test("visited A/B/C pages receive params, hide inactive views, and back restores
   for (const dispose of disposers) dispose();
   assert.equal(f.roots[0].unmountCalls, 1, "disposing a visited page first unmounts the whole tree");
   assert.throws(() => service.openPage("C"), /navigation requires .*after pluginsReady/);
+  await f.core.unmount("ui");
+});
+
+test("navigation guards can reject open and back without changing the route or history", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "A" });
+  const requests = [];
+  let rejectBack = true;
+  service.registerNavigationGuard({
+    id: "leave-check",
+    prepare(request) {
+      requests.push(request);
+      return request.kind === "back" && rejectBack ? false : true;
+    },
+  });
+  service.registerPage(page("A"));
+  service.registerPage(page("B"));
+  await f.notifyReady();
+
+  assert.equal(await service.openPage("B", { source: "test" }), true);
+  assert.equal(service.getSnapshot().current.id, "B");
+  assert.equal(await service.back(), false);
+  assert.equal(service.getSnapshot().current.id, "B", "a rejected back keeps the current page");
+  assert.equal(service.getSnapshot().canGoBack, true, "a rejected back keeps history intact");
+  const backRequest = requests.at(-1);
+  assert.equal(backRequest.kind, "back");
+  assert.equal(backRequest.from.id, "B");
+  assert.deepEqual({ ...backRequest.from.params }, { source: "test" });
+  assert.equal(backRequest.to.id, "A");
+  assert.equal(backRequest.to.params, undefined);
+
+  rejectBack = false;
+  assert.equal(await service.back(), true);
+  assert.equal(service.getSnapshot().current.id, "A");
+  assert.equal(service.getSnapshot().canGoBack, false);
+  await f.core.unmount("ui");
+});
+
+test("reset navigation clears history only after guard approval and does not push the prior page", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "welcome" });
+  let rejectReset = true;
+  const requests = [];
+  service.registerNavigationGuard({
+    id: "project-close",
+    prepare(request) {
+      requests.push(request);
+      return request.kind !== "open" || request.history !== "reset" || !rejectReset;
+    },
+  });
+  service.registerPage(page("welcome"));
+  service.registerPage(page("workbench"));
+  await f.notifyReady();
+
+  assert.equal(await service.openPage("workbench", { projectId: "project-a" }), true);
+  assert.equal(service.getSnapshot().canGoBack, true);
+  assert.equal(await service.openPage("welcome", undefined, { history: "reset" }), false);
+  assert.equal(service.getSnapshot().current.id, "workbench");
+  assert.equal(service.getSnapshot().canGoBack, true, "a rejected reset preserves existing history");
+  assert.equal(requests.at(-1).history, "reset");
+
+  rejectReset = false;
+  assert.equal(await service.openPage("welcome", undefined, { history: "reset" }), true);
+  assert.equal(service.getSnapshot().current.id, "welcome");
+  assert.equal(service.getSnapshot().canGoBack, false);
+  assert.equal(await service.back(), true);
+  assert.equal(service.getSnapshot().current.id, "welcome", "back cannot reopen the closed project page");
+
+  await f.core.unmount("ui");
+});
+
+test("same-page reset is guarded and clears existing history", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "welcome" });
+  const requests = [];
+  let rejectReset = true;
+  service.registerNavigationGuard({
+    id: "same-page-reset",
+    prepare(request) {
+      requests.push(request);
+      return request.history !== "reset" || !rejectReset;
+    },
+  });
+  service.registerPage(page("welcome"));
+  service.registerPage(page("workbench"));
+  await f.notifyReady();
+
+  assert.equal(await service.openPage("workbench"), true);
+  assert.equal(await service.openPage("welcome"), true);
+  assert.equal(service.getSnapshot().current.id, "welcome");
+  assert.equal(service.getSnapshot().canGoBack, true);
+
+  assert.equal(await service.openPage("welcome", undefined, { history: "reset" }), false);
+  assert.equal(service.getSnapshot().canGoBack, true, "rejection leaves same-page history intact");
+  assert.equal(requests.at(-1).from.id, "welcome");
+  assert.equal(requests.at(-1).to.id, "welcome");
+  assert.equal(requests.at(-1).history, "reset");
+
+  rejectReset = false;
+  assert.equal(await service.openPage("welcome", undefined, { history: "reset" }), true);
+  assert.equal(service.getSnapshot().current.id, "welcome");
+  assert.equal(service.getSnapshot().canGoBack, false, "same-page reset clears history on commit");
+  assert.equal(requests.filter(({ history }) => history === "reset").length, 2,
+    "same-page reset is a real guarded navigation while history exists");
+
+  await f.core.unmount("ui");
+});
+
+test("same-page parameter changes are guarded and rejected changes preserve the prior location", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "home" });
+  let reject = true;
+  const requests = [];
+  service.registerNavigationGuard({
+    id: "project-switch",
+    prepare(request) {
+      requests.push(request);
+      return !reject;
+    },
+  });
+  service.registerPage(page("home"));
+  await f.notifyReady();
+
+  const nextParams = { projectId: "project-b" };
+  assert.equal(await service.openPage("home", nextParams), false);
+  assert.equal(service.getSnapshot().current.params, undefined);
+  assert.equal(service.getSnapshot().canGoBack, false);
+  assert.equal(requests[0].kind, "open");
+  assert.equal(requests[0].from.id, "home");
+  assert.equal(requests[0].to.id, "home");
+  assert.equal(requests[0].to.params, nextParams);
+
+  reject = false;
+  assert.equal(await service.openPage("home", nextParams), true);
+  assert.equal(service.getSnapshot().current.params, nextParams);
+  assert.equal(service.getSnapshot().canGoBack, true);
+  assert.equal(await service.back(), true);
+  assert.equal(service.getSnapshot().current.params, undefined);
+  await f.core.unmount("ui");
+});
+
+test("later guard rejection cancels earlier approvals in reverse order", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "home" });
+  const calls = [];
+  for (const id of ["first", "second"]) {
+    service.registerNavigationGuard({
+      id,
+      prepare() {
+        calls.push(`prepare:${id}`);
+        return {
+          commit() { calls.push(`commit:${id}`); },
+          cancel() { calls.push(`cancel:${id}`); },
+          complete() { calls.push(`complete:${id}`); },
+        };
+      },
+    });
+  }
+  service.registerNavigationGuard({
+    id: "rejecting",
+    prepare() { calls.push("prepare:rejecting"); return false; },
+  });
+  service.registerPage(page("home"));
+  service.registerPage(page("next"));
+  await f.notifyReady();
+
+  assert.equal(await service.openPage("next"), false);
+  assert.deepEqual(calls, [
+    "prepare:first", "prepare:second", "prepare:rejecting", "cancel:second", "cancel:first",
+  ]);
+  assert.equal(service.getSnapshot().current.id, "home");
+  assert.equal(service.getSnapshot().canGoBack, false);
+  await f.core.unmount("ui");
+});
+
+test("rollback restores synchronous guard state inside flushSync before async cleanup", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "home" });
+  let releaseCleanup;
+  const cleanupGate = new Promise(resolve => { releaseCleanup = resolve; });
+  service.registerNavigationGuard({
+    id: "workbench",
+    prepare() {
+      return {
+        cancel() {
+          f.flushSyncEvents.push("restore-old-session");
+          return cleanupGate.then(() => f.flushSyncEvents.push("dispose-candidate-session"));
+        },
+      };
+    },
+  });
+  service.registerNavigationGuard({id: "rejecting", prepare() { return false; }});
+  service.registerPage(page("home"));
+  service.registerPage(page("next"));
+  await f.notifyReady();
+
+  const navigation = service.openPage("next");
+  await flushUiMicrotasks();
+  assert.deepEqual(f.flushSyncEvents, ["start", "restore-old-session", "end"]);
+  assert.equal(service.getSnapshot().current.id, "home");
+
+  releaseCleanup();
+  assert.equal(await navigation, false);
+  assert.deepEqual(f.flushSyncEvents, [
+    "start", "restore-old-session", "end", "dispose-candidate-session",
+  ]);
+  await f.core.unmount("ui");
+});
+
+test("guard commits and route publication flush before completion cleanup", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "home" });
+  service.registerNavigationGuard({
+    id: "session",
+    prepare() {
+      f.flushSyncEvents.push("prepare");
+      return {
+        commit() { f.flushSyncEvents.push("commit"); },
+        complete() { f.flushSyncEvents.push("complete"); },
+      };
+    },
+  });
+  service.registerPage(page("home"));
+  service.registerPage(page("next"));
+  await f.notifyReady();
+  service.subscribe(() => f.flushSyncEvents.push("route"));
+
+  assert.equal(await service.openPage("next"), true);
+  assert.deepEqual(f.flushSyncEvents, ["prepare", "start", "commit", "route", "end", "complete"]);
+  await f.core.unmount("ui");
+});
+
+test("completion failures reject after route commit and do not skip remaining cleanup", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "home" });
+  const { UiNavigationCompleteError } = f.requireSdk("@lodestory/sdk/ui");
+  const firstError = new Error("first cleanup failed");
+  const secondError = new Error("second cleanup failed");
+  const calls = [];
+  let shouldFail = true;
+  for (const [id, error] of [["first", firstError], ["second", secondError]]) {
+    service.registerNavigationGuard({
+      id,
+      prepare() {
+        return { complete() {
+          calls.push(id);
+          if (shouldFail) throw error;
+        } };
+      },
+    });
+  }
+  service.registerPage(page("home"));
+  service.registerPage(page("next"));
+  await f.notifyReady();
+
+  await assert.rejects(service.openPage("next"), error => {
+    assert.ok(error instanceof UiNavigationCompleteError);
+    assert.equal(error.routeCommitted, true);
+    assert.equal(error.errors.length, 2);
+    assert.equal(error.errors[0], firstError);
+    assert.equal(error.errors[1], secondError);
+    return true;
+  });
+  assert.deepEqual(calls, ["first", "second"]);
+  assert.equal(service.getSnapshot().current.id, "next", "complete errors happen after the route is committed");
+  assert.equal(service.getSnapshot().canGoBack, true);
+
+  shouldFail = false;
+  assert.equal(await service.back(), true, "the navigation lock is released after complete rejects");
+  assert.equal(service.getSnapshot().current.id, "home");
+  await f.core.unmount("ui");
+});
+
+test("a throwing commit cancels every approval in reverse order, including prior commits", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "home" });
+  const calls = [];
+  const commitError = new Error("commit failed");
+  service.registerNavigationGuard({
+    id: "committed",
+    prepare() {
+      calls.push("prepare:committed");
+      return {
+        commit() { calls.push("commit:committed"); },
+        cancel() { calls.push("cancel:committed"); },
+      };
+    },
+  });
+  service.registerNavigationGuard({
+    id: "throws",
+    prepare() {
+      calls.push("prepare:throws");
+      return {
+        commit() { calls.push("commit:throws"); throw commitError; },
+        cancel() { calls.push("cancel:throws"); },
+      };
+    },
+  });
+  service.registerNavigationGuard({
+    id: "not-committed",
+    prepare() {
+      calls.push("prepare:not-committed");
+      return {
+        commit() { calls.push("commit:not-committed"); },
+        cancel() { calls.push("cancel:not-committed"); },
+      };
+    },
+  });
+  service.registerPage(page("home"));
+  service.registerPage(page("next"));
+  await f.notifyReady();
+
+  await assert.rejects(service.openPage("next"), error => error === commitError);
+  assert.deepEqual(calls, [
+    "prepare:committed", "prepare:throws", "prepare:not-committed",
+    "commit:committed", "commit:throws", "cancel:not-committed", "cancel:throws", "cancel:committed",
+  ]);
+  assert.equal(service.getSnapshot().current.id, "home");
+  assert.equal(service.getSnapshot().canGoBack, false);
+  await f.core.unmount("ui");
+});
+
+test("a throwing guard rejects the transition and cancels prior approvals", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "home" });
+  const calls = [];
+  const guardError = new Error("guard failed");
+  service.registerNavigationGuard({
+    id: "prepared",
+    prepare() { return { cancel() { calls.push("cancel"); } }; },
+  });
+  service.registerNavigationGuard({
+    id: "throws",
+    prepare() { throw guardError; },
+  });
+  service.registerPage(page("home"));
+  service.registerPage(page("next"));
+  await f.notifyReady();
+
+  await assert.rejects(service.openPage("next"), error => error === guardError);
+  assert.deepEqual(calls, ["cancel"]);
+  assert.equal(service.getSnapshot().current.id, "home");
+  assert.equal(service.getSnapshot().canGoBack, false);
+  assert.ok(f.logs.some(([message, detail]) => message === "UI navigation guard failed." && detail.guardId === "throws"));
+  await f.core.unmount("ui");
+});
+
+test("concurrent navigation requests return false while the first guard is pending", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "home" });
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  service.registerNavigationGuard({
+    id: "slow",
+    async prepare() { await gate; return true; },
+  });
+  service.registerPage(page("home"));
+  service.registerPage(page("next"));
+  await f.notifyReady();
+
+  const first = service.openPage("next");
+  assert.equal(await service.openPage("home", { concurrent: true }), false);
+  assert.equal(service.getSnapshot().current.id, "home");
+  assert.equal(service.getSnapshot().canGoBack, false);
+  release();
+  assert.equal(await first, true);
+  assert.equal(service.getSnapshot().current.id, "next");
+  await f.core.unmount("ui");
+});
+
+test("deactivation during an awaited guard cancels its late approval without committing", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "home" });
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const calls = [];
+  service.registerNavigationGuard({
+    id: "pending",
+    async prepare() {
+      await gate;
+      return {
+        commit() { calls.push("commit"); },
+        cancel() { calls.push("cancel"); },
+        complete() { calls.push("complete"); },
+      };
+    },
+  });
+  service.registerPage(page("home"));
+  service.registerPage(page("next"));
+  await f.notifyReady();
+
+  const pending = service.openPage("next");
+  await f.core.unmount("ui");
+  release();
+  assert.equal(await pending, false);
+  assert.deepEqual(calls, ["cancel"]);
+  assert.equal(f.roots[0].unmountCalls, 1);
+  assert.throws(() => service.getSnapshot(), /no longer active/);
+  await flushUiMicrotasks();
+  assert.equal(f.roots.length, 1, "a late approval cannot recreate the UI root");
+  assert.equal(f.roots[0].renderCalls.length, 1);
+});
+
+test("disposing an awaited guard invalidates its pending navigation before commit", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "home" });
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const calls = [];
+  const removeGuard = service.registerNavigationGuard({
+    id: "pending",
+    async prepare() {
+      await gate;
+      return {
+        commit() { calls.push("commit"); },
+        cancel() { calls.push("cancel"); },
+      };
+    },
+  });
+  service.registerPage(page("home"));
+  service.registerPage(page("next"));
+  await f.notifyReady();
+
+  const pending = service.openPage("next");
+  removeGuard();
+  release();
+  assert.equal(await pending, false);
+  assert.deepEqual(calls, ["cancel"]);
+  assert.equal(f.roots[0].unmountCalls, 1);
+  await f.core.unmount("ui");
+});
+
+test("mid-commit invalidation cancels all approvals, including one already committed", async () => {
+  const f = uiPluginFixture();
+  const { service } = await f.mountUi({ initialPage: "home" });
+  const calls = [];
+  let removeSecond;
+  service.registerNavigationGuard({
+    id: "first",
+    prepare() {
+      return {
+        commit() { calls.push("commit:first"); removeSecond(); },
+        cancel() { calls.push("cancel:first"); },
+      };
+    },
+  });
+  removeSecond = service.registerNavigationGuard({
+    id: "second",
+    prepare() {
+      return {
+        commit() { calls.push("commit:second"); },
+        cancel() { calls.push("cancel:second"); },
+      };
+    },
+  });
+  service.registerPage(page("home"));
+  service.registerPage(page("next"));
+  await f.notifyReady();
+
+  assert.equal(await service.openPage("next"), false);
+  assert.deepEqual(calls, ["commit:first", "cancel:second", "cancel:first"]);
+  assert.equal(service.getSnapshot().current.id, "home");
+  assert.equal(service.getSnapshot().canGoBack, false);
+  assert.equal(f.roots[0].unmountCalls, 1);
   await f.core.unmount("ui");
 });
 

@@ -1,18 +1,18 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { Button, IconButton } from "../../components/Button";
 import { Icon } from "../../components/Icon";
-import type { TreeEntry } from "../../documents/documentApi";
+import type { EditorTreeEntry as TreeEntry } from "./editorModel";
 import { ContextMenuRegion } from "../context-menu";
 
 type ProjectTreeProps = {
   projectName: string;
-  entries: TreeEntry[];
+  entries: readonly TreeEntry[];
   activeDocument: string | null;
   openingPath: string | null;
   loading: boolean;
   error: string | null;
   newDisabled: boolean;
-  onOpenDocument: (path: string) => void | Promise<void>;
+  onOpenDocument: (path: string) => unknown | Promise<unknown>;
   onSelectFolder: (path: string) => void;
   onNewDocument: (parentPath?: string) => void;
   onReload: () => void;
@@ -27,7 +27,7 @@ function TreeNode({
   openingPath: string | null;
   expanded: Set<string>;
   onToggleFolder: (path: string) => void;
-  onOpenDocument: (path: string) => void | Promise<void>;
+  onOpenDocument: (path: string) => unknown | Promise<unknown>;
   onNewDocument: (parentPath?: string) => void;
   newDisabled: boolean;
   loading: boolean;
@@ -44,6 +44,7 @@ function TreeNode({
             onSelect: (path) => { if (!loading && node.path === path) onToggleFolder(path); } },
         ]}>
         <button type="button" className="file-tree-entry file-tree-folder-toggle" style={indentation} title={node.name}
+          disabled={loading}
           aria-expanded={expanded.has(node.path)} onClick={() => onToggleFolder(node.path)}>
           <Icon name="chevronRight" size="small" />
           <Icon name="folder" />
@@ -74,6 +75,7 @@ function TreeNode({
         className="file-tree-entry file-tree-document"
         style={indentation}
         type="button"
+        disabled={loading}
         aria-current={selected ? "page" : undefined}
         aria-busy={openingPath === node.path}
         title={node.name}

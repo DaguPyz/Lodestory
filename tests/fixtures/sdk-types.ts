@@ -9,8 +9,10 @@ import {
 } from "@lodestory/sdk";
 import {layoutKey, type LayoutService, type LayoutContent} from "@lodestory/sdk/layout";
 import { uiKey, type UiService } from "@lodestory/sdk/ui";
+import type { UiNavigationRequest } from "@lodestory/sdk/ui";
 import { errorUiKey, type ErrorUiService } from "@lodestory/sdk/error";
 import { themeKey, type ThemeConfig, type ThemeService } from "@lodestory/sdk/theme";
+import { workbenchKey, type LeaveReason, type WorkbenchProject, type WorkbenchService, type WorkbenchSession } from "@lodestory/sdk/workbench";
 
 type Document = { read(): string };
 type DocumentChanged = { documentId: string; revision: number };
@@ -27,12 +29,35 @@ const listener: EventListener<DocumentChanged> = ({ documentId, revision }) => {
 declare const context: PluginContext;
 const plugin: Plugin = {
   id: "sdk-types",
-  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey],
+  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, workbenchKey],
   provides: [],
   activate(pluginContext) {
     const document = pluginContext.get(documentKey);
     const text: string = document.read();
     const ui: UiService = pluginContext.get(uiKey);
+    const workbench: WorkbenchService = pluginContext.get(workbenchKey);
+    const project: WorkbenchProject = {id: "project", name: "项目", path: "/projects/project"};
+    const opening: Promise<boolean> = workbench.openProject(project);
+    const closing: Promise<boolean> = workbench.closeProject();
+    const removeParticipant: () => Promise<void> = workbench.registerParticipant({
+      id: "example.participant",
+      start(session: WorkbenchSession) {
+        const sessionId: string = session.id;
+        const reason: LeaveReason = "close";
+        return {
+          beforeLeave(nextReason) { const check: LeaveReason = nextReason; return check === reason; },
+          dispose() { void sessionId; },
+        };
+      },
+    });
+    const active = workbench.getSnapshot().active;
+    const session = workbench.getSnapshot().session;
+    const removeGuard: () => void = ui.registerNavigationGuard({
+      id: "example.navigation",
+      prepare(request: UiNavigationRequest) { return request.to.id !== "blocked"; },
+    });
+    const pageChange: Promise<boolean> = ui.openPage("settings");
+    const back: Promise<boolean> = ui.back();
     const errorUi: ErrorUiService = pluginContext.get(errorUiKey);
     const theme: ThemeService = pluginContext.get(themeKey);
     const unsubscribe = pluginContext.on(documentChanged, listener);
@@ -51,6 +76,12 @@ const plugin: Plugin = {
     void shown;
     void layout.View;
     void ui;
+    void opening;
+    void closing;
+    void active;
+    void session;
+    void pageChange;
+    void back;
     void errorUi.ErrorBoundary;
     void errorUi.ErrorView;
     const removeTheme: () => void = theme.registerTheme({
@@ -70,6 +101,8 @@ const plugin: Plugin = {
     removeTheme();
     void emitted;
     unsubscribe();
+    removeGuard();
+    void removeParticipant;
     // @ts-expect-error The event payload must match its public generic contract.
     void pluginContext.emit(documentChanged, { documentId: text, revision: "one" });
     // @ts-expect-error The listener payload is inferred from EventKey<T>.

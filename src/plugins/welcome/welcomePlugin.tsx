@@ -1,6 +1,7 @@
 import type {Plugin} from "@lodestory/sdk";
-import {appPages, type EditorPageParams} from "../../app/pages";
+import {appPages} from "../../app/pages";
 import {WelcomePage} from "./WelcomePage";
+import {workbenchKey} from "@lodestory/sdk/workbench";
 import {themeKey} from "@lodestory/sdk/theme";
 import {uiKey} from "@lodestory/sdk/ui";
 import {errorUiKey} from "@lodestory/sdk/error";
@@ -11,17 +12,18 @@ export function createWelcomePlugin(): Plugin {
 
     return {
         id: "welcome",
-        requires: [uiKey, themeKey, errorUiKey],
+        requires: [uiKey, themeKey, errorUiKey, workbenchKey],
         provides: [],
 
         activate(context) {
             const ui = context.get(uiKey);
+            const workbench = context.get(workbenchKey);
             const {ErrorBoundary} = context.get(errorUiKey);
             removePage = ui.registerPage({
                 id: appPages.welcome,
                 render: ({active}) => <ErrorBoundary><WelcomePage
                     active={active}
-                    onOpenProject={(project) => ui.openPage(appPages.editor, {project} satisfies EditorPageParams)}
+                    onOpenProject={(project) => workbench.openProject(project)}
                     onOpenSettings={() => ui.openPage(appPages.settings)}
                 /></ErrorBoundary>,
             });

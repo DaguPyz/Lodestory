@@ -35,10 +35,10 @@ export class DocumentSession {
     return pending;
   }
 
-  dispose() {
+  dispose(): Promise<boolean> {
     this.clearTimer();
     // Switching works must not cancel a pending autosave.
-    void this.save();
+    return this.save();
   }
 
   private clearTimer() {

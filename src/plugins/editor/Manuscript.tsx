@@ -4,10 +4,11 @@ import { Icon } from "../../components/Icon";
 import type { WorkspaceDocument } from "../../documents/documentApi";
 import { ContextMenuRegion } from "../context-menu";
 
-export function Manuscript({ document, projectName, visible, onChange, onSave }: {
+export function Manuscript({ document, projectName, visible, readOnly = false, onChange, onSave }: {
   document: WorkspaceDocument;
   projectName: string;
   visible: boolean;
+  readOnly?: boolean;
   onChange: (content: string) => void;
   onSave: () => unknown | Promise<unknown>;
 }) {
@@ -59,7 +60,7 @@ export function Manuscript({ document, projectName, visible, onChange, onSave }:
           <Button variant="ghost" onClick={onSave}>重试保存</Button>
         </div>}
         <textarea ref={input} id={`editor-document-input-${document.id}`} className="manuscript-body manuscript-input"
-          aria-label={`${document.fileName} 正文`} placeholder="从这里开始写作…" value={document.content}
+          aria-label={`${document.fileName} 正文`} placeholder="从这里开始写作…" value={document.content} readOnly={readOnly}
           onChange={(event) => onChange(event.target.value)} spellCheck={false} />
       </article>
     </section>

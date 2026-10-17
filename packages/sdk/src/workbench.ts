@@ -1,0 +1,49 @@
+import {createServiceKey} from "./ServiceKey.js";
+
+/** 已由项目管理功能打开的项目；工作台不负责创建目录或维护最近项目。 */
+export type WorkbenchProject = {
+  readonly id: string;
+  readonly name: string;
+  readonly path: string;
+};
+
+/** 一次项目编辑环境；关闭后再打开同一项目也会生成新的 id。 */
+export type WorkbenchSession = {
+  readonly id: string;
+  readonly project: WorkbenchProject;
+};
+
+/** 稳定、不可变的快照；暂时离页保留 session，busy 期间暂停新的业务修改。 */
+export type WorkbenchSnapshot = {
+  readonly session: WorkbenchSession | null;
+  readonly active: boolean;
+  readonly busy: boolean;
+};
+
+export type LeaveReason = "suspend" | "switch" | "close" | "shutdown";
+type Awaitable<T> = T | Promise<T>;
+
+/** 每次 start 返回独立资源；检查可以保存数据，dispose 在停止视图使用后执行。 */
+export type WorkbenchParticipation = {
+  beforeLeave?(reason: LeaveReason): Awaitable<boolean>;
+  dispose(): Awaitable<void>;
+};
+
+/** 应用启动时登记一次，按登记顺序随每个项目启动，按逆序结束。 */
+export type WorkbenchParticipant = {
+  readonly id: string;
+  /** 创建失败时参与者自行释放尚未返回的部分资源。 */
+  readonly start: (session: WorkbenchSession) => Awaitable<WorkbenchParticipation>;
+};
+
+export type WorkbenchService = {
+  openProject(project: WorkbenchProject): Promise<boolean>;
+  closeProject(): Promise<boolean>;
+  getSnapshot(): WorkbenchSnapshot;
+  subscribe(listener: () => void): () => void;
+  /** 启动期登记；撤销幂等。撤销正在使用的参与者会先停止 UI，再等待资源清理。 */
+  registerParticipant(participant: WorkbenchParticipant): () => Promise<void>;
+};
+
+/** 一个应用装配一个工作台；业务插件不依赖具体工作台实现。 */
+export const workbenchKey = createServiceKey<WorkbenchService>("app/workbench");

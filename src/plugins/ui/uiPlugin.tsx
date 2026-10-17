@@ -1,8 +1,9 @@
 import {StrictMode, type ReactNode} from "react";
 import {createRoot, type Root, type RootOptions} from "react-dom/client";
+import {flushSync} from "react-dom";
 import type {Plugin} from "@lodestory/sdk";
 import {pluginsReady} from "../../plugin-core";
-import {uiKey, type UiService, type UiWrapper} from "@lodestory/sdk/ui";
+import {uiKey, UiNavigationCompleteError, type UiNavigationApproval, type UiNavigationGuard, type UiNavigationRequest, type UiService, type UiWrapper} from "@lodestory/sdk/ui";
 import {errorUiKey} from "@lodestory/sdk/error";
 import {createPageRegistry} from "./pageRegistry";
 import {UiPages} from "./UiPages";
@@ -31,9 +32,12 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
             // 每次激活使用独立登记和状态，旧服务和旧撤销函数不能影响下一次激活。
             const pages = createPageRegistry();
             const wrappers = new Map<string, UiWrapper>();
+            const navigationGuards = new Map<string, UiNavigationGuard>();
             let active = true;
             let mountAttempted = false;
             let navigationAllowed = false;
+            let navigationInFlight = false;
+            let navigationGeneration = 0;
             let reactRoot: Root | undefined;
             let renderFailureHandled = false;
             let firstRenderError: unknown;
@@ -42,6 +46,7 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
 
             function unmount() {
                 navigationAllowed = false;
+                navigationGeneration += 1;
                 const root = reactRoot;
                 reactRoot = undefined;
                 root?.unmount();
@@ -54,6 +59,7 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                 } finally {
                     pages.clear();
                     wrappers.clear();
+                    navigationGuards.clear();
                 }
             };
 
@@ -69,6 +75,137 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
             function checkNavigationAllowed() {
                 checkActive();
                 if (!navigationAllowed) throw new Error("UI navigation requires a mounted page container after pluginsReady.");
+            }
+
+            async function cancelApprovals(approvals: readonly UiNavigationApproval[]) {
+                for (let index = approvals.length - 1; index >= 0; index -= 1) {
+                    if (!approvals[index].cancel) continue;
+                    let cancellation: void | Promise<void> = undefined;
+                    try {
+                        flushSync(() => {
+                            cancellation = approvals[index].cancel?.();
+                        });
+                    } catch (error) {
+                        console.error("UI navigation guard rollback failed.", {error});
+                    }
+                    try {
+                        await cancellation;
+                    } catch (error) {
+                        console.error("UI navigation guard cancellation failed.", {error});
+                    }
+                }
+            }
+
+            function navigationStillValid(generation: number, guards: readonly UiNavigationGuard[]) {
+                return active && navigationAllowed && navigationGeneration === generation
+                    && guards.every(guard => navigationGuards.get(guard.id) === guard);
+            }
+
+            async function navigate(request: UiNavigationRequest | null): Promise<boolean> {
+                if (navigationInFlight) return false;
+                if (!request) return true;
+
+                navigationInFlight = true;
+                const generation = navigationGeneration;
+                const guardSnapshot = [...navigationGuards.values()];
+                const approvals: UiNavigationApproval[] = [];
+
+                try {
+                    for (const guard of guardSnapshot) {
+                        let result: boolean | UiNavigationApproval;
+                        try {
+                            result = await guard.prepare(request);
+                        } catch (error) {
+                            console.error("UI navigation guard failed.", {guardId: guard.id, error});
+                            await cancelApprovals(approvals);
+                            throw error;
+                        }
+
+                        const approval = result !== null && typeof result === "object" ? result : undefined;
+                        if (approval) approvals.push(approval);
+
+                        // A disposer or UI shutdown during an awaited guard invalidates this route.
+                        // Include a late approval above so its prepared resources are also released.
+                        if (!navigationStillValid(generation, guardSnapshot)) {
+                            await cancelApprovals(approvals);
+                            return false;
+                        }
+                        if (result !== true && !approval) {
+                            await cancelApprovals(approvals);
+                            if (result === false) return false;
+                            throw new TypeError(`UI navigation guard '${guard.id}' must return true, false, or an approval.`);
+                        }
+                    }
+
+                    if (!navigationStillValid(generation, guardSnapshot)) {
+                        await cancelApprovals(approvals);
+                        return false;
+                    }
+
+                    let commitFailure: unknown;
+                    let commitFailed = false;
+                    let invalidatedDuringCommit = false;
+                    let routeCommitted = false;
+                    const completionErrors: unknown[] = [];
+                    try {
+                        // Commit guard state and publish the route together. Workbench complete
+                        // hooks may dispose the old session only after React processed this tree.
+                        flushSync(() => {
+                            for (let index = 0; index < approvals.length; index += 1) {
+                                if (!navigationStillValid(generation, guardSnapshot)) {
+                                    invalidatedDuringCommit = true;
+                                    break;
+                                }
+                                try {
+                                    approvals[index].commit?.();
+                                } catch (error) {
+                                    commitFailure = error;
+                                    commitFailed = true;
+                                    break;
+                                }
+                            }
+                            if (commitFailed || invalidatedDuringCommit) return;
+                            if (!navigationStillValid(generation, guardSnapshot)) {
+                                invalidatedDuringCommit = true;
+                                return;
+                            }
+                            try {
+                                pages.commitNavigation(request);
+                                routeCommitted = true;
+                            } catch (error) {
+                                commitFailure = error;
+                                commitFailed = true;
+                            }
+                        });
+                    } catch (error) {
+                        if (routeCommitted) completionErrors.push(error);
+                        else {
+                            if (!commitFailed) commitFailure = error;
+                            commitFailed = true;
+                        }
+                    }
+                    if (invalidatedDuringCommit) {
+                        await cancelApprovals(approvals);
+                        return false;
+                    }
+                    if (commitFailed) {
+                        console.error("UI navigation commit failed.", {error: commitFailure});
+                        await cancelApprovals(approvals);
+                        throw commitFailure;
+                    }
+
+                    for (const approval of approvals) {
+                        try {
+                            await approval.complete?.();
+                        } catch (error) {
+                            completionErrors.push(error);
+                        }
+                    }
+                    if (completionErrors.length > 0) throw new UiNavigationCompleteError(completionErrors);
+                    return true;
+                } finally {
+                    navigationInFlight = false;
+                }
             }
 
             function recoverFromRenderError(error: unknown) {
@@ -150,13 +287,35 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                         }
                     };
                 },
-                openPage(id, params) {
+                registerNavigationGuard(guard) {
+                    checkRegistrationAllowed();
+                    if (!guard || typeof guard !== "object") throw new TypeError("UI navigation guard must be an object");
+                    const entry = {id: guard.id, prepare: guard.prepare};
+                    if (typeof entry.id !== "string" || !entry.id.trim()) throw new Error("UI navigation guard id cannot be empty.");
+                    if (typeof entry.prepare !== "function") throw new Error("UI navigation guard prepare must be a function.");
+                    if (navigationGuards.has(entry.id)) throw new Error(`UI navigation guard '${entry.id}' is already registered.`);
+                    navigationGuards.set(entry.id, entry);
+                    let registered = true;
+
+                    return () => {
+                        if (!registered) return;
+                        registered = false;
+                        if (navigationGuards.get(entry.id) !== entry) return;
+                        try {
+                            // Invalidate any awaited guard before its eventual result can commit.
+                            unmount();
+                        } finally {
+                            navigationGuards.delete(entry.id);
+                        }
+                    };
+                },
+                openPage(id, params, options) {
                     checkNavigationAllowed();
-                    pages.openPage(id, params);
+                    return navigate(pages.previewOpen(id, params, options?.history));
                 },
                 back() {
                     checkNavigationAllowed();
-                    pages.back();
+                    return navigate(pages.previewBack());
                 },
                 getSnapshot() {
                     checkActive();

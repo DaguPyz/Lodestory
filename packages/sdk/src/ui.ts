@@ -27,6 +27,49 @@ export type UiLocation = {
   readonly params: unknown;
 };
 
+/** A proposed page transition, inspected by navigation guards before history changes. */
+export type UiNavigationRequest =
+  | {
+      readonly from: UiLocation | null;
+      readonly to: UiLocation;
+      readonly kind: "open";
+      /** Omitted for the default push behavior; reset clears history only after approval. */
+      readonly history?: "push" | "reset";
+    }
+  | {
+      readonly from: UiLocation | null;
+      readonly to: UiLocation;
+      readonly kind: "back";
+    };
+
+/** Resources prepared by a navigation guard for one transition. */
+export type UiNavigationApproval = {
+  /** Synchronous, side-effect-only finalization. It must not perform business async work or throw. */
+  readonly commit?: () => void;
+  /** Release prepared resources if navigation fails or is invalidated, including reverting commit until navigation completes. */
+  readonly cancel?: () => void | Promise<void>;
+  /** Finish asynchronous cleanup after the page transition has committed. */
+  readonly complete?: () => void | Promise<void>;
+};
+
+/** The route committed, but one or more post-commit cleanup callbacks failed. */
+export class UiNavigationCompleteError extends Error {
+  readonly routeCommitted = true;
+  readonly errors: readonly unknown[];
+
+  constructor(errors: readonly unknown[]) {
+    super("Page navigation committed, but one or more navigation guards failed to complete.");
+    this.name = "UiNavigationCompleteError";
+    this.errors = Object.freeze([...errors]);
+  }
+}
+
+/** A startup-registered participant that may approve or reject a page transition. */
+export type UiNavigationGuard = {
+  readonly id: string;
+  readonly prepare: (request: UiNavigationRequest) => boolean | UiNavigationApproval | Promise<boolean | UiNavigationApproval>;
+};
+
 export type UiPageView = UiPage & UiPageContext;
 
 /** 状态不变时返回同一个快照；pages 仅包含已经访问过的页面。 */
@@ -45,10 +88,12 @@ export type UiService = {
   registerPage(page: UiPage): () => void;
   /** 登记包装规则，保存函数而不立即调用；返回可重复调用的撤销函数。 */
   addWrapper(wrapper: UiWrapper): () => void;
-  /** 切换到已登记页面，传入参数，并记录上一页；仅在 ready 后可用。 */
-  openPage(id: string, params?: unknown): void;
-  /** 恢复上一页及其参数；没有上一页时不改变状态。 */
-  back(): void;
+  /** 登记导航守卫；只允许在 pluginsReady 前调用，撤销已挂载守卫会先卸载整棵 UI 树。 */
+  registerNavigationGuard(guard: UiNavigationGuard): () => void;
+  /** 切换到已登记页面并传入参数；默认记录上一页，可用 history: "reset" 清空历史。并发导航会返回 false。 */
+  openPage(id: string, params?: unknown, options?: {readonly history?: "push" | "reset"}): Promise<boolean>;
+  /** 恢复上一页及其参数；没有上一页时返回 true 且不改变状态。 */
+  back(): Promise<boolean>;
   /** 读取页面显示状态。 */
   getSnapshot(): UiSnapshot;
   /** 订阅页面状态变化，返回取消订阅函数。 */

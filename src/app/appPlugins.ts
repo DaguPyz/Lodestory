@@ -6,20 +6,23 @@ import {createBuiltinThemesPlugin} from "../plugins/builtin-themes";
 import {createDefaultLayoutPlugin} from "../plugins/default-layout/defaultLayoutPlugin";
 import {createContextMenuPlugin} from "../plugins/context-menu";
 import {createWelcomePlugin} from "../plugins/welcome/welcomePlugin";
-import {createEditorPlugin} from "../plugins/editor/editorPlugin";
+import {createEditorFeaturesPlugin} from "../plugins/editor/editorPlugin";
+import {createWorkbenchPlugin} from "../plugins/workbench/workbenchPlugin";
+import {appPages} from "./pages";
 import {createSettingsPlugin} from "../plugins/settings/settingsPlugin";
 
 /** 应用选择哪些插件；启动和渲染流程不根据具体插件添加分支。 */
 export function createAppPlugins(): readonly Plugin[] {
     return [
         createErrorUiPlugin(),
-        createUiPlugin(),
+        createUiPlugin(undefined, {initialPage: appPages.welcome}),
         createThemePlugin(),
         createBuiltinThemesPlugin(),
         createContextMenuPlugin(),
         createDefaultLayoutPlugin(),
+        createWorkbenchPlugin(),
         createWelcomePlugin(),
-        createEditorPlugin(),
+        createEditorFeaturesPlugin(),
         createSettingsPlugin(),
     ];
 }

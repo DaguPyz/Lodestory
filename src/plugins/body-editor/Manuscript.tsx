@@ -6,7 +6,7 @@ import type {EditorDefinition, EditorFormat, EditorHandle, EditorProps} from "@l
 import {ContextMenuRegion} from "../context-menu";
 import {createEditorCallbackGuard, type EditorCallbackGuard} from "./editorCallbackGuard";
 
-export function Manuscript({document, visible, active, readOnly = false, format, definition, onChange, onSave, onEditorReady}: {
+export function Manuscript({document, visible, active, readOnly = false, format, definition, onChange, onSave, onSaveAs, onEditorReady}: {
   document: OpenDocument;
   visible: boolean;
   active: boolean;
@@ -14,6 +14,7 @@ export function Manuscript({document, visible, active, readOnly = false, format,
   format?: EditorFormat;
   definition?: Readonly<EditorDefinition>;
   onChange: (content: string) => void;
+  onSaveAs?: (request: Parameters<NonNullable<EditorProps["onSaveAs"]>>[0]) => Promise<void>;
   onSave: () => unknown | Promise<unknown>;
   onEditorReady: (documentId: string, handle: EditorHandle | null) => void;
 }) {
@@ -40,7 +41,7 @@ export function Manuscript({document, visible, active, readOnly = false, format,
         {definition && format
           ? <EditorRuntime key={format + ":" + definition.id} definition={definition} documentId={document.id} format={format}
               content={document.content} readOnly={readOnly || !visible} active={editorActive}
-              onChange={onChange} onReady={ready}/>
+              onChange={onChange} onReady={ready} onSaveAs={onSaveAs}/>
           : <p className="editor-document-feedback" role="status">
               {format ? "当前没有可用的编辑器实现。" : "暂不支持该文档格式。"}
             </p>}
@@ -50,7 +51,7 @@ export function Manuscript({document, visible, active, readOnly = false, format,
   );
 }
 
-function EditorRuntime({definition, documentId, format, content, readOnly, active, onChange, onReady}: {
+function EditorRuntime({definition, documentId, format, content, readOnly, active, onChange, onReady, onSaveAs}: {
   definition: Readonly<EditorDefinition>;
   documentId: string;
   format: EditorFormat;
@@ -59,12 +60,13 @@ function EditorRuntime({definition, documentId, format, content, readOnly, activ
   active: boolean;
   onChange: (content: string) => void;
   onReady: (handle: EditorHandle | null) => void;
+  onSaveAs?: NonNullable<EditorProps["onSaveAs"]>;
 }) {
   const [Editor, setEditor] = useState<ComponentType<EditorProps>>();
   const [error, setError] = useState<Error>();
   const [attempt, setAttempt] = useState(0);
-  const callbacks = useRef({onChange, onReady});
-  callbacks.current = {onChange, onReady};
+  const callbacks = useRef({onChange, onReady, onSaveAs, active, readOnly});
+  callbacks.current = {onChange, onReady, onSaveAs, active, readOnly};
   const activeToken = useRef<symbol | null>(null);
   const activeGuard = useRef<EditorCallbackGuard | null>(null);
   const loadEditor = definition.load;
@@ -91,6 +93,12 @@ function EditorRuntime({definition, documentId, format, content, readOnly, activ
       onChange: content => callbacks.current.onChange(content),
       onReady: handle => callbacks.current.onReady(handle),
       onError: reason => fail(token, reason),
+      onSaveAs: request => {
+        const current = callbacks.current;
+        if (!current.onSaveAs) throw new Error("当前编辑器不支持转换保存。");
+        if (!current.active || current.readOnly) throw new Error("当前文稿不可编辑，无法转换保存。");
+        return current.onSaveAs(request);
+      },
     });
     activeGuard.current = guard;
     setEditor(undefined);
@@ -123,6 +131,7 @@ function EditorRuntime({definition, documentId, format, content, readOnly, activ
     onChange: guard.onChange,
     onReady: guard.onReady,
     onError: guard.onError,
+    ...(onSaveAs ? {onSaveAs: guard.onSaveAs} : {}),
   };
   return <EditorErrorBoundary key={attempt} onError={guard.onError}>
     <Editor {...props}/>

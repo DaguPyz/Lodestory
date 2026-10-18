@@ -52,10 +52,13 @@ function createFixture() {
             reads.push([projectPath, path]);
             return makeRecord(path);
           },
-          async createDocument(projectPath, parentPath, name) {
+          async createDocument(projectPath, parentPath, name, content) {
+            const createGate = controls.createGate;
+            if (createGate) await createGate;
+            if (controls.failCreates) throw new Error("create failed");
             const path = [parentPath, name].filter(Boolean).join("/");
             creates.push([projectPath, parentPath, name]);
-            return makeRecord(path, `created:${path}`);
+            return makeRecord(path, content ?? `created:${path}`);
           },
           async saveDocument(projectPath, path, content, expectedContent) {
             writes.push([projectPath, path, content, expectedContent]);
@@ -233,6 +236,31 @@ test("reveal event failures do not undo document operations or turn save failure
 
   f.controls.failWrites = false;
   assert.equal(await workspace.save(created.id), true);
+
+  const other = await workspace.create("", "第二章.md");
+  assert.ok(other);
+  assert.equal(workspace.select(created.id), true);
+  const sourceContent = workspace.getSnapshot().documents.find(document => document.id === created.id).content;
+  let finishCreate;
+  f.controls.createGate = new Promise(resolve => { finishCreate = resolve; });
+  const saveAs = workspace.saveAs(created.id, "第一章.lode", "rich-delta-envelope");
+  await Promise.resolve();
+  f.controls.createGate = null;
+  assert.equal(workspace.select(other.id), true);
+  finishCreate();
+  await saveAs;
+
+  const snapshot = workspace.getSnapshot();
+  const savedAs = snapshot.documents.find(document => document.fileName === "第一章.lode");
+  assert.equal(savedAs.content, "rich-delta-envelope");
+  assert.equal(snapshot.activeId, other.id, "a late create must not steal the current document selection");
+  assert.equal(snapshot.documents.find(document => document.id === created.id).content, sourceContent);
+  await assert.rejects(workspace.saveAs(created.id, "第一章.lode", "replacement"), /已在工作区打开/);
+  assert.equal(workspace.getSnapshot().documents.find(document => document.fileName === "第一章.lode").content, "rich-delta-envelope");
+  f.controls.failCreates = true;
+  await assert.rejects(workspace.saveAs(created.id, "失败.lode", "failed-envelope"), /create failed/);
+  f.controls.failCreates = false;
+  assert.equal(workspace.getSnapshot().documents.find(document => document.id === created.id).content, sourceContent);
   await participation.dispose();
   f.participationBySession.delete(session.id);
   await f.plugin.deactivate();

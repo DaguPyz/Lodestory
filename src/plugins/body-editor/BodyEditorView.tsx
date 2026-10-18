@@ -2,6 +2,7 @@ import {useCallback, useEffect, useRef} from "react";
 import {IconButton} from "../../components/Button";
 import {Icon} from "../../components/Icon";
 import type {EditorFormat, EditorHandle} from "@lodestory/sdk/body-editor";
+import {getEditorFormat} from "./bodyEditorRegistry";
 import {BodyEditorInteractions, useBodyEditorContext} from "./BodyEditorContext";
 import {EmptyDocument, Manuscript} from "./Manuscript";
 
@@ -92,16 +93,23 @@ export function BodyEditor({active}: {active: boolean}) {
               workspace.update(document.id, content);
             }
           }}
-          onSave={() => workspace.save(document.id)}/>;
+          onSave={() => workspace.save(document.id)}
+          onSaveAs={async ({extension, content}) => {
+            const normalizedExtension = extension.trim().replace(/^\./, "");
+            if (!/^[a-z0-9][a-z0-9_-]*$/i.test(normalizedExtension)) {
+              throw new Error("文件扩展名无效，无法转换保存。");
+            }
+            const latest = workspace.getSnapshot();
+            const focus = focusState.current;
+            if (!documentActive || !focus.active || focus.busy || latest.activeId !== document.id
+              || !latest.documents.some(open => open.id === document.id)) {
+              throw new Error("当前文稿已不可编辑，无法转换保存。");
+            }
+            const extensionIndex = document.fileName.lastIndexOf(".");
+            const basename = extensionIndex > 0 ? document.fileName.slice(0, extensionIndex) : document.fileName;
+            await workspace.saveAs(document.id, `${basename}.${normalizedExtension}`, content);
+          }}/>
       }) : <EmptyDocument projectPath={editor.projectPath} onCreate={() => editor.requestNewDocument()} disabled={editor.newDisabled || !active}/>}
     </div>
   </div>;
-}
-
-function getEditorFormat(fileName: string): EditorFormat | undefined {
-  const extension = fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase();
-  if (extension === "md" || extension === "markdown") return "markdown";
-  if (extension === "txt") return "plain-text";
-  if (extension === "lode") return "rich-delta";
-  return undefined;
 }

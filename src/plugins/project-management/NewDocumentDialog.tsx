@@ -38,7 +38,7 @@ export function NewDocumentDialog({ projectName, entries, initialParent, busy, e
               <input ref={input} id="new-document-name" name="documentName" value={name} onChange={(event) => setName(event.target.value)}
                 aria-describedby="new-document-name-hint"
                 required maxLength={255} autoComplete="off" placeholder="例如：第一章" disabled={busy} />
-              <span id="new-document-name-hint" className="project-form-hint">默认使用 .md 格式，也可输入 .txt 后缀。</span>
+              <span id="new-document-name-hint" className="project-form-hint">默认使用 .md 格式，也可输入 .txt 或 .lode 后缀。</span>
             </div>
             <label className="project-form-field">
               <span>保存位置</span>

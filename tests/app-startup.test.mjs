@@ -84,12 +84,25 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "documents", "project-management", "body-editor", "markdown-editor", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "documents", "project-management", "body-editor", "markdown-editor", "rich-text-editor", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings"]);
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "./MarkdownEditor"), false,
   "application startup does not import the Milkdown component");
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier.startsWith("@milkdown/")), false,
     "application startup does not load Milkdown packages");
   assert.deepEqual(fixture.appPluginsCalls, [[]]);
+  const {configKey} = fixture.requireSdk("@lodestory/sdk/config");
+  const {bodyEditorDefaultEditorsConfig} = fixture.requireSdk("@lodestory/sdk/body-editor");
+  assert.deepEqual(fixture.getService(configKey).getSnapshot(bodyEditorDefaultEditorsConfig), {
+    markdown: "milkdown",
+    "plain-text": "quill",
+    "rich-delta": "quill",
+  }, "application defaults route rich and plain text through the rich-text plugin");
+  assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "./RichTextEditor"), false,
+    "application startup registers the rich-text editor without loading its component");
+  assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "quill" || specifier.startsWith("quill/")), false,
+    "application startup does not import Quill runtime packages");
+  assert.equal(fixture.tauriCalls.some(({command}) => command === "list_system_font_families"), false,
+    "lazy rich-text editor registration does not enumerate system fonts");
   const entryImports = fixture.moduleImports
     .filter(({ from }) => from === "main.tsx")
     .map(({ specifier }) => specifier);

@@ -32,6 +32,8 @@ export type DocumentWorkspace = {
   open(path: string): Promise<boolean>;
   /** 创建后加入打开列表；返回实际文件名和路径，失败返回 null。 */
   create(parentPath: string, name: string): Promise<OpenDocument | null>;
+  /** 将当前文档内容另存为同目录的新文档，并在成功后打开新文档。 */
+  saveAs(documentId: string, fileName: string, content: string): Promise<void>;
   select(id: string): boolean;
   /** 更新共享内容，并由文档插件安排自动保存。 */
   update(id: string, content: string): boolean;

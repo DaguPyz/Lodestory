@@ -40,6 +40,16 @@ impl Documents {
         parent_path: &str,
         name: &str,
     ) -> Result<Document, ProjectError> {
+        self.create_with_content(project, parent_path, name, String::new())
+    }
+
+    pub fn create_with_content(
+        &self,
+        project: &Path,
+        parent_path: &str,
+        name: &str,
+        content: String,
+    ) -> Result<Document, ProjectError> {
         let _guard = self.writes.lock().map_err(|_| busy())?;
         let root = project_root(project)?;
         let parent = resolve_inside(&root, parent_path)?;
@@ -48,7 +58,7 @@ impl Documents {
         })?;
         let file_name = document_name(name)?;
         let path = parent.join(file_name);
-        let file = OpenOptions::new()
+        let mut file = OpenOptions::new()
             .write(true)
             .create_new(true)
             .open(&path)
@@ -59,9 +69,14 @@ impl Documents {
                     failure("document_create_failed", "创建文档失败", &path, error)
                 }
             })?;
-        file.sync_all()
-            .map_err(|error| failure("document_create_failed", "保存新文档失败", &path, error))?;
-        Ok(document(&root, &path, String::new()))
+        let write_result = std::io::Write::write_all(&mut file, content.as_bytes())
+            .and_then(|()| file.sync_all());
+        if let Err(error) = write_result {
+            drop(file);
+            let _ = fs::remove_file(&path);
+            return Err(failure("document_create_failed", "保存新文档失败", &path, error));
+        }
+        Ok(document(&root, &path, content))
     }
 
     pub fn read(&self, project: &Path, relative: &str) -> Result<Document, ProjectError> {
@@ -205,9 +220,48 @@ fn supported_document(path: &Path) -> bool {
         .is_some_and(|extension| {
             matches!(
                 extension.to_ascii_lowercase().as_str(),
-                "md" | "markdown" | "txt"
+                "md" | "markdown" | "txt" | "lode"
             )
         })
+}
+
+#[cfg(test)]
+mod lode_document_tests {
+    use super::*;
+    use tempfile::tempdir;
+
+    #[test]
+    fn lode_document_creation_read_save_and_conflict_preserve_content() {
+        let project = tempdir().unwrap();
+        let documents = Documents::default();
+        let initial = "{\"ops\":[{\"insert\":\"正文\"}]}";
+
+        let created = documents
+            .create_with_content(project.path(), "", "草稿.lode", initial.to_owned())
+            .unwrap();
+        assert_eq!(created.content, initial);
+        assert_eq!(fs::read_to_string(project.path().join("草稿.lode")).unwrap(), initial);
+
+        let reopened = documents.read(project.path(), &created.path).unwrap();
+        assert_eq!(reopened.content, initial);
+        assert!(documents
+            .list(project.path())
+            .unwrap()
+            .iter()
+            .any(|entry| entry.path == created.path));
+        documents
+            .save(project.path(), &created.path, "更新后的正文", initial)
+            .unwrap();
+        assert_eq!(documents.read(project.path(), &created.path).unwrap().content, "更新后的正文");
+
+        assert!(documents
+            .create_with_content(project.path(), "", "草稿.lode", "replacement".to_owned())
+            .is_err());
+        assert_eq!(documents.read(project.path(), &created.path).unwrap().content, "更新后的正文");
+        assert!(documents
+            .create_with_content(project.path(), "", "../越界.lode", "invalid".to_owned())
+            .is_err());
+    }
 }
 
 fn relative_path(root: &Path, path: &Path) -> String {

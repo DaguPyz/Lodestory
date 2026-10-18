@@ -7,8 +7,8 @@ function desktopCommand<T>(command: string, args: Record<string, unknown>): Prom
   return invoke<T>(command, args);
 }
 
-export function createDocument(projectPath: string, parentPath: string, name: string): Promise<DocumentRecord> {
-  return desktopCommand("create_document", { projectPath, parentPath, name });
+export function createDocument(projectPath: string, parentPath: string, name: string, content = ""): Promise<DocumentRecord> {
+  return desktopCommand("create_document", { projectPath, parentPath, name, content });
 }
 
 export function readDocument(projectPath: string, path: string): Promise<DocumentRecord> {

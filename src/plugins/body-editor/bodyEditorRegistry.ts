@@ -9,6 +9,14 @@ type Entry = {
 
 const formats: readonly EditorFormat[] = ["markdown", "plain-text", "rich-delta"];
 
+export function getEditorFormat(fileName: string): EditorFormat | undefined {
+  const extension = fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase();
+  if (extension === "md" || extension === "markdown") return "markdown";
+  if (extension === "txt") return "plain-text";
+  if (extension === "lode") return "rich-delta";
+  return undefined;
+}
+
 /** Startup registry; editor code is shared, while mounted instances belong to documents. */
 export function createBodyEditorRegistry(
   defaults: Readonly<Partial<Record<EditorFormat, string>>>,
@@ -20,8 +28,14 @@ export function createBodyEditorRegistry(
     if (typeof id !== "string" || !id.trim()) throw new TypeError("Default editor id cannot be empty.");
   }
   const entries = new Map<string, Entry>();
+  const listeners = new Set<() => void>();
   let started = false;
   let alive = true;
+  function notify() {
+    for (const listener of [...listeners]) {
+      try { listener(); } catch { /* Subscription callbacks cannot block registry cleanup. */ }
+    }
+  }
 
   function checkActive() {
     if (!alive) throw new Error("Body editor registry is no longer active.");
@@ -71,11 +85,13 @@ export function createBodyEditorRegistry(
       const source: Readonly<EditorDefinition> = Object.freeze({
         id: definition.id,
         formats: Object.freeze([...definition.formats]),
+        ...(definition.getText ? {getText: definition.getText} : {}),
         load: definition.load,
       });
       const entry: Entry = {source, definition: source};
       entry.definition = Object.freeze({...source, load: () => load(entry)});
       entries.set(source.id, entry);
+      notify();
       return () => {
         if (!alive || entries.get(source.id) !== entry) return;
         try {
@@ -83,8 +99,30 @@ export function createBodyEditorRegistry(
         } finally {
           if (entries.get(source.id) === entry) entries.delete(source.id);
           entry.pending = undefined;
+          notify();
         }
       };
+    },
+    getText(fileName, content) {
+      if (!alive || !started) return undefined;
+      const format = getEditorFormat(fileName);
+      if (!format) return undefined;
+      const id = associations[format];
+      const entry = id === undefined ? undefined : entries.get(id);
+      const definition = entry?.source.formats.includes(format) ? entry.definition : undefined;
+      if (!definition) return undefined;
+      if (!definition.getText) return format === "rich-delta" ? undefined : content;
+      try {
+        const text = definition.getText(content, format);
+        return typeof text === "string" ? text : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    subscribe(listener) {
+      checkActive();
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
     },
   });
 
@@ -109,6 +147,8 @@ export function createBodyEditorRegistry(
         alive = false;
         for (const entry of entries.values()) entry.pending = undefined;
         entries.clear();
+        notify();
+        listeners.clear();
       }
     },
   };

@@ -3,6 +3,7 @@ mod document_commands;
 mod documents;
 mod project_commands;
 mod project_index;
+mod system_fonts;
 
 use tauri::Manager;
 
@@ -37,6 +38,7 @@ pub fn run() {
             document_commands::create_document,
             document_commands::read_document,
             document_commands::save_document,
+            system_fonts::list_system_font_families,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

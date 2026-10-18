@@ -15,6 +15,7 @@ export function useDocumentWorkspace(workspace: DocumentWorkspace) {
     select: workspace.select,
     update: workspace.update,
     save: workspace.save,
+    saveAs: workspace.saveAs,
     saveAll: workspace.saveAll,
     clearError: workspace.clearError,
   };

@@ -51,6 +51,14 @@ const bodyEditorService: BodyEditorService = {
     void load;
     return () => {};
   },
+  getText(fileName, content) {
+    void fileName;
+    return content;
+  },
+  subscribe(listener) {
+    void listener;
+    return () => {};
+  },
 };
 const welcomePage: ConfigItem<string | null> = {
   id: "ui.initialPage",
@@ -74,7 +82,7 @@ const listener: EventListener<DocumentChanged> = ({ documentId, revision }) => {
 declare const context: PluginContext;
 const plugin: Plugin = {
   id: "sdk-types",
-  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, workbenchKey, configKey, documentsKey, bodyEditorKey],
+requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, workbenchKey, configKey, documentsKey, bodyEditorKey],
   provides: [],
   activate(pluginContext) {
     const document = pluginContext.get(documentKey);
@@ -86,6 +94,10 @@ const plugin: Plugin = {
     const removeEditor: () => void = bodyEditor.registerEditor({
       id: "example.markdown",
       formats: ["markdown"],
+      getText(content: string, format: EditorFormat): string {
+        void format;
+        return content;
+      },
       async load() {
         const Editor: ComponentType<EditorProps> = (props: EditorProps) => {
           const content: string = props.content;
@@ -95,8 +107,10 @@ const plugin: Plugin = {
           const handle: EditorHandle = {focus() {}};
           props.onReady(handle);
           props.onError(new Error("editor example"));
+          const saveAs: Promise<void> | undefined = props.onSaveAs?.({extension: ".lode", content});
           void active;
           void readOnly;
+          void saveAs;
           return null;
         };
         return {default: Editor};

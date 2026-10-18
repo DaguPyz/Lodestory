@@ -170,6 +170,44 @@ export function createDocumentWorkspace(projectPath: string, options: Options = 
         }
       });
     },
+    saveAs(documentId: string, fileName: string, content: string) {
+      if (blocked() || creating) return Promise.reject(new Error("当前不能另存文档。"));
+      const source = sessions.get(documentId);
+      if (!source || closing.has(documentId)) return Promise.reject(new Error("源文档已关闭。"));
+      if (typeof content !== "string" || typeof fileName !== "string" || !fileName.trim()
+        || fileName !== fileName.trim() || fileName.startsWith(".") || /[\/\\:\u0000-\u001f]/.test(fileName)
+        || !/\.(md|markdown|txt|lode)$/i.test(fileName)) {
+        return Promise.reject(new Error("另存文件名或内容无效。"));
+      }
+      const sourcePath = source.document.path;
+      const parentPath = sourcePath.includes("/") ? sourcePath.slice(0, sourcePath.lastIndexOf("/")) : "";
+      if (!validPath(parentPath, true)) return Promise.reject(new Error("源文档目录无效。"));
+      const targetPath = parentPath ? `${parentPath}/${fileName}` : fileName;
+      const targetId = encodeURIComponent(targetPath);
+      if (sessions.has(targetId)) return Promise.reject(new Error("同名文档已在工作区打开。"));
+      const sequence = ++selection;
+      return run(async () => {
+        creating = true;
+        openingPath = null;
+        error = null;
+        publish();
+        try {
+          const record = await createDocument(projectPath, parentPath, fileName, content);
+          if (disposed) return;
+          const sourceStillOpen = sessions.get(documentId) === source;
+          const target = sessions.get(targetId);
+          const document = target ? target.document : install(record).document;
+          if (sourceStillOpen && sequence === selection) activate(document.id);
+          else publish();
+        } catch (cause) {
+          if (!disposed) { error = documentErrorMessage(cause); publish(); }
+          throw cause;
+        } finally {
+          creating = false;
+          publish();
+        }
+      });
+    },
     select(id: string) {
       if (blocked() || closing.has(id) || !sessions.has(id)) return false;
       selection += 1;

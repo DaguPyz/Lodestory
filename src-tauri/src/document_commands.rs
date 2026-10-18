@@ -33,9 +33,15 @@ pub async fn create_document(
     project_path: String,
     parent_path: String,
     name: String,
+    content: Option<String>,
 ) -> Result<Document, ProjectError> {
     with_documents(app, move |store| {
-        store.create(Path::new(&project_path), &parent_path, &name)
+        store.create_with_content(
+            Path::new(&project_path),
+            &parent_path,
+            &name,
+            content.unwrap_or_default(),
+        )
     })
     .await
 }

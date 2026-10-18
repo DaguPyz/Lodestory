@@ -15,7 +15,7 @@ function createWorkspace() {
   };
 }
 
-function setup({rejectContentId, editorDefaults = {markdown: "milkdown", "plain-text": "textarea"}} = {}) {
+function setup({rejectContentId, editorDefaults = {markdown: "milkdown", "plain-text": "quill", "rich-delta": "quill"}} = {}) {
   const fixture = createMainFixture();
   const {configKey} = fixture.requireSdk("@lodestory/sdk/config");
   const {workbenchKey} = fixture.requireSdk("@lodestory/sdk/workbench");
@@ -110,6 +110,7 @@ function setup({rejectContentId, editorDefaults = {markdown: "milkdown", "plain-
   };
   const plugin = fixture.loadModule("plugins/body-editor/bodyEditorPlugin.tsx").createBodyEditorPlugin();
   const markdownEditorPlugin = fixture.loadModule("plugins/markdown-editor/markdownEditorPlugin.ts").createMarkdownEditorPlugin();
+  const richTextEditorPlugin = fixture.loadModule("plugins/rich-text-editor/richTextEditorPlugin.ts").createRichTextEditorPlugin();
 
   return {
     context,
@@ -129,9 +130,11 @@ function setup({rejectContentId, editorDefaults = {markdown: "milkdown", "plain-
     fixture,
     layout,
     markdownEditorPlugin,
+    richTextEditorPlugin,
     plugin,
     prepareWrappers: async () => { await Promise.all(wrappers.map(({prepare}) => prepare())); },
     deactivatePlugins: async () => {
+      await richTextEditorPlugin.deactivate();
       await markdownEditorPlugin.deactivate();
       await plugin.deactivate();
     },
@@ -186,6 +189,7 @@ test("body editor declares the SDK contract and keeps reveal listening before a 
 
   f.plugin.activate(f.context);
   f.markdownEditorPlugin.activate(f.context);
+  f.richTextEditorPlugin.activate(f.context);
   await f.prepareWrappers();
   assert.deepEqual(f.configRegistrations, [f.bodyEditorDefaultEditorsConfig]);
   assert.equal(f.configReads(), 1, "the registry reads its default editor mapping from the configuration service");
@@ -201,11 +205,19 @@ test("body editor declares the SDK contract and keeps reveal listening before a 
   const model = renderModel(f, f.session.id);
   const markdownEditor = resolveEditor(f, f.session.id, "markdown");
   assert.equal(markdownEditor.id, "milkdown");
-  assert.equal(resolveEditor(f, f.session.id, "plain-text").id, "textarea");
-  assert.equal(resolveEditor(f, f.session.id, "rich-delta"), undefined);
+  assert.equal(resolveEditor(f, f.session.id, "plain-text").id, "quill");
+  assert.equal(resolveEditor(f, f.session.id, "rich-delta").id, "quill");
+  const bodyEditor = f.provided.get(f.bodyEditorKey);
+  assert.equal(bodyEditor.getText("chapter.md", "**raw markdown**"), "**raw markdown**");
+  assert.equal(bodyEditor.getText("chapter.txt", "plain text"), "plain text");
+  assert.equal(bodyEditor.getText("chapter.lode", "not a Delta envelope"), undefined,
+    "malformed rich text is unavailable to status instead of being counted as JSON");
+  assert.equal(bodyEditor.getText("chapter.csv", "unmapped"), undefined);
   assert.equal(typeof markdownEditor.load, "function");
   assert.equal(f.fixture.moduleImports.some(({specifier}) => specifier.startsWith("@milkdown/")), false,
     "registering and resolving Milkdown does not load its package before the editor definition is loaded");
+  assert.equal(f.fixture.moduleImports.some(({specifier}) => specifier.startsWith("quill")), false,
+    "registering and resolving Quill does not load its package before the editor definition is loaded");
   assert.deepEqual({projectName: model.getSnapshot().projectName, projectPath: model.getSnapshot().projectPath}, {
     projectName: f.session.project.name,
     projectPath: f.session.project.path,

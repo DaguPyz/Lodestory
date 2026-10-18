@@ -24,12 +24,15 @@ export type EditorProps = Readonly<{
   onReady(handle: EditorHandle | null): void;
   /** 编辑器初始化或运行错误；宿主负责显示并保留原始内容。 */
   onError(error: Error): void;
+  /** 请求把当前内容另存为指定扩展名的独立文档。 */
+  onSaveAs?(request: Readonly<{extension: string; content: string}>): Promise<void>;
 }>;
 
 /** 一个编辑器实现声明其支持的格式，并按需异步加载组件。 */
 export type EditorDefinition = Readonly<{
   id: string;
   formats: readonly EditorFormat[];
+  getText?(content: string, format: EditorFormat): string;
   load(): Promise<{default: ComponentType<EditorProps>}>;
 }>;
 
@@ -37,6 +40,8 @@ export type EditorDefinition = Readonly<{
 export type BodyEditorService = {
   /** 登记一个编辑器；返回可重复调用的撤销函数。 */
   registerEditor(definition: EditorDefinition): () => void;
+  getText(fileName: string, content: string): string | undefined;
+  subscribe(listener: () => void): () => void;
 };
 
 /** 正文编辑器注册表能力；宿主与格式插件必须共享同一个 key。 */

@@ -13,7 +13,7 @@ export function deferred() {
   return { promise, resolve: resolvePromise };
 }
 
-export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, preference, configBaseValues, configOverrides, configStorageReadError, configStorageWriteError, layoutFactory, additionalPlugins = [], invokeHandler, mockWorkbenchToolbar = true } = {}) {
+export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, preference, configBaseValues, configOverrides, configStorageReadError, configStorageWriteError, layoutFactory, additionalPlugins = [], invokeHandler, moduleMocks = {}, mockWorkbenchToolbar = true } = {}) {
   const modules = new Map();
   const sdk = createSdkLoader({ modules });
   const createdCores = [];
@@ -252,6 +252,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     const cached = modules.get(path);
     if (cached) return cached;
     const relativePath = relative(sourceRoot, path);
+    if (Object.hasOwn(moduleMocks, relativePath)) return {...moduleMocks[relativePath], __esModule: true};
     if (relativePath === "plugins/welcome/WelcomePage.tsx") return { __esModule: true, WelcomePage: components.WelcomePage };
     if (relativePath === "plugins/body-editor/BodyEditorContext.tsx") return {
       __esModule: true,

@@ -1,10 +1,13 @@
-import type {EditorHandle} from "@lodestory/sdk/body-editor";
+import type {EditorHandle, EditorProps} from "@lodestory/sdk/body-editor";
+
+type EditorSaveAsRequest = Parameters<NonNullable<EditorProps["onSaveAs"]>>[0];
 
 export type EditorCallbackGuard = Readonly<{
   token: symbol;
   onChange(content: string): void;
   onReady(handle: EditorHandle | null): void;
   onError(error: Error): void;
+  onSaveAs(request: EditorSaveAsRequest): Promise<void>;
   invalidate(): void;
 }>;
 
@@ -16,6 +19,7 @@ export function createEditorCallbackGuard(
     onChange(content: string): void;
     onReady(handle: EditorHandle | null): void;
     onError(error: Error): void;
+    onSaveAs(request: EditorSaveAsRequest): Promise<void>;
   },
 ): EditorCallbackGuard {
   let valid = true;
@@ -38,6 +42,10 @@ export function createEditorCallbackGuard(
     },
     onError(error) {
       if (isValid()) handlers.onError(error);
+    },
+    async onSaveAs(request) {
+      if (!isValid()) throw new Error("This editor instance is no longer active.");
+      await handlers.onSaveAs(request);
     },
     invalidate() {
       if (!valid) return;

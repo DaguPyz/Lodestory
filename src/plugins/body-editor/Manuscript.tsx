@@ -6,9 +6,8 @@ import type {EditorDefinition, EditorFormat, EditorHandle, EditorProps} from "@l
 import {ContextMenuRegion} from "../context-menu";
 import {createEditorCallbackGuard, type EditorCallbackGuard} from "./editorCallbackGuard";
 
-export function Manuscript({document, projectName, visible, active, readOnly = false, format, definition, onChange, onSave, onEditorReady}: {
+export function Manuscript({document, visible, active, readOnly = false, format, definition, onChange, onSave, onEditorReady}: {
   document: OpenDocument;
-  projectName: string;
   visible: boolean;
   active: boolean;
   readOnly?: boolean;
@@ -18,8 +17,6 @@ export function Manuscript({document, projectName, visible, active, readOnly = f
   onSave: () => unknown | Promise<unknown>;
   onEditorReady: (documentId: string, handle: EditorHandle | null) => void;
 }) {
-  const title = document.fileName.replace(/\.(md|markdown|txt|lode)$/i, "");
-  const folder = document.path.includes("/") ? document.path.slice(0, document.path.lastIndexOf("/")) : "";
   const ready = useCallback((handle: EditorHandle | null) => onEditorReady(document.id, handle), [document.id, onEditorReady]);
   const editorActive = active && visible;
 
@@ -32,14 +29,10 @@ export function Manuscript({document, projectName, visible, active, readOnly = f
       className="editor-document"
       id={"editor-document-" + document.id}
       hidden={!visible}
-      aria-labelledby={"editor-document-title-" + document.id}
+      aria-label={document.fileName}
       tabIndex={-1}
     >
       <article className="manuscript">
-        <header className="manuscript-header">
-          <p className="manuscript-context">{projectName}{folder && " · " + folder}</p>
-          <h1 className="manuscript-title" id={"editor-document-title-" + document.id} tabIndex={-1}>{title}</h1>
-        </header>
         {document.saveError && <div className="document-save-error" role="alert">
           <p className="project-error">{document.saveError}</p>
           <Button variant="ghost" disabled={readOnly || document.saveState === "saving"} onClick={onSave}>重试保存</Button>

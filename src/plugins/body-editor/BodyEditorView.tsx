@@ -57,7 +57,7 @@ export function BodyEditor({active}: {active: boolean}) {
       if (workspace.activeId) {
         const handle = handles.current.get(workspace.activeId);
         if (handle) handle.focus();
-        else root.current?.querySelector<HTMLElement>(".editor-document:not([hidden]) .manuscript-title")?.focus({preventScroll: true});
+        else root.current?.querySelector<HTMLElement>(".editor-document:not([hidden])")?.focus({preventScroll: true});
       } else {
         root.current?.querySelector<HTMLElement>("#editor-empty-title")?.focus({preventScroll: true});
       }
@@ -82,7 +82,7 @@ export function BodyEditor({active}: {active: boolean}) {
         const format = getEditorFormat(document.fileName);
         const definition = format ? editor.resolveEditor(format) : undefined;
         return <Manuscript key={document.id} document={document}
-          projectName={editor.projectName} visible={visible} active={documentActive} readOnly={disabled || !visible}
+          visible={visible} active={documentActive} readOnly={disabled || !visible}
           format={format} definition={definition} onEditorReady={onEditorReady}
           onChange={content => {
             const latest = workspace.getSnapshot();

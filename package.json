@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "pnpm run build:sdk && vite",
+    "dev": "pnpm run build:sdk && node scripts/dev-with-sdk.mjs",
     "dev:sdk": "pnpm --filter @lodestory/sdk dev",
     "dev:desktop": "tauri dev",
     "generate:theme": "node scripts/generate-theme-assets.mjs",

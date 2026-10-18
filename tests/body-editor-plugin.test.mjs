@@ -122,7 +122,6 @@ test("body editor declares the SDK contract and keeps reveal listening before a 
   assert.equal(f.events.get(f.documentRevealRequested).size, 1, "the reveal handler exists before any project session starts");
   assert.deepEqual(Array.from(f.contributions, ({id, role}) => ({id, role})), [
     {id: "body-editor.main", role: "main"},
-    {id: "body-editor.status", role: "status"},
   ]);
 
   await f.context.emit(f.documentRevealRequested, {sessionId: f.session.id, documentId: "not-open-yet"});
@@ -213,8 +212,8 @@ test("new-document requests follow session, visibility, busy, blocked, and SDK e
 });
 
 test("partial contribution failure rolls back its listener, participant, and earlier content", async () => {
-  const f = setup({rejectContentId: "body-editor.status"});
-  assert.throws(() => f.plugin.activate(f.context), /duplicate body-editor.status/);
+  const f = setup({rejectContentId: "body-editor.main"});
+  assert.throws(() => f.plugin.activate(f.context), /duplicate body-editor.main/);
   await f.plugin.deactivate();
   assert.equal(f.contributions.length, 0);
   assert.equal(f.events.get(f.documentRevealRequested).size, 0);

@@ -1,6 +1,6 @@
 import type {LayoutContent, LayoutRole, LayoutSnapshot} from "@lodestory/sdk/layout";
 
-const roles: readonly LayoutRole[] = ["main", "navigation", "auxiliary", "actions", "status"];
+const roles: readonly LayoutRole[] = ["main", "tabs", "navigation", "auxiliary", "actions", "status"];
 type PanelRole = "navigation" | "auxiliary";
 type Preference = "auto" | "open" | "closed";
 

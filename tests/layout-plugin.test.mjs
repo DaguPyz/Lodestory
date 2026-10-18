@@ -133,19 +133,29 @@ test("layout cleanup still revokes a descriptor when stopping UI fails", () => {
   remove();
 });
 
-test("project management, body editor, and workbench toolbar contribute their own layout roles", async () => {
+test("document tabs, body editor, writing status, project management, and toolbar contribute independently", async () => {
   const f = createMainFixture();
   f.start(); await flushStartup();
   const layoutKey = f.requireSdk("@lodestory/sdk/layout").layoutKey;
   const layout = f.getService(layoutKey);
-  assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.role), ["main", "navigation", "actions", "status"]);
+  assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.role), ["main", "tabs", "navigation", "actions", "status"]);
   assert.ok(layout.getSnapshot().contents.some(({id}) => id === "project-management.files"));
   assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.id).sort(), [
-    "body-editor.main", "body-editor.status", "project-management.files", "workbench-toolbar.main",
+    "body-editor.main", "document-tabs.tabs", "project-management.files", "workbench-toolbar.main", "writing-status.status",
   ]);
   assert.ok(f.lifecycle.indexOf("activate:default-layout:complete") < f.lifecycle.indexOf("activate:body-editor:begin"));
   assert.ok(f.lifecycle.indexOf("activate:project-management:complete") < f.lifecycle.indexOf("activate:body-editor:begin"));
   assert.ok(f.lifecycle.indexOf("activate:body-editor:complete") < f.lifecycle.indexOf("activate:workbench-toolbar:begin"));
+  const editorContentIds = ["document-tabs.tabs", "body-editor.main", "writing-status.status"];
+  for (const hiddenId of editorContentIds) {
+    layout.hide(hiddenId);
+    const shownIds = new Set(layout.getSnapshot().shownIds);
+    assert.equal(shownIds.has(hiddenId), false, `${hiddenId} should be hidden independently`);
+    for (const otherId of editorContentIds) {
+      if (otherId !== hiddenId) assert.equal(shownIds.has(otherId), true, `${otherId} should stay visible`);
+    }
+    layout.show(hiddenId);
+  }
   const before = layout.getSnapshot();
   const ui = f.getService(f.requireSdk("@lodestory/sdk/ui").uiKey);
   await ui.openPage("editor", {project: {id: "one", name: "one", path: "/one"}});
@@ -153,11 +163,19 @@ test("project management, body editor, and workbench toolbar contribute their ow
   assert.equal(layout.getSnapshot(), before, "page navigation does not reset layout selection");
   await f.createdCores.at(-1).unmount("workbench-toolbar");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
-    "body-editor.main", "body-editor.status", "project-management.files",
+    "body-editor.main", "document-tabs.tabs", "project-management.files", "writing-status.status",
   ]);
   await f.createdCores.at(-1).unmount("body-editor");
-  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id), ["project-management.files"]);
+  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
+    "document-tabs.tabs", "project-management.files", "writing-status.status",
+  ]);
   await f.createdCores.at(-1).unmount("project-management");
+  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
+    "document-tabs.tabs", "writing-status.status",
+  ]);
+  await f.createdCores.at(-1).unmount("document-tabs");
+  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id), ["writing-status.status"]);
+  await f.createdCores.at(-1).unmount("writing-status");
   assert.equal(layout.getSnapshot().contents.length, 0);
   assert.equal(f.logs.filter(entry => entry === "root.unmount").length, 1);
   await f.createdCores.at(-1).unmountAll();
@@ -205,9 +223,9 @@ test("another provider of layoutKey receives the editor contributions and is inj
     activate(context) { context.provide(layoutKey, service); },
   })});
   f.start(); await flushStartup();
-  assert.equal(contributions.length, 4);
+assert.equal(contributions.length, 5);
   assert.deepEqual(contributions.map(({id}) => id).sort(), [
-    "body-editor.main", "body-editor.status", "project-management.files", "workbench-toolbar.main",
+  "body-editor.main", "document-tabs.tabs", "project-management.files", "workbench-toolbar.main", "writing-status.status",
   ]);
   const ui = f.getService(f.requireSdk("@lodestory/sdk/ui").uiKey);
   await ui.openPage("editor", {project: {id: "test", name: "test", path: "/test"}});
@@ -219,5 +237,5 @@ test("another provider of layoutKey receives the editor contributions and is inj
   assert.equal(workbenchPage.props.layout, service);
   assert.equal(workbenchPage.props.layout.View, service.View);
   await f.createdCores.at(-1).unmountAll();
-  assert.equal(new Set(removed).size, 4);
+assert.equal(new Set(removed).size, 5);
 });

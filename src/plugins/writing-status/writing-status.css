@@ -1,0 +1,40 @@
+.editor-save-status[data-state="error"] {
+  color: var(--ui-status-danger);
+}
+
+.editor-statusbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--ui-space-3) var(--ui-space-5);
+  min-height: var(--ui-statusbar-height);
+  padding: var(--ui-space-2) var(--ui-space-5);
+  color: var(--ui-text-secondary);
+  background: var(--ui-surface-chrome);
+  border-top: 1px solid var(--ui-border-divider);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+.editor-save-status,
+.editor-document-status {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-icon-text-gap);
+}
+
+.editor-document-status {
+  flex-wrap: wrap;
+  gap: var(--ui-space-5);
+  font-variant-numeric: tabular-nums;
+}
+
+.editor-document-status > span {
+  white-space: nowrap;
+}
+
+@media (max-width: 40rem) {
+  .editor-document-status > .editor-font-status { display: none; }
+}

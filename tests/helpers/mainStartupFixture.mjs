@@ -190,7 +190,6 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       return children;
     },
     BodyEditor: function BodyEditor({active}) { return React.createElement("body-editor", {active}); },
-    WritingStatus: function WritingStatus() { return React.createElement("writing-status"); },
     ProjectFiles: function ProjectFiles({ workbench, models, active }) {
       const session = workbench.getSnapshot().session;
       const model = session ? models.get(session.id) : undefined;
@@ -257,7 +256,6 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     if (relativePath === "plugins/body-editor/BodyEditorView.tsx") return {
       __esModule: true,
       BodyEditor: components.BodyEditor,
-      WritingStatus: components.WritingStatus,
     };
     if (relativePath === "plugins/project-management/ProjectManagementView.tsx") return {
       __esModule: true,

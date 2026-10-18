@@ -3,11 +3,11 @@ import {documentCreateRequested, documentRevealRequested, documentsKey} from "@l
 import {layoutKey, type LayoutContent} from "@lodestory/sdk/layout";
 import {workbenchKey} from "@lodestory/sdk/workbench";
 import {BodyEditorContentProvider} from "./BodyEditorContext";
-import {BodyEditor, WritingStatus} from "./BodyEditorView";
+import {BodyEditor} from "./BodyEditorView";
 import {bodyEditorContentIds} from "./bodyEditorContentIds";
 import {createBodyEditorModel, type BodyEditorModel} from "./bodyEditorModel";
 
-/** 正文、文稿标签与写作状态的独立提供者，不拥有文档工作区。 */
+/** 文稿正文与焦点恢复的独立提供者，不拥有文档工作区。 */
 export function createBodyEditorPlugin(): Plugin {
   const models = new Map<string, BodyEditorModel>();
   const removeContents: (() => void)[] = [];
@@ -45,7 +45,6 @@ export function createBodyEditorPlugin(): Plugin {
       });
       const contents: LayoutContent[] = [
         {id: bodyEditorContentIds.main, title: "正文编辑", role: "main", render: props => <BodyEditor {...props}/>},
-        {id: bodyEditorContentIds.status, title: "写作状态", role: "status", render: () => <WritingStatus/>},
       ];
       for (const content of contents) {
         removeContents.push(layout.registerContent({...content, render: props =>

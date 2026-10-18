@@ -11,6 +11,8 @@ pnpm install
 pnpm dev:desktop
 ```
 
+`pnpm dev:desktop` starts Tauri and delegates the frontend to `pnpm dev`, which builds the SDK once and then watches SDK changes while running Vite. Use `pnpm dev` for frontend-only development, or `pnpm dev:sdk` to run the SDK watcher by itself.
+
 To build an application bundle:
 
 ```sh
@@ -44,4 +46,4 @@ The `config` plugin provides typed application settings through `configKey`. It 
 
 The `theme` plugin owns the color standard, resolution, selection, and synchronization. The separate `builtin-themes` plugin uses the same `registerTheme` API and cleanup lifecycle as custom contributors. Default and fallback IDs are configured in `src/plugins/theme/theme-config.json`; UI mounting waits until initial contributions and theme preparation are complete.
 
-The `documents` plugin owns opened document content, selection, autosave, and save checks for each workbench session. The independent `project-management` plugin owns the project file tree, directory listing, and new-document dialog; it uses the documents service for file operations and registers its tree with the layout service. `body-editor` provides the document editor and writing status, while `workbench-toolbar` provides the top toolbar. Project-management implementation lives in `src/plugins/project-management/` and adds no SDK service. See [文档管理插件设计](文档/需求设计/文档管理插件.md), [工程管理插件设计](文档/需求设计/工程管理插件.md), and [工作台工具栏插件设计](文档/需求设计/工作台工具栏插件.md).
+The `documents` plugin owns opened document content, selection, autosave, and save checks for each workbench session. The independent `project-management` plugin owns the project file tree, directory listing, and new-document dialog; it uses the documents service for file operations and registers its tree with the layout service. `document-tabs` provides opened-document tabs, `body-editor` provides the main text editor, and `writing-status` provides save and writing information; each registers its own layout content and reads the shared documents workspace. `workbench-toolbar` provides the top toolbar. Project-management implementation lives in `src/plugins/project-management/` and adds no SDK service. See [文档管理插件设计](文档/需求设计/文档管理插件.md), [工程管理插件设计](文档/需求设计/工程管理插件.md), [正文编辑插件设计](文档/需求设计/正文编辑插件.md), and [工作台工具栏插件设计](文档/需求设计/工作台工具栏插件.md).

@@ -2,7 +2,7 @@ import type { ComponentType, ReactNode } from "react";
 import { createServiceKey } from "./ServiceKey.js";
 
 /** 内容的用途；不表示上下左右的位置，所有兼容布局必须支持这些用途。 */
-export type LayoutRole = "main" | "navigation" | "auxiliary" | "actions" | "status";
+export type LayoutRole = "main" | "tabs" | "navigation" | "auxiliary" | "actions" | "status";
 
 /** 内容收到的交互状态；隐藏或工作台不在前台时为 false，应暂停快捷键等交互。 */
 export type LayoutContentContext = { readonly active: boolean };

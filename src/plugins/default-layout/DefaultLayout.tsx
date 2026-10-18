@@ -79,6 +79,9 @@ export function DefaultLayout({store, active, ErrorBoundary}: LayoutViewProps & 
       </nav>
       {panel("navigation", navigationDocked)}
       <main className="layout-main" aria-label="主工作区">
+        <div className="layout-tabs" aria-label="文档标签">
+          {contents("tabs").map(renderContent)}
+        </div>
         {contents("main").length > 1 && <nav className="layout-main-switcher" aria-label="切换主内容">
           {contents("main").map(entry => <Button key={entry.id} variant="ghost" aria-pressed={shown(entry.id)}
             onClick={() => store.show(entry.id)}>{entry.title}</Button>)}

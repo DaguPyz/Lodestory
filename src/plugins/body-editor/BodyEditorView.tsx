@@ -2,9 +2,7 @@ import {useEffect, useRef} from "react";
 import {IconButton} from "../../components/Button";
 import {Icon} from "../../components/Icon";
 import {BodyEditorInteractions, useBodyEditorContext} from "./BodyEditorContext";
-import {DocumentTabs} from "./DocumentTabs";
 import {EmptyDocument, Manuscript} from "./Manuscript";
-import {EditorStatusBar} from "./EditorStatusBar";
 
 export function BodyEditor({active}: {active: boolean}) {
   const editor = useBodyEditorContext();
@@ -24,9 +22,6 @@ export function BodyEditor({active}: {active: boolean}) {
   const disabled = editor.busy || !active;
   return <div className="editor-content-main" ref={root} aria-busy={editor.busy}>
     <BodyEditorInteractions active={active}/>
-    <DocumentTabs documents={workspace.documents} activeDocument={workspace.activeId} onSelect={workspace.select}
-      onClose={workspace.close} onSave={workspace.save} onNewDocument={() => editor.requestNewDocument()}
-      newDisabled={editor.newDisabled || !active} disabled={disabled}/>
     {workspace.error && <div className="editor-document-feedback" role="alert">
       <p className="project-error">{workspace.error}</p>
       <IconButton label="关闭提示" disabled={disabled} onClick={workspace.clearError}><Icon name="close" size="small"/></IconButton>
@@ -41,8 +36,4 @@ export function BodyEditor({active}: {active: boolean}) {
         : <EmptyDocument projectPath={editor.projectPath} onCreate={() => editor.requestNewDocument()} disabled={editor.newDisabled || !active}/>}
     </div>
   </div>;
-}
-
-export function WritingStatus() {
-  return <EditorStatusBar document={useBodyEditorContext().workspace.currentDocument}/>;
 }

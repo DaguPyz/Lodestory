@@ -9,10 +9,10 @@ const entries = [
   {id: "project-management.files", title: "工程文件", role: "navigation"},
   {id: "example.auxiliary", title: "测试辅助内容", role: "auxiliary"},
   {id: toolbarId, title: "工作台工具栏", role: "actions"},
-  {id: "body-editor.status", title: "写作状态", role: "status"},
+  {id: "writing-status.status", title: "写作状态", role: "status"},
 ];
 
-function createLayout({shownIds = ["body-editor.main", "project-management.files", "example.auxiliary", toolbarId, "body-editor.status"], extraEntries = []} = {}) {
+function createLayout({shownIds = ["body-editor.main", "project-management.files", "example.auxiliary", toolbarId, "writing-status.status"], extraEntries = []} = {}) {
   let contents = [...entries, ...extraEntries].map(entry => Object.freeze({...entry, render: () => null}));
   let shown = [...shownIds];
   let snapshot = Object.freeze({contents: Object.freeze(contents), shownIds: Object.freeze(shown)});
@@ -160,7 +160,7 @@ test("panel toggles leave focus first, while main and status toggles do not chan
   const layout = createLayout();
   const {model} = makeModel(fixture, {session: activeSession, workbench, layout});
   model.enterFocus();
-  assert.equal(model.toggleContent("body-editor.status"), true);
+  assert.equal(model.toggleContent("writing-status.status"), true);
   assert.equal(model.getSnapshot().focusMode, true);
   assert.equal(model.toggleContent("body-editor.main"), true);
   assert.equal(model.getSnapshot().focusMode, true);

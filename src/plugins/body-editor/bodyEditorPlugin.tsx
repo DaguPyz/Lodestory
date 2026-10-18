@@ -2,24 +2,58 @@ import type {Plugin} from "@lodestory/sdk";
 import {documentCreateRequested, documentRevealRequested, documentsKey} from "@lodestory/sdk/documents";
 import {layoutKey, type LayoutContent} from "@lodestory/sdk/layout";
 import {workbenchKey} from "@lodestory/sdk/workbench";
+import {bodyEditorKey, type EditorFormat} from "@lodestory/sdk/body-editor";
+import {uiKey} from "@lodestory/sdk/ui";
 import {BodyEditorContentProvider} from "./BodyEditorContext";
 import {BodyEditor} from "./BodyEditorView";
 import {bodyEditorContentIds} from "./bodyEditorContentIds";
 import {createBodyEditorModel, type BodyEditorModel} from "./bodyEditorModel";
+import {createBodyEditorRegistry} from "./bodyEditorRegistry";
+import {TextareaEditor} from "./TextareaEditor";
 
 /** 文稿正文与焦点恢复的独立提供者，不拥有文档工作区。 */
-export function createBodyEditorPlugin(): Plugin {
+export function createBodyEditorPlugin(options: {
+  defaultEditors?: Partial<Record<EditorFormat, string>>;
+} = {}): Plugin {
   const models = new Map<string, BodyEditorModel>();
   const removeContents: (() => void)[] = [];
   let removeParticipant: (() => Promise<void>) | undefined;
+  let registry: ReturnType<typeof createBodyEditorRegistry> | undefined;
+  let removeRegistryUiWrapper: (() => void) | undefined;
+  let removeDefaultEditor: (() => void) | undefined;
   return {
     id: "body-editor",
-    requires: [workbenchKey, documentsKey, layoutKey],
-    provides: [],
+    requires: [workbenchKey, documentsKey, layoutKey, uiKey],
+    provides: [bodyEditorKey],
     activate(context) {
       const workbench = context.get(workbenchKey);
       const documents = context.get(documentsKey);
       const layout = context.get(layoutKey);
+      const ui = context.get(uiKey);
+      const defaults: Partial<Record<EditorFormat, string>> = {
+        markdown: "textarea",
+        "plain-text": "textarea",
+        ...options.defaultEditors,
+      };
+      const editorRegistry = createBodyEditorRegistry(defaults, () => {
+        const remove = removeRegistryUiWrapper;
+        removeRegistryUiWrapper = undefined;
+        remove?.();
+      });
+      registry = editorRegistry;
+      context.provide(bodyEditorKey, editorRegistry.service);
+      removeDefaultEditor = editorRegistry.service.registerEditor({
+        id: "textarea",
+        formats: ["markdown", "plain-text"],
+        load: async () => ({default: TextareaEditor}),
+      });
+      removeRegistryUiWrapper = ui.addWrapper({
+        id: "body-editor-registry",
+        order: 20,
+        prepare: editorRegistry.start,
+        wrap: children => children,
+      });
+      const resolveEditor = (format: EditorFormat) => editorRegistry.resolve(format);
       removeContents.push(context.on(documentRevealRequested, request => {
         const session = workbench.getSnapshot().session;
         if (!session || session.id !== request.sessionId) return;
@@ -48,7 +82,9 @@ export function createBodyEditorPlugin(): Plugin {
       ];
       for (const content of contents) {
         removeContents.push(layout.registerContent({...content, render: props =>
-          <BodyEditorContentProvider workbench={workbench} models={models}>{content.render(props)}</BodyEditorContentProvider>}));
+          <BodyEditorContentProvider workbench={workbench} models={models} resolveEditor={resolveEditor}>
+            {content.render(props)}
+          </BodyEditorContentProvider>}));
       }
     },
     async deactivate() {
@@ -59,6 +95,15 @@ export function createBodyEditorPlugin(): Plugin {
       const remove = removeParticipant;
       removeParticipant = undefined;
       try { await remove?.(); } catch (error) { errors.push(error); }
+      const stopRegistryUi = removeRegistryUiWrapper;
+      removeRegistryUiWrapper = undefined;
+      try { stopRegistryUi?.(); } catch (error) { errors.push(error); }
+      const removeTextareaEditor = removeDefaultEditor;
+      removeDefaultEditor = undefined;
+      try { removeTextareaEditor?.(); } catch (error) { errors.push(error); }
+      const activeRegistry = registry;
+      registry = undefined;
+      try { activeRegistry?.dispose(); } catch (error) { errors.push(error); }
       if (errors.length) throw Object.assign(new Error("Body editor failed to stop."), {errors});
     },
   };

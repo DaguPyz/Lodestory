@@ -1,3 +1,4 @@
+import type {ComponentType} from "react";
 import {
   createEventKey,
   createServiceKey,
@@ -26,12 +27,31 @@ import {
   type DocumentsService,
   type OpenDocument,
 } from "@lodestory/sdk/documents";
+import {
+  bodyEditorKey,
+  type BodyEditorService,
+  type EditorDefinition,
+  type EditorFormat,
+  type EditorHandle,
+  type EditorProps,
+} from "@lodestory/sdk/body-editor";
 
 type Document = { read(): string };
 type DocumentChanged = { documentId: string; revision: number };
 
 const documentKey: ServiceKey<Document> = createServiceKey<Document>("example/document");
 const documentChanged: EventKey<DocumentChanged> = createEventKey<DocumentChanged>("example/document-changed");
+const bodyEditorService: BodyEditorService = {
+  registerEditor(definition) {
+    const editorId: string = definition.id;
+    const formats: readonly EditorFormat[] = definition.formats;
+    const load: Promise<{readonly default: ComponentType<EditorProps>}> = definition.load();
+    void editorId;
+    void formats;
+    void load;
+    return () => {};
+  },
+};
 const welcomePage: ConfigItem<string | null> = {
   id: "ui.initialPage",
   defaultValue: null,
@@ -54,7 +74,7 @@ const listener: EventListener<DocumentChanged> = ({ documentId, revision }) => {
 declare const context: PluginContext;
 const plugin: Plugin = {
   id: "sdk-types",
-  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, workbenchKey, configKey, documentsKey],
+  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, workbenchKey, configKey, documentsKey, bodyEditorKey],
   provides: [],
   activate(pluginContext) {
     const document = pluginContext.get(documentKey);
@@ -62,6 +82,26 @@ const plugin: Plugin = {
     const ui: UiService = pluginContext.get(uiKey);
     const config: ConfigService = pluginContext.get(configKey);
     const documents: DocumentsService = pluginContext.get(documentsKey);
+    const bodyEditor: BodyEditorService = pluginContext.get(bodyEditorKey);
+    const removeEditor: () => void = bodyEditor.registerEditor({
+      id: "example.markdown",
+      formats: ["markdown"],
+      async load() {
+        const Editor: ComponentType<EditorProps> = (props: EditorProps) => {
+          const content: string = props.content;
+          const active: boolean = props.active;
+          const readOnly: boolean = props.readOnly;
+          props.onChange(content);
+          const handle: EditorHandle = {focus() {}};
+          props.onReady(handle);
+          props.onError(new Error("editor example"));
+          void active;
+          void readOnly;
+          return null;
+        };
+        return {default: Editor};
+      },
+    });
     const workspace: DocumentWorkspace | null = documents.getWorkspace("session-1");
     if (workspace) {
       const snapshot: DocumentSnapshot = workspace.getSnapshot();
@@ -182,6 +222,7 @@ const plugin: Plugin = {
     void emittedCreate;
     void emittedReveal;
     void saveState;
+    removeEditor();
     removeGuard();
     void removeParticipant;
     // @ts-expect-error The event payload must match its public generic contract.
@@ -195,6 +236,7 @@ const plugin: Plugin = {
 const wrongDocument: number = context.get(documentKey);
 void plugin;
 void wrongDocument;
+void bodyEditorService;
 
 const themeConfig: ThemeConfig = {
   defaultThemeId: "example.ink.dark",

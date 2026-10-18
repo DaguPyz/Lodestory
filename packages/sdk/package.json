@@ -42,6 +42,10 @@
     "./documents": {
       "types": "./dist/documents.d.ts",
       "import": "./dist/documents.js"
+    },
+    "./body-editor": {
+      "types": "./dist/body-editor.d.ts",
+      "import": "./dist/body-editor.js"
     }
   },
   "scripts": {

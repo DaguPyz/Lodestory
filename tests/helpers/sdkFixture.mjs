@@ -7,6 +7,7 @@ import ts from "typescript";
 const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 const sdkSourceRoot = resolve(repositoryRoot, "packages/sdk/src");
 const publicEntries = {
+  "@lodestory/sdk/body-editor": ["body-editor.ts"],
   "@lodestory/sdk/config": ["config.ts"],
   "@lodestory/sdk/documents": ["documents.ts"],
   "@lodestory/sdk": ["index.ts"],

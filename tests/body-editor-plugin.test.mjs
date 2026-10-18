@@ -20,11 +20,15 @@ function setup({rejectContentId} = {}) {
   const {workbenchKey} = fixture.requireSdk("@lodestory/sdk/workbench");
   const {documentsKey, documentCreateRequested, documentRevealRequested} = fixture.requireSdk("@lodestory/sdk/documents");
   const {layoutKey} = fixture.requireSdk("@lodestory/sdk/layout");
+  const {uiKey} = fixture.requireSdk("@lodestory/sdk/ui");
+  const {bodyEditorKey} = fixture.requireSdk("@lodestory/sdk/body-editor");
   const session = {id: "session-one", project: {id: "project-one", name: "第一本", path: "/stories/one"}};
   let workbenchSnapshot = {session, active: true, busy: false};
   const workbenchListeners = new Set();
   const workspaces = new Map([[session.id, createWorkspace()]]);
   const contributions = [];
+  const wrappers = [];
+  const provided = new Map();
   const events = new Map();
   const emitted = [];
   const shown = [];
@@ -50,12 +54,26 @@ function setup({rejectContentId} = {}) {
     },
     show(id) { shown.push(id); },
   };
+  const ui = {
+    addWrapper(wrapper) {
+      wrappers.push(wrapper);
+      return () => {
+        const index = wrappers.indexOf(wrapper);
+        if (index >= 0) wrappers.splice(index, 1);
+      };
+    },
+  };
   const context = {
     get(key) {
       if (key === workbenchKey) return workbench;
       if (key === documentsKey) return documents;
       if (key === layoutKey) return layout;
+      if (key === uiKey) return ui;
       throw new Error(`Unexpected service '${key.id}'.`);
+    },
+    provide(key, service) {
+      if (provided.has(key)) throw new Error(`Service '${key.id}' already provided.`);
+      provided.set(key, service);
     },
     on(key, listener) {
       if (!events.has(key)) events.set(key, new Set());
@@ -72,6 +90,7 @@ function setup({rejectContentId} = {}) {
   return {
     context,
     contributions,
+    bodyEditorKey,
     documentCreateRequested,
     documentRevealRequested,
     emitted,
@@ -79,11 +98,14 @@ function setup({rejectContentId} = {}) {
     fixture,
     layout,
     plugin,
+    prepareWrappers: async () => { await Promise.all(wrappers.map(({prepare}) => prepare())); },
+    provided,
     participant: () => participant,
     participations,
     removedEvents,
     session,
     shown,
+    wrappers,
     start(sessionValue = session) {
       const current = participant.start(sessionValue);
       participations.push(current);
@@ -109,16 +131,25 @@ function renderModel(f, id) {
   return model;
 }
 
+function resolveEditor(f, id, format) {
+  const resolve = f.fixture.bodyEditorResolvers.get(id);
+  assert.equal(typeof resolve, "function", "the body editor content provider exposes the session's format resolver");
+  return resolve(format);
+}
+
 test("body editor declares the SDK contract and keeps reveal listening before a document is active", async () => {
   const f = setup();
   const {workbenchKey} = f.fixture.requireSdk("@lodestory/sdk/workbench");
   const {documentsKey} = f.fixture.requireSdk("@lodestory/sdk/documents");
   const {layoutKey} = f.fixture.requireSdk("@lodestory/sdk/layout");
+  const {uiKey} = f.fixture.requireSdk("@lodestory/sdk/ui");
   assert.equal(f.plugin.id, "body-editor");
-  assert.deepEqual(Array.from(f.plugin.requires, key => key.id), [workbenchKey.id, documentsKey.id, layoutKey.id]);
-  assert.deepEqual(Array.from(f.plugin.provides), []);
+  assert.deepEqual(Array.from(f.plugin.requires, key => key.id), [workbenchKey.id, documentsKey.id, layoutKey.id, uiKey.id]);
+  assert.deepEqual(Array.from(f.plugin.provides, key => key.id), [f.bodyEditorKey.id]);
 
   f.plugin.activate(f.context);
+  await f.prepareWrappers();
+  assert.equal(typeof f.provided.get(f.bodyEditorKey).registerEditor, "function");
   assert.equal(f.events.get(f.documentRevealRequested).size, 1, "the reveal handler exists before any project session starts");
   assert.deepEqual(Array.from(f.contributions, ({id, role}) => ({id, role})), [
     {id: "body-editor.main", role: "main"},
@@ -128,6 +159,10 @@ test("body editor declares the SDK contract and keeps reveal listening before a 
   assert.deepEqual(f.shown, [], "a reveal received without a session model is safely ignored");
   f.start();
   const model = renderModel(f, f.session.id);
+  assert.equal(resolveEditor(f, f.session.id, "markdown").id, "textarea");
+  assert.equal(resolveEditor(f, f.session.id, "plain-text").id, "textarea");
+  assert.equal(resolveEditor(f, f.session.id, "rich-delta"), undefined);
+  assert.equal(typeof (await resolveEditor(f, f.session.id, "markdown").load()).default, "function");
   assert.deepEqual({projectName: model.getSnapshot().projectName, projectPath: model.getSnapshot().projectPath}, {
     projectName: f.session.project.name,
     projectPath: f.session.project.path,
@@ -135,6 +170,7 @@ test("body editor declares the SDK contract and keeps reveal listening before a 
 
   await f.plugin.deactivate();
   assert.equal(f.contributions.length, 0);
+  assert.equal(f.wrappers.length, 0);
   assert.equal(f.events.get(f.documentRevealRequested).size, 0);
   assert.equal(f.participations.length, 0);
 });
@@ -142,6 +178,7 @@ test("body editor declares the SDK contract and keeps reveal listening before a 
 test("body editor models are session-scoped and valid reveal restores hidden content during busy or blocked state", async () => {
   const f = setup();
   f.plugin.activate(f.context);
+  await f.prepareWrappers();
   const firstModel = (f.start(), renderModel(f, f.session.id));
   const firstWorkspace = f.workspace;
   assert.strictEqual(firstModel.getSnapshot().workspace, firstWorkspace,
@@ -186,6 +223,7 @@ test("body editor models are session-scoped and valid reveal restores hidden con
 test("new-document requests follow session, visibility, busy, blocked, and SDK event guards", async () => {
   const f = setup();
   f.plugin.activate(f.context);
+  await f.prepareWrappers();
   f.start();
   const model = renderModel(f, f.session.id);
 
@@ -216,6 +254,7 @@ test("partial contribution failure rolls back its listener, participant, and ear
   assert.throws(() => f.plugin.activate(f.context), /duplicate body-editor.main/);
   await f.plugin.deactivate();
   assert.equal(f.contributions.length, 0);
+  assert.equal(f.wrappers.length, 0);
   assert.equal(f.events.get(f.documentRevealRequested).size, 0);
   assert.equal(f.removedEvents.length, 1);
 });

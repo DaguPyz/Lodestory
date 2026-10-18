@@ -1,18 +1,22 @@
 import {createContext, useContext, useEffect, useSyncExternalStore, type ReactNode} from "react";
 import {isTauri} from "@tauri-apps/api/core";
 import type {WorkbenchService} from "@lodestory/sdk/workbench";
+import type {EditorDefinition, EditorFormat} from "@lodestory/sdk/body-editor";
 import {useContextMenus} from "../context-menu";
 import {useDocumentWorkspace} from "./useDocumentWorkspace";
 import type {BodyEditorModel} from "./bodyEditorModel";
 import "./body-editor.css";
 
-function useBodyEditorModel(model: BodyEditorModel, workbench: WorkbenchService) {
+type EditorResolver = (format: EditorFormat) => Readonly<EditorDefinition> | undefined;
+
+function useBodyEditorModel(model: BodyEditorModel, workbench: WorkbenchService, resolveEditor: EditorResolver) {
   const data = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
   const workspace = useDocumentWorkspace(data.workspace);
   return {
     ...data,
     workspace,
+    resolveEditor,
     busy: state.busy || workspace.blocked,
     newDisabled: !isTauri() || workspace.creating || workspace.blocked || state.busy || !state.active,
     requestNewDocument: model.requestNewDocument,
@@ -28,18 +32,19 @@ export function useBodyEditorContext() {
   return editor;
 }
 
-export function BodyEditorContentProvider({workbench, models, children}: {
+export function BodyEditorContentProvider({workbench, models, resolveEditor, children}: {
   workbench: WorkbenchService;
   models: ReadonlyMap<string, BodyEditorModel>;
+  resolveEditor: EditorResolver;
   children: ReactNode;
 }) {
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
   const model = state.session && models.get(state.session.id);
-  return model ? <BodyEditorModelProvider key={state.session!.id} model={model} workbench={workbench}>{children}</BodyEditorModelProvider> : null;
+  return model ? <BodyEditorModelProvider key={state.session!.id} model={model} workbench={workbench} resolveEditor={resolveEditor}>{children}</BodyEditorModelProvider> : null;
 }
 
-function BodyEditorModelProvider({model, workbench, children}: {model: BodyEditorModel; workbench: WorkbenchService; children: ReactNode}) {
-  const value = useBodyEditorModel(model, workbench);
+function BodyEditorModelProvider({model, workbench, resolveEditor, children}: {model: BodyEditorModel; workbench: WorkbenchService; resolveEditor: EditorResolver; children: ReactNode}) {
+  const value = useBodyEditorModel(model, workbench, resolveEditor);
   return <BodyEditorContext.Provider value={value}>{children}</BodyEditorContext.Provider>;
 }
 

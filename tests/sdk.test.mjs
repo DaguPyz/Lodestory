@@ -11,14 +11,17 @@ import * as packageTheme from "@lodestory/sdk/theme";
 import * as packageWorkbench from "@lodestory/sdk/workbench";
 import * as packageConfig from "@lodestory/sdk/config";
 import * as packageDocuments from "@lodestory/sdk/documents";
+import * as packageBodyEditor from "@lodestory/sdk/body-editor";
 import { createSdkLoader } from "./helpers/sdkFixture.mjs";
 
 const packageManifest = JSON.parse(readFileSync(new URL("../packages/sdk/package.json", import.meta.url), "utf8"));
 
 test("SDK package exposes ESM root and all public capability entry points", () => {
   assert.equal(packageManifest.type, "module");
-  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./config", "./documents", "./error", "./layout", "./theme", "./ui", "./workbench"]);
+  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./body-editor", "./config", "./documents", "./error", "./layout", "./theme", "./ui", "./workbench"]);
 
+  assert.equal(packageManifest.exports["./body-editor"].import, "./dist/body-editor.js");
+  assert.equal(packageManifest.exports["./body-editor"].types, "./dist/body-editor.d.ts");
   for (const [specifier, target] of [
     [".", "index"],
     ["./error", "error"],
@@ -42,6 +45,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.deepEqual(Object.keys(packageWorkbench), ["workbenchKey"]);
   assert.deepEqual(Object.keys(packageConfig), ["configKey"]);
   assert.deepEqual(Object.keys(packageDocuments).sort(), ["documentCreateRequested", "documentRevealRequested", "documentsKey"]);
+  assert.deepEqual(Object.keys(packageBodyEditor), ["bodyEditorKey"]);
   assert.equal(packageLayout.layoutKey.id, "app/layout");
   assert.equal(packageUi.uiKey.id, "app/ui");
   assert.equal(packageError.errorUiKey.id, "app/error-ui");
@@ -49,6 +53,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.equal(packageWorkbench.workbenchKey.id, "app/workbench");
   assert.equal(packageConfig.configKey.id, "app/config");
   assert.equal(packageDocuments.documentsKey.id, "app/documents");
+  assert.equal(packageBodyEditor.bodyEditorKey.id, "app/body-editor");
   assert.equal(packageDocuments.documentCreateRequested.id, "app/documents/create-requested");
   assert.equal(packageDocuments.documentRevealRequested.id, "app/documents/reveal-requested");
   assert.equal(packageUi.uiInitialPageConfig.id, "ui.initialPage");
@@ -91,6 +96,9 @@ test("SDK subpaths share one key module and need no host imports or runtime APIs
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/config").configKey, hostConfigKey);
   const hostDocumentsKey = sdk.requireSdk("@lodestory/sdk/documents").documentsKey;
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/documents").documentsKey, hostDocumentsKey);
+  const hostBodyEditorKey = sdk.requireSdk("@lodestory/sdk/body-editor").bodyEditorKey;
+  assert.strictEqual(sdk.requireSdk("@lodestory/sdk/body-editor").bodyEditorKey, hostBodyEditorKey);
+  assert.equal(hostBodyEditorKey.id, "app/body-editor");
   const hostDocumentCreateRequested = sdk.requireSdk("@lodestory/sdk/documents").documentCreateRequested;
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/documents").documentCreateRequested, hostDocumentCreateRequested);
   const hostDocumentRevealRequested = sdk.requireSdk("@lodestory/sdk/documents").documentRevealRequested;

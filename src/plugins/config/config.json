@@ -1,3 +1,7 @@
 {
-  "ui.initialPage": "welcome"
+  "ui.initialPage": "welcome",
+  "bodyEditor.defaultEditors": {
+    "markdown": "milkdown",
+    "plain-text": "textarea"
+  }
 }

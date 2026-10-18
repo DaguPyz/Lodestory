@@ -16,8 +16,38 @@ async function mount(f) {
 }
 function renderSettings(f, service) {
   const { ThemeSettingsPage } = f.loadModule("plugins/settings/ThemeSettingsPage.tsx");
-  return f.renderToStaticMarkup(f.React.createElement(f.ThemeProvider, { service }, f.React.createElement(ThemeSettingsPage, { active: false, onBack() {} })));
+  return f.renderToStaticMarkup(f.React.createElement(ThemeSettingsPage, { service, active: false, onBack() {} }));
 }
+
+test("settings page renders from an injected ThemeService without a ThemeProvider", () => {
+  const f = fixture();
+  const dark = { id: "replacement-dark", name: "替代服务主题", type: "dark", cssVariables: {} };
+  const light = { id: "replacement-light", name: "替代浅色", type: "light", cssVariables: {} };
+  const service = {
+    snapshot: {
+      preference: { mode: "fixed", themeId: dark.id },
+      theme: dark,
+      themes: [light, dark],
+      fallbackThemeIds: { light: light.id, dark: dark.id },
+      unavailableThemeId: null,
+      persistenceError: null,
+      windowError: null,
+    },
+    snapshotReads: 0,
+    getSnapshot() {
+      assert.equal(this, service);
+      this.snapshotReads += 1;
+      return this.snapshot;
+    },
+    subscribe() { return () => {}; },
+    setPreference() {},
+    retry() {},
+  };
+
+  const markup = renderSettings(f, service);
+  assert.match(markup, /替代服务主题/);
+  assert.ok(service.snapshotReads > 0);
+});
 
 test("manager opens one registration API before contributions and delays application until UI preparation", async () => {
   const nativeReady = deferred();

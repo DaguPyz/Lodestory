@@ -10,6 +10,7 @@ import {createWorkbenchPlugin} from "../plugins/workbench/workbenchPlugin";
 import {createDocumentsPlugin} from "../plugins/documents/documentsPlugin";
 import {createProjectManagementPlugin} from "../plugins/project-management/projectManagementPlugin";
 import {createBodyEditorPlugin} from "../plugins/body-editor/bodyEditorPlugin";
+import {createMarkdownEditorPlugin} from "../plugins/markdown-editor/markdownEditorPlugin";
 import {createDocumentTabsPlugin} from "../plugins/document-tabs/documentTabsPlugin";
 import {createWritingStatusPlugin} from "../plugins/writing-status/writingStatusPlugin";
 import {createWorkbenchToolbarPlugin} from "../plugins/workbench-toolbar/workbenchToolbarPlugin";
@@ -30,6 +31,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createDocumentsPlugin(),
         createProjectManagementPlugin(),
         createBodyEditorPlugin(),
+        createMarkdownEditorPlugin(),
         createDocumentTabsPlugin(),
         createWritingStatusPlugin(),
         createWorkbenchToolbarPlugin(),

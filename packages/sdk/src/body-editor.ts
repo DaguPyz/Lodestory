@@ -1,4 +1,5 @@
 import type {ComponentType} from "react";
+import type {ConfigItem} from "./config.js";
 import {createServiceKey} from "./ServiceKey.js";
 
 /** 持久化到文档工作区的正文格式。 */
@@ -40,3 +41,18 @@ export type BodyEditorService = {
 
 /** 正文编辑器注册表能力；宿主与格式插件必须共享同一个 key。 */
 export const bodyEditorKey = createServiceKey<BodyEditorService>("app/body-editor");
+
+/** 默认编辑器映射在启动时读取，修改后重启生效。 */
+export const bodyEditorDefaultEditorsConfig: ConfigItem<Readonly<Record<string, string>>> = Object.freeze({
+  id: "bodyEditor.defaultEditors",
+  defaultValue: Object.freeze({markdown: "textarea", "plain-text": "textarea"}),
+  effect: "restart",
+  validate: (value: unknown): value is Readonly<Record<string, string>> => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return false;
+    return Object.entries(value).every(([format, id]) =>
+      (format === "markdown" || format === "plain-text" || format === "rich-delta")
+      && typeof id === "string" && id.trim().length > 0);
+  },
+});

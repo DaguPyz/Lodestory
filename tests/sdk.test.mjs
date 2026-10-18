@@ -45,7 +45,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.deepEqual(Object.keys(packageWorkbench), ["workbenchKey"]);
   assert.deepEqual(Object.keys(packageConfig), ["configKey"]);
   assert.deepEqual(Object.keys(packageDocuments).sort(), ["documentCreateRequested", "documentRevealRequested", "documentsKey"]);
-  assert.deepEqual(Object.keys(packageBodyEditor), ["bodyEditorKey"]);
+  assert.deepEqual(Object.keys(packageBodyEditor).sort(), ["bodyEditorDefaultEditorsConfig", "bodyEditorKey"]);
   assert.equal(packageLayout.layoutKey.id, "app/layout");
   assert.equal(packageUi.uiKey.id, "app/ui");
   assert.equal(packageError.errorUiKey.id, "app/error-ui");
@@ -54,6 +54,17 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.equal(packageConfig.configKey.id, "app/config");
   assert.equal(packageDocuments.documentsKey.id, "app/documents");
   assert.equal(packageBodyEditor.bodyEditorKey.id, "app/body-editor");
+  assert.equal(packageBodyEditor.bodyEditorDefaultEditorsConfig.id, "bodyEditor.defaultEditors");
+  assert.equal(packageBodyEditor.bodyEditorDefaultEditorsConfig.effect, "restart");
+  const validateBodyEditorDefaults = packageBodyEditor.bodyEditorDefaultEditorsConfig.validate;
+  assert.equal(validateBodyEditorDefaults({markdown: "milkdown", "plain-text": "textarea"}), true);
+  assert.equal(validateBodyEditorDefaults({}), true, "unconfigured formats may remain unavailable");
+  assert.equal(validateBodyEditorDefaults(Object.create(null)), true, "JSON object records may have a null prototype");
+  assert.equal(validateBodyEditorDefaults(null), false);
+  assert.equal(validateBodyEditorDefaults([]), false);
+  assert.equal(validateBodyEditorDefaults(Object.create({markdown: "milkdown"})), false);
+  assert.equal(validateBodyEditorDefaults({tabs: "editor"}), false);
+  assert.equal(validateBodyEditorDefaults({markdown: "  "}), false);
   assert.equal(packageDocuments.documentCreateRequested.id, "app/documents/create-requested");
   assert.equal(packageDocuments.documentRevealRequested.id, "app/documents/reveal-requested");
   assert.equal(packageUi.uiInitialPageConfig.id, "ui.initialPage");

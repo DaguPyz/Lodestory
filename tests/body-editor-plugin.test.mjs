@@ -15,13 +15,14 @@ function createWorkspace() {
   };
 }
 
-function setup({rejectContentId} = {}) {
+function setup({rejectContentId, editorDefaults = {markdown: "milkdown", "plain-text": "textarea"}} = {}) {
   const fixture = createMainFixture();
+  const {configKey} = fixture.requireSdk("@lodestory/sdk/config");
   const {workbenchKey} = fixture.requireSdk("@lodestory/sdk/workbench");
   const {documentsKey, documentCreateRequested, documentRevealRequested} = fixture.requireSdk("@lodestory/sdk/documents");
   const {layoutKey} = fixture.requireSdk("@lodestory/sdk/layout");
   const {uiKey} = fixture.requireSdk("@lodestory/sdk/ui");
-  const {bodyEditorKey} = fixture.requireSdk("@lodestory/sdk/body-editor");
+  const {bodyEditorKey, bodyEditorDefaultEditorsConfig} = fixture.requireSdk("@lodestory/sdk/body-editor");
   const session = {id: "session-one", project: {id: "project-one", name: "第一本", path: "/stories/one"}};
   let workbenchSnapshot = {session, active: true, busy: false};
   const workbenchListeners = new Set();
@@ -29,6 +30,10 @@ function setup({rejectContentId} = {}) {
   const contributions = [];
   const wrappers = [];
   const provided = new Map();
+  const configRegistrations = [];
+  let configReads = 0;
+  let configRemovals = 0;
+  let configSnapshot = editorDefaults;
   const events = new Map();
   const emitted = [];
   const shown = [];
@@ -63,8 +68,26 @@ function setup({rejectContentId} = {}) {
       };
     },
   };
+  const config = {
+    register(item) {
+      configRegistrations.push(item);
+      return () => {
+        const index = configRegistrations.indexOf(item);
+        if (index >= 0) {
+          configRegistrations.splice(index, 1);
+          configRemovals++;
+        }
+      };
+    },
+    getSnapshot(item) {
+      assert.strictEqual(item, bodyEditorDefaultEditorsConfig);
+      configReads++;
+      return configSnapshot ?? item.defaultValue;
+    },
+  };
   const context = {
     get(key) {
+      if (key === configKey) return config;
       if (key === workbenchKey) return workbench;
       if (key === documentsKey) return documents;
       if (key === layoutKey) return layout;
@@ -86,10 +109,18 @@ function setup({rejectContentId} = {}) {
     },
   };
   const plugin = fixture.loadModule("plugins/body-editor/bodyEditorPlugin.tsx").createBodyEditorPlugin();
+  const markdownEditorPlugin = fixture.loadModule("plugins/markdown-editor/markdownEditorPlugin.ts").createMarkdownEditorPlugin();
 
   return {
     context,
     contributions,
+    config,
+    configKey,
+    configReads: () => configReads,
+    configRegistrations,
+    configRemovals: () => configRemovals,
+    configSnapshot: value => { configSnapshot = value; },
+    bodyEditorDefaultEditorsConfig,
     bodyEditorKey,
     documentCreateRequested,
     documentRevealRequested,
@@ -97,8 +128,13 @@ function setup({rejectContentId} = {}) {
     events,
     fixture,
     layout,
+    markdownEditorPlugin,
     plugin,
     prepareWrappers: async () => { await Promise.all(wrappers.map(({prepare}) => prepare())); },
+    deactivatePlugins: async () => {
+      await markdownEditorPlugin.deactivate();
+      await plugin.deactivate();
+    },
     provided,
     participant: () => participant,
     participations,
@@ -143,12 +179,16 @@ test("body editor declares the SDK contract and keeps reveal listening before a 
   const {documentsKey} = f.fixture.requireSdk("@lodestory/sdk/documents");
   const {layoutKey} = f.fixture.requireSdk("@lodestory/sdk/layout");
   const {uiKey} = f.fixture.requireSdk("@lodestory/sdk/ui");
+  const {configKey} = f.fixture.requireSdk("@lodestory/sdk/config");
   assert.equal(f.plugin.id, "body-editor");
-  assert.deepEqual(Array.from(f.plugin.requires, key => key.id), [workbenchKey.id, documentsKey.id, layoutKey.id, uiKey.id]);
+  assert.deepEqual(Array.from(f.plugin.requires, key => key.id), [workbenchKey.id, documentsKey.id, layoutKey.id, uiKey.id, configKey.id]);
   assert.deepEqual(Array.from(f.plugin.provides, key => key.id), [f.bodyEditorKey.id]);
 
   f.plugin.activate(f.context);
+  f.markdownEditorPlugin.activate(f.context);
   await f.prepareWrappers();
+  assert.deepEqual(f.configRegistrations, [f.bodyEditorDefaultEditorsConfig]);
+  assert.equal(f.configReads(), 1, "the registry reads its default editor mapping from the configuration service");
   assert.equal(typeof f.provided.get(f.bodyEditorKey).registerEditor, "function");
   assert.equal(f.events.get(f.documentRevealRequested).size, 1, "the reveal handler exists before any project session starts");
   assert.deepEqual(Array.from(f.contributions, ({id, role}) => ({id, role})), [
@@ -159,25 +199,31 @@ test("body editor declares the SDK contract and keeps reveal listening before a 
   assert.deepEqual(f.shown, [], "a reveal received without a session model is safely ignored");
   f.start();
   const model = renderModel(f, f.session.id);
-  assert.equal(resolveEditor(f, f.session.id, "markdown").id, "textarea");
+  const markdownEditor = resolveEditor(f, f.session.id, "markdown");
+  assert.equal(markdownEditor.id, "milkdown");
   assert.equal(resolveEditor(f, f.session.id, "plain-text").id, "textarea");
   assert.equal(resolveEditor(f, f.session.id, "rich-delta"), undefined);
-  assert.equal(typeof (await resolveEditor(f, f.session.id, "markdown").load()).default, "function");
+  assert.equal(typeof markdownEditor.load, "function");
+  assert.equal(f.fixture.moduleImports.some(({specifier}) => specifier.startsWith("@milkdown/")), false,
+    "registering and resolving Milkdown does not load its package before the editor definition is loaded");
   assert.deepEqual({projectName: model.getSnapshot().projectName, projectPath: model.getSnapshot().projectPath}, {
     projectName: f.session.project.name,
     projectPath: f.session.project.path,
   });
 
-  await f.plugin.deactivate();
+  await f.deactivatePlugins();
   assert.equal(f.contributions.length, 0);
   assert.equal(f.wrappers.length, 0);
   assert.equal(f.events.get(f.documentRevealRequested).size, 0);
   assert.equal(f.participations.length, 0);
+  assert.deepEqual(f.configRegistrations, [], "deactivation unregisters the configuration declaration");
+  assert.equal(f.configRemovals(), 1, "deactivation revokes the configuration declaration once");
 });
 
 test("body editor models are session-scoped and valid reveal restores hidden content during busy or blocked state", async () => {
   const f = setup();
   f.plugin.activate(f.context);
+  f.markdownEditorPlugin.activate(f.context);
   await f.prepareWrappers();
   const firstModel = (f.start(), renderModel(f, f.session.id));
   const firstWorkspace = f.workspace;
@@ -215,7 +261,7 @@ test("body editor models are session-scoped and valid reveal restores hidden con
   assert.equal(secondModel.getSnapshot().revealVersion, 0);
 
   unsubscribe();
-  await f.plugin.deactivate();
+  await f.deactivatePlugins();
   assert.equal(firstModel.revealDocument(activeDocument.id), false, "deactivation disposes every session model");
   assert.equal(secondModel.revealDocument(secondDocument.id), false);
 });
@@ -223,6 +269,7 @@ test("body editor models are session-scoped and valid reveal restores hidden con
 test("new-document requests follow session, visibility, busy, blocked, and SDK event guards", async () => {
   const f = setup();
   f.plugin.activate(f.context);
+  f.markdownEditorPlugin.activate(f.context);
   await f.prepareWrappers();
   f.start();
   const model = renderModel(f, f.session.id);
@@ -246,7 +293,7 @@ test("new-document requests follow session, visibility, busy, blocked, and SDK e
   await flushStartup();
   assert.equal(f.emitted.length, 1, "invalid or stale requests never reach project management");
 
-  await f.plugin.deactivate();
+  await f.deactivatePlugins();
 });
 
 test("partial contribution failure rolls back its listener, participant, and earlier content", async () => {
@@ -257,5 +304,7 @@ test("partial contribution failure rolls back its listener, participant, and ear
   assert.equal(f.wrappers.length, 0);
   assert.equal(f.events.get(f.documentRevealRequested).size, 0);
   assert.equal(f.removedEvents.length, 1);
+  assert.deepEqual(f.configRegistrations, [], "partial activation cleanup unregisters configuration");
+  assert.equal(f.configRemovals(), 1, "partial activation cleanup revokes configuration once");
 });
 

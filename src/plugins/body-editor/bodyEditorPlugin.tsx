@@ -2,7 +2,8 @@ import type {Plugin} from "@lodestory/sdk";
 import {documentCreateRequested, documentRevealRequested, documentsKey} from "@lodestory/sdk/documents";
 import {layoutKey, type LayoutContent} from "@lodestory/sdk/layout";
 import {workbenchKey} from "@lodestory/sdk/workbench";
-import {bodyEditorKey, type EditorFormat} from "@lodestory/sdk/body-editor";
+import {bodyEditorDefaultEditorsConfig, bodyEditorKey, type EditorFormat} from "@lodestory/sdk/body-editor";
+import {configKey} from "@lodestory/sdk/config";
 import {uiKey} from "@lodestory/sdk/ui";
 import {BodyEditorContentProvider} from "./BodyEditorContext";
 import {BodyEditor} from "./BodyEditorView";
@@ -12,29 +13,26 @@ import {createBodyEditorRegistry} from "./bodyEditorRegistry";
 import {TextareaEditor} from "./TextareaEditor";
 
 /** 文稿正文与焦点恢复的独立提供者，不拥有文档工作区。 */
-export function createBodyEditorPlugin(options: {
-  defaultEditors?: Partial<Record<EditorFormat, string>>;
-} = {}): Plugin {
+export function createBodyEditorPlugin(): Plugin {
   const models = new Map<string, BodyEditorModel>();
   const removeContents: (() => void)[] = [];
   let removeParticipant: (() => Promise<void>) | undefined;
   let registry: ReturnType<typeof createBodyEditorRegistry> | undefined;
   let removeRegistryUiWrapper: (() => void) | undefined;
   let removeDefaultEditor: (() => void) | undefined;
+  let removeConfig: (() => void) | undefined;
   return {
     id: "body-editor",
-    requires: [workbenchKey, documentsKey, layoutKey, uiKey],
+    requires: [workbenchKey, documentsKey, layoutKey, uiKey, configKey],
     provides: [bodyEditorKey],
     activate(context) {
       const workbench = context.get(workbenchKey);
       const documents = context.get(documentsKey);
       const layout = context.get(layoutKey);
       const ui = context.get(uiKey);
-      const defaults: Partial<Record<EditorFormat, string>> = {
-        markdown: "textarea",
-        "plain-text": "textarea",
-        ...options.defaultEditors,
-      };
+      const config = context.get(configKey);
+      removeConfig = config.register(bodyEditorDefaultEditorsConfig);
+      const defaults = config.getSnapshot(bodyEditorDefaultEditorsConfig);
       const editorRegistry = createBodyEditorRegistry(defaults, () => {
         const remove = removeRegistryUiWrapper;
         removeRegistryUiWrapper = undefined;
@@ -104,6 +102,9 @@ export function createBodyEditorPlugin(options: {
       const activeRegistry = registry;
       registry = undefined;
       try { activeRegistry?.dispose(); } catch (error) { errors.push(error); }
+      const removeEditorConfig = removeConfig;
+      removeConfig = undefined;
+      try { removeEditorConfig?.(); } catch (error) { errors.push(error); }
       if (errors.length) throw Object.assign(new Error("Body editor failed to stop."), {errors});
     },
   };

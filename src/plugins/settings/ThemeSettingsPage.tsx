@@ -1,8 +1,7 @@
-import { useEffect, useRef, useSyncExternalStore, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useSyncExternalStore, type CSSProperties } from "react";
 import { Button } from "../../components/Button";
 import { Icon } from "../../components/Icon";
-import { useThemeService } from "../theme/ThemeProvider";
-import type { ResolvedTheme, ThemePreference } from "@lodestory/sdk/theme";
+import type { ResolvedTheme, ThemePreference, ThemeService } from "@lodestory/sdk/theme";
 import { ProjectPageLayout } from "../../components/ProjectPageLayout";
 
 function ThemePreview({ theme }: { theme: ResolvedTheme }) {
@@ -25,17 +24,20 @@ function ThemePreview({ theme }: { theme: ResolvedTheme }) {
 }
 
 type ThemeSettingsPageProps = {
+  service: ThemeService;
   active: boolean;
   onBack: () => void;
 };
 
-export function ThemeSettingsPage({ active, onBack }: ThemeSettingsPageProps) {
-  const service = useThemeService();
+export function ThemeSettingsPage({ service, active, onBack }: ThemeSettingsPageProps) {
   const heading = useRef<HTMLHeadingElement>(null);
+  // Wrap methods so ThemeService implementations may safely use `this`.
+  const subscribe = useCallback((listener: () => void) => service.subscribe(listener), [service]);
+  const getSnapshot = useCallback(() => service.getSnapshot(), [service]);
   const { preference, theme, themes, fallbackThemeIds, unavailableThemeId, persistenceError, windowError } = useSyncExternalStore(
-    service.subscribe,
-    service.getSnapshot,
-    service.getSnapshot,
+    subscribe,
+    getSnapshot,
+    getSnapshot,
   );
   const systemPreference: Extract<ThemePreference, { mode: "system" }> = preference.mode === "system" ? preference : {
     mode: "system", lightThemeId: fallbackThemeIds.light, darkThemeId: fallbackThemeIds.dark,

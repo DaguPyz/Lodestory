@@ -1,0 +1,47 @@
+.markdown-editor .milkdown {
+  --crepe-color-background: var(--ui-surface-workspace);
+  --crepe-color-on-background: var(--ui-text-document);
+  --crepe-color-surface: var(--ui-surface-overlay);
+  --crepe-color-surface-low: var(--ui-surface-control);
+  --crepe-color-on-surface: var(--ui-text-primary);
+  --crepe-color-on-surface-variant: var(--ui-text-secondary);
+  --crepe-color-outline: var(--ui-border-control);
+  --crepe-color-primary: var(--ui-accent-foreground);
+  --crepe-color-secondary: var(--ui-surface-control);
+  --crepe-color-on-secondary: var(--ui-text-primary);
+  --crepe-color-inverse: var(--ui-surface-overlay);
+  --crepe-color-on-inverse: var(--ui-text-primary);
+  --crepe-color-inline-code: var(--ui-accent-foreground);
+  --crepe-color-hover: var(--ui-surface-control);
+  --crepe-color-selected: var(--ui-text-selection-bg);
+  --crepe-color-inline-area: var(--ui-surface-control);
+  --crepe-base-font-size: var(--ui-font-size-document);
+  --crepe-font-default: inherit;
+  --crepe-font-title: var(--ui-font-document);
+  color-scheme: var(--ui-color-scheme);
+}
+
+.markdown-editor .milkdown .ProseMirror {
+  min-height: 20rem;
+  padding: 0;
+  color: var(--ui-text-document);
+  font-family: var(--ui-font-document);
+  font-size: var(--ui-font-size-document);
+  line-height: var(--ui-line-height-document);
+  caret-color: var(--ui-caret-foreground);
+  overflow-wrap: anywhere;
+}
+
+.markdown-editor .milkdown .ProseMirror p {
+  line-height: var(--ui-line-height-document);
+}
+
+.markdown-editor .milkdown .ProseMirror > :first-child {
+  margin-top: 0;
+}
+
+.markdown-editor .milkdown button:focus-visible,
+.markdown-editor .milkdown input:focus-visible {
+  outline: 2px solid var(--ui-focus-ring);
+  outline-offset: 2px;
+}

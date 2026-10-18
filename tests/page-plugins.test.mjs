@@ -119,6 +119,8 @@ test("welcome opens settings and settings back returns to welcome", async () => 
   assert.equal(ui.getSnapshot().current.id, "settings");
   const settings = renderRegisteredPage(fixture, ui, "settings");
   assert.equal(settings.type, fixture.components.ThemeSettingsPage);
+  const themeKey = fixture.requireSdk("@lodestory/sdk/theme").themeKey;
+  assert.strictEqual(settings.props.service, fixture.getService(themeKey));
   await settings.props.onBack();
 
   const snapshot = ui.getSnapshot();

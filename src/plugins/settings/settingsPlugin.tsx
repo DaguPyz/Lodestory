@@ -5,7 +5,7 @@ import {themeKey} from "@lodestory/sdk/theme";
 import {uiKey} from "@lodestory/sdk/ui";
 import {errorUiKey} from "@lodestory/sdk/error";
 
-/** 将外观设置页登记到通用 UI；主题状态由根级 ThemeProvider 提供。 */
+/** 将外观设置页登记到通用 UI，并注入主题服务。 */
 export function createSettingsPlugin(): Plugin {
     let removePage: (() => void) | undefined;
 
@@ -16,10 +16,11 @@ export function createSettingsPlugin(): Plugin {
 
         activate(context) {
             const ui = context.get(uiKey);
+            const themes = context.get(themeKey);
             const {ErrorBoundary} = context.get(errorUiKey);
             removePage = ui.registerPage({
                 id: appPages.settings,
-                render: ({active}) => <ErrorBoundary><ThemeSettingsPage active={active} onBack={() => ui.back()}/></ErrorBoundary>,
+                render: ({active}) => <ErrorBoundary><ThemeSettingsPage service={themes} active={active} onBack={() => ui.back()}/></ErrorBoundary>,
             });
         },
 

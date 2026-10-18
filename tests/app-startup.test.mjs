@@ -84,7 +84,11 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "documents", "project-management", "body-editor", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "documents", "project-management", "body-editor", "markdown-editor", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings"]);
+  assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "./MarkdownEditor"), false,
+  "application startup does not import the Milkdown component");
+  assert.equal(fixture.moduleImports.some(({specifier}) => specifier.startsWith("@milkdown/")), false,
+    "application startup does not load Milkdown packages");
   assert.deepEqual(fixture.appPluginsCalls, [[]]);
   const entryImports = fixture.moduleImports
     .filter(({ from }) => from === "main.tsx")

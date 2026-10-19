@@ -13,6 +13,8 @@ export type LayoutContent = {
   readonly id: string;
   /** 用于切换入口、标签和无障碍名称的可读标题。 */
   readonly title: string;
+  /** 可选的装饰图标；由内容插件提供，布局可使用默认图标或文字入口，不绑定宿主图标集。 */
+  readonly icon?: ReactNode;
   /** 内容用途；布局实现自行决定位置、排列和切换方式。 */
   readonly role: LayoutRole;
   /** 同用途内按升序排列，默认 0；相同值按 ID 的字符串顺序排列。 */

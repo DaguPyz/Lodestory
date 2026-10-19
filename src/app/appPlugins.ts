@@ -9,6 +9,7 @@ import {createWelcomePlugin} from "../plugins/welcome/welcomePlugin";
 import {createWorkbenchPlugin} from "../plugins/workbench/workbenchPlugin";
 import {createDocumentsPlugin} from "../plugins/documents/documentsPlugin";
 import {createProjectManagementPlugin} from "../plugins/project-management/projectManagementPlugin";
+import {createOutlineDesignPlugin} from "../plugins/outline-design/outlineDesignPlugin";
 import {createBodyEditorPlugin} from "../plugins/body-editor/bodyEditorPlugin";
 import {createMarkdownEditorPlugin} from "../plugins/markdown-editor/markdownEditorPlugin";
 import {createRichTextEditorPlugin} from "../plugins/rich-text-editor/richTextEditorPlugin";
@@ -31,6 +32,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createWorkbenchPlugin(),
         createDocumentsPlugin(),
         createProjectManagementPlugin(),
+        createOutlineDesignPlugin(),
         createBodyEditorPlugin(),
         createMarkdownEditorPlugin(),
         createRichTextEditorPlugin(),

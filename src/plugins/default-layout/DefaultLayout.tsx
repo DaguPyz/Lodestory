@@ -63,10 +63,10 @@ export function DefaultLayout({store, widths, active, ErrorBoundary}: LayoutView
     return <aside ref={role === "auxiliary" ? auxiliary : undefined} className={`layout-panel layout-${role}`} data-overlay={!docked} hidden={!current}
       aria-label={role === "navigation" ? "导航内容" : "辅助内容"}>
       <div className="layout-panel-header">
-        {entries.length > 1 ? <select aria-label={role === "navigation" ? "切换导航内容" : "切换辅助内容"}
+        {entries.length > 1 ? <div className="layout-panel-switcher"><select aria-label={role === "navigation" ? "切换导航内容" : "切换辅助内容"}
           value={current?.id ?? entries[0].id} onChange={event => store.show(event.target.value)}>
           {entries.map(entry => <option key={entry.id} value={entry.id}>{entry.title}</option>)}
-        </select> : <h2>{current?.title ?? entries[0]?.title}</h2>}
+        </select><Icon name="chevronDown" size="small"/></div> : <h2>{current?.title ?? entries[0]?.title}</h2>}
         {current && <IconButton label={`收起${current.title}`} onClick={() => close(current)}><Icon name="close" size="small"/></IconButton>}
       </div>
       {entries.map(renderContent)}
@@ -85,7 +85,7 @@ export function DefaultLayout({store, widths, active, ErrorBoundary}: LayoutView
       data-has-navigation={contents("navigation").length > 0}>
       <nav ref={rail} className="layout-activitybar" hidden={!contents("navigation").length} aria-label="工作空间工具">
         {contents("navigation").map(entry => <IconButton key={entry.id} label={entry.title} aria-controls={regionId(entry.id)}
-          aria-pressed={shown(entry.id)} onClick={() => toggle(entry)}><Icon name="file"/></IconButton>)}
+          aria-pressed={shown(entry.id)} onClick={() => toggle(entry)}>{entry.icon ?? <Icon name="file"/>}</IconButton>)}
       </nav>
       {panel("navigation", navigationDocked)}
       <main className="layout-main" aria-label="主工作区">

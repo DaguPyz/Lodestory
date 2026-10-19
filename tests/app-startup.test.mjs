@@ -84,7 +84,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "documents", "project-management", "body-editor", "markdown-editor", "rich-text-editor", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "default-layout", "workbench", "documents", "project-management", "outline-design", "body-editor", "markdown-editor", "rich-text-editor", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings"]);
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "./MarkdownEditor"), false,
   "application startup does not import the Milkdown component");
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier.startsWith("@milkdown/")), false,
@@ -137,6 +137,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   }
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/documents/documentsPlugin.ts"), "the documents plugin source should run in the fixture");
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/project-management/projectManagementPlugin.tsx"), "the project management plugin source should run in the fixture");
+  assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/outline-design/outlineDesignPlugin.tsx"), "the outline-design plugin source should run in the fixture");
   assert.ok(fixture.lifecycle.includes("activate:documents:complete"), "the documents service should activate");
   assert.ok(fixture.logs.indexOf("activate:workbench:complete") < fixture.logs.indexOf("activate:documents:begin"));
   assert.ok(fixture.logs.indexOf("activate:documents:complete") < fixture.logs.indexOf("activate:project-management:begin"), "the document service must be available before project management activation");
@@ -149,6 +150,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
     "the workbench toolbar plugin source should run in the fixture");
   assert.ok(fixture.lifecycle.includes("activate:workbench-toolbar:complete"), "the workbench toolbar plugin should activate");
   assert.ok(fixture.lifecycle.includes("activate:project-management:complete"), "the project management plugin should activate");
+  assert.ok(fixture.lifecycle.includes("activate:outline-design:complete"), "the outline-design plugin should activate");
   assert.ok(fixture.logs.indexOf("activate:config:complete") < fixture.logs.indexOf("activate:ui:begin"), "the config service must be available before UI activation");
   assert.ok(fixture.logs.indexOf("activate:workbench:complete") < fixture.logs.indexOf("activate:welcome:begin"), "the workbench page registers before the welcome page");
   assert.equal(fixture.lifecycle.at(-1), "activate:settings:complete");

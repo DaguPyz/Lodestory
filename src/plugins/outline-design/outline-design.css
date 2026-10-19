@@ -1,0 +1,38 @@
+.outline-design-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--ui-space-5);
+  min-width: 0;
+  min-height: 0;
+  padding: var(--ui-panel-padding);
+  color: var(--ui-text-primary);
+}
+
+.outline-design-description,
+.outline-design-empty {
+  margin: 0;
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-body);
+  line-height: var(--ui-line-height-body);
+}
+
+.outline-design-project {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-2);
+  min-width: 0;
+}
+
+.outline-design-project-label {
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+.outline-design-project-name {
+  overflow-wrap: anywhere;
+  font-size: var(--ui-font-size-label);
+  line-height: var(--ui-line-height-label);
+  font-weight: 600;
+}

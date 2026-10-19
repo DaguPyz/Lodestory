@@ -69,7 +69,7 @@ export function createLayoutStore(beforeRemove: () => void) {
       checkActive();
       if (started) throw new Error("Layout contents must be registered before pluginsReady.");
       // 固定描述，避免调用方修改对象绕过校验或影响排序。
-      const entry = Object.freeze({id: content.id, title: content.title, role: content.role, order: content.order ?? 0, render: content.render});
+      const entry = Object.freeze({id: content.id, title: content.title, icon: content.icon, role: content.role, order: content.order ?? 0, render: content.render});
       if (typeof entry.id !== "string" || !entry.id.trim()) throw new TypeError("Layout content id cannot be empty.");
       if (typeof entry.title !== "string" || !entry.title.trim()) throw new TypeError("Layout content title cannot be empty.");
       if (!roles.includes(entry.role)) throw new TypeError("Unknown layout role.");

@@ -16,6 +16,14 @@ const shapes = {
       <path d="M14 3v6h6M8 13h8M8 17h6" />
     </>
   ),
+  outline: (
+    <>
+      <rect x="3" y="3" width="5" height="4" rx="1" />
+      <path d="M5.5 7v11M5.5 11h6M5.5 18h6" />
+      <rect x="12" y="9" width="9" height="4" rx="1" />
+      <rect x="12" y="16" width="9" height="4" rx="1" />
+    </>
+  ),
   chevronRight: <path d="m9 5 7 7-7 7" />,
   chevronDown: <path d="m5 9 7 7 7-7" />,
   close: <path d="m6 6 12 12M18 6 6 18" />,

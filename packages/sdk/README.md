@@ -184,6 +184,8 @@ export const inkThemePlugin: Plugin = {
 
 布局能力独立于页面导航。功能插件声明 `requires: [layoutKey]`，通过 `registerContent({id, title, role, order?, render})` 按用途登记；`role` 为 main、navigation、auxiliary、actions 或 status，不指定位置。工作台页面挂载服务的 `View`，布局实现决定如何显示这些内容。`show`/`hide` 控制展示，`getSnapshot`/`subscribe` 提供不可变目录和展示状态。完整接入与生命周期见[布局插件设计](../../文档/需求设计/布局插件.md)。
 
+登记描述可附带 `icon?: ReactNode` 作为入口的装饰图标，由贡献插件提供，不绑定宿主图标集合。默认布局用于左侧导航入口；未提供时沿用文件图标，其他布局也可使用文字入口。图标不替代 `title` 和无障碍名称。
+
 隐藏内容保留组件实例，并传入 `active: false`；工作台切到后台时所有内容也收到 false。登记函数必须在启动准备前调用，并在插件停用时调用返回的撤销函数。当前 UI 不支持热卸载，撤销已准备好的布局贡献会先停止 UI；布局实现的替换发生在下一次装配。此入口也只有 React 类型依赖，不导入 React 运行时代码。
 
 ## 工作台服务

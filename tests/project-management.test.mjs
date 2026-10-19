@@ -50,7 +50,7 @@ function createFixture({listDocuments = async () => [], desktop = true} = {}) {
   const session = {id: "session-a", project: {id: "project-a", name: "第一本", path: "/projects/first"}};
   let workbenchSnapshot = {session, active: true, busy: false};
   let workspaceSnapshot = {
-    documents: [], activeId: null, openingPath: null, creating: false, blocked: false, error: null,
+    documents: [], activeId: null, openingPath: null, creating: false, deletingPath: null, blocked: false, error: null,
   };
   const controls = {open: undefined, create: undefined};
 
@@ -77,6 +77,8 @@ function createFixture({listDocuments = async () => [], desktop = true} = {}) {
       publishWorkspace({documents: [...workspaceSnapshot.documents.filter(item => item.id !== document.id), document], activeId: document.id, creating: false});
       return document;
     },
+    async createDirectory() { throw new Error("Unexpected directory creation in this fixture"); },
+    async deleteDocument() { throw new Error("Unexpected document deletion in this fixture"); },
     clearError() { publishWorkspace({error: null}); },
   };
 

@@ -47,6 +47,32 @@ pub async fn create_document(
 }
 
 #[tauri::command]
+pub async fn create_document_directory(
+    app: AppHandle,
+    project_path: String,
+    parent_path: String,
+    name: String,
+) -> Result<String, ProjectError> {
+    with_documents(app, move |store| {
+        store.create_directory(Path::new(&project_path), &parent_path, &name)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn delete_document(
+    app: AppHandle,
+    project_path: String,
+    path: String,
+    expected_content: String,
+) -> Result<(), ProjectError> {
+    with_documents(app, move |store| {
+        store.delete_document(Path::new(&project_path), &path, &expected_content)
+    })
+    .await
+}
+
+#[tauri::command]
 pub async fn read_document(
     app: AppHandle,
     project_path: String,

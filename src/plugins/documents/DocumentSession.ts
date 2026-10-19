@@ -9,6 +9,7 @@ export class DocumentSession {
   private savedContent: string;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private pending: Promise<boolean> | null = null;
+  private deleting = false;
 
   constructor(record: DocumentRecord, private write: WriteDocument, private changed: () => void) {
     this.value = Object.freeze({ ...record, id: encodeURIComponent(record.path), saveState: "saved", saveError: null });
@@ -16,9 +17,11 @@ export class DocumentSession {
   }
 
   get document(): OpenDocument { return this.value; }
+  get persistedContent(): string { return this.savedContent; }
+  get isDirty(): boolean { return this.value.content !== this.savedContent; }
 
   update(content: string) {
-    if (this.value.content === content) return;
+    if (this.deleting || this.value.content === content) return;
     this.value = Object.freeze({
       ...this.value, content, saveError: null,
       saveState: this.pending ? "saving" : content === this.savedContent ? "saved" : "pending",
@@ -31,14 +34,19 @@ export class DocumentSession {
   save(): Promise<boolean> {
     this.clearTimer();
     if (this.pending) return this.pending;
+    if (this.deleting) return Promise.resolve(false);
     // Install the promise before publishing save state, so subscriber reentry shares this write.
     let done!: (value: boolean) => void;
     const pending = new Promise<boolean>(resolve => { done = resolve; });
     this.pending = pending;
     const complete = (result: boolean) => {
       // An observer may edit during the saved notification or its following microtask.
-      if (result && this.value.content !== this.savedContent) { void this.persist().then(complete, failed); return; }
+      if (result && !this.deleting && this.value.content !== this.savedContent) { void this.persist().then(complete, failed); return; }
       this.clearTimer();
+      if (result && this.deleting && this.value.content !== this.savedContent) {
+        this.value = Object.freeze({...this.value, saveState: "pending", saveError: null});
+        this.notify();
+      }
       this.pending = null;
       done(result);
     };
@@ -57,6 +65,26 @@ export class DocumentSession {
     return this.save();
   }
 
+  /** Lock edits/autosave and wait only for a write already accepted before deletion. */
+  beginDelete(): Promise<boolean> {
+    this.deleting = true;
+    this.clearTimer();
+    return this.pending ?? Promise.resolve(true);
+  }
+
+  /** Resume normal editing after a failed disk deletion. */
+  cancelDelete(resumeAutosave = true) {
+    if (!this.deleting) return;
+    this.deleting = false;
+    if (resumeAutosave && this.isDirty) this.timer = setTimeout(() => { void this.save(); }, 700);
+  }
+
+  /** Mark the session permanently removed without flushing a discarded draft. */
+  finishDelete() {
+    this.deleting = true;
+    this.clearTimer();
+  }
+
   private clearTimer() {
     if (this.timer !== null) clearTimeout(this.timer);
     this.timer = null;
@@ -68,7 +96,7 @@ export class DocumentSession {
   }
 
   private async persist(): Promise<boolean> {
-    while (this.value.content !== this.savedContent) {
+    while (!this.deleting && this.value.content !== this.savedContent) {
       const content = this.value.content;
       this.value = Object.freeze({ ...this.value, saveState: "saving", saveError: null });
       this.notify();
@@ -81,7 +109,8 @@ export class DocumentSession {
         return false;
       }
     }
-    if (this.value.saveState !== "saved" || this.value.saveError !== null) {
+    if (this.value.content === this.savedContent
+      && (this.value.saveState !== "saved" || this.value.saveError !== null)) {
       this.value = Object.freeze({ ...this.value, saveState: "saved", saveError: null });
       this.notify();
     }

@@ -11,6 +11,14 @@ export function createDocument(projectPath: string, parentPath: string, name: st
   return desktopCommand("create_document", { projectPath, parentPath, name, content });
 }
 
+export function createDocumentDirectory(projectPath: string, parentPath: string, name: string): Promise<string> {
+  return desktopCommand("create_document_directory", { projectPath, parentPath, name });
+}
+
+export function deleteDocument(projectPath: string, path: string, expectedContent: string): Promise<void> {
+  return desktopCommand("delete_document", { projectPath, path, expectedContent });
+}
+
 export function readDocument(projectPath: string, path: string): Promise<DocumentRecord> {
   return desktopCommand("read_document", { projectPath, path });
 }

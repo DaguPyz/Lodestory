@@ -36,6 +36,8 @@ pub fn run() {
             project_commands::pick_project_directory,
             document_commands::list_documents,
             document_commands::create_document,
+            document_commands::create_document_directory,
+            document_commands::delete_document,
             document_commands::read_document,
             document_commands::save_document,
             system_fonts::list_system_font_families,

@@ -2,6 +2,7 @@ import {useSyncExternalStore} from "react";
 import type {WorkbenchService} from "@lodestory/sdk/workbench";
 import type {ProjectManagementModel} from "./projectManagementModel";
 import {NewDocumentDialog} from "./NewDocumentDialog";
+import {DeleteDocumentDialog} from "./DeleteDocumentDialog";
 import {ProjectTree} from "./ProjectTree";
 import "./project-management.css";
 
@@ -30,10 +31,13 @@ function ProjectFilesForSession({workbench, model, active}: {
     loading={snapshot.loading}
     error={snapshot.error}
     active={canInteract}
-    newDisabled={!canInteract || snapshot.creating || snapshot.loading}
+    newDisabled={!canInteract || snapshot.creating || snapshot.loading || snapshot.dialogOpen || !!snapshot.deletePath || snapshot.deleting || !!snapshot.deletingPath}
+    deletingPath={snapshot.deletingPath}
     onOpenDocument={path => model.openDocument(path)}
     onSelectFolder={path => { model.selectFolder(path); }}
-    onNewDocument={parentPath => { model.requestCreate(parentPath); }}
+    onNewDocument={(parentPath, extension) => { model.requestCreate(parentPath, extension); }}
+    onNewDirectory={parentPath => { model.requestCreateDirectory(parentPath); }}
+    onDeleteDocument={path => { model.requestDelete(path); }}
     onReload={() => { void model.refresh(); }}
   />;
 }
@@ -50,12 +54,23 @@ export function ProjectFiles({workbench, models, active}: ProjectManagementViews
 function ProjectDialogsForSession({workbench, model}: {workbench: WorkbenchService; model: ProjectManagementModel}) {
   const workbenchState = useWorkbench(workbench);
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
-  if (!workbenchState.active || !snapshot.dialogOpen) return null;
+  if (!workbenchState.active) return null;
+  if (snapshot.deletePath) return <DeleteDocumentDialog
+    key={snapshot.deletePath}
+    path={snapshot.deletePath}
+    busy={workbenchState.busy || snapshot.blocked || snapshot.deleting || !!snapshot.deletingPath}
+    error={snapshot.deleteError}
+    onClose={() => { model.closeDeleteDialog(); }}
+    onDelete={() => model.confirmDelete()}
+  />;
+  if (!snapshot.dialogOpen) return null;
   return <NewDocumentDialog
-    key={snapshot.sessionId}
+    key={`${snapshot.sessionId}:${snapshot.createKind}:${snapshot.createExtension ?? "default"}`}
     projectName={snapshot.projectName}
     entries={snapshot.entries}
     initialParent={snapshot.selectedFolder}
+    kind={snapshot.createKind}
+    extension={snapshot.createExtension}
     busy={workbenchState.busy || snapshot.blocked || snapshot.creating}
     error={snapshot.createError}
     onClose={() => { model.closeCreateDialog(); }}

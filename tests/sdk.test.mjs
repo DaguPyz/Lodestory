@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { runInNewContext } from "node:vm";
 import test from "node:test";
 import ts from "typescript";
 import * as packageRoot from "@lodestory/sdk";
@@ -60,6 +61,14 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.equal(validateBodyEditorDefaults({markdown: "milkdown", "plain-text": "textarea"}), true);
   assert.equal(validateBodyEditorDefaults({}), true, "unconfigured formats may remain unavailable");
   assert.equal(validateBodyEditorDefaults(Object.create(null)), true, "JSON object records may have a null prototype");
+  assert.equal(validateBodyEditorDefaults(runInNewContext("({markdown: 'quill'})")), true,
+    "plain records from another realm remain valid configuration values");
+  assert.equal(validateBodyEditorDefaults(runInNewContext("Object.assign(Object.create(null), {markdown: 'quill'})")), true,
+    "null-prototype records from another realm remain valid");
+  assert.equal(validateBodyEditorDefaults(runInNewContext("new (class CustomConfig {})()")), false,
+    "custom class instances are not plain configuration records");
+  assert.equal(validateBodyEditorDefaults(runInNewContext("new Date()")), false,
+    "built-in instances are not plain configuration records");
   assert.equal(validateBodyEditorDefaults(null), false);
   assert.equal(validateBodyEditorDefaults([]), false);
   assert.equal(validateBodyEditorDefaults(Object.create({markdown: "milkdown"})), false);

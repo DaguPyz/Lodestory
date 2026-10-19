@@ -48,6 +48,8 @@ function deferred() {
 function createWorkspaceFactory({
   read = async (projectPath, path) => record(path, "正文"),
   create = async (_projectPath, parentPath, name) => record([parentPath, name].filter(Boolean).join("/")),
+  createDirectory = async (_projectPath, parentPath, name) => [parentPath, name].filter(Boolean).join("/"),
+  deleteFile = async () => {},
   write = async () => {},
 } = {}) {
   const sessionExports = {};
@@ -69,6 +71,8 @@ function createWorkspaceFactory({
         documentErrorMessage: (error) => error.message,
         readDocument: read,
         createDocument: create,
+        createDocumentDirectory: createDirectory,
+        deleteDocument: deleteFile,
         saveDocument: write,
       };
       throw new Error(`Unexpected import: ${name}`);
@@ -76,6 +80,189 @@ function createWorkspaceFactory({
   });
   return workspaceExports.createDocumentWorkspace;
 }
+
+test("deleting a dirty open document requires explicit confirmation", async () => {
+  const deleteCalls = [];
+  const createWorkspace = createWorkspaceFactory({
+    read: async (_projectPath, path) => record(path, "磁盘正文"),
+    deleteFile: async (...args) => deleteCalls.push(args),
+  });
+  const workspace = createWorkspace("/projects/book");
+  await workspace.service.open("第一章.md");
+  const document = workspace.service.getSnapshot().documents[0];
+  assert.equal(workspace.service.update(document.id, "未保存草稿"), true);
+
+  assert.equal(await workspace.service.deleteDocument(document.path), false);
+  assert.equal(workspace.service.getSnapshot().deletingPath, null);
+  assert.equal(workspace.service.getSnapshot().documents[0].content, "未保存草稿");
+  assert.deepEqual(deleteCalls, [], "the file API is not called until the dirty draft is confirmed");
+  await workspace.dispose();
+});
+
+test("confirmed deletion locks edits, waits for an accepted save, and removes the active tab", async () => {
+  const writes = [];
+  const deletes = [];
+  let releaseWrite;
+  const writeGate = new Promise(resolve => { releaseWrite = resolve; });
+  const createWorkspace = createWorkspaceFactory({
+    read: async (_projectPath, path) => record(path, `原文:${path}`),
+    write: async (...args) => { writes.push(args); await writeGate; },
+    deleteFile: async (...args) => deletes.push(args),
+  });
+  const workspace = createWorkspace("/projects/book");
+  await workspace.service.open("第一章.md");
+  await workspace.service.open("第二章.md");
+  const active = workspace.service.getSnapshot().documents.find(document => document.id === workspace.service.getSnapshot().activeId);
+  assert.ok(active);
+  workspace.service.update(active.id, "已提交的草稿");
+  const save = workspace.service.save(active.id);
+  await Promise.resolve();
+  assert.deepEqual(writes[0], [active.path, "已提交的草稿", `原文:${active.path}`]);
+
+  let reentrantUpdate;
+  const unsubscribe = workspace.service.subscribe(() => {
+    if (workspace.service.getSnapshot().deletingPath === active.path) {
+      reentrantUpdate = workspace.service.update(active.id, "删除期间的输入");
+    }
+  });
+  const deletion = workspace.service.deleteDocument(active.path, {discardChanges: true});
+  assert.equal(workspace.service.getSnapshot().deletingPath, active.path);
+  assert.equal(workspace.service.update(active.id, "删除期间的输入"), false);
+  assert.equal(await workspace.service.save(active.id), false);
+  assert.equal(reentrantUpdate, false, "a synchronous subscriber cannot reenter and edit after the delete lock");
+  assert.deepEqual(deletes, [], "native deletion waits for the write already in flight");
+
+  releaseWrite();
+  assert.equal(await save, true);
+  assert.equal(await deletion, true);
+  unsubscribe();
+  assert.deepEqual(deletes, [["/projects/book", active.path, "已提交的草稿"]]);
+  const snapshot = workspace.service.getSnapshot();
+  assert.equal(snapshot.deletingPath, null);
+  assert.equal(snapshot.documents.some(document => document.id === active.id), false);
+  assert.equal(snapshot.activeId, encodeURIComponent("第一章.md"), "deleting the active tab selects its previous neighbor");
+  await workspace.dispose();
+});
+
+test("deletion failure keeps the tab and draft and restores normal saving", async () => {
+  const writes = [];
+  const deletes = [];
+  const createWorkspace = createWorkspaceFactory({
+    read: async (_projectPath, path) => record(path, "磁盘原文"),
+    write: async (...args) => writes.push(args),
+    deleteFile: async (...args) => {
+      deletes.push(args);
+      throw new Error("文件已在外部修改");
+    },
+  });
+  const workspace = createWorkspace("/projects/book");
+  await workspace.service.open("第一章.md");
+  const document = workspace.service.getSnapshot().documents[0];
+  workspace.service.update(document.id, "本地草稿");
+
+  assert.equal(await workspace.service.deleteDocument(document.path, {discardChanges: true}), false);
+  assert.deepEqual(deletes, [["/projects/book", document.path, "磁盘原文"]]);
+  let snapshot = workspace.service.getSnapshot();
+  assert.equal(snapshot.deletingPath, null);
+  assert.equal(snapshot.documents[0].content, "本地草稿");
+  assert.equal(snapshot.activeId, document.id);
+  assert.match(snapshot.error, /文件已在外部修改/);
+
+  assert.equal(workspace.service.update(document.id, "恢复后的草稿"), true);
+  assert.equal(await workspace.service.save(document.id), true);
+  assert.deepEqual(writes.at(-1), [document.path, "恢复后的草稿", "磁盘原文"]);
+  snapshot = workspace.service.getSnapshot();
+  assert.equal(snapshot.documents[0].saveState, "saved");
+  await workspace.dispose();
+});
+
+test("directory creation publishes busy state, blocks concurrent requests, and reports failures", async () => {
+  let finishCreate;
+  const createWorkspace = createWorkspaceFactory({
+    createDirectory: async (_projectPath, parentPath, name) => new Promise(resolve => {
+      finishCreate = () => resolve([parentPath, name].filter(Boolean).join("/"));
+    }),
+  });
+  const workspace = createWorkspace("/projects/book");
+  const creating = workspace.service.createDirectory("chapters", "人物");
+  assert.equal(workspace.service.getSnapshot().creating, true);
+  assert.equal(await workspace.service.createDirectory("chapters", "第二个"), null);
+  await Promise.resolve();
+  finishCreate();
+  assert.equal(await creating, "chapters/人物");
+  assert.equal(workspace.service.getSnapshot().creating, false);
+  await workspace.dispose();
+
+  const failedWorkspace = createWorkspaceFactory({
+    createDirectory: async () => { throw new Error("目录创建失败"); },
+  })("/projects/book");
+  assert.equal(await failedWorkspace.service.createDirectory("chapters", "重复"), null);
+  assert.equal(failedWorkspace.service.getSnapshot().creating, false);
+  assert.equal(failedWorkspace.service.getSnapshot().error, "目录创建失败");
+  await failedWorkspace.dispose();
+});
+
+test("disposal waits for an accepted delete and does not autosave the discarded draft", async () => {
+  const writes = [];
+  let signalDeleteStarted;
+  let finishDelete;
+  const deleteStarted = new Promise(resolve => { signalDeleteStarted = resolve; });
+  const deleteGate = new Promise(resolve => { finishDelete = resolve; });
+  const createWorkspace = createWorkspaceFactory({
+    read: async (_projectPath, path) => record(path, "磁盘正文"),
+    write: async (...args) => writes.push(args),
+    deleteFile: async () => {
+      signalDeleteStarted();
+      await deleteGate;
+    },
+  });
+  const workspace = createWorkspace("/projects/book");
+  await workspace.service.open("第一章.md");
+  const document = workspace.service.getSnapshot().documents[0];
+  workspace.service.update(document.id, "确认丢弃的草稿");
+
+  const deletion = workspace.service.deleteDocument(document.path, {discardChanges: true});
+  await deleteStarted;
+  const disposal = workspace.dispose();
+  finishDelete();
+
+  assert.equal(await deletion, true);
+  await disposal;
+  assert.deepEqual(writes, [], "workspace disposal cannot recreate a successfully deleted file by flushing its old buffer");
+  assert.deepEqual(workspace.service.getSnapshot().documents, []);
+});
+
+test("deleting during a save stops its retry loop at the accepted write and deletes against that baseline", async () => {
+  const writes = [];
+  const deletes = [];
+  let releaseFirstWrite;
+  const firstWriteGate = new Promise(resolve => { releaseFirstWrite = resolve; });
+  const createWorkspace = createWorkspaceFactory({
+    read: async (_projectPath, path) => record(path, "disk"),
+    write: async (...args) => {
+      writes.push(args);
+      if (writes.length === 1) await firstWriteGate;
+    },
+    deleteFile: async (...args) => deletes.push(args),
+  });
+  const workspace = createWorkspace("/projects/book");
+  await workspace.service.open("第一章.md");
+  const document = workspace.service.getSnapshot().documents[0];
+  workspace.service.update(document.id, "A");
+  const saving = workspace.service.save(document.id);
+  await Promise.resolve();
+  assert.deepEqual(writes, [[document.path, "A", "disk"]]);
+
+  workspace.service.update(document.id, "B");
+  const deleting = workspace.service.deleteDocument(document.path, {discardChanges: true});
+  releaseFirstWrite();
+
+  assert.equal(await saving, true, "the accepted write completes successfully even though the later draft is discarded");
+  assert.equal(await deleting, true);
+  assert.deepEqual(writes, [[document.path, "A", "disk"]], "deletion prevents the pending save loop from writing B");
+  assert.deepEqual(deletes, [["/projects/book", document.path, "A"]], "native deletion compares against the content that reached disk");
+  await workspace.dispose();
+});
 
 const record = (path, content = "正文") => ({ path, fileName: path.split("/").at(-1), content });
 const documentId = (path) => encodeURIComponent(path);

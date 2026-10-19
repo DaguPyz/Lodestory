@@ -8,6 +8,20 @@ function registry() {
   const store = f.loadModule("plugins/default-layout/layoutStore.ts").createLayoutStore(() => removals++);
   return {f, store, removals: () => removals};
 }
+
+test("default layout registers its persisted navigation width with the configuration service", async () => {
+  const f = createMainFixture({configOverrides: {"defaultLayout.navigationWidth": 480}});
+  f.start();
+  await flushStartup();
+
+  const {configKey} = f.requireSdk("@lodestory/sdk/config");
+  const {navigationWidthConfig} = f.loadModule("plugins/default-layout/navigationWidth.ts");
+  const config = f.getService(configKey);
+  assert.equal(config.getSnapshot(navigationWidthConfig), 480,
+    "the default-layout plugin declares the saved preference through the configuration service");
+
+  await f.createdCores.at(-1).unmountAll();
+});
 const content = (id, role = "main", order = 0) => ({id, title: id, role, order, render: ({active}) => ({id, active})});
 const ids = store => Array.from(store.getSnapshot().shownIds);
 
@@ -165,17 +179,19 @@ test("document tabs, body editor, writing status, project management, and toolba
   assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
     "body-editor.main", "document-tabs.tabs", "project-management.files", "writing-status.status",
   ]);
+  await f.createdCores.at(-1).unmount("writing-status");
+  await f.createdCores.at(-1).unmount("rich-text-editor");
+  await f.createdCores.at(-1).unmount("markdown-editor");
+  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
+    "body-editor.main", "document-tabs.tabs", "project-management.files",
+  ]);
   await f.createdCores.at(-1).unmount("body-editor");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
-    "document-tabs.tabs", "project-management.files", "writing-status.status",
+    "document-tabs.tabs", "project-management.files",
   ]);
   await f.createdCores.at(-1).unmount("project-management");
-  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
-    "document-tabs.tabs", "writing-status.status",
-  ]);
+  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id), ["document-tabs.tabs"]);
   await f.createdCores.at(-1).unmount("document-tabs");
-  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id), ["writing-status.status"]);
-  await f.createdCores.at(-1).unmount("writing-status");
   assert.equal(layout.getSnapshot().contents.length, 0);
   assert.equal(f.logs.filter(entry => entry === "root.unmount").length, 1);
   await f.createdCores.at(-1).unmountAll();

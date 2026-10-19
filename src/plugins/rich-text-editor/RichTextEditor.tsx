@@ -188,6 +188,7 @@ function createQuillDriver(root: HTMLElement, initialContent: string, format: Ed
   let pasteHandler: ((event: ClipboardEvent) => void) | undefined;
   let disposed = false;
   let fontSelect: SystemFontSelect | undefined;
+  let releaseToolbar: (() => void) | undefined;
   let families: readonly string[] = [];
   let readOnly = true;
 
@@ -251,13 +252,15 @@ function createQuillDriver(root: HTMLElement, initialContent: string, format: Ed
           fontSelect = createSystemFontSelect(instance, toolbar);
           fontSelect.setFamilies(families);
           fontSelect.setReadOnly(readOnly);
-          labelToolbar(toolbar);
+          releaseToolbar = prepareToolbar(toolbar);
         }
       }
     },
     async destroy() {
       disposed = true;
       notify = undefined;
+      releaseToolbar?.();
+      releaseToolbar = undefined;
       fontSelect?.destroy();
       fontSelect = undefined;
       const instance = quill;
@@ -318,7 +321,39 @@ function getToolbarContainer(quill: Quill): HTMLElement | undefined {
   return toolbar?.container;
 }
 
-function labelToolbar(root: HTMLElement) {
+function prepareToolbar(root: HTMLElement): () => void {
+  root.setAttribute("role", "toolbar");
+  root.setAttribute("aria-label", "富文本格式工具栏");
+  const fields = document.createElement("div");
+  fields.className = "rich-text-toolbar-fields";
+  const actions = document.createElement("div");
+  actions.className = "rich-text-toolbar-actions";
+  for (const group of Array.from(root.children)) {
+    const field = group.classList.contains("rich-text-font-family")
+      || group.querySelector(".ql-header, .ql-size");
+    if (field) {
+      group.classList.add("rich-text-toolbar-field");
+      if (!group.classList.contains("rich-text-font-family")) {
+        const caption = document.createElement("span");
+        caption.className = "rich-text-toolbar-caption";
+        caption.textContent = group.querySelector(".ql-header") ? "段落" : "字号";
+        caption.setAttribute("aria-hidden", "true");
+        group.prepend(caption);
+      }
+      fields.append(group);
+    } else actions.append(group);
+  }
+  root.append(fields, actions);
+
+  for (const name of ["header", "size"]) {
+    root.querySelectorAll<HTMLElement>(`.ql-picker.ql-${name} .ql-picker-label, .ql-picker.ql-${name} .ql-picker-item`)
+      .forEach(element => {
+        const value = element.dataset.value;
+        const label = name === "header" ? (value ? `标题 ${value}` : "正文") : (value ?? "默认");
+        element.dataset.label = label;
+        if (element.classList.contains("ql-picker-item")) element.setAttribute("aria-label", label);
+      });
+  }
   const labels: Record<string, string> = {
     "ql-header": "标题级别",
     "ql-size": "字号",
@@ -336,14 +371,72 @@ function labelToolbar(root: HTMLElement) {
     "ql-clean": "清除格式",
   };
   for (const [selector, label] of Object.entries(labels)) {
-    root.querySelectorAll<HTMLElement>(`.${selector}`).forEach(element => element.setAttribute("aria-label", label));
+    root.querySelectorAll<HTMLElement>(`.${selector}`).forEach(element => {
+      element.setAttribute("aria-label", label);
+      if (element.tagName === "BUTTON") element.title = label;
+    });
   }
   root.querySelectorAll<HTMLElement>(".ql-header .ql-picker-label")
-    .forEach(element => element.setAttribute("aria-label", "标题级别"));
+    .forEach(element => {
+      element.setAttribute("aria-label", "标题级别");
+      element.title = "标题级别";
+    });
   for (const name of ["size", "align", "color", "background"]) {
     root.querySelectorAll<HTMLElement>(`.ql-${name} .ql-picker-label`)
-      .forEach(element => element.setAttribute("aria-label", labels[`ql-${name}`]));
+      .forEach(element => {
+        element.setAttribute("aria-label", labels[`ql-${name}`]);
+        element.title = labels[`ql-${name}`];
+      });
   }
+  const alignments: Record<string, string> = {"": "左对齐", center: "居中对齐", right: "右对齐", justify: "两端对齐"};
+  root.querySelectorAll<HTMLElement>(".ql-align .ql-picker-item").forEach(element => {
+    element.setAttribute("aria-label", alignments[element.dataset.value ?? ""]);
+    element.title = alignments[element.dataset.value ?? ""];
+  });
+  for (const name of ["color", "background"]) {
+    root.querySelectorAll<HTMLElement>(`.ql-${name} .ql-picker-item`).forEach(element => {
+      const label = `${labels[`ql-${name}`]}：${element.dataset.value || "默认"}`;
+      element.setAttribute("aria-label", label);
+      element.title = label;
+    });
+  }
+
+  // Snow 的浮层保留原有选择行为，只校正靠近窗口边缘时的位置。
+  const positionOptions = () => {
+    const gutter = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const width = Number.parseFloat(getComputedStyle(root).width);
+    const scale = (width > 0 ? root.getBoundingClientRect().width / width : 1) || 1;
+    const viewportGutter = gutter * scale;
+    let left = viewportGutter;
+    let right = document.documentElement.clientWidth - viewportGutter;
+    for (let parent = root.parentElement; parent; parent = parent.parentElement) {
+      if (!/auto|scroll|hidden|clip/.test(getComputedStyle(parent).overflowX)) continue;
+      const clip = parent.getBoundingClientRect();
+      left = Math.max(left, clip.left + viewportGutter);
+      right = Math.min(right, clip.right - viewportGutter);
+    }
+    root.querySelectorAll<HTMLElement>(".ql-expanded .ql-picker-options").forEach(options => {
+      const available = Math.max(0, right - left) / scale;
+      options.style.minWidth = `${Math.min(14 * gutter, available)}px`;
+      options.style.maxWidth = `${available}px`;
+      options.style.marginLeft = "0px";
+      const bounds = options.getBoundingClientRect();
+      const shift = Math.max(left - bounds.left, Math.min(0, right - bounds.right));
+      options.style.marginLeft = `${shift / scale}px`;
+      const menuTop = (options.parentElement?.getBoundingClientRect().bottom ?? bounds.top)
+        + Number.parseFloat(getComputedStyle(options).marginTop) * scale;
+      const availableHeight = Math.max(0, document.documentElement.clientHeight - viewportGutter - menuTop) / scale;
+      options.style.maxHeight = `min(20rem, 50vh, ${availableHeight}px)`;
+    });
+  };
+  root.addEventListener("mousedown", positionOptions);
+  root.addEventListener("keydown", positionOptions);
+  window.addEventListener("resize", positionOptions);
+  return () => {
+    root.removeEventListener("mousedown", positionOptions);
+    root.removeEventListener("keydown", positionOptions);
+    window.removeEventListener("resize", positionOptions);
+  };
 }
 
 function clearHistory(quill: Quill) {

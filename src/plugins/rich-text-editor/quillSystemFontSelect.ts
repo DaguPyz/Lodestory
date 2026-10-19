@@ -12,6 +12,7 @@ export function createSystemFontSelect(quill: Quill, toolbar: HTMLElement): Syst
   const group = document.createElement("label");
   group.className = "ql-formats rich-text-font-family";
   const caption = document.createElement("span");
+  caption.className = "rich-text-toolbar-caption";
   caption.textContent = "字体";
   const select = document.createElement("select");
   select.className = "rich-text-font-select";

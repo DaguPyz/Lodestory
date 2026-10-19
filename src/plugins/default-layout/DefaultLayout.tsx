@@ -4,6 +4,8 @@ import type {ErrorUiService} from "@lodestory/sdk/error";
 import {Button, IconButton} from "../../components/Button";
 import {Icon} from "../../components/Icon";
 import type {LayoutStore} from "./layoutStore";
+import type {createNavigationWidthModel} from "./navigationWidth";
+import {NavigationResizer} from "./NavigationResizer";
 import "./layout.css";
 
 function Content({entry, active}: {entry: LayoutContent; active: boolean}) {
@@ -11,11 +13,16 @@ function Content({entry, active}: {entry: LayoutContent; active: boolean}) {
 }
 
 /** 仅消费用途目录；不读取业务 ID、业务 DOM，也不导入任何编辑页组件。 */
-export function DefaultLayout({store, active, ErrorBoundary}: LayoutViewProps & {
+export function DefaultLayout({store, widths, active, ErrorBoundary}: LayoutViewProps & {
   store: LayoutStore;
+  widths: ReturnType<typeof createNavigationWidthModel>;
   ErrorBoundary: ErrorUiService["ErrorBoundary"];
 }) {
   const root = useRef<HTMLDivElement>(null);
+  const workspace = useRef<HTMLDivElement>(null);
+  const rail = useRef<HTMLElement>(null);
+  const auxiliary = useRef<HTMLElement>(null);
+  const probe = useRef<HTMLDivElement>(null);
   const {snapshot, navigationDocked, auxiliaryDocked} = useSyncExternalStore(store.subscribe, store.getState, store.getState);
   const contents = (role: LayoutRole) => snapshot.contents.filter(entry => entry.role === role);
   const shown = (id: string) => snapshot.shownIds.includes(id);
@@ -53,7 +60,7 @@ export function DefaultLayout({store, active, ErrorBoundary}: LayoutViewProps & 
   function panel(role: "navigation" | "auxiliary", docked: boolean) {
     const entries = contents(role);
     const current = entries.find(entry => shown(entry.id));
-    return <aside className={`layout-panel layout-${role}`} data-overlay={!docked} hidden={!current}
+    return <aside ref={role === "auxiliary" ? auxiliary : undefined} className={`layout-panel layout-${role}`} data-overlay={!docked} hidden={!current}
       aria-label={role === "navigation" ? "导航内容" : "辅助内容"}>
       <div className="layout-panel-header">
         {entries.length > 1 ? <select aria-label={role === "navigation" ? "切换导航内容" : "切换辅助内容"}
@@ -63,6 +70,9 @@ export function DefaultLayout({store, active, ErrorBoundary}: LayoutViewProps & 
         {current && <IconButton label={`收起${current.title}`} onClick={() => close(current)}><Icon name="close" size="small"/></IconButton>}
       </div>
       {entries.map(renderContent)}
+      {role === "navigation" && <NavigationResizer widths={widths} root={root} workspace={workspace}
+        rail={rail} auxiliary={auxiliary} probe={probe} enabled={active && !!current} docked={docked}
+        reserveAuxiliary={auxiliaryDocked && hasShown("auxiliary")} />}
     </aside>;
   }
 
@@ -70,10 +80,10 @@ export function DefaultLayout({store, active, ErrorBoundary}: LayoutViewProps & 
     <header className="layout-toolbar">
       <div className="layout-actions">{contents("actions").map(renderContent)}</div>
     </header>
-    <div className="layout-workspace" data-navigation-docked={navigationDocked && hasShown("navigation")}
+    <div ref={workspace} className="layout-workspace" data-navigation-docked={navigationDocked && hasShown("navigation")}
       data-auxiliary-docked={auxiliaryDocked && hasShown("auxiliary")}
       data-has-navigation={contents("navigation").length > 0}>
-      <nav className="layout-activitybar" hidden={!contents("navigation").length} aria-label="工作空间工具">
+      <nav ref={rail} className="layout-activitybar" hidden={!contents("navigation").length} aria-label="工作空间工具">
         {contents("navigation").map(entry => <IconButton key={entry.id} label={entry.title} aria-controls={regionId(entry.id)}
           aria-pressed={shown(entry.id)} onClick={() => toggle(entry)}><Icon name="file"/></IconButton>)}
       </nav>
@@ -90,6 +100,7 @@ export function DefaultLayout({store, active, ErrorBoundary}: LayoutViewProps & 
         {!hasShown("main") && <p className="layout-empty">从“布局内容”菜单选择要展示的内容。</p>}
       </main>
       {panel("auxiliary", auxiliaryDocked)}
+      <div ref={probe} className="layout-navigation-width-probe" aria-hidden="true" />
     </div>
     <footer className="layout-status" hidden={!hasShown("status")} aria-label="工作区状态">
       {contents("status").map(renderContent)}

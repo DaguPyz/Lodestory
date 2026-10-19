@@ -1,7 +1,7 @@
 import {useCallback, useEffect, useRef} from "react";
 import {IconButton} from "../../components/Button";
 import {Icon} from "../../components/Icon";
-import type {EditorFormat, EditorHandle} from "@lodestory/sdk/body-editor";
+import type {EditorHandle} from "@lodestory/sdk/body-editor";
 import {getEditorFormat} from "./bodyEditorRegistry";
 import {BodyEditorInteractions, useBodyEditorContext} from "./BodyEditorContext";
 import {EmptyDocument, Manuscript} from "./Manuscript";
@@ -83,7 +83,8 @@ export function BodyEditor({active}: {active: boolean}) {
         const format = getEditorFormat(document.fileName);
         const definition = format ? editor.resolveEditor(format) : undefined;
         return <Manuscript key={document.id} document={document}
-          visible={visible} active={documentActive} readOnly={disabled || !visible}
+          visible={visible} active={documentActive}
+          readOnly={disabled || !visible || workspace.deletingPath === document.path}
           format={format} definition={definition} onEditorReady={onEditorReady}
           onChange={content => {
             const latest = workspace.getSnapshot();

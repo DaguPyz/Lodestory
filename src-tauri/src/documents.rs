@@ -79,6 +79,61 @@ impl Documents {
         Ok(document(&root, &path, content))
     }
 
+    /// Creates one directory inside an existing project directory without replacing anything.
+    pub fn create_directory(
+        &self,
+        project: &Path,
+        parent_path: &str,
+        name: &str,
+    ) -> Result<String, ProjectError> {
+        let _guard = self.writes.lock().map_err(|_| busy())?;
+        let root = project_root(project)?;
+        let parent = resolve_inside(&root, parent_path)?;
+        fs::read_dir(&parent).map_err(|error| {
+            failure("document_create_failed", "无法访问保存目录", &parent, error)
+        })?;
+        validate_directory_name(name).map_err(|_| {
+            ProjectError::new("invalid_directory_name", "文件夹名称无效，请检查名称后重试。")
+        })?;
+        let path = parent.join(name);
+        fs::create_dir(&path).map_err(|error| {
+            if error.kind() == ErrorKind::AlreadyExists {
+                ProjectError::new("directory_exists", "已存在同名文件或文件夹，请换一个名称。")
+            } else {
+                failure("document_create_failed", "创建文件夹失败", &path, error)
+            }
+        })?;
+        let relative = path.strip_prefix(&root).map_err(|_| {
+            ProjectError::new("invalid_document_path", "文件夹必须位于当前作品目录中。")
+        })?;
+        Ok(relative.to_string_lossy().replace('\\', "/"))
+    }
+
+    /// Removes one supported regular document after checking its last saved contents.
+    pub fn delete_document(
+        &self,
+        project: &Path,
+        relative: &str,
+        expected_content: &str,
+    ) -> Result<(), ProjectError> {
+        let _guard = self.writes.lock().map_err(|_| busy())?;
+        let root = project_root(project)?;
+        reject_symlink_components(&root, relative)?;
+        let path = document_path(&root, relative)?;
+        let current = fs::read_to_string(&path).map_err(|error| {
+            failure("document_read_failed", "读取待删除文档失败", &path, error)
+        })?;
+        if current != expected_content {
+            return Err(ProjectError::new(
+                "document_changed",
+                "文档已被其他程序修改，未删除磁盘内容；请保留当前正文并处理外部修改。",
+            ));
+        }
+        fs::remove_file(&path).map_err(|error| {
+            failure("document_delete_failed", "删除文档失败", &path, error)
+        })
+    }
+
     pub fn read(&self, project: &Path, relative: &str) -> Result<Document, ProjectError> {
         let root = project_root(project)?;
         let path = document_path(&root, relative)?;
@@ -195,6 +250,46 @@ fn document_path(root: &Path, relative: &str) -> Result<PathBuf, ProjectError> {
         ));
     }
     Ok(path)
+}
+
+/// Rejects symlinks in a deletion path before canonicalization could resolve an alias.
+fn reject_symlink_components(root: &Path, relative: &str) -> Result<(), ProjectError> {
+    let relative_path = Path::new(relative);
+    if relative.contains('\\')
+        || relative_path
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_) | Component::CurDir))
+    {
+        return Err(ProjectError::new(
+            "invalid_document_path",
+            "文档必须位于当前作品目录中。",
+        ));
+    }
+    let mut current = root.to_path_buf();
+    for component in relative_path.components() {
+        match component {
+            Component::Normal(part) => {
+                current.push(part);
+                let metadata = fs::symlink_metadata(&current).map_err(|error| {
+                    failure("document_unavailable", "无法访问文档路径", &current, error)
+                })?;
+                if metadata.file_type().is_symlink() {
+                    return Err(ProjectError::new(
+                        "invalid_document_path",
+                        "文档删除路径不能经过符号链接。",
+                    ));
+                }
+            }
+            Component::CurDir => {}
+            _ => {
+                return Err(ProjectError::new(
+                    "invalid_document_path",
+                    "文档必须位于当前作品目录中。",
+                ));
+            }
+        }
+    }
+    Ok(())
 }
 
 fn document_name(name: &str) -> Result<String, ProjectError> {
@@ -515,5 +610,128 @@ mod tests {
         );
         assert_eq!(fs::read_to_string(&path).unwrap(), "正文");
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
+    }
+
+    #[test]
+    fn creating_directories_is_single_level_project_local_and_never_overwrites() {
+        let root = tempfile::tempdir().unwrap();
+        let store = Documents::default();
+
+        let created = store.create_directory(root.path(), "", "章节").unwrap();
+        assert_eq!(created, "章节");
+        assert!(root.path().join(&created).is_dir());
+
+        let existing_file = root.path().join("占用.md");
+        fs::write(&existing_file, "保留内容").unwrap();
+        assert_eq!(
+            store
+                .create_directory(root.path(), "", "占用.md")
+                .unwrap_err()
+                .code,
+            "directory_exists"
+        );
+        assert_eq!(fs::read_to_string(existing_file).unwrap(), "保留内容");
+
+        assert!(store
+            .create_directory(root.path(), "不存在的父目录", "子目录")
+            .is_err());
+        assert!(!root.path().join("不存在的父目录").exists());
+        assert!(store
+            .create_directory(root.path(), "../outside", "越界")
+            .is_err());
+    }
+
+    #[test]
+    fn deleting_requires_matching_saved_content_and_never_removes_directories() {
+        let root = tempfile::tempdir().unwrap();
+        let store = Documents::default();
+        let created = store
+            .create_with_content(root.path(), "", "可删除.md", "已保存正文".to_owned())
+            .unwrap();
+
+        assert_eq!(
+            store
+                .delete_document(root.path(), &created.path, "旧版本")
+                .unwrap_err()
+                .code,
+            "document_changed"
+        );
+        assert_eq!(
+            fs::read_to_string(root.path().join(&created.path)).unwrap(),
+            "已保存正文"
+        );
+
+        store
+            .delete_document(root.path(), &created.path, "已保存正文")
+            .unwrap();
+        assert!(!root.path().join(&created.path).exists());
+
+        let folder = store.create_directory(root.path(), "", "保留目录").unwrap();
+        let nested = store
+            .create_with_content(root.path(), &folder, "正文.txt", "仍保留".to_owned())
+            .unwrap();
+        assert_eq!(
+            store
+                .delete_document(root.path(), &folder, "")
+                .unwrap_err()
+                .code,
+            "unsupported_document"
+        );
+        assert!(root.path().join(&folder).is_dir());
+        assert_eq!(
+            fs::read_to_string(root.path().join(&nested.path)).unwrap(),
+            "仍保留"
+        );
+        assert!(store
+            .delete_document(root.path(), "../outside.md", "")
+            .is_err());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn deleting_a_symlinked_document_refuses_to_delete_its_target() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().unwrap();
+        let store = Documents::default();
+        let target = root.path().join("a.md");
+        fs::write(&target, "保留正文").unwrap();
+        let link = root.path().join("link.md");
+        symlink(&target, &link).unwrap();
+
+        assert_eq!(
+            store
+                .delete_document(root.path(), "link.md", "保留正文")
+                .unwrap_err()
+                .code,
+            "invalid_document_path"
+        );
+        assert_eq!(fs::read_to_string(target).unwrap(), "保留正文");
+        assert!(fs::symlink_metadata(link).unwrap().file_type().is_symlink());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn deleting_through_a_symlinked_parent_refuses_to_delete_its_target() {
+        use std::os::unix::fs::symlink;
+
+        let root = tempfile::tempdir().unwrap();
+        let store = Documents::default();
+        let subfolder = root.path().join("subfolder");
+        fs::create_dir(&subfolder).unwrap();
+        let target = subfolder.join("a.md");
+        fs::write(&target, "保留正文").unwrap();
+        let alias = root.path().join("alias");
+        symlink(&subfolder, &alias).unwrap();
+
+        assert_eq!(
+            store
+                .delete_document(root.path(), "alias/a.md", "保留正文")
+                .unwrap_err()
+                .code,
+            "invalid_document_path"
+        );
+        assert_eq!(fs::read_to_string(target).unwrap(), "保留正文");
+        assert!(fs::symlink_metadata(alias).unwrap().file_type().is_symlink());
     }
 }

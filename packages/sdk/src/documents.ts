@@ -19,6 +19,8 @@ export type DocumentSnapshot = Readonly<{
   activeId: string | null;
   openingPath: string | null;
   creating: boolean;
+  /** A project-relative path being deleted; only one deletion may run at a time. */
+  deletingPath: string | null;
   blocked: boolean;
   /** 操作错误；单个文档的保存错误位于其 saveError。 */
   error: string | null;
@@ -32,8 +34,12 @@ export type DocumentWorkspace = {
   open(path: string): Promise<boolean>;
   /** 创建后加入打开列表；返回实际文件名和路径，失败返回 null。 */
   create(parentPath: string, name: string): Promise<OpenDocument | null>;
+  /** 在现有目录下创建单层子目录；不覆盖或递归创建。 */
+  createDirectory(parentPath: string, name: string): Promise<string | null>;
   /** 将当前文档内容另存为同目录的新文档，并在成功后打开新文档。 */
   saveAs(documentId: string, fileName: string, content: string): Promise<void>;
+  /** 删除项目内的受支持文档；有未保存更改时须显式确认丢弃。 */
+  deleteDocument(path: string, options?: { discardChanges?: boolean }): Promise<boolean>;
   select(id: string): boolean;
   /** 更新共享内容，并由文档插件安排自动保存。 */
   update(id: string, content: string): boolean;

@@ -20,11 +20,13 @@ function setup({wrapperError} = {}) {
   let participation;
   let activeParticipation;
   const workspaceListeners = new Set();
-  let documentSnapshot = {documents: [], activeId: null, openingPath: null, creating: false, blocked: false, error: null};
+  let documentSnapshot = {documents: [], activeId: null, openingPath: null, creating: false, deletingPath: null, blocked: false, error: null};
   const workspace = {
     getSnapshot() { return documentSnapshot; },
     subscribe(listener) { workspaceListeners.add(listener); return () => workspaceListeners.delete(listener); },
     clearError() {},
+    async createDirectory() { throw new Error("Unexpected directory creation in this fixture"); },
+    async deleteDocument() { throw new Error("Unexpected document deletion in this fixture"); },
     async open(path) {
       const document = {id: `opaque::${path}`, path, fileName: path.split("/").at(-1), content: "", saveState: "saved", saveError: null};
       documentSnapshot = {...documentSnapshot, documents: [document], activeId: document.id};

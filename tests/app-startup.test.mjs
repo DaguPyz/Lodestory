@@ -92,7 +92,9 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.deepEqual(fixture.appPluginsCalls, [[]]);
   const {configKey} = fixture.requireSdk("@lodestory/sdk/config");
   const {bodyEditorDefaultEditorsConfig} = fixture.requireSdk("@lodestory/sdk/body-editor");
-  assert.deepEqual(fixture.getService(configKey).getSnapshot(bodyEditorDefaultEditorsConfig), {
+  assert.deepEqual(Object.fromEntries(Object.entries(
+    fixture.getService(configKey).getSnapshot(bodyEditorDefaultEditorsConfig),
+  )), {
     markdown: "milkdown",
     "plain-text": "quill",
     "rich-delta": "quill",

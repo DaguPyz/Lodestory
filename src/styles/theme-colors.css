@@ -20,7 +20,7 @@
   --ui-border-control: #82909F;
   --ui-accent-foreground: #76B6F2;
   --ui-accent-indicator: #3D9EFF;
-  --ui-focus-ring: #8CC6FF;
+  --ui-focus-ring: #B7C0CA;
   --ui-caret-foreground: #D9DFE7;
   --ui-text-selection-bg: #294B6E;
   --ui-selection-foreground: #E4E8ED;
@@ -91,7 +91,7 @@
   --ui-surface-inverse: #E4E8ED;
   --ui-text-inverse: #18212D;
   --ui-border-inverse: #65768C;
-  --ui-focus-inverse-ring: #286BB1;
+  --ui-focus-inverse-ring: #536277;
   --ui-category-1-background: #1D3048;
   --ui-category-1-foreground: #A8CCFF;
   --ui-category-1-border: #A8CCFF;
@@ -134,7 +134,7 @@
   --ui-border-control: #65768C;
   --ui-accent-foreground: #245F9B;
   --ui-accent-indicator: #286BB1;
-  --ui-focus-ring: #286BB1;
+  --ui-focus-ring: #536277;
   --ui-caret-foreground: #243144;
   --ui-text-selection-bg: #C5DCF6;
   --ui-selection-foreground: #18212D;
@@ -205,7 +205,7 @@
   --ui-surface-inverse: #18212D;
   --ui-text-inverse: #E4E8ED;
   --ui-border-inverse: #82909F;
-  --ui-focus-inverse-ring: #8CC6FF;
+  --ui-focus-inverse-ring: #B7C0CA;
   --ui-category-1-background: #E7F0FD;
   --ui-category-1-foreground: #244F87;
   --ui-category-1-border: #244F87;

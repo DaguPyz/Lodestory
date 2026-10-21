@@ -159,7 +159,7 @@ test("the native select preserves the complete system font list, including unusu
   editor.setFamilies(families);
 
   const [group] = toolbar.children;
-  const select = group.children[1];
+  const select = group.children.find(child => child.tagName === "SELECT");
   assert.equal(group.className, "ql-formats rich-text-font-family");
   assert.equal(select.attributes.get("aria-label"), "字体");
   assert.deepEqual(select.children.map(option => option.value), [
@@ -175,7 +175,7 @@ test("the selector restores a remembered range after editor focus is lost and ap
   const fake = createFakeQuill({selection: null});
   const toolbar = new FakeElement("div");
   const editor = createSystemFontSelect(fake.quill, toolbar);
-  const select = toolbar.children[0].children[1];
+  const select = toolbar.children[0].children.find(child => child.tagName === "SELECT");
   editor.setFamilies(["O'Brien", "宋体"]);
   editor.setReadOnly(false);
   fake.quill.emitEditorChange("selection-change", {index: 4, length: 3}, null, "user");
@@ -195,7 +195,7 @@ test("silent editor changes sync the current document font and preserve a font a
   const fake = createFakeQuill({font: "Installed Family"});
   const toolbar = new FakeElement("div");
   const editor = createSystemFontSelect(fake.quill, toolbar);
-  const select = toolbar.children[0].children[1];
+  const select = toolbar.children[0].children.find(child => child.tagName === "SELECT");
   editor.setFamilies(["Installed Family", "另一种字体"]);
   editor.setReadOnly(false);
   assert.equal(select.value, "Installed Family");
@@ -215,7 +215,7 @@ test("read-only mode and an empty system font list disable changes", () => {
   const fake = createFakeQuill();
   const toolbar = new FakeElement("div");
   const editor = createSystemFontSelect(fake.quill, toolbar);
-  const select = toolbar.children[0].children[1];
+  const select = toolbar.children[0].children.find(child => child.tagName === "SELECT");
 
   assert.equal(select.disabled, true, "empty list starts disabled");
   editor.setReadOnly(false);
@@ -232,13 +232,34 @@ test("read-only mode and an empty system font list disable changes", () => {
   editor.destroy();
 });
 
+test("pointer focus can stay on an unchanged font without hiding subsequent keyboard focus", () => {
+  const {createSystemFontSelect} = loadSystemFontSelect();
+  const {quill, calls} = createFakeQuill();
+  const toolbar = new FakeElement("div");
+  const editor = createSystemFontSelect(quill, toolbar);
+  const select = toolbar.children[0].children.find(child => child.tagName === "SELECT");
+  editor.setFamilies(["Arial"]);
+  editor.setReadOnly(false);
+
+  select.dispatch("pointerdown");
+  assert.equal(select.attributes.get("data-pointer-focus"), "true");
+  assert.equal(select.value, "", "choosing the current default needs no change event");
+  assert.deepEqual(calls.formats, [], "focus feedback must not change document formatting");
+  select.dispatch("keydown");
+  assert.equal(select.attributes.get("data-pointer-focus"), "false");
+  select.dispatch("pointerdown");
+  select.dispatch("blur");
+  assert.equal(select.attributes.get("data-pointer-focus"), "false", "Tab can show focus after leaving the select");
+  editor.destroy();
+});
+
 test("destroy removes the select and Quill listeners and makes repeated cleanup harmless", () => {
   const {createSystemFontSelect} = loadSystemFontSelect();
   const fake = createFakeQuill();
   const toolbar = new FakeElement("div");
   const editor = createSystemFontSelect(fake.quill, toolbar);
   const group = toolbar.children[0];
-  const select = group.children[1];
+  const select = group.children.find(child => child.tagName === "SELECT");
   editor.setFamilies(["Arial"]);
   editor.setReadOnly(false);
   const readsBeforeDestroy = fake.calls.getFormats.length;
@@ -251,7 +272,9 @@ test("destroy removes the select and Quill listeners and makes repeated cleanup 
 
   assert.equal(toolbar.children.length, 0);
   assert.equal(group.removed, true);
-  assert.equal(select.listeners.get("change").size, 0);
+  for (const event of ["change", "pointerdown", "keydown", "blur"]) {
+    assert.equal(select.listeners.get(event).size, 0, `${event} listeners are removed`);
+  }
   assert.equal(fake.listeners.get("editor-change").size, 0);
   assert.equal(fake.calls.getFormats.length, readsBeforeDestroy, "events after cleanup cannot read editor state");
   assert.deepEqual(fake.calls.formats, []);

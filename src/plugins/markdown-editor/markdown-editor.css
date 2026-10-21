@@ -41,7 +41,25 @@
 }
 
 .markdown-editor .milkdown button:focus-visible,
-.markdown-editor .milkdown input:focus-visible {
-  outline: 2px solid var(--ui-focus-ring);
-  outline-offset: 2px;
+.markdown-editor .milkdown input:focus-visible,
+.markdown-editor .milkdown select:focus-visible,
+.markdown-editor .milkdown textarea:focus-visible,
+.markdown-editor .milkdown .milkdown-code-block .expand-icon:focus-visible,
+.markdown-editor .milkdown .milkdown-code-block .language-list-item:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: var(--ui-focus-offset);
+}
+
+.markdown-editor .milkdown .milkdown-code-block .search-box {
+  outline: var(--ui-focus-width) solid var(--ui-border-control);
+  outline-offset: var(--ui-focus-offset);
+}
+
+.markdown-editor .milkdown .milkdown-code-block .search-box:focus-within {
+  outline-color: var(--ui-focus-ring);
+  outline-width: var(--ui-focus-width);
+}
+
+.markdown-editor .milkdown .milkdown-code-block .search-box input:focus-visible {
+  outline: none;
 }

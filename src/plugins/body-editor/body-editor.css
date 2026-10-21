@@ -56,7 +56,7 @@
 
 .manuscript-input:focus-visible {
   outline: var(--ui-focus-width) solid var(--ui-focus-ring);
-  outline-offset: var(--ui-space-3);
+  outline-offset: var(--ui-focus-offset);
 }
 
 .document-save-error,

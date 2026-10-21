@@ -35,7 +35,10 @@ button {
 button:focus-visible,
 input:focus-visible,
 select:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+a[href]:focus-visible,
+summary:focus-visible,
+:where([tabindex]:not([tabindex="-1"])):focus-visible {
   outline: var(--ui-focus-width) solid var(--ui-focus-ring);
   outline-offset: var(--ui-focus-offset);
 }
@@ -289,6 +292,10 @@ p {
   background: var(--ui-action-bg-pressed);
 }
 
+.button--primary:focus-visible {
+  outline-color: var(--ui-text-on-action);
+}
+
 .button--secondary {
   color: var(--ui-text-primary);
   background: var(--ui-surface-control);
@@ -395,8 +402,8 @@ p {
 }
 
 .search-field:focus-within {
-  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
-  outline-offset: var(--ui-focus-offset);
+  border-color: var(--ui-focus-ring);
+  outline: none;
 }
 
 .search-field:hover:not(:has(input:disabled)) {
@@ -850,6 +857,14 @@ p {
     border-color: ButtonText;
   }
 
+  .button--primary:focus-visible {
+    outline-color: Highlight;
+  }
+
+  .search-field:focus-within {
+    border-color: Highlight;
+  }
+
   .project-row:not(:last-child)::after {
     background: GrayText;
   }
@@ -1244,6 +1259,6 @@ p {
 }
 
 .theme-system-choices select:focus-visible {
-  outline: 2px solid var(--ui-focus-ring);
-  outline-offset: 2px;
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: var(--ui-focus-offset);
 }

@@ -9,15 +9,13 @@ export type SystemFontSelect = Readonly<{
 
 /** A native select keeps large system font lists out of Snow's generated picker. */
 export function createSystemFontSelect(quill: Quill, toolbar: HTMLElement): SystemFontSelect {
-  const group = document.createElement("label");
+  const group = document.createElement("div");
   group.className = "ql-formats rich-text-font-family";
-  const caption = document.createElement("span");
-  caption.className = "rich-text-toolbar-caption";
-  caption.textContent = "字体";
   const select = document.createElement("select");
   select.className = "rich-text-font-select";
   select.setAttribute("aria-label", "字体");
-  group.append(caption, select);
+  select.title = "字体";
+  group.append(select);
   toolbar.prepend(group);
 
   let families: readonly string[] = [];
@@ -71,7 +69,14 @@ export function createSystemFontSelect(quill: Quill, toolbar: HTMLElement): Syst
     quill.focus();
     syncSelection();
   };
+  // Native selects may match :focus-visible after mouse use, even when the
+  // same option is picked and no change event returns focus to the editor.
+  const onPointerDown = () => select.setAttribute("data-pointer-focus", "true");
+  const onKeyboardOrBlur = () => select.setAttribute("data-pointer-focus", "false");
   select.addEventListener("change", onChange);
+  select.addEventListener("pointerdown", onPointerDown);
+  select.addEventListener("keydown", onKeyboardOrBlur);
+  select.addEventListener("blur", onKeyboardOrBlur);
   quill.on("editor-change", onEditorChange);
   renderOptions();
   syncSelection();
@@ -91,6 +96,9 @@ export function createSystemFontSelect(quill: Quill, toolbar: HTMLElement): Syst
       if (disposed) return;
       disposed = true;
       select.removeEventListener("change", onChange);
+      select.removeEventListener("pointerdown", onPointerDown);
+      select.removeEventListener("keydown", onKeyboardOrBlur);
+      select.removeEventListener("blur", onKeyboardOrBlur);
       quill.off("editor-change", onEditorChange);
       group.remove();
     },

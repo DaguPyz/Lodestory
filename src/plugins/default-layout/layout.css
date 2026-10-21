@@ -82,11 +82,10 @@
   content: ""; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px;
   background: transparent;
 }
-.layout-navigation-resizer:focus-visible::before,
 .layout-navigation-resizer[data-dragging="true"]::before { background: var(--ui-accent-foreground); }
 .layout-navigation-resizer:focus-visible {
   outline: var(--ui-focus-width) solid var(--ui-focus-ring);
-  outline-offset: 0;
+  outline-offset: var(--ui-focus-offset);
 }
 .layout-navigation-resizer[aria-disabled="true"] { cursor: default; }
 .default-layout[data-resizing-navigation="true"],

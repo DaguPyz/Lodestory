@@ -72,20 +72,12 @@
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow .rich-text-toolbar-field {
-  gap: var(--ui-icon-text-gap);
   min-width: 0;
 }
 
-.rich-text-toolbar-caption {
-  flex-shrink: 0;
-  color: var(--ui-text-secondary);
-  font-size: var(--ui-font-size-label);
-  font-weight: 500;
-  line-height: var(--ui-line-height-label);
-}
-
 .rich-text-editor-mount .ql-toolbar.ql-snow button,
-.rich-text-editor-mount .ql-toolbar.ql-snow .ql-picker-label {
+.rich-text-editor-mount .ql-toolbar.ql-snow .ql-picker-label,
+.rich-text-editor-mount .ql-toolbar.ql-snow .rich-text-font-select {
   display: inline-flex;
   float: none;
   align-items: center;
@@ -144,22 +136,23 @@
 .rich-text-editor-mount .ql-toolbar.ql-snow button.ql-active,
 .rich-text-editor-mount .ql-toolbar.ql-snow .ql-picker-label.ql-active,
 .rich-text-editor-mount .ql-toolbar.ql-snow .ql-expanded .ql-picker-label {
-  color: var(--ui-state-selected-foreground);
-  background: var(--ui-surface-selected);
-  box-shadow: inset 0 calc(-1 * var(--ui-indicator-width)) 0 var(--ui-accent-indicator);
+  color: var(--ui-state-inactive-selected-foreground);
+  background: var(--ui-surface-selected-inactive);
+  box-shadow: none;
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow button.ql-active:hover:not(:disabled),
 .rich-text-editor-mount .ql-toolbar.ql-snow .ql-picker-label.ql-active:hover,
 .rich-text-editor-mount .ql-toolbar.ql-snow .ql-expanded .ql-picker-label:hover {
-  color: var(--ui-state-selected-hover-foreground);
-  background: var(--ui-surface-selected-hover);
+  color: var(--ui-state-hover-foreground);
+  background: var(--ui-surface-hover);
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow button.ql-active:active:not(:disabled),
-.rich-text-editor-mount .ql-toolbar.ql-snow .ql-picker-label.ql-active:active {
-  color: var(--ui-state-selected-pressed-foreground);
-  background: var(--ui-state-selected-pressed-background);
+.rich-text-editor-mount .ql-toolbar.ql-snow .ql-picker-label.ql-active:active,
+.rich-text-editor-mount .ql-toolbar.ql-snow .ql-expanded .ql-picker-label:active {
+  color: var(--ui-state-pressed-foreground);
+  background: var(--ui-surface-pressed);
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow button:focus-visible,
@@ -249,12 +242,7 @@
   width: 11rem;
   max-width: 100%;
   min-width: 0;
-  min-height: var(--ui-control-height);
-  padding: var(--ui-space-3) var(--ui-space-8) var(--ui-space-3) var(--ui-space-4);
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-control);
-  border: 1px solid var(--ui-border-control);
-  border-radius: var(--ui-radius-control);
+  padding: var(--ui-space-2) var(--ui-space-8) var(--ui-space-2) var(--ui-space-3);
   font: inherit;
   font-weight: 400;
   text-overflow: ellipsis;
@@ -269,21 +257,17 @@
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow .ql-picker.ql-header {
-  width: 7rem;
+  width: 6rem;
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow .ql-picker.ql-size {
-  width: 6rem;
+  width: 7rem;
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow :where(.ql-header, .ql-size) .ql-picker-label {
   justify-content: flex-start;
   width: 100%;
-  min-height: var(--ui-control-height);
-  padding: var(--ui-space-3) var(--ui-space-8) var(--ui-space-3) var(--ui-space-4);
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-control);
-  border-color: var(--ui-border-control);
+  padding: var(--ui-space-2) var(--ui-space-8) var(--ui-space-2) var(--ui-space-3);
   font-weight: 400;
 }
 
@@ -308,7 +292,7 @@
   display: block;
   position: absolute;
   top: 50%;
-  right: var(--ui-space-4);
+  right: var(--ui-space-3);
   width: var(--ui-icon-small);
   height: var(--ui-icon-small);
   margin-top: calc(var(--ui-icon-small) / -2);
@@ -371,13 +355,13 @@
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow .ql-picker-item.ql-selected {
-  color: var(--ui-state-selected-foreground);
-  background-color: var(--ui-surface-selected);
+  color: var(--ui-state-inactive-selected-foreground);
+  background-color: var(--ui-surface-selected-inactive);
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow .ql-picker-item.ql-selected:hover {
-  color: var(--ui-state-selected-hover-foreground);
-  background-color: var(--ui-surface-selected-hover);
+  color: var(--ui-state-hover-foreground);
+  background-color: var(--ui-surface-hover);
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow .ql-color-picker .ql-picker-options {
@@ -435,6 +419,10 @@
 .rich-text-editor-font-error button:focus-visible {
   outline: var(--ui-focus-width) solid var(--ui-focus-ring);
   outline-offset: var(--ui-focus-offset);
+}
+
+.rich-text-editor-mount .rich-text-font-select[data-pointer-focus="true"]:focus-visible {
+  outline: none;
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow .rich-text-font-select:hover:not(:disabled) {
@@ -521,7 +509,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .rich-text-editor-mount .ql-toolbar.ql-snow button,
-  .rich-text-editor-mount .ql-toolbar.ql-snow .ql-picker-label {
+  .rich-text-editor-mount .ql-toolbar.ql-snow .ql-picker-label,
+  .rich-text-editor-mount .ql-toolbar.ql-snow .rich-text-font-select {
     transition: none;
   }
   .rich-text-editor-mount .ql-toolbar.ql-snow .ql-picker-options {

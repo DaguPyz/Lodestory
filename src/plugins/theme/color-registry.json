@@ -188,8 +188,8 @@
       "cssVariable": "--ui-focus-ring",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#8CC6FF",
-        "light": "#286BB1"
+        "dark": "#B7C0CA",
+        "light": "#536277"
       }
     },
     {
@@ -1026,8 +1026,8 @@
       "cssVariable": "--ui-focus-inverse-ring",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#286BB1",
-        "light": "#8CC6FF"
+        "dark": "#536277",
+        "light": "#B7C0CA"
       }
     },
     {
@@ -3904,7 +3904,7 @@
       "background": "selection.background"
     },
     "focus": {
-      "description": "键盘可见焦点外环；与背景前景状态独立，邻接表面由实现显式传入。",
+      "description": "键盘可见焦点轮廓；与背景前景状态独立，邻接表面由实现显式传入。",
       "indicator": "focus.ring",
       "background": {
         "context": "surface"
@@ -4055,7 +4055,7 @@
       "border": "border.inverse"
     },
     "inverseFocus": {
-      "description": "实际邻接反色表面的焦点外环。",
+      "description": "实际邻接反色表面的焦点轮廓。",
       "indicator": "focus.inverseRing",
       "background": "surface.inverse"
     },
@@ -4252,7 +4252,7 @@
       ],
       "rules": [
         "完整提示成套取用前景、背景和边界；单独校验只使用 validation 组合，不改变原前景和背景。",
-        "校验边界只允许在 validationSurface 上；可与选中、悬停、按下共存。焦点外环独立保留。禁用对象抑制校验边界，错误说明放在邻近提示中。",
+        "校验边界只允许在 validationSurface 上；可与选中、悬停、按下共存。焦点轮廓独立保留。禁用对象抑制校验边界，错误说明放在邻近提示中。",
         "强填充操作和反色区域中的校验使用独立反馈区域，不直接叠加校验边界；提示不能只靠颜色表达。"
       ]
     },

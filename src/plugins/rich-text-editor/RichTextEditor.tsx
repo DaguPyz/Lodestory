@@ -333,13 +333,6 @@ function prepareToolbar(root: HTMLElement): () => void {
       || group.querySelector(".ql-header, .ql-size");
     if (field) {
       group.classList.add("rich-text-toolbar-field");
-      if (!group.classList.contains("rich-text-font-family")) {
-        const caption = document.createElement("span");
-        caption.className = "rich-text-toolbar-caption";
-        caption.textContent = group.querySelector(".ql-header") ? "段落" : "字号";
-        caption.setAttribute("aria-hidden", "true");
-        group.prepend(caption);
-      }
       fields.append(group);
     } else actions.append(group);
   }
@@ -349,7 +342,7 @@ function prepareToolbar(root: HTMLElement): () => void {
     root.querySelectorAll<HTMLElement>(`.ql-picker.ql-${name} .ql-picker-label, .ql-picker.ql-${name} .ql-picker-item`)
       .forEach(element => {
         const value = element.dataset.value;
-        const label = name === "header" ? (value ? `标题 ${value}` : "正文") : (value ?? "默认");
+        const label = name === "header" ? (value ? `标题 ${value}` : "正文") : (value ?? "默认字号");
         element.dataset.label = label;
         if (element.classList.contains("ql-picker-item")) element.setAttribute("aria-label", label);
       });

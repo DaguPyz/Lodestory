@@ -12,8 +12,10 @@
   --ui-line-height-display-small: 2.5rem;
   --ui-font-size-page-title: 2rem;
   --ui-line-height-page-title: 2.5rem;
-  --ui-font-size-title: 1.5rem;
-  --ui-line-height-title: 2rem;
+  --ui-font-size-page-title-small: 1.5rem;
+  --ui-line-height-page-title-small: 2rem;
+  --ui-font-size-title: 1.25rem;
+  --ui-line-height-title: 1.75rem;
   --ui-font-size-strong: 1rem;
   --ui-line-height-strong: 1.5rem;
   --ui-font-size-body: 1rem;
@@ -46,6 +48,7 @@
   --ui-navigation-width: 16rem;
   --ui-inspector-width: 20rem;
   --ui-control-height: 2.5rem;
+  --ui-menu-row-height: 2.25rem;
   --ui-control-padding-inline: 1rem;
   --ui-icon-button-size: 2rem;
   --ui-row-height: 2.5rem;
@@ -64,13 +67,23 @@
   --ui-icon-brand: 2rem;
   --ui-radius-control: 0.5rem;
   --ui-radius-row: 0.5rem;
-  --ui-radius-overlay: 0.75rem;
-  --ui-radius-dialog: 1rem;
-  --ui-focus-width: 1px;
-  --ui-focus-offset: var(--ui-focus-width);
+  --ui-radius-overlay: 0.625rem;
+  --ui-radius-dialog: 0.75rem;
+  --ui-dialog-width: 35rem;
+  --ui-dialog-width-narrow: 30rem;
+  --ui-dialog-width-wide: 40rem;
+  --ui-dialog-width-large: 50rem;
+  --ui-dialog-padding: var(--ui-panel-padding);
+  --ui-dialog-actions-gap: 1.5rem;
+  --ui-dialog-button-gap: 0.5rem;
+  --ui-focus-width: 2px;
+  --ui-focus-offset: 1px;
   --ui-indicator-width: 2px;
   --ui-duration-fast: 100ms;
   --ui-duration-normal: 160ms;
+  --ui-duration-dialog: 220ms;
+  --ui-motion-offset: 4px;
+  --ui-tooltip-delay: 500ms;
   --ui-ease-enter: cubic-bezier(.2, 0, 0, 1);
   --ui-ease-exit: cubic-bezier(.4, 0, 1, 1);
 }
@@ -81,6 +94,8 @@
   --ui-line-height-label: 1.5rem;
   --ui-font-size-caption: 0.875rem;
   --ui-control-height: 3rem;
+  --ui-menu-row-height: 2.5rem;
+  --ui-dialog-padding: var(--ui-panel-padding);
   --ui-control-padding-inline: 1.5rem;
   --ui-icon-button-size: 2.5rem;
   --ui-row-height: 3rem;
@@ -101,6 +116,8 @@
   --ui-font-size-caption: 0.75rem;
   --ui-line-height-caption: 1.125rem;
   --ui-control-height: 2rem;
+  --ui-menu-row-height: 2rem;
+  --ui-dialog-padding: var(--ui-panel-padding);
   --ui-control-padding-inline: 0.75rem;
   --ui-icon-button-size: 1.75rem;
   --ui-row-height: 2rem;
@@ -113,4 +130,21 @@
   --ui-content-padding: 2rem;
   --ui-icon-text-gap: 0.5rem;
   --ui-icon-size: 1rem;
+}
+
+/* Preferences reach every portal through the same root; feedback remains static. */
+:root[data-ui-motion="reduce"] {
+  --ui-duration-fast: 0ms;
+  --ui-duration-normal: 0ms;
+  --ui-duration-dialog: 0ms;
+  --ui-motion-offset: 0px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ui-duration-fast: 0ms;
+    --ui-duration-normal: 0ms;
+    --ui-duration-dialog: 0ms;
+    --ui-motion-offset: 0px;
+  }
 }

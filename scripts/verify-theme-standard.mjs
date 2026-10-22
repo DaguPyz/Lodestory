@@ -374,17 +374,17 @@ for (const theme of builtin.themes) {
 const partial = resolveColors(ink.themes[0]);
 assert.equal(partial["surface.content"], "#171A23");
 assert.equal(partial["text.reading"], "#ECE2CE");
-assert.equal(partial["state.selectedHoverForeground"], "#F5EDFF");
-assert.equal(partial["state.selectedPressedForeground"], "#F5EDFF");
+assert.equal(partial["state.selectedHoverForeground"], "#E3F6EC");
+assert.equal(partial["state.selectedPressedForeground"], "#F0FAF4");
 const inherited = resolveColors({ type: "dark", colors: { "text.onAction": "#FDFDFD", "state.selectedForeground": "#FEFEFE" } });
 assert.equal(inherited["action.foreground"], "#FDFDFD");
 assert.equal(inherited["danger.foreground"], "#FDFDFD");
-assert.equal(inherited["state.inactiveSelectedForeground"], "#FEFEFE");
-assert.equal(resolveColors({ type: "light", colors: {} })["text.primary"], "#18212D");
-const extendedInherited = resolveColors({ type: "dark", colors: { "status.info": "#AABBCC", "status.infoBackground": "#101820", "category.1.foreground": "#DDEEFF" } });
-assert.equal(extendedInherited["status.infoForeground"], "#AABBCC");
-assert.equal(extendedInherited["drop.allowedForeground"], "#AABBCC");
-assert.equal(extendedInherited["drop.allowedBackground"], "#101820");
+assert.equal(inherited["state.inactiveSelectedForeground"], "#B5C4BA");
+assert.equal(resolveColors({ type: "light", colors: {} })["text.primary"], "#23392F");
+const extendedInherited = resolveColors({ type: "dark", colors: { "status.success": "#AABBCC", "status.successBackground": "#101820", "category.1.foreground": "#DDEEFF" } });
+assert.equal(extendedInherited["status.successForeground"], "#AABBCC");
+assert.equal(extendedInherited["drop.allowedForeground"], "#AABBCC", "allowed drop feedback inherits the success foreground");
+assert.equal(extendedInherited["drop.allowedBackground"], "#101820", "allowed drop feedback inherits the success background");
 assert.equal(extendedInherited["category.1.border"], "#DDEEFF");
 for (const type of ["dark", "light"]) {
   assert.deepEqual(collectWarnings(resolveColors({ type, colors: {} })), [], "完全缺省主题必须覆盖全部新增场景");

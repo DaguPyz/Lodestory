@@ -206,7 +206,7 @@ function createQuillDriver(root: HTMLElement, initialContent: string, format: Ed
             [{size: [false, "10px", "12px", "14px", "16px", "18px", "20px", "24px", "28px", "32px", "36px", "48px", "64px", "72px"]}],
             ["bold", "italic", "underline", "strike"],
             [{color: []}, {background: []}],
-            [{align: [false, "center", "right", "justify"]}],
+            [{align: ""}, {align: "center"}, {align: "right"}, {align: "justify"}],
             [{list: "ordered"}, {list: "bullet"}],
             ["blockquote", "link"],
             ["clean"],
@@ -332,18 +332,52 @@ function getToolbarContainer(quill: Quill): HTMLElement | undefined {
 function prepareToolbar(root: HTMLElement): void {
   root.setAttribute("role", "toolbar");
   root.setAttribute("aria-label", "富文本格式工具栏");
-  const fields = document.createElement("div");
-  fields.className = "rich-text-toolbar-fields";
-  const actions = document.createElement("div");
-  actions.className = "rich-text-toolbar-actions";
+  root.dataset.uiDensity = "compact";
   for (const group of Array.from(root.children)) {
-    const field = group.classList.contains("rich-text-select-field");
-    if (field) {
-      group.classList.add("rich-text-toolbar-field");
-      fields.append(group);
-    } else actions.append(group);
+    group.classList.add(group.classList.contains("rich-text-select-field")
+      ? "rich-text-toolbar-field" : "rich-text-toolbar-actions");
   }
-  root.append(fields, actions);
+
+  const createRow = () => {
+    const row = document.createElement("div");
+    row.className = "rich-text-toolbar-row";
+    return row;
+  };
+  const appendGroup = (row: HTMLElement, selector: string) => {
+    const group = root.querySelector(selector)?.closest(".ql-formats");
+    if (group) row.append(group);
+  };
+  const fontRow = createRow();
+  appendGroup(fontRow, ".rich-text-font-family");
+  for (const format of ["header", "size"]) {
+    appendGroup(fontRow, `[data-format="${format}"]`);
+  }
+  const inlineRow = createRow();
+  inlineRow.classList.add("rich-text-toolbar-inline");
+  appendGroup(inlineRow, ".ql-bold");
+  appendGroup(inlineRow, '[data-format="color"]');
+
+  const tools = document.createElement("span");
+  tools.className = "ql-formats rich-text-toolbar-actions";
+  for (const selector of [".ql-link", ".ql-clean"]) {
+    const button = root.querySelector(selector);
+    if (button) tools.append(button);
+  }
+  inlineRow.append(tools);
+
+  const listRow = createRow();
+  appendGroup(listRow, ".ql-list");
+  appendGroup(listRow, ".ql-blockquote");
+  const paragraphRow = createRow();
+  appendGroup(paragraphRow, ".ql-align");
+
+  const textSection = document.createElement("div");
+  textSection.className = "rich-text-toolbar-section rich-text-toolbar-text";
+  textSection.append(fontRow, inlineRow);
+  const paragraphSection = document.createElement("div");
+  paragraphSection.className = "rich-text-toolbar-section rich-text-toolbar-paragraph";
+  paragraphSection.append(listRow, paragraphRow);
+  root.replaceChildren(textSection, paragraphSection);
 
   const labels: Record<string, string> = {
     "ql-bold": "加粗",
@@ -352,6 +386,10 @@ function prepareToolbar(root: HTMLElement): void {
     "ql-strike": "删除线",
     "ql-list[value=ordered]": "有序列表",
     "ql-list[value=bullet]": "无序列表",
+    'ql-align[value=""]': "左对齐",
+    "ql-align[value=center]": "居中对齐",
+    "ql-align[value=right]": "右对齐",
+    "ql-align[value=justify]": "两端对齐",
     "ql-blockquote": "引用",
     "ql-link": "插入链接",
     "ql-clean": "清除格式",

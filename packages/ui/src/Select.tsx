@@ -1,5 +1,5 @@
 import { Select as BaseSelect } from "@base-ui/react/select";
-import { useEffect, useImperativeHandle, useRef, useState, type ComponentPropsWithRef, type RefObject } from "react";
+import { useEffect, useImperativeHandle, useRef, useState, type ComponentPropsWithRef, type ReactNode, type RefObject } from "react";
 import type { FocusSurface } from "./FocusSurface.js";
 import { Icon } from "./Icon.js";
 
@@ -15,6 +15,11 @@ type TriggerProps = Omit<ComponentPropsWithRef<"button">,
   "children" | "className" | "style" | "type" | "value" | "defaultValue" | "onChange" | "onSelect">;
 
 export type SelectProps = TriggerProps & {
+  /** Field chrome by default; title and toolbar are quiet inline switchers. */
+  variant?: "field" | "title" | "toolbar";
+  /** Optional visual cue for a toolbar select. iconOnly keeps the selected value for assistive technology. */
+  triggerIcon?: ReactNode;
+  iconOnly?: boolean;
   /** null means no selection. An empty string is a valid option value. */
   value: string | null;
   options: readonly SelectOption[];
@@ -33,7 +38,7 @@ function Swatch({ color }: { color: string }) {
 }
 
 /** Single selection: plugins own the value and options; the package owns the popup. */
-export function Select({ value, options, onValueChange, placeholder = "请选择", disabled = false, readOnly = false,
+export function Select({ value, options, onValueChange, variant = "field", triggerIcon, iconOnly = false, placeholder = "请选择", disabled = false, readOnly = false,
   required, name, form, autoComplete, id, ref, focusSurface, onOpenChange, finalFocus, ...triggerProps }: SelectProps) {
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
@@ -49,7 +54,7 @@ export function Select({ value, options, onValueChange, placeholder = "请选择
     }
   }, [disabled, open, onOpenChange]);
 
-  return <span className="ui-select">
+  return <span className="ui-select" data-variant={variant}>
     <BaseSelect.Root value={value} items={options} name={name} form={form} id={id} autoComplete={autoComplete}
       required={required} disabled={disabled} readOnly={readOnly} open={open && !disabled}
       onOpenChange={(nextOpen) => {
@@ -64,9 +69,15 @@ export function Select({ value, options, onValueChange, placeholder = "请选择
         }
       }}>
       <BaseSelect.Trigger {...triggerProps} ref={trigger} className="ui-select-trigger" type="button"
+        data-variant={variant} data-icon-only={iconOnly && !!triggerIcon || undefined}
         data-focus-surface={focusSurface} data-ui-placeholder={value === null || undefined}>
-        {selected?.swatch && <Swatch color={selected.swatch} />}
-        <BaseSelect.Value className="ui-select-value">{value === null ? placeholder : selected?.label ?? value}</BaseSelect.Value>
+        {iconOnly && triggerIcon ? <span className="ui-select-trigger-icon" aria-hidden="true">
+          {triggerIcon}
+          {variant === "toolbar" && selected?.swatch && <span className="ui-select-trigger-swatch" style={{backgroundColor: selected.swatch}} />}
+        </span> : selected?.swatch && <Swatch color={selected.swatch} />}
+        <BaseSelect.Value className={iconOnly && triggerIcon ? "ui-select-value ui-select-value--visually-hidden" : "ui-select-value"}>
+          {value === null ? placeholder : selected?.label ?? value}
+        </BaseSelect.Value>
         <BaseSelect.Icon className="ui-select-chevron"><Icon name="chevronDown" size="small" /></BaseSelect.Icon>
       </BaseSelect.Trigger>
       <BaseSelect.Portal>

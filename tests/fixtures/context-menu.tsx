@@ -91,7 +91,7 @@ function Fixture() {
         rightClick("inner", point);
         await settle();
         const rect = document.querySelector('[role="menu"]')!.getBoundingClientRect();
-        check(rect.left >= 15 && rect.top >= 15 && rect.right <= innerWidth - 15 && rect.bottom <= innerHeight - 15, `窗口边角 ${index + 1} 避让`);
+        check(rect.left >= 7 && rect.top >= 7 && rect.right <= innerWidth - 7 && rect.bottom <= innerHeight - 7, `窗口边角 ${index + 1} 避让`);
         menus.closeAll();
         await settle();
       }

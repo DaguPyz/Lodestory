@@ -14,7 +14,6 @@ import { createThemePlugin } from "../../src/plugins/theme/themePlugin";
 import { NewProjectDialog } from "../../src/plugins/welcome/NewProjectDialog";
 import { NewDocumentDialog } from "../../src/plugins/project-management/NewDocumentDialog";
 import { DeleteDocumentDialog } from "../../src/plugins/project-management/DeleteDocumentDialog";
-import type { ProjectTreeEntry } from "../../src/plugins/project-management/projectManagementModel";
 
 const wrappers = new Map<string, UiWrapper>();
 const uiService: UiService = {
@@ -45,13 +44,6 @@ const themeConfig = {
 type DialogKind = "project" | "document" | "delete";
 type Outcome = "success" | "error";
 
-const sampleEntries: readonly ProjectTreeEntry[] = [
-  { path: "chapters", name: "chapters", children: [
-    { path: "chapters/arc-one", name: "arc-one", children: [] },
-  ] },
-  { path: "notes", name: "notes", children: [] },
-];
-
 const longDeletePath = `书稿/archives/${"特别长的历史篇章目录".repeat(22)}/请确认删除的章节.lode`;
 
 function ThemePicker({ service, compact = false }: { service: ThemeService; compact?: boolean }) {
@@ -77,6 +69,7 @@ function ThemePicker({ service, compact = false }: { service: ThemeService; comp
 
 function StandaloneDialog({ service }: { service: ThemeService }) {
   const [open, setOpen] = useState(false);
+  const [size, setSize] = useState<"regular" | "narrow" | "wide" | "large">("regular");
   const [pending, setPending] = useState(false);
   const [result, setResult] = useState("");
   const trigger = useRef<HTMLButtonElement>(null);
@@ -95,12 +88,22 @@ function StandaloneDialog({ service }: { service: ThemeService }) {
       <Button data-testid="standalone-open" ref={trigger} onClick={() => { setResult(""); setOpen(true); }}>
         打开独立弹框
       </Button>
+      <label className="fixture-theme fixture-theme--compact">
+        <span>弹框宽度预设</span>
+        <select data-testid="dialog-size" value={size} onChange={(event) => setSize(event.currentTarget.value as typeof size)}>
+          <option value="regular">常规</option>
+          <option value="narrow">窄</option>
+          <option value="wide">宽</option>
+          <option value="large">大</option>
+        </select>
+      </label>
     </div>
     <output className="fixture-result" aria-live="polite">{result || "尚无模拟操作"}</output>
     <Dialog
       open={open}
       onOpenChange={setOpen}
       title="通用弹框"
+      size={size}
       description="主题、焦点管理、遮罩与关闭行为由 UI 包提供。"
       busy={pending}
       initialFocus={name}
@@ -133,15 +136,26 @@ function StandaloneDialog({ service }: { service: ThemeService }) {
 
 function BusinessDialogs() {
   const [kind, setKind] = useState<DialogKind | null>(null);
+  const [closingKind, setClosingKind] = useState<DialogKind | null>(null);
   const [outcome, setOutcome] = useState<Outcome>("error");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [event, setEvent] = useState("");
 
   function openDialog(next: DialogKind) {
+    setClosingKind(null);
     setError(null);
     setEvent("");
     setKind(next);
+  }
+
+  function closeDialog(closing: DialogKind | null = kind) {
+    if (closing) setClosingKind(closing);
+    setKind(null);
+  }
+
+  function finishDialogClose(closing: DialogKind) {
+    if (kind === null) setClosingKind(current => current === closing ? null : current);
   }
 
   async function runBusinessAction(label: string) {
@@ -156,7 +170,7 @@ function BusinessDialogs() {
       return;
     }
     setEvent(`${label}：模拟完成，没有写入任何文件`);
-    setKind(null);
+    closeDialog(kind);
   }
 
   const buttons = [
@@ -164,6 +178,7 @@ function BusinessDialogs() {
     ["document", "新建文档／文件夹"],
     ["delete", "删除长路径文档"],
   ] as const;
+  const displayedKind = kind ?? closingKind;
 
   return <section className="fixture-section" aria-labelledby="business-title">
     <div className="fixture-section__header">
@@ -186,38 +201,42 @@ function BusinessDialogs() {
       </label>
     </div>
     <div className="fixture-business-actions">
-      {buttons.map(([id, label]) => <Button
-        key={id}
-        data-testid={`open-${id}`}
-        disabled={busy}
-        onClick={() => openDialog(id)}
-      >{label}</Button>)}
+      {buttons.map(([id, label]) => {
+        const trigger = <Button data-testid={`open-${id}`} disabled={busy} onClick={() => openDialog(id)}>{label}</Button>;
+        return id === "project"
+          ? <div key={id} data-ui-density="spacious">{trigger}</div>
+          : <Button key={id} data-testid={`open-${id}`} disabled={busy} onClick={() => openDialog(id)}>{label}</Button>;
+      })}
     </div>
     <output className="fixture-result" aria-live="polite">{event || "先选择测试结果，再打开一个弹框"}</output>
 
-    {kind === "project" && <NewProjectDialog
+    {displayedKind === "project" && <NewProjectDialog
+      open={kind === "project"}
       busy={busy}
       error={error}
-      onClose={() => setKind(null)}
+      onClose={() => closeDialog("project")}
+      onCloseComplete={() => finishDialogClose("project")}
       onPickDirectory={async () => "测试目录/示例项目"}
       onCreate={async () => runBusinessAction("新建项目")}
     />}
-    {kind === "document" && <NewDocumentDialog
-      projectName="示例项目"
-      entries={sampleEntries}
+    {displayedKind === "document" && <NewDocumentDialog
+      open={kind === "document"}
       initialParent="chapters"
       kind="document"
       extension="lode"
       busy={busy}
       error={error}
-      onClose={() => setKind(null)}
+      onClose={() => closeDialog("document")}
+      onCloseComplete={() => finishDialogClose("document")}
       onCreate={async () => runBusinessAction("新建文档")}
     />}
-    {kind === "delete" && <DeleteDocumentDialog
+    {displayedKind === "delete" && <DeleteDocumentDialog
+      open={kind === "delete"}
       path={longDeletePath}
       busy={busy}
       error={error}
-      onClose={() => setKind(null)}
+      onClose={() => closeDialog("delete")}
+      onCloseComplete={() => finishDialogClose("delete")}
       onDelete={() => runBusinessAction("删除文档")}
     />}
   </section>;

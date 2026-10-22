@@ -1,18 +1,29 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { Button, Dialog, DialogActions, DialogClose, Icon } from "@lodestory/ui";
 
 type NewProjectDialogProps = {
+  open?: boolean;
   busy: boolean;
   error: string | null;
   onClose: () => void;
+  onCloseComplete?: () => void;
   onPickDirectory: () => Promise<string | null | undefined>;
   onCreate: (parentPath: string, name: string) => Promise<void>;
 };
 
-export function NewProjectDialog({ busy, error, onClose, onPickDirectory, onCreate }: NewProjectDialogProps) {
+export function NewProjectDialog({ open = true, busy, error, onClose, onCloseComplete, onPickDirectory, onCreate }: NewProjectDialogProps) {
   const [name, setName] = useState("");
   const [parentPath, setParentPath] = useState("");
+  const previousOpen = useRef(open);
   const nameInput = useRef<HTMLInputElement>(null);
+
+  useLayoutEffect(() => {
+    if (open && !previousOpen.current) {
+      setName("");
+      setParentPath("");
+    }
+    previousOpen.current = open;
+  }, [open]);
 
   async function chooseParent() {
     const selected = await onPickDirectory();
@@ -20,7 +31,8 @@ export function NewProjectDialog({ busy, error, onClose, onPickDirectory, onCrea
   }
 
   return (
-    <Dialog open onOpenChange={(open) => { if (!open) onClose(); }} title="新建项目"
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
+      onOpenChangeComplete={(nextOpen) => { if (!nextOpen) onCloseComplete?.(); }} title="新建项目"
       description="输入小说名称，选择保存目录。" busy={busy} initialFocus={nameInput}>
       <form className="project-form" aria-busy={busy} onSubmit={(event) => {
         event.preventDefault();

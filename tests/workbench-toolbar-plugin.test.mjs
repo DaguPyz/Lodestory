@@ -225,7 +225,40 @@ test("workbench actions use the existing close-project and UI navigation APIs", 
 });
 
 test("toolbar UI exposes project actions, layout toggles, focus, and disabled search", async () => {
-  const fixture = createMainFixture({mockWorkbenchToolbar: false});
+  const menuParts = {
+    Root: Symbol("Menu.Root"),
+    Trigger: Symbol("Menu.Trigger"),
+    Portal: Symbol("Menu.Portal"),
+    Positioner: Symbol("Menu.Positioner"),
+    Popup: Symbol("Menu.Popup"),
+    Item: Symbol("Menu.Item"),
+  };
+  const moduleMocks = {"@base-ui/react/menu": {Menu: menuParts}};
+  const fixture = createMainFixture({mockWorkbenchToolbar: false, moduleMocks});
+  const {createMenuCoordinator} = fixture.loadModule("plugins/context-menu/menuCoordinator.ts");
+  const actualCoordinator = createMenuCoordinator();
+  let activeMenu = null;
+  const menuSwitches = [];
+  const menus = {
+    activate(id, close) {
+      actualCoordinator.activate(id, reason => {
+        menuSwitches.push({id, reason});
+        close(reason);
+      });
+      activeMenu = {id, close};
+    },
+    release(id) {
+      actualCoordinator.release(id);
+      if (activeMenu?.id === id) activeMenu = null;
+    },
+    closeAll(reason) {
+      const previous = activeMenu;
+      activeMenu = null;
+      actualCoordinator.closeAll(reason);
+      if (previous) menuSwitches.push({id: previous.id, reason});
+    },
+  };
+  moduleMocks["plugins/context-menu/ContextMenuProvider.tsx"] = {useContextMenus: () => menus};
   const activeSession = session();
   const workbench = createWorkbench(activeSession);
   const layout = createLayout();
@@ -243,18 +276,49 @@ test("toolbar UI exposes project actions, layout toggles, focus, and disabled se
     models: new Map([[activeSession.id, model]]),
     active: true,
   }));
+  const roots = collect(tree, value => value.type === menuParts.Root);
+  const triggers = collect(tree, value => value.type === menuParts.Trigger);
+  const positioners = collect(tree, value => value.type === menuParts.Positioner);
+  const items = collect(tree, value => value.type === menuParts.Item);
+  assert.equal(roots.length, 2, "the two toolbar menus use Base UI roots");
+  assert.ok(roots.every(value => value.props.modal === false), "toolbar menus remain non-modal");
+  assert.ok(triggers.some(value => value.props.render.props["data-toolbar-project-trigger"]), "project menu uses the shared Button trigger");
+  assert.ok(triggers.some(value => value.props.render.props["data-toolbar-content-trigger"]), "content menu uses the shared IconButton trigger");
+  const contentTrigger = triggers.find(value => value.props.render.props["data-toolbar-content-trigger"]);
+  assert.ok(contentTrigger.props.children, "content menu trigger retains its more icon");
+  assert.ok(positioners.every(value => value.props.collisionPadding === 8), "menu collision padding matches the shared menu spacing");
+  assert.ok(items.every(value => value.props.nativeButton === true), "shared Button render targets are native menu buttons");
+  const projectRoot = roots[0];
+  const contentRoot = roots[1];
+  projectRoot.props.onOpenChange(true, {reason: "triggerPress"});
+  assert.equal(activeMenu?.id, "fixture-id.project");
+  projectRoot.props.onOpenChange(false, {reason: "escapeKey"});
+  assert.equal(activeMenu?.id, "fixture-id.project", "ordinary close keeps coordinator ownership during the exit transition");
+  projectRoot.props.onOpenChangeComplete(false);
+  assert.equal(activeMenu, null, "coordinator ownership is released after the exit transition completes");
+  projectRoot.props.onOpenChange(true, {reason: "triggerPress"});
+  contentRoot.props.onOpenChange(true, {reason: "triggerPress"});
+  assert.deepEqual(menuSwitches, [{id: "fixture-id.project", reason: "switch"}], "opening the other toolbar menu immediately coordinates a switch");
   const buttons = collect(tree, value => value.type === "button");
   const button = (labelOrText) => buttons.find(value => value.props["aria-label"] === labelOrText || textContent(value) === labelOrText);
+  const menuItem = (label) => items.find(value => textContent(value) === label);
   assert.ok(collect(tree, value => value.props?.className === "toolbar-brand").length);
-  assert.ok(collect(tree, value => value.props?.className === "toolbar-project-trigger").some(value => textContent(value).includes(activeSession.project.name)));
+  assert.ok(triggers.some(value => textContent(value).includes(activeSession.project.name)));
   assert.equal(button("搜索项目").props.disabled, true);
   assert.ok(button("设置"), "the common settings entry is available");
   assert.ok(button("工程文件"), "navigation contents receive their own toolbar toggles");
   assert.ok(button("收起测试辅助内容"), "auxiliary contents receive their own toolbar toggles");
   assert.ok(button("专注模式"), "focus mode is owned by the toolbar");
-  assert.ok(collect(tree, value => value.props?.["aria-label"] === "布局内容").length, "the full layout directory remains available");
-  assert.ok(button("返回欢迎页"));
-  assert.ok(button("外观设置"));
+  assert.ok(triggers.some(value => value.props.render.props.label === "布局内容"), "the full layout directory remains available");
+  assert.ok(menuItem("返回欢迎页"));
+  assert.ok(menuItem("外观设置"));
+  const contentFileItem = menuItem("隐藏工程文件");
+  assert.equal(contentFileItem.props.closeOnClick, false, "content visibility changes keep the menu open");
+  contentFileItem.props.onClick();
+  assert.ok(!layout.getSnapshot().shownIds.includes("project-management.files"));
+  contentFileItem.props.onClick();
+  assert.ok(layout.getSnapshot().shownIds.includes("project-management.files"));
+  assert.equal(activeMenu?.id, "fixture-id.contents", "toggle actions do not release the open content menu");
 
   button("专注模式").props.onClick();
   assert.equal(model.getSnapshot().focusMode, true);
@@ -262,7 +326,7 @@ test("toolbar UI exposes project actions, layout toggles, focus, and disabled se
   assert.equal(model.getSnapshot().focusMode, false);
   assert.ok(layout.getSnapshot().shownIds.includes("project-management.files"));
   button("设置").props.onClick();
-  button("返回欢迎页").props.onClick();
+  menuItem("返回欢迎页").props.onClick();
   await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(uiCalls, ["settings"]);
   assert.deepEqual(workbench.calls, ["closeProject"]);

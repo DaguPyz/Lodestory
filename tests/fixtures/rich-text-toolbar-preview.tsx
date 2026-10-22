@@ -51,7 +51,6 @@ const pickerLabels: Readonly<Record<string, string>> = {
   size: "字号",
   color: "文字颜色",
   background: "文字背景色",
-  align: "段落对齐",
 };
 const menuSelector = openPicker && pickerLabels[openPicker] ? ".ui-select-popup" : undefined;
 let previewInteractionApplied = false;
@@ -65,7 +64,7 @@ const content = serializeRichDelta([
   {insert: "这里展示", attributes: {font: "Arial", size: "18px"}},
   {insert: "粗体", attributes: {bold: true, color: "#286BB1"}},
   {insert: "、斜体和不同段落格式。\n"},
-  {insert: "窄窗口与高倍缩放时，工具栏应该保持可见、可操作，并允许换行。\n"},
+  {insert: "文字工具与段落工具分区排列，工具栏固定两行，窄窗口可横向滚动。\n"},
   {insert: "居中段落\n", attributes: {align: "center"}},
 ]);
 
@@ -99,7 +98,7 @@ window.__richTextToolbarPreview = {
     const controls = [
       '.rich-text-font-family [aria-label="字体"]', '.ql-header [aria-label="标题级别"]',
       '.ql-size [aria-label="字号"]', '.ql-color [aria-label="文字颜色"]',
-      '.ql-background [aria-label="文字背景色"]', '.ql-align [aria-label="段落对齐"]',
+      '.ql-background [aria-label="文字背景色"]', 'button.ql-align',
       ".rich-text-toolbar-actions button",
     ].map(selector => {
       const elements = [...document.querySelectorAll<HTMLElement>(selector)];
@@ -130,7 +129,7 @@ window.__richTextToolbarPreview = {
 function writePreviewMetrics(attempt = 0) {
   if (search.get("measure") !== "1" || !window.__richTextToolbarPreview.ready) return;
   const selectTriggers = document.querySelectorAll(".ui-select-trigger").length;
-  if (selectTriggers < 6 && attempt < 40) {
+  if (selectTriggers < 5 && attempt < 40) {
     window.setTimeout(() => writePreviewMetrics(attempt + 1), 50);
     return;
   }

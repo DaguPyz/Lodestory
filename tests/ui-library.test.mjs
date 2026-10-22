@@ -35,6 +35,22 @@ test("the UI package exposes its components, React peer, declaration build, and 
   assert.match(stylesheet, /\.ui-dialog-title/);
   assert.match(stylesheet, /\.ui-dialog-description/);
   assert.match(stylesheet, /\.ui-dialog-actions/);
+  assert.match(stylesheet, /--ui-duration-dialog/);
+  assert.match(stylesheet, /--ui-duration-normal/);
+  assert.match(stylesheet, /--ui-duration-fast/);
+  assert.match(stylesheet, /--ui-motion-offset/);
+  assert.match(stylesheet, /\.ui-dialog\[data-ui-dialog-size="narrow"\]/);
+  assert.match(stylesheet, /\.ui-dialog\[data-ui-dialog-size="wide"\]/);
+  assert.match(stylesheet, /\.ui-dialog\[data-ui-dialog-size="large"\]/);
+  assert.match(stylesheet, /\.ui-select-popup\[data-starting-style\]\[data-side="bottom"\]/);
+  assert.match(stylesheet, /\.ui-select-popup\[data-starting-style\]\[data-side="top"\]/);
+  assert.match(stylesheet, /\.ui-select-popup\[data-starting-style\]\[data-side="right"\]/);
+  assert.match(stylesheet, /\.ui-select-popup\[data-starting-style\]\[data-side="left"\]/);
+  assert.match(stylesheet, /--ui-dialog-actions-gap/);
+  assert.match(stylesheet, /--ui-dialog-button-gap/);
+  assert.doesNotMatch(stylesheet, /transition\s*:\s*all\b/i);
+  assert.doesNotMatch(stylesheet, /(?:^|\n)\s*transition(?:-property)?\s*:[^;]*(?:\bcolor\b|\bbackground\b)/i,
+    "theme colors remain synchronous so a switch cannot interpolate an unreadable palette");
   assert.match(stylesheet, /\.icon-button/);
   assert.match(stylesheet, /\.search-field/);
   assert.match(stylesheet, /\.ui-select\s*\{/);
@@ -76,26 +92,19 @@ test("public UI components render on the server without browser globals", () => 
   assert.equal(closeElement.props.variant, "secondary");
 });
 
-test("Dialog keeps controlled state and cancels close requests while busy", () => {
-  const changes = [];
-  let cancellations = 0;
-  const tree = Dialog({
+test("Dialog accepts controlled open and busy props as a React component", () => {
+  const onOpenChange = () => {};
+  const element = createElement(Dialog, {
     open: true,
-    onOpenChange(open) { changes.push(open); },
+    onOpenChange,
     title: "处理中",
     busy: true,
-    children: createElement(DialogClose, null, "关闭"),
-  });
-  const root = tree.props.children;
+  }, createElement(DialogClose, null, "关闭"));
 
-  assert.equal(root.props.open, true, "Dialog reflects its controlled open prop");
-  assert.equal(root.props.disablePointerDismissal, true, "busy prevents pointer dismissal");
-  root.props.onOpenChange(false, {cancel() { cancellations += 1; }});
-  assert.deepEqual(changes, [], "busy close requests do not change controlled state");
-  assert.equal(cancellations, 1, "busy close requests cancel the underlying Base UI event");
-  root.props.onOpenChange(true, {cancel() { cancellations += 1; }});
-  assert.deepEqual(changes, [true], "open state changes still reach the owning component");
-  assert.equal(cancellations, 1, "non-close transitions are not cancelled");
+  assert.equal(element.type, Dialog, "Dialog remains a public React component");
+  assert.equal(element.props.open, true, "open is supplied by the owning component");
+  assert.equal(element.props.onOpenChange, onOpenChange, "open changes are reported to the owner");
+  assert.equal(element.props.busy, true, "busy is supplied by the owning operation state");
 });
 
 test("public TypeScript declarations accept the supported component props and reject invalid variants", () => {

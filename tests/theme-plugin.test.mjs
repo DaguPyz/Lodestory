@@ -14,9 +14,27 @@ async function mount(f) {
   await f.prepareUi();
   return plugin;
 }
-function renderSettings(f, service) {
+function renderSettings(f, service, motionPreference = "system") {
   const { ThemeSettingsPage } = f.loadModule("plugins/settings/ThemeSettingsPage.tsx");
-  return f.renderToStaticMarkup(f.React.createElement(ThemeSettingsPage, { service, active: false, onBack() {} }));
+  const { uiMotionConfig } = f.requireSdk("@lodestory/sdk/ui");
+  const config = {
+    getSnapshot(item) {
+      assert.equal(item, uiMotionConfig);
+      return motionPreference;
+    },
+    subscribe(item) {
+      assert.equal(item, uiMotionConfig);
+      return () => {};
+    },
+    set(item, value) {
+      assert.equal(item, uiMotionConfig);
+      motionPreference = value;
+      return Promise.resolve();
+    },
+    reset() { return Promise.resolve(); },
+    register() { throw new Error("Unexpected config registration in settings view."); },
+  };
+  return f.renderToStaticMarkup(f.React.createElement(ThemeSettingsPage, { service, config, active: false, onBack() {} }));
 }
 
 test("settings page renders from an injected ThemeService without a ThemeProvider", () => {
@@ -46,7 +64,26 @@ test("settings page renders from an injected ThemeService without a ThemeProvide
 
   const markup = renderSettings(f, service);
   assert.match(markup, /替代服务主题/);
+  assert.match(markup, /动效偏好/);
+  assert.match(markup, /跟随系统/);
   assert.ok(service.snapshotReads > 0);
+});
+
+test("settings page reads the shared reduce preference without offering a full-motion override", () => {
+  const f = fixture();
+  const theme = { id: "settings-theme", name: "设置测试主题", type: "light", cssVariables: {} };
+  const service = {
+    getSnapshot: () => ({
+      preference: { mode: "fixed", themeId: theme.id }, theme, themes: [theme],
+      fallbackThemeIds: { light: theme.id, dark: theme.id }, unavailableThemeId: null,
+      persistenceError: false, windowError: false,
+    }),
+    subscribe: () => () => {},
+  };
+  const markup = renderSettings(f, service, "reduce");
+  assert.match(markup, /减少动效/);
+  assert.match(markup, /设备要求减少动效时始终生效/);
+  assert.doesNotMatch(markup, /完整动效/);
 });
 
 test("manager opens one registration API before contributions and delays application until UI preparation", async () => {

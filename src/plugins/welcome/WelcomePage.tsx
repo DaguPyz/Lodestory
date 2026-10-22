@@ -1,7 +1,7 @@
-import { Menu } from "@base-ui/react/menu";
 import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NewProjectDialog } from "./NewProjectDialog";
+import { ProjectActionsMenu } from "./ProjectActionsMenu";
 import { ProjectPageLayout } from "../../components/ProjectPageLayout";
 import { Button, Icon, SearchField } from "@lodestory/ui";
 import { ContextMenuRegion, useContextMenus, type MenuAction } from "../context-menu";
@@ -32,7 +32,6 @@ type WelcomePageProps = {
 export function WelcomePage({ active, onOpenProject, onOpenSettings }: WelcomePageProps) {
   const menus = useContextMenus();
   const heading = useRef<HTMLHeadingElement>(null);
-  const [moreProject, setMoreProject] = useState<string | null>(null);
   const operationPending = useRef(false);
   const loadSequence = useRef(0);
   const [projects, setProjects] = useState<RecentProject[]>([]);
@@ -58,14 +57,9 @@ export function WelcomePage({ active, onOpenProject, onOpenSettings }: WelcomePa
 
   useEffect(() => {
     if (active) return;
-    setMoreProject(null);
     setCreateDialogOpen(false);
     menus.closeAll();
   }, [active, menus]);
-
-  useEffect(() => {
-    return () => { if (moreProject) menus.release(`recent-project-more:${moreProject}`); };
-  }, [moreProject, menus]);
 
   const reload = useCallback(async () => {
     if (!active || operationPending.current) return;
@@ -238,27 +232,7 @@ export function WelcomePage({ active, onOpenProject, onOpenSettings }: WelcomePa
                     </span>
                     <time className="project-time" dateTime={project.lastOpenedAt}>{formatLastOpened(project.lastOpenedAt)}</time>
                   </button>
-                  <Menu.Root modal={false} open={active && moreProject === project.id} onOpenChange={(open) => {
-                    const id = `recent-project-more:${project.id}`;
-                    if (open) { menus.activate(id, () => setMoreProject(null)); setMoreProject(project.id); }
-                    else { menus.release(id); setMoreProject((current) => current === project.id ? null : current); }
-                  }}>
-                    <Menu.Trigger className="icon-button" aria-label={`${project.name}的更多操作`} title={`${project.name}的更多操作`} disabled={disabled}>
-                      <Icon name="more" />
-                    </Menu.Trigger>
-                    <Menu.Portal>
-                      <Menu.Positioner className="project-menu-positioner" sideOffset={8} align="end">
-                        <Menu.Popup className="project-menu" data-ui-density="comfortable">
-                          {projectActions(project.id).filter((action) => action.id !== "open").map((action) => (
-                            <Menu.Item key={action.id} className="project-menu-item" disabled={action.disabled as boolean} onClick={() => {
-                              menus.closeAll("action");
-                              void action.onSelect(project.id);
-                            }}>{action.label}</Menu.Item>
-                          ))}
-                        </Menu.Popup>
-                      </Menu.Positioner>
-                    </Menu.Portal>
-                  </Menu.Root>
+                  <ProjectActionsMenu projectId={project.id} name={project.name} disabled={disabled} actions={projectActions(project.id)} />
                 </li>
                 </ContextMenuRegion>
               ))}
@@ -268,7 +242,7 @@ export function WelcomePage({ active, onOpenProject, onOpenSettings }: WelcomePa
 
         <footer className="welcome-footer">一个目录，一部小说。</footer>
       </main>
-      {active && createDialogOpen && <NewProjectDialog busy={busy} error={error} onClose={() => setCreateDialogOpen(false)}
+      {active && <NewProjectDialog open={createDialogOpen} busy={busy} error={error} onClose={() => setCreateDialogOpen(false)}
         onPickDirectory={() => runAction(() => pickProjectDirectory("选择项目保存位置"))} onCreate={create} />}
     </ProjectPageLayout>
   );

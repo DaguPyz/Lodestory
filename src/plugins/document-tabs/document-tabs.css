@@ -26,7 +26,7 @@
 }
 
 .document-tab[data-active="true"] {
-  background: var(--ui-surface-workspace);
+  background: var(--ui-surface-selected);
 }
 
 .document-tab[data-active="true"]::after {
@@ -63,17 +63,21 @@
 }
 
 .document-tab-select:hover {
-  color: var(--ui-text-primary);
+  color: var(--ui-state-hover-foreground);
   background: var(--ui-surface-hover);
 }
 
 .document-tab-select[aria-current="page"] {
-  color: var(--ui-text-primary);
+  color: var(--ui-state-selected-foreground);
 }
 
-.document-tab-select[aria-current="page"] > .icon {
-  color: var(--ui-accent-foreground);
+.document-tab-select[aria-current="page"]:hover {
+  color: var(--ui-state-selected-hover-foreground);
+  background: var(--ui-surface-selected-hover);
 }
+
+.document-tab-select:active { color: var(--ui-state-pressed-foreground); background: var(--ui-surface-pressed); }
+.document-tab-select:disabled { color: var(--ui-state-disabled-foreground); background: var(--ui-state-disabled-background); }
 
 .document-tab-select:focus-visible {
   outline-offset: calc(-1 * var(--ui-focus-width));

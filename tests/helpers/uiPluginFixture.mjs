@@ -13,6 +13,16 @@ const React = requireFromHere("react");
 const jsxRuntime = requireFromHere("react/jsx-runtime");
 const jsxDevRuntime = requireFromHere("react/jsx-dev-runtime");
 
+function createDocumentRoot() {
+  const attributes = new Map();
+  return {
+    id: "root",
+    getAttribute(name) { return attributes.has(name) ? attributes.get(name) : null; },
+    setAttribute(name, value) { attributes.set(name, String(value)); },
+    removeAttribute(name) { attributes.delete(name); },
+  };
+}
+
 function findModule(fromPath, specifier) {
   const base = resolve(dirname(fromPath), specifier);
   const candidates = [
@@ -40,7 +50,7 @@ function findModule(fromPath, specifier) {
  * Load the real plugin core and UI plugin sources into an isolated CommonJS
  * graph, while retaining real React elements and replacing only createRoot.
  */
-export function uiPluginFixture({ container = {}, documentRoot = { id: "root" }, rootOptions, renderError = null, renderErrorOnce = null } = {}) {
+export function uiPluginFixture({ container = {}, documentRoot = createDocumentRoot(), rootOptions, renderError = null, renderErrorOnce = null } = {}) {
   const modules = new Map();
   const sdk = createSdkLoader({ modules });
   const roots = [];
@@ -48,6 +58,7 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
   const flushSyncEvents = [];
   const documentLookups = [];
   const document = {
+    documentElement: documentRoot,
     getElementById(id) {
       documentLookups.push(id);
       return id === "root" ? documentRoot : null;
@@ -68,8 +79,29 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
         hook.value = typeof nextValue === "function" ? nextValue(hook.value) : nextValue;
       }];
     },
+    useRef(initialValue) {
+      if (!hookRuntime) return React.useRef(initialValue);
+      const { hooks, index } = hookRuntime;
+      hookRuntime.index += 1;
+      if (!(index in hooks)) hooks[index] = { value: { current: initialValue } };
+      return hooks[index].value;
+    },
+    useCallback(callback, dependencies) {
+      if (!hookRuntime) return React.useCallback(callback, dependencies);
+      const { hooks, index } = hookRuntime;
+      hookRuntime.index += 1;
+      const previous = hooks[index];
+      const changed = !previous || !dependencies || !previous.dependencies
+        || dependencies.length !== previous.dependencies.length
+        || dependencies.some((value, dependencyIndex) => !Object.is(value, previous.dependencies[dependencyIndex]));
+      if (changed) hooks[index] = { value: callback, dependencies };
+      return hooks[index].value;
+    },
     useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot) {
-      if (hookRuntime) return getSnapshot();
+      if (hookRuntime) {
+        hookRuntime.index += 1;
+        return getSnapshot();
+      }
       return React.useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
     },
   };
@@ -156,11 +188,12 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
   const { createUiPlugin } = load(resolve(sourceRoot, "plugins/ui/uiPlugin.tsx"));
   const { uiKey } = sdk.requireSdk("@lodestory/sdk/ui");
   const { uiInitialPageConfig } = sdk.requireSdk("@lodestory/sdk/ui");
+  const { uiMotionConfig } = sdk.requireSdk("@lodestory/sdk/ui");
   const { configKey } = sdk.requireSdk("@lodestory/sdk/config");
   const { errorUiKey } = sdk.requireSdk("@lodestory/sdk/error");
   const core = new EngineCore();
 
-  const configFaults = { readError: null };
+  const configFaults = { readError: null, writeError: null };
   const configItems = new Map();
   const configValues = new Map();
   const configListeners = new Map();
@@ -181,6 +214,7 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
     async set(item, value) {
       if (configItems.get(item.id) !== item) throw new Error(`Configuration '${item.id}' is not registered.`);
       if (!item.validate(value)) throw new TypeError(`Configuration '${item.id}' has an invalid value.`);
+      if (configFaults.writeError) throw configFaults.writeError;
       configValues.set(item.id, value);
       for (const listener of [...(configListeners.get(item.id) ?? [])]) listener();
     },
@@ -223,6 +257,7 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
     logs,
     uiKey,
     uiInitialPageConfig,
+    uiMotionConfig,
     errorUiKey,
     flushSyncEvents,
     window,

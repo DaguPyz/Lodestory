@@ -1,4 +1,4 @@
-import {useSyncExternalStore} from "react";
+import {useLayoutEffect, useState, useSyncExternalStore} from "react";
 import type {WorkbenchService} from "@lodestory/sdk/workbench";
 import type {ProjectManagementModel} from "./projectManagementModel";
 import {NewDocumentDialog} from "./NewDocumentDialog";
@@ -54,28 +54,36 @@ export function ProjectFiles({workbench, models, active}: ProjectManagementViews
 function ProjectDialogsForSession({workbench, model}: {workbench: WorkbenchService; model: ProjectManagementModel}) {
   const workbenchState = useWorkbench(workbench);
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
+  const [closingDeletePath, setClosingDeletePath] = useState(snapshot.deletePath);
+
+  useLayoutEffect(() => {
+    if (snapshot.deletePath) setClosingDeletePath(snapshot.deletePath);
+  }, [snapshot.deletePath]);
+
   if (!workbenchState.active) return null;
-  if (snapshot.deletePath) return <DeleteDocumentDialog
-    key={snapshot.deletePath}
-    path={snapshot.deletePath}
-    busy={workbenchState.busy || snapshot.blocked || snapshot.deleting || !!snapshot.deletingPath}
-    error={snapshot.deleteError}
-    onClose={() => { model.closeDeleteDialog(); }}
-    onDelete={() => model.confirmDelete()}
-  />;
-  if (!snapshot.dialogOpen) return null;
-  return <NewDocumentDialog
-    key={`${snapshot.sessionId}:${snapshot.createKind}:${snapshot.createExtension ?? "default"}`}
-    projectName={snapshot.projectName}
-    entries={snapshot.entries}
-    initialParent={snapshot.selectedFolder}
-    kind={snapshot.createKind}
-    extension={snapshot.createExtension}
-    busy={workbenchState.busy || snapshot.blocked || snapshot.creating}
-    error={snapshot.createError}
-    onClose={() => { model.closeCreateDialog(); }}
-    onCreate={(parentPath, name) => model.create(parentPath, name)}
-  />;
+  return <>
+    <DeleteDocumentDialog
+      open={snapshot.deletePath !== null}
+      path={snapshot.deletePath ?? closingDeletePath ?? ""}
+      busy={workbenchState.busy || snapshot.blocked || snapshot.deleting || !!snapshot.deletingPath}
+      error={snapshot.deleteError}
+      onClose={() => { model.closeDeleteDialog(); }}
+      onCloseComplete={() => {
+        if (!model.getSnapshot().deletePath) setClosingDeletePath(null);
+      }}
+      onDelete={() => model.confirmDelete()}
+    />
+    <NewDocumentDialog
+      open={snapshot.dialogOpen}
+      initialParent={snapshot.selectedFolder}
+      kind={snapshot.createKind}
+      extension={snapshot.createExtension}
+      busy={workbenchState.busy || snapshot.blocked || snapshot.creating}
+      error={snapshot.createError}
+      onClose={() => { model.closeCreateDialog(); }}
+      onCreate={(parentPath, name) => model.create(parentPath, name)}
+    />
+  </>;
 }
 
 /** Mounted in a UI wrapper so the dialog stays available when the navigation content is hidden. */

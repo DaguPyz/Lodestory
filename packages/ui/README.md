@@ -10,8 +10,8 @@ Lodestory 自有 React 基础组件库。组件、公开属性类型和组件样
 | `IconButton` | 图标按钮 | 必填 `label`，同时提供无障碍名称和悬停提示 |
 | `Icon` | 装饰性 SVG 图标 | `name`，`size`: `default` / `small` / `medium` / `large` / `brand` |
 | `SearchField` | 带图标的搜索输入框 | 必填 `label`，默认也用作 `placeholder` |
-| `Select` | 受控单选下拉框 | `value`、`options`、`onValueChange`；支持占位、禁用、只读、表单属性及颜色样本 |
-| `Dialog` | 受控模态弹框 | `open`、`onOpenChange`、`title`，可选 `description`、`busy`、`initialFocus`、`finalFocus` |
+| `Select` | 受控单选下拉框 | `value`、`options`、`onValueChange`；`variant`: `field`（默认）/ `title` / `toolbar`；支持占位、禁用、只读、表单属性、颜色样本及 `triggerIcon` / `iconOnly` 图标触发器 |
+| `Dialog` | 受控模态弹框 | `open`、`onOpenChange`、`title`，可选 `onOpenChangeComplete`、`size`（`regular` 默认、`narrow`、`wide`、`large`）、`description`、`busy`、`initialFocus`、`finalFocus` |
 | `DialogActions` | 弹框操作区 | 统一右对齐、间距与换行 |
 | `DialogClose` | 关闭弹框的按钮 | 支持 `Button` 属性和 `ref`，固定为非提交按钮 |
 
@@ -51,15 +51,17 @@ Lodestory 已在 `src/styles.css` 接入该入口，插件无需重复导入。�
 | 普通悬停 / 按下 | `state.hover*` / `state.pressed*` 前景背景一起变化 |
 | 选中 / 选中悬停 / 选中按下 / 失焦选中 | 对应 `state.selected*` / `state.inactiveSelected*` 组合，另绘制 `accent.indicator` 边界标记 |
 | 禁用 / 禁用选中 | 对应 `state.disabled*` / `state.disabledSelected*`，边界为 `state.disabledBorder`；禁用选中保留标记 |
-| 焦点 | `focus.ring` 独立外环，与填充间隔由共享 `--ui-focus-offset` 提供；不覆盖选中标记或错误边界 |
-| 搜索框校验错误 | `aria-invalid` 为 `true`、`grammar`、`spelling` 时使用 `status.dangerBorder`；禁用时抑制错误边界 |
+| 焦点 | 有边框的输入控件在原边界内侧绘制 2px 焦点线，与边框合并且不改变尺寸；按钮和无边框控件使用独立外环，与填充间隔由共享 `--ui-focus-offset` 提供 |
+| 搜索框校验错误 | `aria-invalid` 为 `true`、`grammar`、`spelling` 时使用 `status.dangerBorder`；聚焦时仍以该色显示一条 2px 边界，禁用时抑制错误边界与焦点提示 |
 | 输入与文字选区 | 普通输入光标使用 `caret.foreground`；交互背景上的光标使用该状态前景；选区同时使用 `selection.foreground/background` |
 
 按钮通过原生 `aria-pressed`（包括 `mixed`）或适用角色下的 `aria-selected` 表达选中；混合选中额外用虚线标记。选择状态仍由使用方拥有。`selectionActive={false}` 表示所属选择上下文失焦，不等同于按钮自身没有键盘焦点。优先级为：禁用选中 → 禁用 → 选中按下 → 选中悬停 → 失焦选中 → 选中 → 操作用途的按下、悬停、默认态。
 
+SearchField、表单文本输入和 `variant="field"` 的 Select 聚焦时，在原边界内侧显示 2px 焦点线，与原边框合成一条，不留外侧间距、不改变尺寸；该焦点线邻接字段自身中性填充，使用 `focus.ring`。SearchField 由外层边界承载焦点，内部输入框不重复绘制。无效且聚焦时保留 `status.dangerBorder`，用加粗的同一条边界表示焦点，并保留错误文字或图标；禁用控件不显示焦点。`variant="title"` 的 Select、按钮和无边框控件沿用独立外侧焦点环；此类焦点环按 `focusSurface` 描述的外侧邻接表面选择角色。高对比模式使用系统焦点色；强制色模式下，无效边界可以用虚线保留错误差异。
+
 禁用操作使用原生 `disabled`，也支持父级 `fieldset disabled`；`aria-disabled` 只声明语义和配色，保留可聚焦行为，使用方须拦截操作。只读搜索框保留普通配色、焦点与文字选择，不采用禁用配色。
 
-控件实际放在反色表面（`surface.inverse`）上时，设置 `focusSurface="inverse"`，外环使用 `focus.inverseRing`；透明的 ghost / IconButton 默认前景也采用 `text.inverse`。其他控件仍绘制自己的成套填充。该属性描述控件**外侧表面**，不能根据按钮自己的填充色或主题明暗猜测。
+控件实际放在反色表面（`surface.inverse`）上时，设置 `focusSurface="inverse"`，独立外环使用 `focus.inverseRing`；透明的 ghost / IconButton 默认前景也采用 `text.inverse`。表单字段的内侧焦点线邻接字段自己的中性填充，因此使用 `focus.ring`，不因 `focusSurface` 改色。该属性描述控件**外侧表面**，不能根据按钮自己的填充色或主题明暗猜测。
 
 `Icon` 使用 `currentColor`，由承载它的按钮、选中对象或内容区域提供最终前景。单独使用图标时也须由宿主提供与背景配套的前景。
 
@@ -80,11 +82,17 @@ import { Button, Dialog, DialogActions, DialogClose } from "@lodestory/ui";
 </Dialog>
 ```
 
-`Dialog` 在包内封装 Base UI，统一遮罩、标题与描述的无障碍关联、焦点限制和关闭后焦点恢复。默认允许 Escape、点击遮罩及 `DialogClose` 请求关闭；`busy` 时拦截这些关闭请求并禁用关闭按钮。业务字段及提交按钮的禁用、重复提交保护仍由插件负责。操作成功后，插件可更新 `open` 或卸载弹框；失败时保留已挂载表单和输入内容。
+`Dialog` 在包内封装 Base UI，统一遮罩、标题与描述的无障碍关联、焦点限制和关闭后焦点恢复。默认允许 Escape、点击遮罩及 `DialogClose` 请求关闭；`busy` 时拦截这些关闭请求并禁用关闭按钮。关闭请求立即更新业务 `open` 状态；Popup 随后短暂 inert 并按时长退出，`onOpenChangeComplete(false)` 在 Base UI 完成退出后通知 UI 宿主。回调只用于释放过渡期间保留的呈现快照，不能延迟业务关闭、导航或保存结果。失败时保留业务表单和输入内容。
 
-`initialFocus` 指定打开后的焦点，删除确认可指向取消按钮；`finalFocus` 可显式指定关闭后接收焦点的元素，不传时由 Base UI 恢复原焦点。弹框通过 Portal 挂到文档中，消费根元素的全局主题变量，并固定采用 `comfortable` 密度；不要只在触发按钮的局部容器上设置主题。
+`initialFocus` 指定打开后的焦点，删除确认可指向取消按钮；`finalFocus` 可显式指定关闭后接收焦点的元素，不传时由 Base UI 恢复原焦点。弹框通过 Portal 挂到文档中，打开时从当前焦点读取最近的 `data-ui-density` 容器，并把密度带到 Portal；找不到有效触发密度时回退到 `comfortable`。因此欢迎页等 `spacious` 区域的弹框保留宽松密度，主题仍从应用根继承。
 
 弹框使用 `surface.floating`、`text.primary/secondary`、`border.divider`、`overlay.scrim`、`focus.ring` 与主题阴影变量；标题、尺寸、间距也沿用项目标准。长描述自动换行，高度超出视口时内部滚动，切换主题不重新挂载业务内容。
+
+宽度预设依次消费 `--ui-dialog-width-narrow`（480px）、`--ui-dialog-width`（560px）、`--ui-dialog-width-wide`（640px）和 `--ui-dialog-width-large`（800px）；任何预设仍受视口安全边距约束。组件默认使用 `regular`，旧调用无需增加属性。宽度是语义选项，Base UI 实例和定位细节不属于公共 API。
+
+弹框打开时内容以 220ms 淡入并从下方最多 4px 到位，遮罩以 160ms 淡入；关闭时二者分别以 160ms、100ms 同时淡出。初次已打开的弹框也会淡入。Select 以 160ms 淡入并从碰撞定位后的触发器方向移动最多 4px，退出以 100ms 反向淡出。关闭、选值和焦点管理仍由 Base UI 生命周期完成，CSS 过渡不会延迟业务回调；连续开合会按最新状态中断过渡。
+
+时长与位移读取宿主共享的 `--ui-duration-fast`、`--ui-duration-normal`、`--ui-duration-dialog` 和 `--ui-motion-offset`；系统减少动效媒体偏好与根元素 `data-ui-motion="reduce"` 由宿主设置为 0ms／0px。焦点环保持即时。主题色不做插值，切换主题时前景、背景与边界同步替换。
 
 ## 单选下拉框
 
@@ -99,13 +107,30 @@ import { Select } from "@lodestory/ui";
 
 选项类型为 `{ value: string, label: string, disabled?: boolean, swatch?: string }`，值必须唯一。`null` 表示未选择，显示 `placeholder`；空字符串是合法选项，用于根目录、默认字体等。`onValueChange` 只回传用户选择的字符串，选项数据和状态更新仍归使用方。若当前值暂时不在选项中，组件保留该值，不擅自选择其他项；插件可以提供带说明的禁用选项表示不可用值。
 
-Base UI 在包内负责列表定位、键盘导航、按字符查找、Escape 关闭和焦点恢复。展开面板通过 Portal 避免被表单或编辑器裁切，复制触发器所属的 `data-ui-density`，颜色始终继承根元素主题变量。长选项自动换行，长列表内部滚动；触发器宽度由外层容器决定。组件不开放 `className` / `style`，宿主不应覆盖其状态颜色。
+Base UI 在包内负责列表定位、键盘导航、按字符查找、Escape 关闭和焦点恢复。展开面板通过 Portal 避免被表单或编辑器裁切，复制触发器所属的 `data-ui-density`，颜色始终继承根元素主题变量。长选项自动换行，长列表内部滚动；触发器宽度由外层容器决定。面板按碰撞后的实际侧向进入与退出，最多移动 4px；减少动效时直接到达终态。组件不开放 `className` / `style`，宿主不应覆盖其状态颜色。
 
-`disabled` 阻止交互并收起已打开的面板；单个选项的 `disabled` 阻止选值，但仍可被键盘聚焦以获知内容。`readOnly` 允许展开查看，阻止更改。选中、悬停、按下、禁用及其组合均使用项目成套前景／背景角色，勾选标记和独立焦点环补充颜色含义；`aria-invalid` 提供错误边界，禁用时使用禁用边界。通过关联的 `<label>` 或 `aria-label` / `aria-labelledby` 提供名称。
+`disabled` 阻止交互并收起已打开的面板；单个选项的 `disabled` 阻止选值，但仍可被键盘聚焦以获知内容。`readOnly` 允许展开查看，阻止更改。选中、悬停、按下、禁用及其组合均使用项目成套前景／背景角色，勾选标记与对应变体的焦点线补充颜色含义；`aria-invalid` 提供错误边界，禁用时使用禁用边界。通过关联的 `<label>` 或 `aria-label` / `aria-labelledby` 提供名称。
 
 `name` / `form` 支持原生 FormData 提交；`required` 与原生控件一样将空字符串视为缺值，根目录若是有效业务值则不要将该字段声明为必填。`ref` 指向触发按钮；`onOpenChange` 用于观察展开状态；`finalFocus` 可指定关闭后接收焦点的元素，编辑器可指向正文。`swatch` 只展示业务内容的颜色样本（例如文字颜色），不改变控件的主题配色。
 
-当前保存位置、系统主题映射、布局内容切换以及富文本的字体／标题／字号／对齐／文字色／背景色均复用此组件。富文本插件自行维护 Quill 选区、格式值和资源清理；动作菜单不属于单选控件。
+`variant="field"` 是默认形式，用于表单字段和系统主题映射，保留常规控件表面与边界。`variant="title"` 用于布局标题栏中的导航内容切换：触发器采用 Strong 字号和字重（16 / 24px、600）、常态透明、按文字与箭头收宽。`variant="toolbar"` 用于编辑工具栏：常态透明，并继承所在区域的密度；编辑器将工具栏设为 `compact`。具体排列由所属工具界面决定，Select 继续管理内部尺寸与状态，消费者不覆盖触发器样式。三种形式均沿用共享的悬停、按下、展开、焦点和禁用状态，并共用菜单、键盘和无障碍行为。
+
+工具栏 Select 可提供 `triggerIcon` 和 `iconOnly`：图标只替代触发器的可见选值，当前选值仍留在辅助技术可读文本中。`iconOnly` 必须配合 `triggerIcon`，调用方为每个控件提供 `aria-label`；可将动态选值放入 `title`，让悬停提示显示当前格式。Compact 下图标触发器为 32 × 32px，与动作按钮同高。颜色选项的 `swatch` 作为图标下缘细色条显示作者所选颜色，不参与主题控件着色。
+
+```tsx
+import { Icon, Select } from "@lodestory/ui";
+
+<Select variant="toolbar" iconOnly triggerIcon={<Icon name="textColor" />}
+  aria-label="文字颜色" title={`文字颜色：${selectedColorLabel}`}
+  value={color} options={colors} onValueChange={setColor} />
+```
+
+```tsx
+<Select variant="title" aria-label="切换导航内容"
+  value={activeContentId} onValueChange={setActiveContentId} options={contents} />
+```
+
+保存位置和系统主题映射继续使用默认的 `field` 形式。富文本工具栏采用固定两行、左右分组：左侧上排为字体／标题／字号，下排为加粗／斜体／下划线／删除线、文字色／背景色、链接／清除格式；右侧上排为有序／无序列表和引用，下排为左对齐／居中／右对齐／两端对齐四个并列图标按钮。左右区块之间使用竖向分隔和留白。工具栏置于 `compact` 密度中，文字色和背景色使用 32 × 32px `toolbar` 图标触发器；颜色选项的作者色样显示为图标下缘细色条，对齐按钮显示当前选中状态。窄工具区保持两行并允许外层横向滚动，不压缩控件或增加第三行；全部控件仍可通过键盘访问。不能通过覆写 Select 内部 CSS 调整控件。富文本插件自行维护 Quill 选区、格式值和资源清理；动作菜单不属于单选控件。
 
 ## 职责边界
 

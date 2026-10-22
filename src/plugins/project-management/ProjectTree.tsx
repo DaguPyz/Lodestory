@@ -21,18 +21,19 @@ type ProjectTreeProps = {
   onReload: () => void;
 };
 
-function creationItems(parentPath: string, disabled: boolean,
-  onNewDocument: ProjectTreeProps["onNewDocument"], onNewDirectory: ProjectTreeProps["onNewDirectory"]): MenuEntry<string>[] {
+function creationItems(contextPath: string, disabled: boolean,
+  onNewDocument: ProjectTreeProps["onNewDocument"], onNewDirectory: ProjectTreeProps["onNewDirectory"],
+  parentPath = contextPath): MenuEntry<string>[] {
   const formats: readonly [DocumentExtension, string][] = [["txt", "TXT"], ["md", "Markdown"], ["lode", "富文本"]];
   return [
     {id: "new-document", label: "新建文档", icon: <Icon name="plus" />, disabled, restoreFocus: false,
-      onSelect: path => { if (!disabled && path === parentPath) onNewDocument(path); }},
+      onSelect: path => { if (!disabled && path === contextPath) onNewDocument(parentPath); }},
     ...formats.map(([extension, label]) => ({
       id: `new-document-${extension}`, label: `新建 ${label} 文档`, icon: <Icon name="file" />, disabled, restoreFocus: false,
-      onSelect: (path: string) => { if (!disabled && path === parentPath) onNewDocument(path, extension); },
+      onSelect: (path: string) => { if (!disabled && path === contextPath) onNewDocument(parentPath, extension); },
     })),
     {id: "new-directory", label: "新建文件夹", icon: <Icon name="folder" />, disabled, restoreFocus: false,
-      onSelect: path => { if (!disabled && path === parentPath) onNewDirectory(path); }},
+      onSelect: path => { if (!disabled && path === contextPath) onNewDirectory(parentPath); }},
   ];
 }
 
@@ -87,11 +88,13 @@ function TreeNode({
 
   const selected = node.path === activeDocumentPath;
   const deleting = node.path === deletingPath;
+  const parentPath = node.path.includes("/") ? node.path.slice(0, node.path.lastIndexOf("/")) : "";
   return (
     <li>
       <ContextMenuRegion context={node.path} label={`${node.name}文档操作`} items={[
         { id: "open", label: "打开文档", icon: <Icon name="file" />, disabled: loading || deleting || openingPath === node.path, restoreFocus: false,
           onSelect: (path) => { if (!loading && !deleting && openingPath !== path && node.path === path) return onOpenDocument(path); } },
+        ...creationItems(node.path, newDisabled || deleting || loading, onNewDocument, onNewDirectory, parentPath),
         {id: "delete-document", label: "删除文档", disabled: newDisabled || deleting || loading || openingPath === node.path, restoreFocus: false,
           onSelect: path => { if (!newDisabled && !loading && !deleting && openingPath !== path && node.path === path) onDeleteDocument(path); }},
       ]}>

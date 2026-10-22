@@ -10,6 +10,14 @@ export const uiInitialPageConfig: ConfigItem<string | null> = Object.freeze({
   validate: (value: unknown): value is string | null => value === null || typeof value === "string",
 });
 
+/** 应用级动效偏好；system 由 UI 插件留给 prefers-reduced-motion 兜底。 */
+export const uiMotionConfig: ConfigItem<"system" | "reduce"> = Object.freeze({
+  id: "ui.motion",
+  defaultValue: "system",
+  effect: "live",
+  validate: (value: unknown): value is "system" | "reduce" => value === "system" || value === "reduce",
+});
+
 /** 一个插件提供的根包装层；数值较小的 order 在外层，相同值保持登记顺序。 */
 export type UiWrapper = {
   readonly id: string;

@@ -7,7 +7,7 @@ export function EditorStatusBar({document, text}: {document: OpenDocument | unde
   return (
     <footer className="editor-statusbar" aria-label="写作状态">
       <span className="editor-save-status" role="status" data-state={document?.saveState}>
-        {document?.saveState === "saved" && <Icon name="checkCircle" size="small" />}<span>{status}</span>
+        <span className="editor-save-icon" aria-hidden="true">{document?.saveState === "saved" && <Icon name="checkCircle" size="small" />}</span><span>{status}</span>
       </span>
       <div className="editor-document-status">
         {document && <span>文稿 {count === undefined ? "—" : `${count.toLocaleString("zh-CN")} 字`}</span>}

@@ -24,6 +24,17 @@ const shapes = {
       <rect x="12" y="16" width="9" height="4" rx="1" />
     </>
   ),
+  textColor: <path d="m5 20 7-16 7 16M8 13h8" />,
+  highlight: (
+    <>
+      <path d="m4 16 12-12 4 4L8 20H4v-4Z" />
+      <path d="m13 7 4 4M4 20h16" />
+    </>
+  ),
+  alignLeft: <path d="M4 5h16M4 9h11M4 13h16M4 17h11" />,
+  alignCenter: <path d="M4 5h16M7 9h10M4 13h16M7 17h10" />,
+  alignRight: <path d="M4 5h16M9 9h11M4 13h16M9 17h11" />,
+  alignJustify: <path d="M4 5h16M4 9h16M4 13h16M4 17h16" />,
   chevronRight: <path d="m9 5 7 7-7 7" />,
   chevronDown: <path d="m5 9 7 7 7-7" />,
   close: <path d="m6 6 12 12M18 6 6 18" />,

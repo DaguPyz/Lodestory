@@ -38,7 +38,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   }
 
   assert.deepEqual(Object.keys(packageRoot).sort(), ["createEventKey", "createServiceKey"]);
-  assert.deepEqual(Object.keys(packageUi).sort(), ["UiNavigationCompleteError", "uiInitialPageConfig", "uiKey"]);
+  assert.deepEqual(Object.keys(packageUi).sort(), ["UiNavigationCompleteError", "uiInitialPageConfig", "uiKey", "uiMotionConfig"]);
   assert.equal(typeof packageUi.UiNavigationCompleteError, "function");
   assert.deepEqual(Object.keys(packageError), ["errorUiKey"]);
   assert.deepEqual(Object.keys(packageTheme).sort(), ["themeKey"]);
@@ -77,6 +77,13 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.equal(packageDocuments.documentCreateRequested.id, "app/documents/create-requested");
   assert.equal(packageDocuments.documentRevealRequested.id, "app/documents/reveal-requested");
   assert.equal(packageUi.uiInitialPageConfig.id, "ui.initialPage");
+  assert.equal(packageUi.uiMotionConfig.id, "ui.motion");
+  assert.equal(packageUi.uiMotionConfig.defaultValue, "system");
+  assert.equal(packageUi.uiMotionConfig.effect, "live");
+  assert.equal(packageUi.uiMotionConfig.validate("system"), true);
+  assert.equal(packageUi.uiMotionConfig.validate("reduce"), true);
+  assert.equal(packageUi.uiMotionConfig.validate("full"), false);
+  assert.equal(packageUi.uiMotionConfig.validate(null), false);
   assert.ok(packageManifest.files.includes("dist"), "the packed package must include the runtime and declaration outputs");
 });
 

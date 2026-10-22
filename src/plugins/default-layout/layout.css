@@ -43,15 +43,36 @@
 .layout-panel[data-overlay="true"] {
   position: absolute; grid-column: 1 / -1; z-index: 4; top: 0; bottom: 0;
   max-width: calc(100% - var(--cmp-layout-rail-width)); box-shadow: var(--ui-shadow-popover);
+  opacity: 0; transform: translateX(var(--cmp-layout-motion-offset-x, 0px));
+  transition-property: opacity, transform;
+  transition-duration: var(--ui-duration-fast), var(--ui-duration-fast);
+  transition-timing-function: var(--ui-ease-exit), var(--ui-ease-exit);
 }
-.layout-navigation[data-overlay="true"] { left: var(--cmp-layout-rail-width); width: var(--cmp-layout-user-navigation-width, var(--ui-navigation-width)); }
-.layout-auxiliary[data-overlay="true"] { right: 0; width: var(--ui-inspector-width); }
+.layout-panel[data-overlay="true"][data-open="true"] {
+  opacity: 1; transform: translateX(0);
+  transition-duration: var(--ui-duration-normal), var(--ui-duration-normal);
+  transition-timing-function: var(--ui-ease-enter), var(--ui-ease-enter);
+}
+.layout-panel[data-overlay="true"][data-motion-enabled="false"] { transition-property: none; }
+.layout-panel[data-overlay="true"][data-panel-phase="exiting"] { pointer-events: none; }
+:root[data-ui-motion="reduce"] .layout-panel[data-overlay="true"] { transition-property: none; }
+@media (prefers-reduced-motion: reduce) {
+  .layout-panel[data-overlay="true"] { transition-property: none; }
+}
+.layout-navigation[data-overlay="true"] {
+  --cmp-layout-motion-offset-x: calc(0px - var(--ui-motion-offset));
+  left: var(--cmp-layout-rail-width); width: var(--cmp-layout-user-navigation-width, var(--ui-navigation-width));
+}
+.layout-auxiliary[data-overlay="true"] {
+  --cmp-layout-motion-offset-x: var(--ui-motion-offset);
+  right: 0; width: var(--ui-inspector-width);
+}
 .layout-panel-header {
   display: flex; flex-shrink: 0; align-items: center; justify-content: space-between;
   min-height: var(--ui-toolbar-height); gap: var(--ui-space-3); padding-inline: var(--ui-space-5);
 }
 .layout-panel-header h2 { font-size: var(--ui-font-size-strong); line-height: var(--ui-line-height-strong); font-weight: 600; }
-.layout-panel-switcher { display: flex; flex: 0 1 18rem; align-items: center; min-width: 0; max-width: 100%; }
+.layout-panel-switcher { display: flex; flex: 0 1 auto; align-items: center; min-width: 0; max-width: 100%; }
 .layout-main { grid-column: 3; grid-row: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .layout-tabs { display: flex; flex-direction: column; flex: 0 0 auto; min-width: 0; }
 .layout-tabs > .layout-content { flex: 0 0 auto; }
@@ -64,11 +85,11 @@
   width: var(--ui-navigation-width); height: 0; overflow: hidden;
 }
 .layout-navigation-resizer {
-  position: absolute; top: 0; bottom: 0; right: -3px; z-index: 5;
-  width: 6px; cursor: col-resize; touch-action: none;
+  position: absolute; top: 0; bottom: 0; right: -4px; z-index: 5;
+  width: 8px; cursor: col-resize; touch-action: none;
 }
 .layout-navigation-resizer::before {
-  content: ""; position: absolute; top: 0; bottom: 0; left: 2px; width: 2px;
+  content: ""; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px;
   background: transparent;
 }
 .layout-navigation-resizer[data-dragging="true"]::before { background: var(--ui-accent-foreground); }
@@ -80,6 +101,21 @@
 .default-layout[data-resizing-navigation="true"],
 .default-layout[data-resizing-navigation="true"] * { cursor: col-resize !important; user-select: none !important; }
 .default-layout [hidden] { display: none !important; }
+@keyframes layout-dock-content-enter {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.layout-panel[data-overlay="false"] .layout-content[data-entering="true"]:not([hidden]) {
+  animation: layout-dock-content-enter var(--ui-duration-normal) var(--ui-ease-enter) both;
+}
+:root[data-ui-motion="reduce"] .layout-panel[data-overlay="false"] .layout-content[data-entering="true"]:not([hidden]) {
+  animation-name: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root .layout-panel[data-overlay="false"] .layout-content[data-entering="true"]:not([hidden]) {
+    animation-name: none;
+  }
+}
 @container workbench-layout (max-width: 26rem) {
   .layout-workspace { --cmp-layout-rail-width: 0px; }
   .layout-activitybar { display: none; }

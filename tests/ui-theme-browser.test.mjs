@@ -147,6 +147,7 @@ async function readSearchStyle(input) {
       border: fieldStyle.borderTopColor,
       outline: fieldStyle.outlineColor,
       outlineOffset: fieldStyle.outlineOffset,
+      outlineWidth: fieldStyle.outlineWidth,
       selectionForeground: getComputedStyle(element, '::selection').color,
       selectionBackground: getComputedStyle(element, '::selection').backgroundColor,
     };
@@ -211,10 +212,10 @@ async function assertButtonStates(page, variant, colors) {
 }
 
 async function assertIconButtonStates(page, colors) {
-  const ordinary = page.getByRole('button', {name: '普通图标按钮'});
-  const selected = page.getByRole('button', {name: '选中图标按钮'});
-  const inactive = page.getByRole('button', {name: '失焦选中图标按钮'});
-  const disabled = page.getByRole('button', {name: '禁用图标按钮'});
+  const ordinary = page.getByRole('button', {name: '普通图标按钮', exact: true});
+  const selected = page.getByRole('button', {name: '选中图标按钮', exact: true});
+  const inactive = page.getByRole('button', {name: '失焦选中图标按钮', exact: true});
+  const disabled = page.getByRole('button', {name: '禁用图标按钮', exact: true});
 
   await assertButtonPaint(ordinary, 'icon', {}, colors, 'icon button default');
   await assertButtonPaint(selected, 'icon', {selected: true}, colors, 'icon button selected');
@@ -283,12 +284,20 @@ async function assertSearchFieldStates(page, colors) {
   await page.mouse.up();
   await page.mouse.move(0, 0);
 
+  await editable.focus();
+  const focusedEditable = await readSearchStyle(editable);
+  const focusRole = getPaintRole('focus', 'indicator');
+  assert.equal(focusedEditable.border, colors[focusRole], 'focused SearchField emphasizes its existing border');
+  assert.equal(focusedEditable.outline, focusedEditable.border, 'focus is one continuous stroke');
+  assert.equal(focusedEditable.outlineOffset, `-${focusedEditable.outlineWidth}`, 'focus stroke stays inside the field boundary');
+
   const invalidFieldStyle = await readSearchStyle(invalid);
   assert.equal(invalidFieldStyle.border, colors[validationPaint.border], 'invalid SearchField shows validation border');
   await invalid.focus();
   const focusedInvalid = await readSearchStyle(invalid);
-  const focusRole = getPaintRole('focus', 'indicator');
-  assert.equal(focusedInvalid.outline, colors[focusRole], 'invalid border and independent focus ring coexist');
+  assert.equal(focusedInvalid.outline, colors[validationPaint.border], 'focused invalid fields retain their validation color');
+  assert.equal(focusedInvalid.border, focusedInvalid.outline, 'invalid focus uses a single continuous boundary');
+  assert.equal(focusedInvalid.outlineOffset, `-${focusedInvalid.outlineWidth}`, 'invalid focus also stays inside the boundary');
 
   await readOnly.hover();
   assert.equal(await readOnly.getAttribute('readonly'), '', 'read-only SearchField keeps native readOnly semantics');
@@ -347,6 +356,7 @@ test('UI components follow registry state paints across themes in a real browser
 
     server = await createServer({
       configFile: false,
+      cacheDir: 'node_modules/.vite-ui-theme-test',
       root: process.cwd(),
       appType: 'mpa',
       server: {host: '127.0.0.1', port: 0, strictPort: true, hmr: false},
@@ -359,7 +369,7 @@ test('UI components follow registry state paints across themes in a real browser
     const pageErrors = [];
     page.on('pageerror', error => pageErrors.push(error));
     await page.goto(`http://127.0.0.1:${address.port}/tests/fixtures/ui-theme.html`);
-    await page.waitForSelector('#startup-status[hidden]');
+    await page.waitForSelector('#startup-status[hidden]', {state: 'attached'});
     await page.waitForSelector('[data-testid="fixture-app"][data-mount-count="1"]');
 
     const themeSelect = page.getByTestId('theme-select');
@@ -428,13 +438,16 @@ test('UI components follow registry state paints across themes in a real browser
       };
     });
     assert.equal(inverseFocus.offset, focusDimensions.offset, 'focus ring offset follows the shared focus token');
-    assert.equal(focusDimensions.offset, focusDimensions.width, 'focus ring leaves a positive focus-width gap');
+    assert.equal(focusDimensions.offset, '1px', 'focus ring uses the specified 1px gap');
+    assert.equal(focusDimensions.width, '2px', 'focus ring remains 2px wide');
 
     const inverseSearch = page.getByTestId('inverse-focus-search');
     await inverseSearch.focus();
     const inverseSearchFocus = await readSearchStyle(inverseSearch);
-    assert.equal(inverseSearchFocus.outline, currentColors[inverseFocusRole],
-      'inverse SearchField uses inverseFocus indicator');
+    assert.equal(inverseSearchFocus.outline, currentColors[getPaintRole('focus', 'indicator')],
+      'inset SearchField focus adjoins its own control surface, even on an inverse outer surface');
+    assert.equal(inverseSearchFocus.outlineOffset, `-${inverseSearchFocus.outlineWidth}`,
+      'SearchField does not add an exterior focus ring');
 
     await page.emulateMedia({forcedColors: 'active'});
     assert.equal(await page.evaluate(() => matchMedia('(forced-colors: active)').matches), true,
@@ -468,6 +481,171 @@ test('UI components follow registry state paints across themes in a real browser
     assert.equal(reducedMotion.active, true, 'reduced-motion emulation is active');
     assert.ok(reducedMotion.durations.every(duration => duration === 0),
       'UI components do not animate under reduced motion');
+
+    await page.emulateMedia({forcedColors: 'none', reducedMotion: 'no-preference'});
+    await page.goto(`http://127.0.0.1:${address.port}/tests/fixtures/ui-dialog.html`);
+    await page.waitForSelector('#startup-status[hidden]', {state: 'attached'});
+    await page.waitForSelector('[data-testid="standalone-open"]');
+    const sizePicker = page.getByTestId('dialog-size');
+    await sizePicker.selectOption('regular');
+    await page.getByTestId('standalone-open').click();
+    await page.waitForSelector('.ui-dialog');
+    const dialogMotion = await page.evaluate(() => {
+      const popup = document.querySelector('.ui-dialog');
+      const backdrop = document.querySelector('.ui-dialog-backdrop');
+      if (!popup || !backdrop) throw new Error('Dialog portal did not mount both popup and backdrop.');
+      return {
+        popupDuration: getComputedStyle(popup).transitionDuration,
+        backdropDuration: getComputedStyle(backdrop).transitionDuration,
+        size: popup.getAttribute('data-ui-dialog-size'),
+        density: popup.getAttribute('data-ui-density'),
+        padding: getComputedStyle(popup).paddingLeft,
+        width: Math.round(popup.getBoundingClientRect().width),
+        focus: document.activeElement?.dataset?.testid ?? null,
+      };
+    });
+    assert.equal(dialogMotion.popupDuration, '0.22s', 'dialog content uses the 220ms shared entry duration');
+    assert.equal(dialogMotion.backdropDuration, '0.16s', 'backdrop uses the 160ms shared entry duration');
+    assert.equal(dialogMotion.size, 'regular', 'Dialog defaults to the semantic regular preset');
+    assert.equal(dialogMotion.density, 'comfortable', 'a Dialog without a density trigger context uses the comfortable default');
+    assert.equal(dialogMotion.padding, '24px', 'comfortable density uses the shared 24px dialog padding');
+    assert.equal(dialogMotion.width, 560, 'regular Dialog width resolves to 560px at a 16px root size');
+    assert.equal(dialogMotion.focus, 'standalone-name', 'initial focus reaches the field without waiting for motion');
+
+    for (const [size, width] of [['narrow', 480], ['wide', 640], ['large', 800]]) {
+      await sizePicker.selectOption(size);
+      const actualWidth = await page.locator('.ui-dialog').evaluate(element => Math.round(element.getBoundingClientRect().width));
+      assert.equal(actualWidth, width, `${size} Dialog preset resolves to ${width}px`);
+    }
+
+    await page.keyboard.press('Escape');
+    const dialogExit = await page.evaluate(() => {
+      const popup = document.querySelector('.ui-dialog');
+      const backdrop = document.querySelector('.ui-dialog-backdrop');
+      if (!popup || !backdrop) return null;
+      return {
+        popupEnding: popup.hasAttribute('data-ending-style'),
+        popupInert: popup.inert,
+        backdropEnding: backdrop.hasAttribute('data-ending-style'),
+        popupDuration: getComputedStyle(popup).transitionDuration,
+        backdropDuration: getComputedStyle(backdrop).transitionDuration,
+      };
+    });
+    assert.deepEqual(dialogExit, {
+      popupEnding: true,
+      popupInert: true,
+      backdropEnding: true,
+      popupDuration: '0.16s',
+      backdropDuration: '0.1s',
+    }, 'Dialog and backdrop begin their independently timed exits together');
+    await page.waitForFunction(() => !document.querySelector('.ui-dialog'), null, {timeout: 1000});
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset?.testid ?? null), 'standalone-open',
+      'Base UI returns focus to the explicit final target by the time the Dialog exit completes');
+
+    await page.getByTestId('open-project').click();
+    await page.waitForSelector('.ui-dialog');
+    await page.waitForFunction(() => document.querySelector('.ui-dialog')?.getAttribute('data-ui-density') === 'spacious');
+    const welcomeDensity = await page.locator('.ui-dialog').evaluate(element => ({
+      density: element.getAttribute('data-ui-density'),
+      padding: getComputedStyle(element).paddingLeft,
+    }));
+    assert.deepEqual(welcomeDensity, {density: 'spacious', padding: '32px'},
+      'a NewProjectDialog opened from the spacious welcome context carries that density through its Portal');
+    await page.locator('.ui-dialog').evaluate(element => Promise.allSettled(element.getAnimations().map(animation => animation.finished)));
+    await page.keyboard.press('Escape');
+    const businessExit = await page.locator('.ui-dialog').evaluate(element => ({
+      ending: element.hasAttribute('data-ending-style'),
+      inert: element.inert,
+    }));
+    assert.deepEqual(businessExit, {ending: true, inert: true},
+      'a controlled business Dialog stays mounted for its exit while becoming inert immediately');
+    await page.waitForFunction(() => !document.querySelector('.ui-dialog'), null, {timeout: 1000});
+    assert.equal(await page.getByTestId('open-project').evaluate(element => element === document.activeElement), true,
+      'Base UI restores focus to the business trigger when the exit finishes');
+
+    await page.getByTestId('open-project').click();
+    await page.waitForSelector('.ui-dialog');
+    await page.locator('.ui-dialog').evaluate(element => Promise.allSettled(element.getAnimations().map(animation => animation.finished)));
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => {
+      const popup = document.querySelector('.ui-dialog');
+      return popup?.hasAttribute('data-ending-style')
+        && popup.getAnimations().some(animation => animation.playState === 'running' && animation.currentTime > 0);
+    });
+    const reducedDuringExit = await page.evaluate(() => {
+      document.documentElement.dataset.uiMotion = 'reduce';
+      return {
+        popupTransition: getComputedStyle(document.querySelector('.ui-dialog')).transitionProperty,
+        backdropTransition: getComputedStyle(document.querySelector('.ui-dialog-backdrop')).transitionProperty,
+      };
+    });
+    assert.deepEqual(reducedDuringExit, {popupTransition: 'none', backdropTransition: 'none'},
+      'switching to reduced motion cancels an active Dialog exit transition');
+    await page.waitForFunction(() => !document.querySelector('.ui-dialog') && !document.querySelector('.ui-dialog-backdrop'),
+      null, {timeout: 300});
+    assert.equal(await page.getByTestId('open-project').evaluate(element => element === document.activeElement), true,
+      'Base UI completes Dialog cleanup and restores focus after the transition is cancelled');
+    await page.evaluate(() => { delete document.documentElement.dataset.uiMotion; });
+
+    await page.getByTestId('open-project').click();
+    await page.waitForSelector('.ui-dialog');
+    const initialOpenTransitions = await page.evaluate(() => {
+      const popup = document.querySelector('.ui-dialog');
+      if (!popup) return [];
+      return popup.getAnimations().map(animation => ({
+        property: animation.transitionProperty,
+        duration: animation.effect?.getTiming().duration,
+      }));
+    });
+    assert.ok(initialOpenTransitions.some(animation => animation.property === 'opacity' && animation.duration === 220),
+      'a conditionally mounted open Dialog animates on its first frame');
+    assert.ok(initialOpenTransitions.some(animation => animation.property === 'translate' && animation.duration === 220),
+      'the initial Dialog entrance uses the offset transition without replacing centering');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.querySelector('.ui-dialog'), null, {timeout: 1000});
+
+    await page.goto(`http://127.0.0.1:${address.port}/tests/fixtures/ui-select.html`);
+    await page.waitForSelector('#startup-status[hidden]', {state: 'attached'});
+    const ordinarySelect = page.getByRole('combobox', {name: '普通选择', exact: true});
+    await ordinarySelect.click();
+    await page.waitForTimeout(180);
+    const selectEntry = await page.locator('.ui-select-popup').evaluate(element => ({
+      side: element.getAttribute('data-side'),
+      duration: getComputedStyle(element).transitionDuration,
+      anchor: element.getBoundingClientRect().y,
+      triggerBottom: document.querySelector('.ui-select-trigger[aria-label="普通选择"]')?.getBoundingClientRect().bottom,
+    }));
+    assert.equal(selectEntry.side, 'bottom', 'Select uses the actual collision-resolved side');
+    assert.equal(selectEntry.duration, '0.16s', 'Select enters with the shared 160ms duration');
+    assert.ok(selectEntry.triggerBottom != null && selectEntry.anchor >= selectEntry.triggerBottom + 3,
+      'bottom placement stays anchored at the configured trigger gap');
+    await page.keyboard.press('Escape');
+    const selectExit = await page.locator('.ui-select-popup').evaluate(element => ({
+      ending: element.hasAttribute('data-ending-style'),
+      duration: getComputedStyle(element).transitionDuration,
+    }));
+    assert.deepEqual(selectExit, {ending: true, duration: '0.1s'}, 'Select begins its 100ms exit without an application timer');
+    await page.waitForFunction(() => {
+      const popup = document.querySelector('.ui-select-popup');
+      return !popup || (popup.closest('.ui-select-positioner')?.hidden && !popup.hasAttribute('data-ending-style'));
+    }, null, {timeout: 1000});
+    assert.equal(await ordinarySelect.evaluate(element => element === document.activeElement), true,
+      'Select closes its retained hidden list and restores trigger focus');
+
+    await page.evaluate(() => { document.documentElement.dataset.uiMotion = 'reduce'; });
+    await ordinarySelect.click();
+    const reducedSelect = await page.locator('.ui-select-popup').evaluate(element => ({
+      duration: getComputedStyle(element).transitionDuration,
+      offset: getComputedStyle(document.documentElement).getPropertyValue('--ui-motion-offset').trim(),
+    }));
+    assert.ok(reducedSelect.duration.split(',').every(value => Number.parseFloat(value) === 0),
+      'the root reduced-motion preference removes Select transition time');
+    assert.equal(reducedSelect.offset, '0px', 'the root reduced-motion preference removes popup travel');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => {
+      const popup = document.querySelector('.ui-select-popup');
+      return !popup || (popup.closest('.ui-select-positioner')?.hidden && !popup.hasAttribute('data-ending-style'));
+    }, null, {timeout: 300});
     assert.deepEqual(pageErrors.map(error => error.message), []);
   } finally {
     await browser?.close();

@@ -42,6 +42,7 @@
 }
 
 .file-tree-entry {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--ui-space-3);
@@ -76,21 +77,32 @@
   white-space: nowrap;
 }
 
-.file-tree-entry:hover {
-  color: var(--ui-text-primary);
+.file-tree-entry:hover:not(:disabled) {
+  color: var(--ui-state-hover-foreground);
   background: var(--ui-surface-hover);
 }
 
-.file-tree-entry:active { background: var(--ui-surface-pressed); }
+.file-tree-entry:active:not(:disabled) { color: var(--ui-state-pressed-foreground); background: var(--ui-surface-pressed); }
 
 .file-tree-entry[aria-current="page"] {
-  color: var(--ui-accent-foreground);
+  color: var(--ui-state-selected-foreground);
   background: var(--ui-surface-selected);
 }
 
-.file-tree-entry[aria-current="page"]:hover { background: var(--ui-surface-selected-hover); }
+.file-tree-entry[aria-current="page"]:hover:not(:disabled) { color: var(--ui-state-selected-hover-foreground); background: var(--ui-surface-selected-hover); }
+.file-tree-entry[aria-current="page"]:active:not(:disabled) { color: var(--ui-state-pressed-foreground); background: var(--ui-surface-pressed); }
+.file-tree-entry[aria-current="page"]::after { content: ""; position: absolute; inset-block: var(--ui-space-3); left: 0; width: var(--ui-indicator-width); background: var(--ui-accent-indicator); pointer-events: none; }
+.file-tree-entry:disabled { color: var(--ui-state-disabled-foreground); background: var(--ui-state-disabled-background); }
+.file-tree-entry[aria-current="page"]:disabled { color: var(--ui-state-disabled-selected-foreground); background: var(--ui-state-disabled-selected-background); }
+.file-tree-entry[aria-current="page"]:disabled::after { background: var(--ui-state-disabled-border); }
 
+.file-tree-folder-toggle > .icon:first-child { transition: transform var(--ui-duration-fast) var(--ui-ease-enter); }
 .file-tree-folder-toggle[aria-expanded="true"] > .icon:first-child { transform: rotate(90deg); }
+
+:root[data-ui-motion="reduce"] .file-tree-folder-toggle > .icon:first-child { transition-property: none; }
+@media (prefers-reduced-motion: reduce) {
+  .file-tree-folder-toggle > .icon:first-child { transition-property: none; }
+}
 
 .file-tree-spacer {
   flex-shrink: 0;

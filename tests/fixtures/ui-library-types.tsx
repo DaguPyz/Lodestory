@@ -31,7 +31,9 @@ const selectProps: SelectProps = {
 const dialogProps: DialogProps = {
   open: false,
   onOpenChange() {},
+  onOpenChangeComplete() {},
   title: "通用弹框",
+  size: "wide",
   description: <span>简短说明</span>,
   busy: false,
   initialFocus: createRef<HTMLElement>(),
@@ -70,9 +72,11 @@ const invalidDialogActions = <DialogActions className="host-class" />;
 const invalidDialogClose = <DialogClose type="submit">提交</DialogClose>;
 // @ts-expect-error Dialog title is required for accessible naming
 const invalidDialog = <Dialog open onOpenChange={() => {}}><p>无标题</p></Dialog>;
+// @ts-expect-error Dialog sizes are semantic presets
+const invalidDialogSize = <Dialog open onOpenChange={() => {}} title="弹框" size="xl" />;
 // @ts-expect-error className is managed by Select
 const invalidSelectClass = <Select className="host-select" value="" options={[]} onValueChange={() => {}} />;
 // @ts-expect-error style is managed by Select
 const invalidSelectStyle = <Select style={{width: 200}} value="" options={[]} onValueChange={() => {}} />;
 void [invalidButton, invalidIconButton, invalidIconName, invalidSurface,
-  invalidDialogActions, invalidDialogClose, invalidDialog, invalidSelectClass, invalidSelectStyle];
+  invalidDialogActions, invalidDialogClose, invalidDialog, invalidDialogSize, invalidSelectClass, invalidSelectStyle];

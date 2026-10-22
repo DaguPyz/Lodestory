@@ -8,6 +8,37 @@ function contributor(f, id, activate, deactivate = () => {}) {
   return f.core.mount({ id, requires: [f.uiKey], provides: [], activate, deactivate });
 }
 
+function manualUiContext(f, motionValue) {
+  const items = new Map();
+  const config = {
+    register(item) {
+      if (items.has(item.id)) throw new Error(`Configuration '${item.id}' is already registered.`);
+      items.set(item.id, item);
+      return () => { if (items.get(item.id) === item) items.delete(item.id); };
+    },
+    getSnapshot(item) {
+      if (items.get(item.id) !== item) throw new Error(`Configuration '${item.id}' is not registered.`);
+      return item.id === "ui.motion" ? motionValue : item.defaultValue;
+    },
+    subscribe(item) {
+      if (items.get(item.id) !== item) throw new Error(`Configuration '${item.id}' is not registered.`);
+      return () => {};
+    },
+  };
+  return {
+    config,
+    context: {
+      get(key) {
+        if (key === f.configKey) return config;
+        if (key === f.errorUiKey) return { ErrorBoundary: ({ children }) => children };
+        throw new Error(`Unexpected service '${key.id}'.`);
+      },
+      provide() {},
+      on() {},
+    },
+  };
+}
+
 async function mountUiAtPage(f, initialPage, options) {
   const mounted = await f.mountUi(options);
   await f.config.set(f.uiInitialPageConfig, initialPage);
@@ -290,6 +321,66 @@ test("initial page config validates its shape and runtime updates wait for resta
   await f.config.set(f.uiInitialPageConfig, "settings");
   assert.equal(service.getSnapshot().current.id, "home", "a restart-only setting must not navigate the running UI");
   await f.core.unmount("ui");
+});
+
+test("live motion preference updates the root, preserves the last saved value on write failure, and restores its prior attribute", async () => {
+  const f = uiPluginFixture();
+  f.documentRoot.setAttribute("data-ui-motion", "before-ui");
+  await f.mountUi();
+
+  assert.equal(f.uiMotionConfig.id, "ui.motion");
+  assert.equal(f.uiMotionConfig.defaultValue, "system");
+  assert.equal(f.uiMotionConfig.effect, "live");
+  assert.equal(f.config.getSnapshot(f.uiMotionConfig), "system");
+  assert.equal(f.documentRoot.getAttribute("data-ui-motion"), null, "system mode removes the UI-owned override");
+
+  await f.config.set(f.uiMotionConfig, "reduce");
+  assert.equal(f.documentRoot.getAttribute("data-ui-motion"), "reduce");
+  f.configFaults.writeError = new Error("disk full");
+  await assert.rejects(f.config.set(f.uiMotionConfig, "system"), /disk full/);
+  assert.equal(f.config.getSnapshot(f.uiMotionConfig), "reduce");
+  assert.equal(f.documentRoot.getAttribute("data-ui-motion"), "reduce");
+
+  f.configFaults.writeError = null;
+  await f.config.set(f.uiMotionConfig, "system");
+  assert.equal(f.documentRoot.getAttribute("data-ui-motion"), null);
+  await f.core.unmount("ui");
+  assert.equal(f.documentRoot.getAttribute("data-ui-motion"), "before-ui");
+  assert.throws(() => f.config.getSnapshot(f.uiMotionConfig), /not registered/);
+});
+
+test("a second UI instance cannot replace the active instance's configuration or root ownership", async () => {
+  const f = uiPluginFixture();
+  await f.mountUi();
+  await f.config.set(f.uiMotionConfig, "reduce");
+
+  const secondUi = { ...f.createUiPlugin(), id: "second-ui" };
+  await assert.rejects(f.core.mount(secondUi), /Configuration 'ui\.initialPage' is already registered/);
+  assert.equal(f.config.getSnapshot(f.uiMotionConfig), "reduce");
+  assert.equal(f.documentRoot.getAttribute("data-ui-motion"), "reduce");
+  assert.equal(f.core.isMounted("ui"), true);
+  await f.core.unmount("ui");
+  assert.equal(f.documentRoot.getAttribute("data-ui-motion"), null);
+});
+
+test("a separate UI instance using the same document cannot claim or restore another owner's motion attribute", () => {
+  const f = uiPluginFixture();
+  f.documentRoot.setAttribute("data-ui-motion", "before-ui");
+  const first = f.createUiPlugin();
+  const firstContext = manualUiContext(f, "reduce");
+  first.activate(firstContext.context);
+  assert.equal(f.documentRoot.getAttribute("data-ui-motion"), "reduce");
+
+  const second = f.createUiPlugin();
+  const secondContext = manualUiContext(f, "system");
+  assert.throws(() => second.activate(secondContext.context), /already owned/);
+  assert.throws(() => secondContext.config.getSnapshot(f.uiMotionConfig), /not registered/, "failed activation unregisters its partial config setup");
+  assert.equal(f.documentRoot.getAttribute("data-ui-motion"), "reduce");
+
+  second.deactivate();
+  assert.equal(f.documentRoot.getAttribute("data-ui-motion"), "reduce");
+  first.deactivate();
+  assert.equal(f.documentRoot.getAttribute("data-ui-motion"), "before-ui");
 });
 
 test("a config read error fails UI startup before creating the root", async () => {

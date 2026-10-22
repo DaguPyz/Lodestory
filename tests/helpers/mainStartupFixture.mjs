@@ -40,8 +40,25 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const themeApplications = [];
   const rootElement = { children: [], textContent: "", innerHTML: "", append(child) { this.children.push(child); } };
   rootElement.replaceChildren = (...children) => { rootElement.children = children; };
+  const documentRootAttributes = new Map();
+  const documentRoot = {
+    dataset: {},
+    getAttribute(name) { return documentRootAttributes.has(name) ? documentRootAttributes.get(name) : null; },
+    setAttribute(name, value) {
+      documentRootAttributes.set(name, String(value));
+      if (name === "data-ui-motion") this.dataset.uiMotion = String(value);
+    },
+    removeAttribute(name) {
+      documentRootAttributes.delete(name);
+      if (name === "data-ui-motion") delete this.dataset.uiMotion;
+    },
+    style: {
+      setProperty(name, value) { if (name === "--ui-surface-workspace") themeApplications.push({ id: documentRoot.dataset.uiThemeId, value }); },
+      removeProperty() {},
+    },
+  };
   const document = {
-    documentElement: { dataset: {}, style: { setProperty(name, value) { if (name === "--ui-surface-workspace") themeApplications.push({ id: document.documentElement.dataset.uiThemeId, value }); }, removeProperty() {} } },
+    documentElement: documentRoot,
     getElementById(id) { return id === "root" && !missingRoot ? rootElement : null; },
     createElement(tagName) {
       return {
@@ -121,6 +138,10 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     StrictMode: Symbol("StrictMode"),
     useSyncExternalStore(_subscribe, getSnapshot) { return getSnapshot(); },
     useEffect() {},
+    useState(initialValue) {
+      let value = typeof initialValue === "function" ? initialValue() : initialValue;
+      return [value, next => { value = typeof next === "function" ? next(value) : next; }];
+    },
     useRef(initialValue) { return {current: initialValue}; },
     useId() { return "fixture-id"; },
     createContext(defaultValue) {
@@ -344,6 +365,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       Array,
       require(specifier) {
         moduleImports.push({ from: relativePath, specifier });
+        if (Object.hasOwn(moduleMocks, specifier)) return moduleMocks[specifier];
         const uiImport = resolveUiPackageImport(specifier, load);
         if (uiImport.handled) return uiImport.value;
         if (specifier.startsWith("@lodestory/sdk")) return sdk.requireSdk(specifier, relativePath);

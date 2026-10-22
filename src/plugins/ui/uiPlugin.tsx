@@ -4,10 +4,47 @@ import {flushSync} from "react-dom";
 import type {Plugin} from "@lodestory/sdk";
 import {pluginsReady} from "../../plugin-core";
 import {configKey} from "@lodestory/sdk/config";
-import {uiInitialPageConfig, uiKey, UiNavigationCompleteError, type UiNavigationApproval, type UiNavigationGuard, type UiNavigationRequest, type UiService, type UiWrapper} from "@lodestory/sdk/ui";
+import {uiInitialPageConfig, uiMotionConfig, uiKey, UiNavigationCompleteError, type UiNavigationApproval, type UiNavigationGuard, type UiNavigationRequest, type UiService, type UiWrapper} from "@lodestory/sdk/ui";
 import {errorUiKey} from "@lodestory/sdk/error";
 import {createPageRegistry} from "./pageRegistry";
 import {UiPages} from "./UiPages";
+
+const motionAttributeOwners = new WeakMap<Element, symbol>();
+
+function ownMotionAttribute(root: Element, initialValue: "system" | "reduce") {
+    if (motionAttributeOwners.has(root)) {
+        throw new Error("The UI motion preference is already owned for this document root.");
+    }
+    const owner = Symbol("ui-motion");
+    const previousValue = root.getAttribute("data-ui-motion");
+    motionAttributeOwners.set(root, owner);
+
+    function apply(value: "system" | "reduce") {
+        if (motionAttributeOwners.get(root) !== owner) return;
+        if (value === "reduce") root.setAttribute("data-ui-motion", "reduce");
+        else root.removeAttribute("data-ui-motion");
+    }
+
+    try {
+        apply(initialValue);
+    } catch (error) {
+        motionAttributeOwners.delete(root);
+        throw error;
+    }
+
+    return {
+        set: apply,
+        restore() {
+            if (motionAttributeOwners.get(root) !== owner) return;
+            try {
+                if (previousValue === null) root.removeAttribute("data-ui-motion");
+                else root.setAttribute("data-ui-motion", previousValue);
+            } finally {
+                motionAttributeOwners.delete(root);
+            }
+        },
+    };
+}
 
 export type UiPluginOptions = {
     readonly rootOptions?: RootOptions;
@@ -30,6 +67,35 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
             const {ErrorBoundary} = context.get(errorUiKey);
             const config = context.get(configKey);
             const removeInitialPageConfig = config.register(uiInitialPageConfig);
+            let removeMotionConfig: (() => void) | undefined;
+            let unsubscribeMotionConfig: (() => void) | undefined;
+            let restoreMotionAttribute: (() => void) | undefined;
+            try {
+                removeMotionConfig = config.register(uiMotionConfig);
+                const motionRoot = typeof document === "undefined" ? undefined : document.documentElement;
+                if (motionRoot) {
+                    const motionAttribute = ownMotionAttribute(motionRoot, config.getSnapshot(uiMotionConfig));
+                    restoreMotionAttribute = () => motionAttribute.restore();
+                    unsubscribeMotionConfig = config.subscribe(uiMotionConfig, () => {
+                        motionAttribute.set(config.getSnapshot(uiMotionConfig));
+                    });
+                }
+            } catch (error) {
+                try {
+                    unsubscribeMotionConfig?.();
+                } finally {
+                    try {
+                        removeMotionConfig?.();
+                    } finally {
+                        try {
+                            removeInitialPageConfig();
+                        } finally {
+                            restoreMotionAttribute?.();
+                        }
+                    }
+                }
+                throw error;
+            }
             // 每次激活使用独立登记和状态，旧服务和旧撤销函数不能影响下一次激活。
             const pages = createPageRegistry();
             const wrappers = new Map<string, UiWrapper>();
@@ -63,7 +129,19 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                         wrappers.clear();
                         navigationGuards.clear();
                     } finally {
-                        removeInitialPageConfig();
+                        try {
+                            unsubscribeMotionConfig?.();
+                        } finally {
+                            try {
+                                removeMotionConfig?.();
+                            } finally {
+                                try {
+                                    removeInitialPageConfig();
+                                } finally {
+                                    restoreMotionAttribute?.();
+                                }
+                            }
+                        }
                     }
                 }
             };

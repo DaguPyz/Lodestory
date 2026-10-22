@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore, type CSSProperties } from "react";
 import { Button, Icon, Select } from "@lodestory/ui";
 import type { ResolvedTheme, ThemePreference, ThemeService } from "@lodestory/sdk/theme";
+import type { ConfigService } from "@lodestory/sdk/config";
 import { ProjectPageLayout } from "../../components/ProjectPageLayout";
+import { MotionSettings } from "./MotionSettings";
 
 function ThemePreview({ theme }: { theme: ResolvedTheme }) {
   return (
@@ -24,11 +26,12 @@ function ThemePreview({ theme }: { theme: ResolvedTheme }) {
 
 type ThemeSettingsPageProps = {
   service: ThemeService;
+  config: ConfigService;
   active: boolean;
   onBack: () => void;
 };
 
-export function ThemeSettingsPage({ service, active, onBack }: ThemeSettingsPageProps) {
+export function ThemeSettingsPage({ service, config, active, onBack }: ThemeSettingsPageProps) {
   const heading = useRef<HTMLHeadingElement>(null);
   // Wrap methods so ThemeService implementations may safely use `this`.
   const subscribe = useCallback((listener: () => void) => service.subscribe(listener), [service]);
@@ -149,6 +152,7 @@ export function ThemeSettingsPage({ service, active, onBack }: ThemeSettingsPage
                 <Button variant="ghost" onClick={() => service.retry()}>重试</Button>
               </div>
             )}
+            <MotionSettings config={config} />
           </section>
         </div>
         <footer className="welcome-footer">一个目录，一部小说。</footer>

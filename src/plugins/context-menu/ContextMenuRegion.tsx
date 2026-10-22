@@ -46,14 +46,16 @@ export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T
   const pending = useRef(new Set<string>());
   const alive = useRef(true);
   const [open, setOpen] = useState(false);
+  const [immediateClose, setImmediateClose] = useState(false);
   const [snapshot, setSnapshot] = useState<Session<T> | null>(null);
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set());
   const [actionError, setActionError] = useState(false);
 
   function close(reason: MenuCloseReason) {
     if (reason !== "dismiss") restore.current = false;
+    setImmediateClose(reason !== "dismiss");
     setOpen(false);
-    coordinator.release(id);
+    if (reason !== "dismiss") coordinator.release(id);
   }
 
   useEffect(() => {
@@ -64,6 +66,7 @@ export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T
   useEffect(() => {
     if (disabled || mode === "native") {
       restore.current = false;
+      setImmediateClose(true);
       setOpen(false);
       coordinator.release(id);
     }
@@ -78,7 +81,10 @@ export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T
     }
     function onPointer(event: PointerEvent) {
       const target = elementOf(event.target);
-      if (!target?.closest(`[data-context-menu-session='${id}']`)) close("switch");
+      if (!target?.closest(`[data-context-menu-session='${id}']`)) {
+        close(event.button === 2 ? "switch" : "dismiss");
+        restore.current = false;
+      }
     }
     function onContext(event: globalThis.MouseEvent) {
       const target = elementOf(event.target);
@@ -120,6 +126,7 @@ export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T
     };
     session.current = next;
     restore.current = true;
+    setImmediateClose(false);
     setSnapshot(next);
     return true;
   }
@@ -152,6 +159,7 @@ export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T
     pending.current.add(key);
     setPendingKeys(new Set(pending.current));
     restore.current = action.restoreFocus !== false;
+    setImmediateClose(true);
     setOpen(false);
     coordinator.release(id);
     try { await action.onSelect(current.context); }
@@ -177,8 +185,8 @@ export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T
       </>;
       if (entry.type === "submenu") return <ContextMenu.SubmenuRoot key={entry.id}>
         <ContextMenu.SubmenuTrigger className="context-menu-item" disabled={entry.disabled}>{content}</ContextMenu.SubmenuTrigger>
-        <ContextMenu.Portal className="context-menu-portal" data-context-menu-session={id} data-ui-density={snapshot?.density}>
-          <ContextMenu.Positioner className="context-menu-positioner" collisionPadding={16} sideOffset={4}>
+        <ContextMenu.Portal className="context-menu-portal" data-context-menu-session={id} data-ui-density={snapshot?.density} data-immediate-close={immediateClose || undefined}>
+          <ContextMenu.Positioner className="context-menu-positioner" collisionPadding={8} sideOffset={4}>
             <ContextMenu.Popup className="context-menu-popup" aria-label={entry.label}>{renderEntries(entry.items, path)}</ContextMenu.Popup>
           </ContextMenu.Positioner>
         </ContextMenu.Portal>
@@ -193,18 +201,19 @@ export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T
   useEffect(() => {
     if (open && !entries.length) {
       restore.current = false;
+      setImmediateClose(true);
       setOpen(false);
       coordinator.release(id);
     }
   }, [open, entries.length, coordinator, id]);
   return <>
-    <ContextMenu.Root open={open} onOpenChange={(next, details) => {
+    <ContextMenu.Root open={open} onOpenChangeComplete={(next) => { if (!next) coordinator.release(id); }} onOpenChange={(next, details) => {
       if (next) {
         if (!session.current || !resolveMenu(latest.current.items ?? [], session.current.context).length || disabled || mode === "native") { details.cancel(); return; }
         coordinator.activate(id, close);
+        setImmediateClose(false);
       } else {
         if (details.reason !== "escape-key" && details.reason !== "item-press") restore.current = false;
-        coordinator.release(id);
       }
       setOpen(next);
     }}>
@@ -223,8 +232,8 @@ export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T
           const rect = anchor.getBoundingClientRect();
           anchor.dispatchEvent(new globalThis.MouseEvent("contextmenu", { bubbles: true, cancelable: true, clientX: rect.left + 4, clientY: rect.bottom }));
         }} />
-      <ContextMenu.Portal className="context-menu-portal" data-context-menu-session={id} data-ui-density={snapshot?.density}>
-        <ContextMenu.Positioner className="context-menu-positioner" collisionPadding={16} sideOffset={4} alignOffset={0}>
+      <ContextMenu.Portal className="context-menu-portal" data-context-menu-session={id} data-ui-density={snapshot?.density} data-immediate-close={immediateClose || undefined}>
+        <ContextMenu.Positioner className="context-menu-positioner" collisionPadding={8} sideOffset={4} alignOffset={0}>
           <ContextMenu.Popup className="context-menu-popup" aria-label={label}
             onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}
             onKeyDownCapture={(event) => {

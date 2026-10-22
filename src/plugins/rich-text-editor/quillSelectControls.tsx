@@ -1,5 +1,5 @@
 import {createRoot, type Root} from "react-dom/client";
-import {Select} from "@lodestory/ui";
+import {Icon, Select} from "@lodestory/ui";
 import type Quill from "quill";
 import {isRichFontFamily} from "./richTextFormatting";
 import {
@@ -17,8 +17,10 @@ export type QuillSelectControls = Readonly<{
   destroy(): void;
 }>;
 
+type SelectFormat = Exclude<QuillSelectFormat, "align">;
+
 type SelectEntry = {
-  format: QuillSelectFormat;
+  format: SelectFormat;
   label: string;
   placeholder: string;
   host: HTMLElement;
@@ -28,16 +30,15 @@ type SelectEntry = {
   disabled?: boolean;
 };
 
-const pickerLabels: Readonly<Record<QuillSelectFormat, string>> = {
+const pickerLabels: Readonly<Record<SelectFormat, string>> = {
   font: "字体",
   header: "标题级别",
   size: "字号",
-  align: "段落对齐",
   color: "文字颜色",
   background: "文字背景色",
 };
 
-const pickerOrder: readonly Exclude<QuillSelectFormat, "font">[] = ["header", "size", "color", "background", "align"];
+const pickerOrder: readonly Exclude<SelectFormat, "font">[] = ["header", "size", "color", "background"];
 
 /** Replaces Snow's generated select pickers with the public shared Select while leaving action buttons to Quill. */
 export function createQuillSelectControls(quill: Quill, toolbar: HTMLElement): QuillSelectControls {
@@ -66,10 +67,13 @@ export function createQuillSelectControls(quill: Quill, toolbar: HTMLElement): Q
     const disabled = readOnly || (entry.format === "font" && families.length === 0);
     if (!force && entry.value === value && entry.disabled === disabled) return;
     const options = resolveOptions(entry, value);
+    const icon = entry.format === "color" ? "textColor" : entry.format === "background" ? "highlight" : undefined;
     entry.value = value;
     entry.disabled = disabled;
-    entry.root.render(<Select value={value} options={options} onValueChange={next => controller.apply(entry.format, next)}
+    entry.root.render(<Select variant="toolbar" value={value} options={options} onValueChange={next => controller.apply(entry.format, next)}
       placeholder={entry.placeholder} disabled={disabled} aria-label={entry.label}
+      iconOnly={!!icon} triggerIcon={icon && <Icon name={icon} />}
+      title={`${entry.label}：${options.find(option => option.value === value)?.label ?? entry.placeholder}`}
       finalFocus={editorFocus} />);
   }
 
@@ -78,7 +82,7 @@ export function createQuillSelectControls(quill: Quill, toolbar: HTMLElement): Q
     entries.forEach(entry => renderEntry(entry));
   }
 
-  function mountEntry(format: QuillSelectFormat, host: HTMLElement, values: readonly string[]) {
+  function mountEntry(format: SelectFormat, host: HTMLElement, values: readonly string[]) {
     const root = createRoot(host);
     const entry: SelectEntry = {
       format,
@@ -96,7 +100,7 @@ export function createQuillSelectControls(quill: Quill, toolbar: HTMLElement): Q
     renderEntry(entry, true);
   }
 
-  function replacePicker(format: Exclude<QuillSelectFormat, "font">) {
+  function replacePicker(format: Exclude<SelectFormat, "font">) {
     const picker = toolbar.querySelector<HTMLElement>(`.ql-picker.ql-${format}`);
     const group = picker?.closest<HTMLElement>(".ql-formats");
     const nativeSelect = group?.querySelector<HTMLSelectElement>(`select.ql-${format}`);
@@ -105,6 +109,7 @@ export function createQuillSelectControls(quill: Quill, toolbar: HTMLElement): Q
     const values = Array.from(nativeSelect.options, option => option.value);
     const host = document.createElement("span");
     host.className = "rich-text-select-host";
+    host.dataset.format = format;
     releaseSnowPickerReferences(quill, picker, nativeSelect);
     group.classList.add("rich-text-select-field", `ql-${format}`);
     picker.replaceWith(host);

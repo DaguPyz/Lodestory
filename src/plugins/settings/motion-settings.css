@@ -1,0 +1,53 @@
+.motion-settings {
+  max-width: 42rem;
+  margin-top: var(--ui-section-gap);
+  padding-top: var(--ui-space-7);
+  border-top: 1px solid var(--ui-border-divider);
+}
+
+.motion-settings > h3 {
+  margin: 0;
+  font-size: var(--ui-font-size-strong);
+  line-height: var(--ui-line-height-strong);
+  font-weight: 600;
+}
+
+.motion-settings-description {
+  margin-top: var(--ui-space-3);
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-body);
+  line-height: var(--ui-line-height-body);
+}
+
+.motion-settings-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(12rem, 18rem);
+  align-items: center;
+  gap: var(--ui-space-6);
+  margin-top: var(--ui-space-6);
+  color: var(--ui-text-primary);
+  font-size: var(--ui-font-size-body);
+  line-height: var(--ui-line-height-body);
+}
+
+.motion-settings-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ui-space-5);
+  margin-top: var(--ui-space-5);
+  color: var(--ui-status-danger);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+.motion-settings-error p {
+  margin: 0;
+}
+
+@container welcome (max-width: 30rem) {
+  .motion-settings-control {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--ui-space-3);
+  }
+}

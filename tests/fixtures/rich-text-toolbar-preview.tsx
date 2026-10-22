@@ -45,9 +45,15 @@ const requestedZoom = Number(search.get("zoom"));
 const previewCssZoom = requestedZoom === 200 ? 2 : 1;
 const readOnly = search.get("readOnly") === "true";
 const openPicker = search.get("open");
-const menuSelector = openPicker && ["header", "size", "color", "background", "align"].includes(openPicker)
-  ? `.ql-${openPicker} .ql-picker-options`
-  : undefined;
+const pickerLabels: Readonly<Record<string, string>> = {
+  font: "字体",
+  header: "标题级别",
+  size: "字号",
+  color: "文字颜色",
+  background: "文字背景色",
+  align: "段落对齐",
+};
+const menuSelector = openPicker && pickerLabels[openPicker] ? ".ui-select-popup" : undefined;
 let previewInteractionApplied = false;
 document.documentElement.dataset.uiThemeId = themeId;
 document.documentElement.dataset.uiTheme = themeId.endsWith("light") ? "light" : "dark";
@@ -91,9 +97,10 @@ window.__richTextToolbarPreview = {
   measure() {
     const rectWidth = (selector: string) => document.querySelector<HTMLElement>(selector)?.getBoundingClientRect().width ?? 0;
     const controls = [
-      ".rich-text-font-select", ".ql-header .ql-picker-label", ".ql-size .ql-picker-label",
-      ".ql-color .ql-picker-label", ".ql-background .ql-picker-label", ".ql-align .ql-picker-label",
-      ".ql-toolbar button",
+      '.rich-text-font-family [aria-label="字体"]', '.ql-header [aria-label="标题级别"]',
+      '.ql-size [aria-label="字号"]', '.ql-color [aria-label="文字颜色"]',
+      '.ql-background [aria-label="文字背景色"]', '.ql-align [aria-label="段落对齐"]',
+      ".rich-text-toolbar-actions button",
     ].map(selector => {
       const elements = [...document.querySelectorAll<HTMLElement>(selector)];
       return {
@@ -122,8 +129,8 @@ window.__richTextToolbarPreview = {
 
 function writePreviewMetrics(attempt = 0) {
   if (search.get("measure") !== "1" || !window.__richTextToolbarPreview.ready) return;
-  const fontOptions = document.querySelectorAll(".rich-text-font-select option").length;
-  if (fontOptions < 2 && attempt < 40) {
+  const selectTriggers = document.querySelectorAll(".ui-select-trigger").length;
+  if (selectTriggers < 6 && attempt < 40) {
     window.setTimeout(() => writePreviewMetrics(attempt + 1), 50);
     return;
   }
@@ -131,8 +138,7 @@ function writePreviewMetrics(attempt = 0) {
     if (search.get("selected") === "bold") document.querySelector<HTMLButtonElement>(".ql-bold")?.click();
     if (search.get("focus") === "bold") document.querySelector<HTMLButtonElement>(".ql-bold")?.focus();
     if (menuSelector) {
-      document.querySelector<HTMLElement>(`.ql-${openPicker} .ql-picker-label`)
-        ?.dispatchEvent(new MouseEvent("mousedown", {bubbles: true, cancelable: true, view: window}));
+      document.querySelector<HTMLButtonElement>(`[aria-label="${pickerLabels[openPicker!]}"]`)?.click();
     }
     previewInteractionApplied = true;
     if (menuSelector) {

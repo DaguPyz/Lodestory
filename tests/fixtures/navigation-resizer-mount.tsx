@@ -9,7 +9,7 @@ declare global {
     __navigationResizeHarness: {
       mount(strictMode?: boolean): void;
       unmount(): void;
-      getState(): {writes: (number | null)[]; mounts: number; effectiveWidth: number};
+      getState(): {writes: (number | null)[]; mounts: number; effectiveWidth: number; shownNavigationId: string | null};
     };
     __navigationResizeMounts: number;
     __navigationEditorNode?: Element | null;
@@ -72,6 +72,13 @@ const navigation = {
   order: 0,
   render: () => <div>导航面板</div>,
 };
+const outline = {
+  id: "outline-test",
+  title: "大纲",
+  role: "navigation" as const,
+  order: 1,
+  render: () => <div>大纲面板</div>,
+};
 const main = {
   id: "main-test",
   title: "正文",
@@ -79,17 +86,40 @@ const main = {
   order: 0,
   render: () => <BodyEditorProbe />,
 };
-const snapshot = Object.freeze({
-  contents: Object.freeze([navigation, main]),
-  shownIds: Object.freeze([navigation.id, main.id]),
-});
-const state = Object.freeze({snapshot, navigationDocked: true, auxiliaryDocked: false});
+const contents = Object.freeze([navigation, outline, main]);
+let shownIds = new Set([navigation.id, main.id]);
+const listeners = new Set<() => void>();
+let snapshot = Object.freeze({contents, shownIds: Object.freeze([...shownIds])});
+let state = Object.freeze({snapshot, navigationDocked: true, auxiliaryDocked: false});
+function publish() {
+  snapshot = Object.freeze({contents, shownIds: Object.freeze([...shownIds])});
+  state = Object.freeze({...state, snapshot});
+  for (const listener of [...listeners]) listener();
+}
 const store = {
   getState: () => state,
-  subscribe: (_listener: () => void) => () => {},
+  subscribe(listener: () => void) {
+    listeners.add(listener);
+    return () => listeners.delete(listener);
+  },
   setViewport: (_width: number, _rem: number) => {},
-  show: (_id: string) => {},
-  hide: (_id: string) => {},
+  show(id: string) {
+    const entry = contents.find(item => item.id === id);
+    if (!entry) return;
+    const next = new Set(shownIds);
+    if (entry.role === "navigation" || entry.role === "auxiliary") {
+      for (const current of contents) if (current.role === entry.role) next.delete(current.id);
+    }
+    next.add(id);
+    shownIds = next;
+    publish();
+  },
+  hide(id: string) {
+    if (!shownIds.has(id)) return;
+    shownIds = new Set(shownIds);
+    shownIds.delete(id);
+    publish();
+  },
 };
 const ErrorBoundary = ({children}: {children: React.ReactNode}) => children;
 let root: Root | undefined;
@@ -110,7 +140,12 @@ function unmount() {
 window.__navigationResizeHarness = {
   mount,
   unmount,
-  getState: () => ({writes: [...configWrites], mounts: window.__navigationResizeMounts, effectiveWidth: widths.getSnapshot().effectiveWidth}),
+  getState: () => ({
+    writes: [...configWrites],
+    mounts: window.__navigationResizeMounts,
+    effectiveWidth: widths.getSnapshot().effectiveWidth,
+    shownNavigationId: snapshot.shownIds.find(id => contents.some(entry => entry.id === id && entry.role === "navigation")) ?? null,
+  }),
 };
 
 class FixtureResizeObserver {

@@ -5,8 +5,7 @@ import {createRichTextEditorSession, type RichTextEditorDriver} from "./createRi
 import {createRichDeltaFromPlainText, parseRichDeltaEnvelope, serializeRichDelta, type RichDeltaOperation} from "./richDeltaFormat";
 import {createPlainTextPasteDelta} from "./plainTextPaste";
 import {createRichTextRegistry} from "./quillRichTextRegistry";
-import {createSystemFontSelect, type SystemFontSelect} from "./quillSystemFontSelect";
-import "quill/dist/quill.snow.css";
+import {createQuillSelectControls, type QuillSelectControls} from "./quillSelectControls";
 import "./rich-text-editor.css";
 
 type Session = ReturnType<typeof createRichTextEditorSession>;
@@ -187,8 +186,7 @@ function createQuillDriver(root: HTMLElement, initialContent: string, format: Ed
   let changeHandler: ((delta: unknown, oldDelta: unknown, source: string) => void) | undefined;
   let pasteHandler: ((event: ClipboardEvent) => void) | undefined;
   let disposed = false;
-  let fontSelect: SystemFontSelect | undefined;
-  let releaseToolbar: (() => void) | undefined;
+  let selectControls: QuillSelectControls | undefined;
   let families: readonly string[] = [];
   let readOnly = true;
 
@@ -217,52 +215,62 @@ function createQuillDriver(root: HTMLElement, initialContent: string, format: Ed
         } : {toolbar: false, history: {userOnly: true}},
       });
       quill = instance;
-      instance.root.setAttribute("role", "textbox");
-      instance.root.setAttribute("aria-label", format === "plain-text" ? "纯文本正文" : "富文本正文");
-      instance.root.setAttribute("aria-multiline", "true");
-      if (format === "rich-delta") {
-        instance.setContents(initialOps as Parameters<typeof instance.setContents>[0], "silent");
-      } else {
-        // Quill owns one terminal newline; the extra newline preserves any newline in the source text.
-        instance.setText(`${initialContent}\n`, "silent");
-        pasteHandler = event => {
-          if (disposed || !quill) return;
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          if (!event.clipboardData) return;
-          const text = event.clipboardData.getData("text/plain");
-          if (text.length === 0) return;
-          const selection = quill.getSelection(true);
-          if (!selection) return;
-          const paste = createPlainTextPasteDelta(selection, text);
-          if (!paste) return;
-          quill.updateContents({ops: paste.ops} as unknown as Parameters<Quill["updateContents"]>[0], "user");
-          quill.setSelection(paste.cursorIndex, 0, "silent");
-        };
-        instance.root.addEventListener("paste", pasteHandler, true);
-      }
-      clearHistory(instance);
-      changeHandler = (_delta: unknown, _old: unknown, source: string) => {
-        if (!disposed && source === "user") notify?.();
-      };
-      instance.on("text-change", changeHandler);
-      if (format === "rich-delta") {
-        const toolbar = getToolbarContainer(instance);
-        if (toolbar) {
-          fontSelect = createSystemFontSelect(instance, toolbar);
-          fontSelect.setFamilies(families);
-          fontSelect.setReadOnly(readOnly);
-          releaseToolbar = prepareToolbar(toolbar);
+      try {
+        instance.root.setAttribute("role", "textbox");
+        instance.root.setAttribute("aria-label", format === "plain-text" ? "纯文本正文" : "富文本正文");
+        instance.root.setAttribute("aria-multiline", "true");
+        if (format === "rich-delta") {
+          instance.setContents(initialOps as Parameters<typeof instance.setContents>[0], "silent");
+        } else {
+          // Quill owns one terminal newline; the extra newline preserves any newline in the source text.
+          instance.setText(`${initialContent}\n`, "silent");
+          pasteHandler = event => {
+            if (disposed || !quill) return;
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            if (!event.clipboardData) return;
+            const text = event.clipboardData.getData("text/plain");
+            if (text.length === 0) return;
+            const selection = quill.getSelection(true);
+            if (!selection) return;
+            const paste = createPlainTextPasteDelta(selection, text);
+            if (!paste) return;
+            quill.updateContents({ops: paste.ops} as unknown as Parameters<Quill["updateContents"]>[0], "user");
+            quill.setSelection(paste.cursorIndex, 0, "silent");
+          };
+          instance.root.addEventListener("paste", pasteHandler, true);
         }
+        clearHistory(instance);
+        changeHandler = (_delta: unknown, _old: unknown, source: string) => {
+          if (!disposed && source === "user") notify?.();
+        };
+        instance.on("text-change", changeHandler);
+        if (format === "rich-delta") {
+          const toolbar = getToolbarContainer(instance);
+          if (toolbar) {
+            selectControls = createQuillSelectControls(instance, toolbar);
+            selectControls.setFamilies(families);
+            selectControls.setReadOnly(readOnly);
+            prepareToolbar(toolbar);
+          }
+        }
+      } catch (error) {
+        selectControls?.destroy();
+        selectControls = undefined;
+        if (changeHandler) instance.off("text-change", changeHandler);
+        if (pasteHandler) instance.root.removeEventListener("paste", pasteHandler, true);
+        instance.disable();
+        instance.blur();
+        root.replaceChildren();
+        quill = undefined;
+        throw error;
       }
     },
     async destroy() {
       disposed = true;
       notify = undefined;
-      releaseToolbar?.();
-      releaseToolbar = undefined;
-      fontSelect?.destroy();
-      fontSelect = undefined;
+      selectControls?.destroy();
+      selectControls = undefined;
       const instance = quill;
       quill = undefined;
       if (!instance) return;
@@ -297,15 +305,15 @@ function createQuillDriver(root: HTMLElement, initialContent: string, format: Ed
       if (toolbar) {
         toolbar.inert = value;
         toolbar.setAttribute("aria-disabled", String(value));
-        toolbar.querySelectorAll<HTMLButtonElement | HTMLSelectElement>("button, select")
+        toolbar.querySelectorAll<HTMLButtonElement>(".rich-text-toolbar-actions button")
           .forEach(control => { control.disabled = value; });
       }
-      fontSelect?.setReadOnly(value);
+      selectControls?.setReadOnly(value);
     },
     setFontFamilies(value) {
       if (disposed) return;
       families = value;
-      fontSelect?.setFamilies(value);
+      selectControls?.setFamilies(value);
     },
     focus() {
       quill?.focus();
@@ -321,7 +329,7 @@ function getToolbarContainer(quill: Quill): HTMLElement | undefined {
   return toolbar?.container;
 }
 
-function prepareToolbar(root: HTMLElement): () => void {
+function prepareToolbar(root: HTMLElement): void {
   root.setAttribute("role", "toolbar");
   root.setAttribute("aria-label", "富文本格式工具栏");
   const fields = document.createElement("div");
@@ -329,8 +337,7 @@ function prepareToolbar(root: HTMLElement): () => void {
   const actions = document.createElement("div");
   actions.className = "rich-text-toolbar-actions";
   for (const group of Array.from(root.children)) {
-    const field = group.classList.contains("rich-text-font-family")
-      || group.querySelector(".ql-header, .ql-size");
+    const field = group.classList.contains("rich-text-select-field");
     if (field) {
       group.classList.add("rich-text-toolbar-field");
       fields.append(group);
@@ -338,21 +345,7 @@ function prepareToolbar(root: HTMLElement): () => void {
   }
   root.append(fields, actions);
 
-  for (const name of ["header", "size"]) {
-    root.querySelectorAll<HTMLElement>(`.ql-picker.ql-${name} .ql-picker-label, .ql-picker.ql-${name} .ql-picker-item`)
-      .forEach(element => {
-        const value = element.dataset.value;
-        const label = name === "header" ? (value ? `标题 ${value}` : "正文") : (value ?? "默认字号");
-        element.dataset.label = label;
-        if (element.classList.contains("ql-picker-item")) element.setAttribute("aria-label", label);
-      });
-  }
   const labels: Record<string, string> = {
-    "ql-header": "标题级别",
-    "ql-size": "字号",
-    "ql-align": "段落对齐",
-    "ql-color": "文字颜色",
-    "ql-background": "文字背景色",
     "ql-bold": "加粗",
     "ql-italic": "斜体",
     "ql-underline": "下划线",
@@ -369,67 +362,6 @@ function prepareToolbar(root: HTMLElement): () => void {
       if (element.tagName === "BUTTON") element.title = label;
     });
   }
-  root.querySelectorAll<HTMLElement>(".ql-header .ql-picker-label")
-    .forEach(element => {
-      element.setAttribute("aria-label", "标题级别");
-      element.title = "标题级别";
-    });
-  for (const name of ["size", "align", "color", "background"]) {
-    root.querySelectorAll<HTMLElement>(`.ql-${name} .ql-picker-label`)
-      .forEach(element => {
-        element.setAttribute("aria-label", labels[`ql-${name}`]);
-        element.title = labels[`ql-${name}`];
-      });
-  }
-  const alignments: Record<string, string> = {"": "左对齐", center: "居中对齐", right: "右对齐", justify: "两端对齐"};
-  root.querySelectorAll<HTMLElement>(".ql-align .ql-picker-item").forEach(element => {
-    element.setAttribute("aria-label", alignments[element.dataset.value ?? ""]);
-    element.title = alignments[element.dataset.value ?? ""];
-  });
-  for (const name of ["color", "background"]) {
-    root.querySelectorAll<HTMLElement>(`.ql-${name} .ql-picker-item`).forEach(element => {
-      const label = `${labels[`ql-${name}`]}：${element.dataset.value || "默认"}`;
-      element.setAttribute("aria-label", label);
-      element.title = label;
-    });
-  }
-
-  // Snow 的浮层保留原有选择行为，只校正靠近窗口边缘时的位置。
-  const positionOptions = () => {
-    const gutter = Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-    const width = Number.parseFloat(getComputedStyle(root).width);
-    const scale = (width > 0 ? root.getBoundingClientRect().width / width : 1) || 1;
-    const viewportGutter = gutter * scale;
-    let left = viewportGutter;
-    let right = document.documentElement.clientWidth - viewportGutter;
-    for (let parent = root.parentElement; parent; parent = parent.parentElement) {
-      if (!/auto|scroll|hidden|clip/.test(getComputedStyle(parent).overflowX)) continue;
-      const clip = parent.getBoundingClientRect();
-      left = Math.max(left, clip.left + viewportGutter);
-      right = Math.min(right, clip.right - viewportGutter);
-    }
-    root.querySelectorAll<HTMLElement>(".ql-expanded .ql-picker-options").forEach(options => {
-      const available = Math.max(0, right - left) / scale;
-      options.style.minWidth = `${Math.min(14 * gutter, available)}px`;
-      options.style.maxWidth = `${available}px`;
-      options.style.marginLeft = "0px";
-      const bounds = options.getBoundingClientRect();
-      const shift = Math.max(left - bounds.left, Math.min(0, right - bounds.right));
-      options.style.marginLeft = `${shift / scale}px`;
-      const menuTop = (options.parentElement?.getBoundingClientRect().bottom ?? bounds.top)
-        + Number.parseFloat(getComputedStyle(options).marginTop) * scale;
-      const availableHeight = Math.max(0, document.documentElement.clientHeight - viewportGutter - menuTop) / scale;
-      options.style.maxHeight = `min(20rem, 50vh, ${availableHeight}px)`;
-    });
-  };
-  root.addEventListener("mousedown", positionOptions);
-  root.addEventListener("keydown", positionOptions);
-  window.addEventListener("resize", positionOptions);
-  return () => {
-    root.removeEventListener("mousedown", positionOptions);
-    root.removeEventListener("keydown", positionOptions);
-    window.removeEventListener("resize", positionOptions);
-  };
 }
 
 function clearHistory(quill: Quill) {

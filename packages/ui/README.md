@@ -10,6 +10,10 @@ Lodestory 自有 React 基础组件库。组件、公开属性类型和组件样
 | `IconButton` | 图标按钮 | 必填 `label`，同时提供无障碍名称和悬停提示 |
 | `Icon` | 装饰性 SVG 图标 | `name`，`size`: `default` / `small` / `medium` / `large` / `brand` |
 | `SearchField` | 带图标的搜索输入框 | 必填 `label`，默认也用作 `placeholder` |
+| `Select` | 受控单选下拉框 | `value`、`options`、`onValueChange`；支持占位、禁用、只读、表单属性及颜色样本 |
+| `Dialog` | 受控模态弹框 | `open`、`onOpenChange`、`title`，可选 `description`、`busy`、`initialFocus`、`finalFocus` |
+| `DialogActions` | 弹框操作区 | 统一右对齐、间距与换行 |
+| `DialogClose` | 关闭弹框的按钮 | 支持 `Button` 属性和 `ref`，固定为非提交按钮 |
 
 按钮默认 `type="button"`，表单提交时显式指定 `type="submit"`。按钮与搜索框支持原生属性及事件，通过公开类型约束，不开放任意 `className` / `style`，视觉差异优先扩展语义明确的变体。`Icon` 标记为装饰内容，操作的文字含义由外层按钮或标签提供。
 
@@ -33,7 +37,7 @@ export function Example() {
 @import "@lodestory/ui/styles.css";
 ```
 
-Lodestory 已在 `src/styles.css` 接入该入口，插件无需重复导入。组件继承现有 `--ui-*` 配色、排版、尺寸和密度变量；库不写入主题、不读取主题存储，也不重复提供默认色值。单独预览或其他宿主使用时，须由宿主提供符合[主题标准](../../文档/主题标准-v1.md)和 [UI 设计规范](../../文档/UI设计规范.md)的变量；当前应用的基础尺寸变量位于 `src/styles/tokens.css`，配色由主题插件提供。缺少这些变量时不保证视觉正确。
+Lodestory 已在 `src/styles.css` 接入该入口，插件无需重复导入。组件继承现有 `--ui-*` 配色、排版、尺寸和密度变量；库不写入主题、不读取主题存储，也不重复提供默认色值。单独预览或其他宿主使用时，须由宿主提供符合[主题标准](../../文档/主题标准-v1.md)和 [UI 设计规范](../../UI规范/UI设计规范.md)的变量；当前应用的基础尺寸变量位于 `src/styles/tokens.css`，配色由主题插件提供。缺少这些变量时不保证视觉正确。
 
 组件 CSS 包含自身尺寸计算、字体继承、交互状态与强制颜色模式规则，不导入应用全局样式。配色不做过渡动画，主题变化时前景、背景和边界同步替换，也符合减少动效设置。页面负责外部布局和宽度，组件负责内部结构与状态；例如搜索框默认占父容器宽度，欢迎页另行设置工具栏搜索区的宽度。
 
@@ -59,14 +63,58 @@ Lodestory 已在 `src/styles.css` 接入该入口，插件无需重复导入。�
 
 `Icon` 使用 `currentColor`，由承载它的按钮、选中对象或内容区域提供最终前景。单独使用图标时也须由宿主提供与背景配套的前景。
 
+## 通用弹框
+
+```tsx
+import { Button, Dialog, DialogActions, DialogClose } from "@lodestory/ui";
+
+<Dialog open={open} onOpenChange={setOpen} title="新建文档"
+  description="为文档取个名字。" busy={busy} initialFocus={nameInput}>
+  <form onSubmit={handleSubmit}>
+    {/* 表单字段、校验、提交和错误提示由插件提供。 */}
+    <DialogActions>
+      <DialogClose>取消</DialogClose>
+      <Button type="submit" variant="primary" disabled={busy}>创建</Button>
+    </DialogActions>
+  </form>
+</Dialog>
+```
+
+`Dialog` 在包内封装 Base UI，统一遮罩、标题与描述的无障碍关联、焦点限制和关闭后焦点恢复。默认允许 Escape、点击遮罩及 `DialogClose` 请求关闭；`busy` 时拦截这些关闭请求并禁用关闭按钮。业务字段及提交按钮的禁用、重复提交保护仍由插件负责。操作成功后，插件可更新 `open` 或卸载弹框；失败时保留已挂载表单和输入内容。
+
+`initialFocus` 指定打开后的焦点，删除确认可指向取消按钮；`finalFocus` 可显式指定关闭后接收焦点的元素，不传时由 Base UI 恢复原焦点。弹框通过 Portal 挂到文档中，消费根元素的全局主题变量，并固定采用 `comfortable` 密度；不要只在触发按钮的局部容器上设置主题。
+
+弹框使用 `surface.floating`、`text.primary/secondary`、`border.divider`、`overlay.scrim`、`focus.ring` 与主题阴影变量；标题、尺寸、间距也沿用项目标准。长描述自动换行，高度超出视口时内部滚动，切换主题不重新挂载业务内容。
+
+## 单选下拉框
+
+```tsx
+import { Select } from "@lodestory/ui";
+
+<label htmlFor="document-parent">保存位置</label>
+<Select id="document-parent" name="documentParent"
+  value={parentPath} onValueChange={setParentPath} disabled={busy}
+  options={[{ value: "", label: projectName }, ...folderOptions]} />
+```
+
+选项类型为 `{ value: string, label: string, disabled?: boolean, swatch?: string }`，值必须唯一。`null` 表示未选择，显示 `placeholder`；空字符串是合法选项，用于根目录、默认字体等。`onValueChange` 只回传用户选择的字符串，选项数据和状态更新仍归使用方。若当前值暂时不在选项中，组件保留该值，不擅自选择其他项；插件可以提供带说明的禁用选项表示不可用值。
+
+Base UI 在包内负责列表定位、键盘导航、按字符查找、Escape 关闭和焦点恢复。展开面板通过 Portal 避免被表单或编辑器裁切，复制触发器所属的 `data-ui-density`，颜色始终继承根元素主题变量。长选项自动换行，长列表内部滚动；触发器宽度由外层容器决定。组件不开放 `className` / `style`，宿主不应覆盖其状态颜色。
+
+`disabled` 阻止交互并收起已打开的面板；单个选项的 `disabled` 阻止选值，但仍可被键盘聚焦以获知内容。`readOnly` 允许展开查看，阻止更改。选中、悬停、按下、禁用及其组合均使用项目成套前景／背景角色，勾选标记和独立焦点环补充颜色含义；`aria-invalid` 提供错误边界，禁用时使用禁用边界。通过关联的 `<label>` 或 `aria-label` / `aria-labelledby` 提供名称。
+
+`name` / `form` 支持原生 FormData 提交；`required` 与原生控件一样将空字符串视为缺值，根目录若是有效业务值则不要将该字段声明为必填。`ref` 指向触发按钮；`onOpenChange` 用于观察展开状态；`finalFocus` 可指定关闭后接收焦点的元素，编辑器可指向正文。`swatch` 只展示业务内容的颜色样本（例如文字颜色），不改变控件的主题配色。
+
+当前保存位置、系统主题映射、布局内容切换以及富文本的字体／标题／字号／对齐／文字色／背景色均复用此组件。富文本插件自行维护 Quill 选区、格式值和资源清理；动作菜单不属于单选控件。
+
 ## 职责边界
 
 - 本包是无业务状态的展示组件模块，不是运行时插件，不建立全局单例，也不新增能力 key。React 组件的挂载和卸载决定其生命周期。
 - 业务状态和保存流程仍由所属插件拥有；页面、布局贡献继续通过 SDK 的公开能力登记。组件库不导入 `src/`、Tauri、插件私有实现或 SDK 服务。
 - `@lodestory/sdk` 只维护跨插件契约，`@lodestory/ui` 维护可复用的 UI 实现，两者职责分开。
-- `PageShell`、`ProjectPageLayout`、文件树、文档标签栏和编辑器属于应用或业务布局，不纳入本包。右键菜单仍由现有插件负责根包装和协调；通用弹窗、输入框、下拉选择尚未迁入。
+- `PageShell`、`ProjectPageLayout`、文件树、文档标签栏和编辑器属于应用或业务布局，不纳入本包。右键菜单仍由现有插件负责根包装和协调；普通输入框尚未迁入。新建项目、新建文档／文件夹和删除文档复用通用弹框，业务逻辑仍在原插件内。
 - 后续新增组件放在 `src/`，在 `src/index.ts` 导出组件和属性类型，并把组件样式放入 `styles.css`。复杂交互可在包内封装 Base UI，消费者不应依赖其内部实例。
-- React 是 peer dependency，宿主和插件必须共享同一运行时；独立打包消费者时将 `react`、`react/jsx-runtime` 和本包作为外部依赖。
+- React 与 React DOM 是 peer dependencies，宿主和插件必须共享同一运行时；独立打包消费者时将 `react`、`react/jsx-runtime`、`react-dom` 和本包作为外部依赖。Base UI 是包内实现依赖，不通过公共属性暴露其类型。
 
 ## 开发与验证
 
@@ -80,3 +128,7 @@ pnpm dev:ui
 本包可通过 `pnpm --dir packages/ui pack` 生成包含 JavaScript、类型和样式的归档；当前只在本地工作区接入，未发布到包仓库。
 
 `tests/fixtures/ui-theme.html` 是开发验收页，通过真实主题插件切换内置深浅主题及两套同类型的自定义测试配色，检查四个组件、状态叠加和输入内容保留。测试配色用于区分角色，不作为正式主题发布。`tests/ui-library.test.mjs` 核验导出、类型和登记变量；`tests/ui-theme-browser.test.mjs` 在安装 Playwright 与 Chromium 后验证真实计算样式及交互。
+
+`tests/fixtures/ui-dialog.html` 检查独立弹框与迁移后的三个业务弹框，支持主题切换、模拟提交成功／失败、处理中关闭保护、长路径换行和键盘焦点验收；文件操作均由回调模拟。`tests/ui-dialog.test.mjs` 覆盖忙碌时取消关闭请求、关闭按钮的禁用／ref／非提交行为和模态语义。
+
+`tests/fixtures/ui-select.html` 检查 Select 的内置与同类型自定义主题、键盘、动态禁用、只读、空值、长列表、表单提交和弹框嵌套；Alt+T 在面板打开时切换主题，Alt+D 切换普通选择器的禁用状态。`tests/fixtures/rich-text-toolbar-preview.html` 验收真实 Quill 中的格式选择，`tests/quill-select-model.test.mjs` 检查选区、默认值、只读和清理规则。

@@ -38,7 +38,11 @@ function stubLayoutChrome() {
         export function Button({children, ...props}) { return React.createElement('button', props, children); }
         export function IconButton({label, children, ...props}) { return React.createElement('button', {...props, 'aria-label': label}, children); }
         export function Icon({name}) { return React.createElement('span', {'data-icon': name}); }
-        export function SearchField(props) { return React.createElement('input', props); }`;
+        export function SearchField(props) { return React.createElement('input', props); }
+        export function Select({value, onValueChange, options, ...props}) {
+          return React.createElement('select', {...props, value, onChange: event => onValueChange(event.target.value)},
+            options.map(option => React.createElement('option', {key: option.value, value: option.value, disabled: option.disabled}, option.label)));
+        }`;
       return undefined;
     },
   };
@@ -90,6 +94,13 @@ test('real layout mounts the resizer, previews its width, and persists only on p
     assert.equal(await page.locator('#body-editor-probe').inputValue(), '正文内容保持不变');
     assert.equal((await page.evaluate(() => window.__navigationResizeHarness.getState())).mounts, 1);
     await page.evaluate(() => { window.__navigationEditorNode = document.querySelector('#body-editor-probe'); });
+
+    const navigationPicker = page.getByRole('combobox', {name: '切换导航内容'});
+    await navigationPicker.selectOption('outline-test');
+    await page.waitForFunction(() => window.__navigationResizeHarness.getState().shownNavigationId === 'outline-test');
+    assert.equal(await page.getByText('大纲面板').isVisible(), true, 'the layout Select routes its chosen entry to store.show');
+    assert.equal(await page.evaluate(() => document.querySelector('#body-editor-probe') === window.__navigationEditorNode), true,
+      'changing the navigation panel preserves the mounted editor node');
 
     const handle = page.locator('.layout-navigation-resizer');
     const handleBox = await handle.boundingBox();

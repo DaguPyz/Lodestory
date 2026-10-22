@@ -68,6 +68,10 @@ importers:
         version: 6.0.3
 
   packages/ui:
+    dependencies:
+      '@base-ui/react':
+        specifier: ^1.8.0
+        version: 1.8.0(@types/react@19.3.0)(react-dom@19.3.0)(react@19.3.0)
     devDependencies:
       '@types/react':
         specifier: ^19.1.8
@@ -75,6 +79,9 @@ importers:
       react:
         specifier: ^19.1.0
         version: 19.3.0
+      react-dom:
+        specifier: ^19.1.0
+        version: 19.3.0(react@19.3.0)
       typescript:
         specifier: ~6.0.3
         version: 6.0.3
@@ -2327,7 +2334,6 @@ packages:
     dependencies:
       react: 19.3.0
       scheduler: 0.28.0
-    dev: false
 
   /react@19.3.0:
     resolution: {integrity: sha512-E8LUcbtBWt20bbl2YoHfx4ZDBdxVTfOKtCZn9cDSJ4l6/nuoApcpIBcj47t2wZoVX8g2ZHuMHbiShgCR1T5Sog==}
@@ -2430,7 +2436,6 @@ packages:
 
   /scheduler@0.28.0:
     resolution: {integrity: sha512-juorfCmIkIw8tT+p5BXSm6PJjQF/ycEYmKyzURCIt/RaZIhL+PulbQ9Yu2z1HdOJDdqDTlxA1+xKBmHXJsczAw==}
-    dev: false
 
   /source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}

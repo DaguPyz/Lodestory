@@ -470,43 +470,6 @@ p {
   cursor: not-allowed;
 }
 
-.project-dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 30;
-  background: var(--ui-overlay-scrim);
-}
-
-.project-dialog {
-  position: fixed;
-  top: 50%;
-  left: 50%;
-  z-index: 31;
-  width: min(36rem, calc(100vw - 2 * var(--ui-space-7)));
-  max-height: calc(100dvh - 2 * var(--ui-space-7));
-  padding: var(--ui-panel-padding);
-  overflow: auto;
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-overlay);
-  border: 1px solid var(--ui-border-divider);
-  border-radius: var(--ui-radius-dialog);
-  box-shadow: var(--ui-shadow-dialog);
-  transform: translate(-50%, -50%);
-}
-
-.project-dialog-title {
-  font-size: var(--ui-font-size-title);
-  line-height: var(--ui-line-height-title);
-  font-weight: 600;
-}
-
-.project-dialog-description {
-  margin-top: var(--ui-space-3);
-  color: var(--ui-text-secondary);
-  font-size: var(--ui-font-size-body);
-  line-height: var(--ui-line-height-body);
-}
-
 .project-form {
   display: flex;
   flex-direction: column;
@@ -523,8 +486,7 @@ p {
   line-height: var(--ui-line-height-label);
 }
 
-.project-form-field input,
-.project-form-field select {
+.project-form-field input {
   width: 100%;
   min-width: 0;
   min-height: var(--ui-control-height);
@@ -548,14 +510,6 @@ p {
   color: var(--ui-text-muted);
   font-size: var(--ui-font-size-caption);
   line-height: var(--ui-line-height-caption);
-}
-
-.project-dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: var(--ui-space-3);
-  margin-top: var(--ui-space-3);
 }
 
 /* Use the available application width, including at browser/UI zoom. */
@@ -1039,26 +993,11 @@ p {
   margin-top: 20px;
 }
 
-.theme-system-choices label {
+.theme-system-choice {
   display: grid;
+  width: min(100%, 18rem);
   min-width: 0;
-  max-width: 100%;
   gap: 8px;
   color: var(--ui-text-secondary);
   font-size: var(--ui-font-size-label);
-}
-
-.theme-system-choices select {
-  max-width: 100%;
-  padding: 8px 12px;
-  border: 1px solid var(--ui-border-control);
-  border-radius: var(--ui-radius-control);
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-control);
-  font: inherit;
-}
-
-.theme-system-choices select:focus-visible {
-  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
-  outline-offset: var(--ui-focus-offset);
 }

@@ -1,0 +1,69 @@
+/* Isolated fixture host setup; it intentionally does not import src/styles.css. */
+:root {
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-workspace);
+  color-scheme: var(--ui-color-scheme);
+  font-family: var(--ui-font-interface);
+}
+
+/* Keep host page resets inside the fixture; the portalled Dialog stays package-styled. */
+.fixture, .fixture * { box-sizing: border-box; }
+body { min-width: 320px; margin: 0; }
+.fixture button, .fixture input, .fixture select, .fixture textarea { font: inherit; }
+.fixture button:focus-visible, .fixture input:focus-visible, .fixture select:focus-visible { outline: var(--ui-focus-width) solid var(--ui-focus-ring); outline-offset: var(--ui-focus-offset); }
+.fixture h1, .fixture h2, .fixture p { margin: 0; }
+.fixture ::selection { color: var(--ui-selection-foreground); background: var(--ui-text-selection-bg); }
+
+#startup-status:not([hidden]) { display: block; padding: 8px 16px; color: var(--ui-text-secondary); }
+
+.fixture {
+  display: grid;
+  gap: var(--ui-space-6);
+  width: min(68rem, 100%);
+  margin-inline: auto;
+  padding: var(--ui-space-8);
+}
+
+.fixture-header,
+.fixture-section__header,
+.fixture-brand,
+.fixture-business-actions { display: flex; align-items: center; }
+.fixture-header, .fixture-section__header { justify-content: space-between; gap: var(--ui-space-6); }
+.fixture-brand { gap: var(--ui-space-3); }
+.fixture-brand h1 { font-size: var(--ui-font-size-title); line-height: var(--ui-line-height-title); }
+.fixture-intro, .fixture-section__header p, .fixture-footer { color: var(--ui-text-secondary); }
+.fixture-section { display: grid; gap: var(--ui-space-5); min-width: 0; padding: var(--ui-space-6); background: var(--ui-surface-content); border: 1px solid var(--ui-border-divider); border-radius: var(--ui-radius-control); }
+.fixture-section__header h2 { font-size: var(--ui-font-size-strong); line-height: var(--ui-line-height-strong); }
+.fixture-section__header p, .fixture-help, .fixture-pending, .fixture-result { font-size: var(--ui-font-size-caption); line-height: var(--ui-line-height-caption); }
+.fixture-theme { display: grid; gap: var(--ui-space-2); min-width: 10rem; color: var(--ui-text-secondary); font-size: var(--ui-font-size-caption); }
+.fixture-field input { box-sizing: border-box; min-height: var(--ui-control-height); padding: var(--ui-space-3) var(--ui-control-padding-inline); color: var(--ui-text-primary); background: var(--ui-surface-control); border: 1px solid var(--ui-border-control); border-radius: var(--ui-radius-control); font: inherit; }
+.fixture-field input:focus-visible { outline: var(--ui-focus-width) solid var(--ui-focus-ring); outline-offset: var(--ui-focus-offset); }
+.fixture-theme--compact { min-width: 0; }
+.fixture-result { min-height: var(--ui-line-height-caption); color: var(--ui-text-secondary); }
+.fixture-business-actions { flex-wrap: wrap; gap: var(--ui-space-3); }
+.fixture-footer { display: flex; justify-content: space-between; gap: var(--ui-space-5); font-size: var(--ui-font-size-caption); }
+.fixture-footer a { color: var(--ui-link-foreground); }
+
+/* These copied host resets and field styles belong to example business forms, not @lodestory/ui. */
+.project-form { display: flex; flex-direction: column; gap: var(--ui-space-7); margin-top: var(--ui-space-7); }
+.project-form, .project-form-field, .project-form-field *, .project-error { box-sizing: border-box; }
+.project-form p { margin: 0; }
+.project-form input:focus-visible, .project-form select:focus-visible { outline: var(--ui-focus-width) solid var(--ui-focus-ring); outline-offset: var(--ui-focus-offset); }
+.project-form-field { display: flex; flex-direction: column; gap: var(--ui-space-3); min-width: 0; font-size: var(--ui-font-size-label); line-height: var(--ui-line-height-label); }
+.project-form-field input, .project-form-field select { width: 100%; min-width: 0; min-height: var(--ui-control-height); padding: var(--ui-space-3) var(--ui-control-padding-inline); color: var(--ui-text-primary); background: var(--ui-surface-control); border: 1px solid var(--ui-border-control); border-radius: var(--ui-radius-control); font: inherit; }
+.project-form-field input::placeholder { color: var(--ui-text-placeholder); }
+.project-form-hint { color: var(--ui-text-muted); font-size: var(--ui-font-size-caption); line-height: var(--ui-line-height-caption); }
+.project-directory-field { display: flex; gap: var(--ui-space-3); }
+.project-directory-field > input { flex: 1; }
+.project-error { padding: var(--ui-space-3) var(--ui-space-4); color: var(--ui-status-danger); background: var(--ui-status-danger-bg); border: 1px solid var(--ui-status-danger-border); border-radius: var(--ui-radius-control); overflow-wrap: anywhere; }
+
+.standalone-content { display: grid; gap: var(--ui-space-5); min-width: 0; margin-top: var(--ui-space-7); }
+.fixture-field { display: grid; gap: var(--ui-space-2); color: var(--ui-text-secondary); font-size: var(--ui-font-size-label); }
+.fixture-help, .fixture-pending { margin: 0; color: var(--ui-text-muted); }
+.fixture-pending { padding: var(--ui-space-3); background: var(--ui-surface-secondary); border-radius: var(--ui-radius-control); }
+
+@media (max-width: 680px) {
+  .fixture { padding: var(--ui-space-5); }
+  .fixture-header, .fixture-section__header, .fixture-footer { align-items: stretch; flex-direction: column; }
+  .fixture-section { padding: var(--ui-space-4); }
+}

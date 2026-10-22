@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import ts from "typescript";
 import { createSdkLoader } from "./sdkFixture.mjs";
+import { resolveUiPackageImport } from "./uiPackageFixture.mjs";
 
 const sourceRoot = fileURLToPath(new URL("../../src/", import.meta.url));
-const uiPackageRoot = fileURLToPath(new URL("../../packages/ui/", import.meta.url));
 
 export function deferred() {
   let resolvePromise;
@@ -239,7 +239,8 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   function resolveLocal(fromPath, specifier) {
     if (!specifier.startsWith(".")) throw new Error(`Unexpected local import '${specifier}' from ${fromPath}`);
     const base = resolve(dirname(fromPath), specifier);
-    const candidates = [base, `${base}.tsx`, `${base}.ts`, `${base}.css`, resolve(base, "index.tsx"), resolve(base, "index.ts")];
+    const candidates = [base, `${base}.tsx`, `${base}.ts`, `${base}.js`, `${base}.mjs`, `${base}.css`,
+      resolve(base, "index.tsx"), resolve(base, "index.ts")];
     const path = candidates.find((candidate) => {
       try { readFileSync(candidate, "utf8"); return true; }
       catch { return false; }
@@ -343,8 +344,9 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       Array,
       require(specifier) {
         moduleImports.push({ from: relativePath, specifier });
+        const uiImport = resolveUiPackageImport(specifier, load);
+        if (uiImport.handled) return uiImport.value;
         if (specifier.startsWith("@lodestory/sdk")) return sdk.requireSdk(specifier, relativePath);
-        if (specifier === "@lodestory/ui") return load(resolve(uiPackageRoot, "dist/index.js"));
         if (specifier === "react") return React;
         if (specifier === "react-dom/client") return ReactDOM;
         if (specifier === "react/jsx-runtime") {

@@ -1,7 +1,7 @@
 import {useLayoutEffect, useRef, useSyncExternalStore} from "react";
 import type {LayoutContent, LayoutRole, LayoutViewProps} from "@lodestory/sdk/layout";
 import type {ErrorUiService} from "@lodestory/sdk/error";
-import { Button, IconButton, Icon } from "@lodestory/ui";
+import { Button, IconButton, Icon, Select } from "@lodestory/ui";
 import type {LayoutStore} from "./layoutStore";
 import type {createNavigationWidthModel} from "./navigationWidth";
 import {NavigationResizer} from "./NavigationResizer";
@@ -62,10 +62,9 @@ export function DefaultLayout({store, widths, active, ErrorBoundary}: LayoutView
     return <aside ref={role === "auxiliary" ? auxiliary : undefined} className={`layout-panel layout-${role}`} data-overlay={!docked} hidden={!current}
       aria-label={role === "navigation" ? "导航内容" : "辅助内容"}>
       <div className="layout-panel-header">
-        {entries.length > 1 ? <div className="layout-panel-switcher"><select aria-label={role === "navigation" ? "切换导航内容" : "切换辅助内容"}
-          value={current?.id ?? entries[0].id} onChange={event => store.show(event.target.value)}>
-          {entries.map(entry => <option key={entry.id} value={entry.id}>{entry.title}</option>)}
-        </select><Icon name="chevronDown" size="small"/></div> : <h2>{current?.title ?? entries[0]?.title}</h2>}
+        {entries.length > 1 ? <div className="layout-panel-switcher"><Select aria-label={role === "navigation" ? "切换导航内容" : "切换辅助内容"}
+          value={current?.id ?? entries[0].id} onValueChange={id => store.show(id)}
+          options={entries.map(entry => ({value: entry.id, label: entry.title}))} /></div> : <h2>{current?.title ?? entries[0]?.title}</h2>}
         {current && <IconButton label={`收起${current.title}`} onClick={() => close(current)}><Icon name="close" size="small"/></IconButton>}
       </div>
       {entries.map(renderContent)}

@@ -117,6 +117,3 @@
 @media (forced-colors: active) {
   .file-tree-entry[aria-current="page"] { color: HighlightText; background: Highlight; }
 }
-.project-delete-description {
-  overflow-wrap: anywhere;
-}

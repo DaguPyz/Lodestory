@@ -1,7 +1,7 @@
 import React, { forwardRef, useState } from "react";
 import { createPortal, flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { Dialog } from "@base-ui/react/dialog";
+import { Dialog, DialogActions, DialogClose } from "@lodestory/ui";
 import { ContextMenuProvider, ContextMenuRegion, useContextMenus, type MenuEntry } from "../../src/plugins/context-menu";
 import "../../src/styles.css";
 
@@ -150,16 +150,14 @@ function Fixture() {
     {createPortal(<ContextMenuRegion label="Portal 菜单" items={[{ id: "portal", label: "Portal 动作", onSelect: () => setResult("Portal") }]}>
       <button id="portal-region" className="button" style={{ position: "fixed", right: 16, bottom: 16 }}>Portal 区域</button>
     </ContextMenuRegion>, document.body)}
-    <Dialog.Root open={dialogOpen} onOpenChange={setDialogOpen}>
-      <Dialog.Portal><Dialog.Backdrop className="project-dialog-backdrop" /><Dialog.Popup className="project-dialog">
-        <Dialog.Title>对话框内复用</Dialog.Title>
-        <Dialog.Description>此区域复用相同公共菜单组件。</Dialog.Description>
+    <Dialog open={dialogOpen} onOpenChange={setDialogOpen} title="对话框内复用" description="此区域复用相同公共菜单组件。">
         <ContextMenuRegion label="对话框菜单" items={[{ id: "dialog", label: "对话框动作", onSelect: () => setResult("对话框") }]}>
           <button id="dialog-region" className="button">对话框响应区域</button>
         </ContextMenuRegion>
-        <Dialog.Close className="button">关闭对话框</Dialog.Close>
-      </Dialog.Popup></Dialog.Portal>
-    </Dialog.Root>
+        <DialogActions>
+          <DialogClose>关闭对话框</DialogClose>
+        </DialogActions>
+    </Dialog>
     <ul aria-label="检查结果">{checks.map((message) => <li key={message}>{message}</li>)}</ul>
   </main>;
 }

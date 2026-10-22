@@ -1,7 +1,7 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ComponentPropsWithRef } from "react";
 import type { FocusSurface } from "./FocusSurface.js";
 
-type NativeButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "className" | "style">;
+type NativeButtonProps = Omit<ComponentPropsWithRef<"button">, "className" | "style">;
 
 type ButtonStateProps = {
   /** Whether the owning selection context is active; independent of keyboard focus. */

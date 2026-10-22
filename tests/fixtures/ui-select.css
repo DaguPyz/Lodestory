@@ -1,0 +1,54 @@
+/* Host layout only; @lodestory/ui owns Select and Dialog surfaces and states. */
+:root {
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-workspace);
+  color-scheme: var(--ui-color-scheme);
+  font-family: var(--ui-font-interface);
+}
+
+body { min-width: 320px; margin: 0; }
+#startup-status:not([hidden]) { display: block; padding: 8px 16px; color: var(--ui-text-secondary); }
+
+.fixture {
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--ui-space-6);
+  width: min(76rem, 100%);
+  margin-inline: auto;
+  padding: var(--ui-space-8);
+}
+
+.fixture h1, .fixture h2, .fixture p { margin: 0; }
+.fixture h1 { font-size: var(--ui-font-size-title); line-height: var(--ui-line-height-title); }
+.fixture__header, .fixture__section-heading, .fixture__bottom-grid, .fixture__form { display: flex; }
+.fixture__header, .fixture__section-heading { align-items: center; justify-content: space-between; gap: var(--ui-space-6); }
+.fixture__header > div:first-child { display: grid; gap: var(--ui-space-2); }
+.fixture__header p, .fixture__section-heading p, .fixture__footer, .fixture__theme-status { color: var(--ui-text-secondary); font-size: var(--ui-font-size-caption); line-height: var(--ui-line-height-caption); }
+.fixture__theme-control { display: grid; gap: var(--ui-space-2); min-width: min(20rem, 100%); }
+.fixture__field { display: grid; gap: var(--ui-space-2); min-width: 0; color: var(--ui-text-secondary); font-size: var(--ui-font-size-label); line-height: var(--ui-line-height-label); }
+.fixture__theme-control .fixture__field { font-size: var(--ui-font-size-caption); }
+.fixture__section { display: grid; gap: var(--ui-space-5); min-width: 0; padding: var(--ui-space-6); background: var(--ui-surface-content); border: 1px solid var(--ui-border-divider); border-radius: var(--ui-radius-control); }
+.fixture__section-heading { align-items: baseline; }
+.fixture__section-heading h2 { font-size: var(--ui-font-size-strong); line-height: var(--ui-line-height-strong); }
+.fixture__section-heading p { text-align: right; }
+.fixture__shortcut-hint { color: var(--ui-text-secondary); font-size: var(--ui-font-size-caption); line-height: var(--ui-line-height-caption); }
+.fixture__fields { display: grid; gap: var(--ui-space-5); min-width: 0; }
+.fixture__fields--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.fixture__fields--two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fixture__result { min-height: var(--ui-line-height-caption); color: var(--ui-text-secondary); font-size: var(--ui-font-size-caption); overflow-wrap: anywhere; }
+.fixture__bottom-grid { align-items: stretch; gap: var(--ui-space-6); }
+.fixture__bottom-grid > .fixture__section { flex: 1 1 0; }
+.fixture__form { flex-direction: column; align-items: flex-start; gap: var(--ui-space-5); }
+.fixture__form .fixture__field { width: min(28rem, 100%); }
+.fixture__field-hint { color: var(--ui-text-muted); font-size: var(--ui-font-size-caption); line-height: var(--ui-line-height-caption); }
+.fixture__dialog-content { display: grid; gap: var(--ui-space-5); margin-top: var(--ui-space-7); }
+.fixture__footer { display: flex; justify-content: space-between; gap: var(--ui-space-5); }
+.fixture__footer a { color: var(--ui-link-foreground); text-underline-offset: .18em; }
+
+@media (max-width: 760px) {
+  .fixture { padding: var(--ui-space-5); }
+  .fixture__header, .fixture__section-heading, .fixture__footer { align-items: stretch; flex-direction: column; }
+  .fixture__section-heading p { text-align: left; }
+  .fixture__fields--three, .fixture__fields--two { grid-template-columns: minmax(0, 1fr); }
+  .fixture__bottom-grid { flex-direction: column; }
+}

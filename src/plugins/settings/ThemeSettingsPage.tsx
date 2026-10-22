@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore, type CSSProperties } from "react";
-import { Button, Icon } from "@lodestory/ui";
+import { Button, Icon, Select } from "@lodestory/ui";
 import type { ResolvedTheme, ThemePreference, ThemeService } from "@lodestory/sdk/theme";
 import { ProjectPageLayout } from "../../components/ProjectPageLayout";
 
@@ -117,14 +117,21 @@ export function ThemeSettingsPage({ service, active, onBack }: ThemeSettingsPage
                 <div className="theme-system-choices">
                   {(["light", "dark"] as const).map(type => {
                     const slot = type === "light" ? "lightThemeId" : "darkThemeId";
+                    const labelId = `system-theme-${type}-label`;
+                    const options = [
+                      ...(!themes.some(item => item.id === preference[slot] && item.type === type)
+                        ? [{value: preference[slot], label: "主题暂不可用", disabled: true}]
+                        : []),
+                      ...themes.filter(item => item.type === type).map(item => ({value: item.id, label: item.name})),
+                    ];
                     return (
-                      <label key={type}>
-                        <span>系统为{type === "light" ? "浅色" : "深色"}时</span>
-                        <select value={preference[slot]} disabled={!systemLight || !systemDark} onChange={event => { if (systemLight && systemDark) service.setPreference({ mode: "system", lightThemeId: systemLight.id, darkThemeId: systemDark.id, [slot]: event.target.value }); }}>
-                          {!themes.some(item => item.id === preference[slot] && item.type === type) && <option value={preference[slot]} disabled>主题暂不可用</option>}
-                          {themes.filter(item => item.type === type).map(item => <option key={item.id} value={item.id}>{item.name}</option>)}
-                        </select>
-                      </label>
+                      <div className="theme-system-choice" key={type}>
+                        <span id={labelId}>系统为{type === "light" ? "浅色" : "深色"}时</span>
+                        <Select aria-labelledby={labelId} value={preference[slot]} options={options}
+                          disabled={!systemLight || !systemDark} onValueChange={value => {
+                            if (systemLight && systemDark) service.setPreference({ mode: "system", lightThemeId: systemLight.id, darkThemeId: systemDark.id, [slot]: value });
+                          }} />
+                      </div>
                     );
                   })}
                 </div>

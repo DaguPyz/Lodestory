@@ -51,15 +51,7 @@
   min-height: var(--ui-toolbar-height); gap: var(--ui-space-3); padding-inline: var(--ui-space-5);
 }
 .layout-panel-header h2 { font-size: var(--ui-font-size-strong); line-height: var(--ui-line-height-strong); font-weight: 600; }
-.layout-panel-switcher { position: relative; display: flex; align-items: center; min-width: 0; }
-.layout-panel-switcher select {
-  appearance: none; min-width: 0; max-width: 100%;
-  padding: var(--ui-space-2) calc(var(--ui-icon-small) + var(--ui-space-3)) var(--ui-space-2) 0;
-  border: 0; border-radius: var(--ui-radius-control); color: var(--ui-text-primary); background: transparent;
-  font-size: var(--ui-font-size-strong); line-height: var(--ui-line-height-strong); font-weight: 600; cursor: pointer;
-}
-.layout-panel-switcher > .icon { position: absolute; right: 0; color: var(--ui-text-secondary); pointer-events: none; }
-.layout-panel-switcher option { color: var(--ui-text-primary); background: var(--ui-surface-panel); }
+.layout-panel-switcher { display: flex; flex: 0 1 18rem; align-items: center; min-width: 0; max-width: 100%; }
 .layout-main { grid-column: 3; grid-row: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .layout-tabs { display: flex; flex-direction: column; flex: 0 0 auto; min-width: 0; }
 .layout-tabs > .layout-content { flex: 0 0 auto; }

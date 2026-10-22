@@ -11,7 +11,10 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/layout`：内容用途、登记描述、布局视图、快照和服务类型，以及共享单例 `layoutKey`。
 - `@lodestory/sdk/workbench`：项目与工作台会话、参与者生命周期、快照和服务类型，以及共享单例 `workbenchKey`。
 - `@lodestory/sdk/documents`：打开文档、文档工作区与文档服务类型，以及 `documentsKey` 和新建/显示请求事件。
+- `@lodestory/sdk/body-editor`：正文格式、编辑器定义与宿主传入的编辑器属性；`EditorHandle` 可按需贡献通用上下文菜单操作。
 - `@lodestory/sdk/theme`：主题定义、仅含 ID 的选择配置、选择策略、管理服务和快照类型，以及共享单例 `themeKey`。
+
+正文格式插件可通过 `EditorHandle.getContextMenuActions()` 动态返回当前操作快照。每项操作由编辑器插件拥有，包含稳定的 `id`、`label`、可选 `disabled` 和 `run()`；正文宿主负责展示并在执行时复核编辑器生命周期与编辑状态。未提供该方法的编辑器无需贡献菜单操作。
 
 ## 生命周期与 key
 

@@ -4,14 +4,55 @@
   font-size: var(--ui-font-size-caption);
 }
 
-.document-tabs {
-  display: flex;
+.document-tabs-shell {
+  position: relative;
   flex-shrink: 0;
-  min-height: var(--ui-toolbar-height);
-  overflow-x: auto;
+  min-width: 0;
+  padding-top: var(--ui-space-3);
   background: var(--ui-surface-chrome);
   border-bottom: 1px solid var(--ui-border-divider);
-  scrollbar-width: thin;
+}
+
+.document-tabs {
+  min-height: var(--ui-toolbar-height);
+  scrollbar-width: none;
+  outline-offset: calc(-1 * var(--ui-focus-width));
+}
+
+.document-tabs::-webkit-scrollbar { display: none; }
+
+.document-tabs-content {
+  display: flex;
+}
+
+/* Reserve the top track so showing it never moves the tabs or the manuscript. */
+.document-tabs-scrollbar {
+  position: absolute;
+  top: 0;
+  inset-inline: 0;
+  display: flex;
+  height: var(--ui-space-3);
+  padding: var(--ui-space-1);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.document-tabs-shell:hover > .document-tabs-scrollbar,
+.document-tabs-scrollbar:active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.document-tabs-scrollbar-thumb {
+  height: 100%;
+  padding-block: calc((var(--ui-space-3) - 2 * var(--ui-space-1) - 2px) / 2);
+  border-radius: var(--ui-space-3);
+  background-color: var(--ui-border-decoration);
+  background-clip: content-box;
+}
+
+.document-tabs-scrollbar-thumb:active {
+  background-color: var(--ui-border-control);
 }
 
 .document-tab {
@@ -84,5 +125,7 @@
 }
 
 @media (forced-colors: active) {
+  .document-tabs-scrollbar-thumb,
+  .document-tabs-scrollbar-thumb:is(:hover, :active) { background-color: ButtonText; }
   .document-tab[data-active="true"]::after { background: Highlight; }
 }

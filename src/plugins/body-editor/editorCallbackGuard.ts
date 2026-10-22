@@ -24,7 +24,32 @@ export function createEditorCallbackGuard(
 ): EditorCallbackGuard {
   let valid = true;
   let hasHandle = false;
+  let currentHandle: EditorHandle | null = null;
+  let exposedHandle: EditorHandle | null = null;
   const isValid = () => valid && isCurrent(token);
+
+  function exposeHandle(handle: EditorHandle): EditorHandle {
+    if (currentHandle === handle && exposedHandle) return exposedHandle;
+    currentHandle = handle;
+    const getActions = handle.getContextMenuActions;
+    exposedHandle = getActions ? {
+      focus() {
+        if (isValid() && currentHandle === handle) handle.focus();
+      },
+      getContextMenuActions() {
+        if (!isValid() || currentHandle !== handle) return [];
+        return getActions.call(handle).map(action => ({
+          ...action,
+          run() {
+            if (!isValid() || currentHandle !== handle) return;
+            return action.run();
+          },
+        }));
+      },
+    } : handle;
+    return exposedHandle;
+  }
+
   return {
     token,
     onChange(content) {
@@ -34,9 +59,11 @@ export function createEditorCallbackGuard(
       if (!isValid()) return;
       if (handle) {
         hasHandle = true;
-        handlers.onReady(handle);
+        handlers.onReady(exposeHandle(handle));
       } else if (hasHandle) {
         hasHandle = false;
+        currentHandle = null;
+        exposedHandle = null;
         handlers.onReady(null);
       }
     },
@@ -52,6 +79,8 @@ export function createEditorCallbackGuard(
       const shouldClear = hasHandle && isCurrent(token);
       valid = false;
       hasHandle = false;
+      currentHandle = null;
+      exposedHandle = null;
       if (shouldClear) handlers.onReady(null);
     },
   };

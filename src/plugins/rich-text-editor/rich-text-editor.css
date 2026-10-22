@@ -184,36 +184,6 @@
   color: var(--ui-text-secondary);
 }
 
-.rich-text-editor-actions {
-  display: flex;
-  justify-content: flex-end;
-  padding-block: var(--ui-space-2);
-}
-
-.rich-text-editor-convert {
-  min-height: var(--ui-control-height);
-  padding-inline: var(--ui-space-3);
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-control);
-  border: 1px solid var(--ui-border-control);
-  border-radius: var(--ui-radius-control);
-  cursor: pointer;
-}
-
-.rich-text-editor-convert:hover:not(:disabled) {
-  background: var(--ui-surface-hover);
-}
-
-.rich-text-editor-convert:focus-visible {
-  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
-  outline-offset: var(--ui-focus-offset);
-}
-
-.rich-text-editor-convert:disabled {
-  color: var(--ui-text-disabled);
-  cursor: default;
-}
-
 .rich-text-editor-error,
 .rich-text-editor-loading {
   margin: 0;

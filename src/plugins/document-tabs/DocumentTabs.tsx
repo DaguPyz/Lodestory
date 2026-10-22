@@ -1,4 +1,5 @@
 import { IconButton, Icon } from "@lodestory/ui";
+import { ScrollArea } from "@base-ui/react/scroll-area";
 import type {OpenDocument} from "@lodestory/sdk/documents";
 import {ContextMenuRegion} from "../context-menu";
 
@@ -19,7 +20,10 @@ export function DocumentTabs({documents, activeDocument, onSelect, onClose, onSa
       {id: "new-document", label: "新建文档", icon: <Icon name="plus"/>, disabled: newDisabled, restoreFocus: false,
         onSelect: () => { if (!newDisabled) onNewDocument(); }},
     ]}>
-      <nav className="document-tabs" aria-label="已打开的文稿" tabIndex={0}>
+      <ScrollArea.Root className="document-tabs-shell">
+      <ScrollArea.Viewport className="document-tabs" render={<nav aria-label="已打开的文稿"/>}
+        style={{overflowX: "auto", overflowY: "hidden"}}>
+      <ScrollArea.Content className="document-tabs-content">
         {documents.map(document => (
           <ContextMenuRegion key={document.id} context={document.id} label={`${document.fileName}标签操作`} items={[
             {id: "save", label: "保存", disabled: disabled || document.saveState === "saving",
@@ -46,7 +50,12 @@ export function DocumentTabs({documents, activeDocument, onSelect, onClose, onSa
             </div>
           </ContextMenuRegion>
         ))}
-      </nav>
+      </ScrollArea.Content>
+      </ScrollArea.Viewport>
+      <ScrollArea.Scrollbar className="document-tabs-scrollbar" orientation="horizontal">
+        <ScrollArea.Thumb className="document-tabs-scrollbar-thumb"/>
+      </ScrollArea.Scrollbar>
+      </ScrollArea.Root>
     </ContextMenuRegion>
   );
 }

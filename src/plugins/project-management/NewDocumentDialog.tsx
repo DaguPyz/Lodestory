@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { Button, Dialog, DialogActions, DialogClose } from "@lodestory/ui";
+import { Dialog } from "@lodestory/ui";
 import type { CreateEntryKind, DocumentExtension } from "./projectManagementModel";
 
 type NewDocumentDialogProps = {
@@ -33,24 +33,20 @@ export function NewDocumentDialog({ open = true, initialParent, kind = "document
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
       onOpenChangeComplete={(nextOpen) => { if (!nextOpen) onCloseComplete?.(); }} title={title}
-      description={directory ? "创建文件夹，整理章节和创作资料。" : "为新的章节或创作资料取个名字。"}
       busy={busy} initialFocus={input}>
       <form className="project-form" aria-busy={busy} onSubmit={(event) => {
         event.preventDefault();
         if (name.trim() && !busy) void onCreate(parentPath, name.trim());
       }}>
         <div className="project-form-field">
-          <label htmlFor="new-document-name">{directory ? "文件夹名称" : "文档名称"}</label>
           <input ref={input} id="new-document-name" name="documentName" value={name} onChange={(event) => setName(event.target.value)}
-            aria-describedby="new-document-name-hint"
+            aria-label={directory ? "文件夹名称" : "文档名称"}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) event.preventDefault();
+            }}
             required maxLength={255} autoComplete="off" placeholder={directory ? "例如：人物设定" : "例如：第一章"} disabled={busy} />
-          <span id="new-document-name-hint" className="project-form-hint">{directory ? "将在当前目录下创建。" : extension ? `将保存为 .${extension} 格式，无需输入后缀。` : "默认使用 .md 格式，也可输入 .txt 或 .lode 后缀。"}</span>
         </div>
         {error && <p className="project-error" role="alert">{error}</p>}
-        <DialogActions>
-          <DialogClose disabled={busy}>取消</DialogClose>
-          <Button type="submit" variant="primary" disabled={busy || !name.trim()}>{busy ? "正在创建…" : directory ? "创建文件夹" : "创建文档"}</Button>
-        </DialogActions>
       </form>
     </Dialog>
   );

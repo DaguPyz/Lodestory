@@ -108,7 +108,22 @@ export default function RichTextEditor(props: RichTextEditorProps) {
         onChange: content => current.current.onChange(content),
         onReady: handle => {
           if (!disposed) setReady(handle !== null);
-          current.current.onReady(handle);
+          current.current.onReady(handle ? {
+            ...handle,
+            getContextMenuActions: () => {
+              const latest = current.current;
+              if (disposed || latest.documentId !== initial.documentId || latest.format !== "plain-text" || !latest.onSaveAs) return [];
+              return [{
+                id: "convert-to-rich-text",
+                label: conversionLock.current ? "正在转换…" : "转换为富文本文档",
+                disabled: conversionLock.current || latest.readOnly || !latest.active || session.current !== instance,
+                run: () => {
+                  if (disposed || current.current.documentId !== initial.documentId || session.current !== instance) return;
+                  return convertToRichText();
+                },
+              }];
+            },
+          } : null);
         },
         onError: error => {
           if (!disposed) current.current.onError(error);
@@ -162,12 +177,6 @@ export default function RichTextEditor(props: RichTextEditorProps) {
   }
 
   return <div className="rich-text-editor" aria-busy={!ready || converting}>
-    {props.format === "plain-text" && props.onSaveAs && <div className="rich-text-editor-actions">
-      <button type="button" className="rich-text-editor-convert" onClick={convertToRichText}
-        disabled={!ready || converting || props.readOnly || !props.active}>
-        {converting ? "正在转换…" : "转换为富文本文档"}
-      </button>
-    </div>}
     {conversionError && <p className="rich-text-editor-error" role="alert">{conversionError}</p>}
     {props.format === "rich-delta" && fontLoading &&
       <p className="rich-text-editor-loading" role="status">正在读取系统字体…</p>}
@@ -408,5 +417,9 @@ function clearHistory(quill: Quill) {
 }
 
 function asError(reason: unknown): Error {
-  return reason instanceof Error ? reason : new Error(String(reason));
+  if (reason instanceof Error) return reason;
+  if (typeof reason === "object" && reason !== null && "message" in reason && typeof reason.message === "string") {
+    return new Error(reason.message);
+  }
+  return new Error(String(reason));
 }

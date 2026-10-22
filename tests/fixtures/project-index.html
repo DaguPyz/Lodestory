@@ -12,6 +12,9 @@
       import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
       const scenario = new URLSearchParams(location.search).get("scenario");
       const documentFiles = new Map([["正文/已有章节.md", "这是已有文稿。"], ["故事大纲.txt", "故事的大纲。"]]);
+      if (scenario === "save-as-conflict") {
+        documentFiles.set("故事大纲.lode", JSON.stringify({format: "quill-delta", version: 1, ops: [{insert: "已存在的富文本文档。\n"}]}));
+      }
       const documentFolders = ["正文", "资料"];
       const parentOf = (path) => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
       function documentTree(parent = "") {
@@ -31,12 +34,16 @@
         if (command === "list_documents") return documentTree();
         if (command === "create_document") {
           if (scenario === "create-error") throw { code: "document_create_failed", message: "创建文档失败：保存目录不可写。" };
+          if (scenario === "save-as-error" && /\.lode$/i.test(args.name)) {
+            throw { code: "document_create_failed", message: "转换保存失败：模拟磁盘写入错误。" };
+          }
           if (/[<>:"/\\|?*]/.test(args.name) || args.name.startsWith(".")) throw { code: "invalid_document_name", message: "文档名称不能包含路径分隔符或特殊字符。" };
-          const name = /\.(md|markdown|txt)$/i.test(args.name) ? args.name : `${args.name}.md`;
+          const name = /\.(md|markdown|txt|lode)$/i.test(args.name) ? args.name : `${args.name}.md`;
           const path = args.parentPath ? `${args.parentPath}/${name}` : name;
           if (documentFiles.has(path)) throw { code: "document_exists", message: "已存在同名文档，请换一个名称。" };
-          documentFiles.set(path, "");
-          return { path, fileName: name, content: "" };
+          const content = args.content ?? "";
+          documentFiles.set(path, content);
+          return { path, fileName: name, content };
         }
         if (command === "read_document") {
           if (!documentFiles.has(args.path)) throw { code: "document_unavailable", message: "文档已被移除。" };
@@ -49,6 +56,7 @@
           documentFiles.set(args.path, args.content);
           return;
         }
+        if (command === "list_system_font_families") return ["Arial", "Noto Sans", "宋体"];
         if (scenario === "corrupt") throw { code: "invalid_index", message: "项目索引格式错误，原文件已保留。" };
         if (command === "list_recent_projects") return records;
         if (command === "pick_project_directory") {

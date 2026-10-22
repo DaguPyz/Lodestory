@@ -2,7 +2,7 @@ import {Component, useCallback, useEffect, useRef, useState, type ComponentType,
 import { Button, Icon } from "@lodestory/ui";
 import type {OpenDocument} from "@lodestory/sdk/documents";
 import type {EditorDefinition, EditorFormat, EditorHandle, EditorProps} from "@lodestory/sdk/body-editor";
-import {ContextMenuRegion} from "../context-menu";
+import {ContextMenuRegion, type MenuEntry} from "../context-menu";
 import {createEditorCallbackGuard, type EditorCallbackGuard} from "./editorCallbackGuard";
 
 export function Manuscript({document, visible, active, readOnly = false, format, definition, onChange, onSave, onSaveAs, onEditorReady}: {
@@ -17,14 +17,68 @@ export function Manuscript({document, visible, active, readOnly = false, format,
   onSave: () => unknown | Promise<unknown>;
   onEditorReady: (documentId: string, handle: EditorHandle | null) => void;
 }) {
-  const ready = useCallback((handle: EditorHandle | null) => onEditorReady(document.id, handle), [document.id, onEditorReady]);
+  const handleRef = useRef<EditorHandle | null>(null);
+  const [editorHandle, setEditorHandle] = useState<EditorHandle | null>(null);
+  const handleGeneration = useRef(0);
+  const latest = useRef({
+    documentId: document.id, visible, active, readOnly, saveState: document.saveState,
+    handle: handleRef.current, generation: handleGeneration.current, onSave,
+  });
+  latest.current = {
+    documentId: document.id, visible, active, readOnly, saveState: document.saveState,
+    handle: handleRef.current, generation: handleGeneration.current, onSave,
+  };
+  const ready = useCallback((handle: EditorHandle | null) => {
+    if (handleRef.current !== handle) handleGeneration.current += 1;
+    handleRef.current = handle;
+    latest.current = {
+      ...latest.current, handle, generation: handleGeneration.current,
+    };
+    setEditorHandle(handle);
+    onEditorReady(document.id, handle);
+  }, [document.id, onEditorReady]);
   const editorActive = active && visible;
+  const editorActions = editorHandle?.getContextMenuActions?.() ?? [];
+
+  const menuItems = (contextDocumentId: string): readonly MenuEntry<string>[] => {
+    const current = latest.current;
+    if (contextDocumentId !== current.documentId) return [];
+    const actions = current.handle?.getContextMenuActions?.() ?? [];
+    const generation = current.generation;
+    const handle = current.handle;
+    const entries: MenuEntry<string>[] = [{
+      id: "save", label: "保存",
+      disabled: current.readOnly || current.saveState === "saving",
+      onSelect: id => {
+        const now = latest.current;
+        if (id !== contextDocumentId || now.documentId !== contextDocumentId
+          || !now.visible || !now.active || now.readOnly || now.saveState === "saving") return;
+        return now.onSave();
+      },
+    }];
+    if (actions.length) entries.push({id: "editor-actions-separator", type: "separator"});
+    for (const action of actions) {
+      entries.push({
+        id: `editor:${generation}:${action.id}`,
+        label: action.label,
+        disabled: !current.visible || !current.active || current.readOnly || action.disabled,
+        onSelect: id => {
+          const now = latest.current;
+          if (id !== contextDocumentId || now.documentId !== contextDocumentId
+            || !now.visible || !now.active || now.readOnly
+            || now.handle !== handle || now.generation !== generation) return;
+          const liveAction = now.handle?.getContextMenuActions?.().find(candidate => candidate.id === action.id);
+          if (!liveAction || liveAction.disabled) return;
+          return liveAction.run();
+        },
+      });
+    }
+    return entries;
+  };
 
   return (
-    <ContextMenuRegion context={document.id} label={document.fileName + "文稿操作"} items={[
-      {id: "save", label: "保存", disabled: readOnly || document.saveState === "saving",
-        onSelect: id => { if (!readOnly && visible && document.id === id) return onSave(); }},
-    ]}>
+    <ContextMenuRegion context={document.id} label={document.fileName + "文稿操作"}
+      mode={editorActions.length ? "custom" : undefined} items={menuItems}>
     <section
       className="editor-document"
       id={"editor-document-" + document.id}

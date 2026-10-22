@@ -79,13 +79,19 @@ function Fixture() {
       check(!!document.querySelector('[role="menu"][aria-label="对话框菜单"]'), "模态对话框内可以复用组件");
       menus.closeAll();
       flushSync(() => setDialogOpen(false));
-      await settle();
+      for (let attempt = 0; attempt < 20 && document.querySelector('[role="dialog"]'); attempt += 1) await settle();
       check(!rightClick("native-region"), "显式原生区域保留默认行为");
       check(rightClick("custom-input"), "输入区域可以显式配置自定义菜单");
       await settle();
       check(!!document.querySelector('[role="menu"][aria-label="输入菜单"]'), "自定义输入菜单可展示");
       menus.closeAll();
       await settle();
+      check(rightClick("custom-descendant"), "显式自定义区域允许可编辑后代打开菜单");
+      await settle();
+      check(!!document.querySelector('[role="menu"][aria-label="编辑器菜单"]'), "编辑器内部正文显示所属区域菜单");
+      check(!rightClick("nested-native-input"), "自定义区域内的原生边界仍保留原生菜单");
+      await settle();
+      check(menuCount() === 0, "原生边界不会回退到自定义父菜单");
       const corners = [{ x: 1, y: 1 }, { x: innerWidth - 1, y: 1 }, { x: 1, y: innerHeight - 1 }, { x: innerWidth - 1, y: innerHeight - 1 }];
       for (const [index, point] of corners.entries()) {
         rightClick("inner", point);
@@ -143,6 +149,14 @@ function Fixture() {
         <p><textarea id="native-input" aria-label="原生正文" defaultValue="保留文字选区和撤销" /></p>
         <ContextMenuRegion mode="custom" label="输入菜单" items={[{ id: "input", label: "输入区域动作", onSelect: () => setResult("输入") }]}>
           <textarea id="custom-input" aria-label="自定义正文" defaultValue="显式启用自定义菜单" />
+        </ContextMenuRegion>
+        <ContextMenuRegion mode="custom" label="编辑器菜单" items={[{ id: "editor", label: "编辑器动作", onSelect: () => setResult("编辑器") }]}>
+          <div>
+            <div id="custom-descendant" contentEditable suppressContentEditableWarning aria-label="编辑器内部正文">编辑器的可编辑后代</div>
+            <ContextMenuRegion mode="native">
+              <textarea id="nested-native-input" aria-label="嵌套原生正文" defaultValue="保留独立原生边界" />
+            </ContextMenuRegion>
+          </div>
         </ContextMenuRegion>
         <div style={{ height: 500 }} />
       </section>

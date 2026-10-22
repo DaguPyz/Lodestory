@@ -5,9 +5,19 @@ import {createServiceKey} from "./ServiceKey.js";
 /** 持久化到文档工作区的正文格式。 */
 export type EditorFormat = "markdown" | "plain-text" | "rich-delta";
 
+/** 编辑器通过公开契约向宿主贡献的通用正文上下文菜单操作。 */
+export type EditorContextMenuAction = Readonly<{
+    id: string;
+    label: string;
+    disabled?: boolean;
+    run(): void | Promise<void>;
+}>;
+
 /** 编辑器实例对宿主开放的最小控制能力。 */
 export type EditorHandle = Readonly<{
     focus(): void;
+    /** 每次调用返回当前可用的菜单操作快照。 */
+    getContextMenuActions?(): readonly EditorContextMenuAction[];
 }>;
 
 /** 正文编辑器宿主传给格式实现的文档内容与交互状态。 */

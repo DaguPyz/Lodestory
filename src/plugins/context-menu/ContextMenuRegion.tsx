@@ -116,7 +116,7 @@ export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T
     const boundary = target?.closest("[data-context-menu-region]");
     if (boundary && boundary !== region) return false;
     const editable = target?.closest(editableSelector);
-    if (editable && (editable !== region || latest.current.mode !== "custom")) return false;
+    if (editable && latest.current.mode !== "custom") return false;
     const context = latest.current.context as T;
     if (!resolveMenu(latest.current.items ?? [], context).length) return false;
     const focus = target?.closest<HTMLElement>(focusableSelector) ?? region.querySelector<HTMLElement>(focusableSelector) ?? region;

@@ -33,7 +33,7 @@ export function NewProjectDialog({ open = true, busy, error, onClose, onCloseCom
   return (
     <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) onClose(); }}
       onOpenChangeComplete={(nextOpen) => { if (!nextOpen) onCloseComplete?.(); }} title="新建项目"
-      description="输入小说名称，选择保存目录。" busy={busy} initialFocus={nameInput}>
+      busy={busy} initialFocus={nameInput}>
       <form className="project-form" aria-busy={busy} onSubmit={(event) => {
         event.preventDefault();
         if (parentPath && name.trim() && !busy) void onCreate(parentPath, name.trim());

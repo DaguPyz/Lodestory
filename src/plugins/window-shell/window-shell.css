@@ -1,0 +1,19 @@
+.app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+.window-titlebar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--ui-titlebar-height);
+  color: var(--ui-text-secondary);
+  background: var(--ui-surface-chrome);
+  border-bottom: 1px solid var(--ui-border-divider);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}

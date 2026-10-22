@@ -1,6 +1,6 @@
 # 应用导航布局插件
 
-应用级页面导航布局由本插件提供。默认实现已由 `appPlugins` 静态装配；SDK 契约位于 `@lodestory/sdk/navigation-layout`。欢迎页与设置页的品牌区和导航已从原 `ProjectPageLayout` 移入本插件，`PageShell` 仍是共享的平台窗口外壳。
+应用级页面导航布局由本插件提供。默认实现已由 `appPlugins` 静态装配；SDK 契约位于 `@lodestory/sdk/navigation-layout`。欢迎页与设置页的品牌区和导航已从原 `ProjectPageLayout` 移入本插件。窗口外壳 `PageShell` 由独立的 `window-shell` 插件通过 `windowShellKey` 提供。
 
 ## 职责与契约
 
@@ -16,4 +16,4 @@
 
 页面只在启动期间登记。撤销单页时先调用对应的 UI 页面撤销函数；若 UI 已挂载，当前 UI 实现会先卸载整棵 React 树，然后布局插件移除该页面的导航条目。整体停止时，运行时按逆依赖顺序停用插件，页面消费者在各自清理中撤销登记；本插件的清理再按登记逆序撤销残余页面，最后释放布局服务。当前不支持在线热装卸或撤销后自动重新挂载 UI。
 
-应用导航样式位于本插件；页面内容的公共样式仍在 `src/styles.css`。工作台编辑页内部布局继续由独立的 `default-layout` 插件提供，两者不共用服务或页面状态。契约细节见 [`@lodestory/sdk` 说明](../../../packages/sdk/README.md)，页面导航和停用关系见[UI 插件说明](../ui/README.md)；[UI 组件包说明](../../../packages/ui/README.md)记录了 `PageShell` 和样式的归属。
+应用导航样式位于本插件；页面内容的公共样式仍在 `src/styles.css`，由本插件显式导入。导航布局依赖 `windowShellKey` 并用 `View` 包裹页面，默认保留浏览器模拟标题栏；Tauri 窗口不显示模拟标题栏。`.app-shell` 和 `.window-titlebar` 样式由 `window-shell` 插件管理。工作台编辑页内部布局继续由独立的 `default-layout` 插件提供，两者不共用服务或页面状态。契约细节见 [`@lodestory/sdk` 说明](../../../packages/sdk/README.md)，页面导航和停用关系见[UI 插件说明](../ui/README.md)；[UI 组件包说明](../../../packages/ui/README.md)记录了包和样式的归属。

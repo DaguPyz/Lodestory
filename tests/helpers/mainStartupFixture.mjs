@@ -14,7 +14,7 @@ export function deferred() {
   return { promise, resolve: resolvePromise };
 }
 
-export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, omitNavigationLayout = false, preference, configBaseValues, configOverrides, configStorageReadError, configStorageWriteError, layoutFactory, navigationLayoutFactory, additionalPlugins = [], invokeHandler, moduleMocks = {}, mockWorkbenchToolbar = true } = {}) {
+export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, omitNavigationLayout = false, omitWindowShell = false, preference, configBaseValues, configOverrides, configStorageReadError, configStorageWriteError, layoutFactory, navigationLayoutFactory, windowShellFactory, additionalPlugins = [], invokeHandler, moduleMocks = {}, mockWorkbenchToolbar = true } = {}) {
   const modules = new Map();
   const sdk = createSdkLoader({ modules });
   const createdCores = [];
@@ -260,6 +260,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   let cleanupError;
   let omitThemeService = false;
   let omitNavigationLayoutPlugin = omitNavigationLayout;
+  let omitWindowShellPlugin = omitWindowShell;
 
   function resolveLocal(fromPath, specifier) {
     if (!specifier.startsWith(".")) throw new Error(`Unexpected local import '${specifier}' from ${fromPath}`);
@@ -425,6 +426,9 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         return emit.call(this, key, payload);
       };
     }
+    if (relativePath === "plugins/window-shell/PageShell.tsx") {
+      components.PageShell = exports.PageShell;
+    }
     if (relativePath === "plugins/theme/themePlugin.ts") {
       const createThemePlugin = exports.createThemePlugin;
       exports.createThemePlugin = (...args) => {
@@ -457,10 +461,12 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         appPluginsCalls.push(args);
         const plugins = createAppPlugins(...args).filter(plugin =>
           (!omitBuiltinThemes || plugin.id !== "builtin-themes")
-          && (!omitNavigationLayoutPlugin || plugin.id !== "navigation-layout"))
+          && (!omitNavigationLayoutPlugin || plugin.id !== "navigation-layout")
+          && (!omitWindowShellPlugin || plugin.id !== "window-shell"))
           .map(plugin => {
             if (plugin.id === "default-layout" && layoutFactory) return layoutFactory(sdk.requireSdk("@lodestory/sdk/layout"));
             if (plugin.id === "navigation-layout" && navigationLayoutFactory) return navigationLayoutFactory(sdk);
+            if (plugin.id === "window-shell" && windowShellFactory) return windowShellFactory(sdk);
             return plugin;
           });
         const injectedPlugins = typeof additionalPlugins === "function"
@@ -539,6 +545,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     setCleanupError(error) { cleanupError = error; },
     omitThemeService() { omitThemeService = true; },
     omitNavigationLayout() { omitNavigationLayoutPlugin = true; },
+    omitWindowShell() { omitWindowShellPlugin = true; },
     getService(key) { return createdCores.at(-1)?.get(key); },
     bodyEditorModels,
     bodyEditorResolvers,

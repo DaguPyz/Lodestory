@@ -10,6 +10,7 @@ import {
 } from "@lodestory/sdk";
 import {layoutKey, type LayoutService, type LayoutContent} from "@lodestory/sdk/layout";
 import {navigationLayoutKey, type NavigationLayoutPage, type NavigationLayoutService} from "@lodestory/sdk/navigation-layout";
+import {windowShellKey, type WindowShellProps, type WindowShellService} from "@lodestory/sdk/window-shell";
 import { uiKey, type UiService } from "@lodestory/sdk/ui";
 import type { UiNavigationRequest } from "@lodestory/sdk/ui";
 import { errorUiKey, type ErrorUiService } from "@lodestory/sdk/error";
@@ -83,7 +84,7 @@ const listener: EventListener<DocumentChanged> = ({ documentId, revision }) => {
 declare const context: PluginContext;
 const plugin: Plugin = {
   id: "sdk-types",
-  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, navigationLayoutKey, workbenchKey, configKey, documentsKey, bodyEditorKey],
+  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, navigationLayoutKey, windowShellKey, workbenchKey, configKey, documentsKey, bodyEditorKey],
   provides: [],
   activate(pluginContext) {
     const document = pluginContext.get(documentKey);
@@ -201,6 +202,14 @@ const plugin: Plugin = {
     void shown;
     void layout.View;
     const navigationLayout: NavigationLayoutService = pluginContext.get(navigationLayoutKey);
+    const windowShell: WindowShellService = pluginContext.get(windowShellKey);
+    const shellProps: WindowShellProps = {children: "page content", showBrowserTitlebar: false};
+    const WindowShell: WindowShellService["View"] = windowShell.View;
+    const shellChildren: WindowShellProps["children"] = shellProps.children;
+    const showTitlebar: boolean | undefined = shellProps.showBrowserTitlebar;
+    void WindowShell;
+    void shellChildren;
+    void showTitlebar;
     const navigationPage: NavigationLayoutPage = {
       id: "example.navigation-page",
       navigation: {label: "示例", icon: "icon", order: 2, group: "secondary"},

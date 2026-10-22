@@ -1,7 +1,7 @@
 import {useEffect, useState, type ReactNode} from "react";
 import type {NavigationGroup} from "@lodestory/sdk/navigation-layout";
 import {Icon} from "@lodestory/ui";
-import {PageShell} from "../../components/PageShell";
+import "../../styles.css";
 import "./navigation-layout.css";
 
 export type RegisteredNavigationItem = {
@@ -52,8 +52,7 @@ export function NavigationLayout({pageId, active, items, onNavigate, children}: 
     </button>);
   }
 
-  return <PageShell>
-    <div className="navigation-layout" data-ui-density="spacious">
+  return <div className="navigation-layout" data-ui-density="spacious">
       <aside className="navigation-panel" aria-label="应用导航">
         <div className="brand">
           <Icon name="book" size="brand" />
@@ -67,6 +66,5 @@ export function NavigationLayout({pageId, active, items, onNavigate, children}: 
         <nav className="navigation-items navigation-secondary" aria-label="辅助导航">{renderItems("secondary")}</nav>
       </aside>
       {children}
-    </div>
-  </PageShell>;
+    </div>;
 }

@@ -4,7 +4,7 @@
 
 本文保留 UI 插件化的原始设计推导，正文中的入口示例和落地表描述设计时的起点，新增扩展接口仍是草案。
 
-当前已实现合并后的 `ui` 插件：其他插件通过 `uiKey` 登记页面和 Provider，`pluginsReady` 后装配单个 React 根，页面通过 `openPage`、`back` 切换并保留已访问页面的组件实例。欢迎页、编辑页和设置页由各自插件登记，旧的 `App/workspace` 切页逻辑已移除；应用级导航由 `navigation-layout` 插件通过 `@lodestory/sdk/navigation-layout` 提供，工作台内部布局则由 `default-layout` 插件提供。实际接口和停用边界见 [UI 插件说明](/Users/yinzhenpu/projects/Lodestory/src/plugins/ui/README.md)；本文提出的通用扩展项批次提交、在线增删和撤回失败保留依赖尚未实现。
+当前已实现合并后的 `ui` 插件：其他插件通过 `uiKey` 登记页面和 Provider，`pluginsReady` 后装配单个 React 根，页面通过 `openPage`、`back` 切换并保留已访问页面的组件实例。欢迎页、编辑页和设置页由各自插件登记；应用级导航由 `navigation-layout` 插件提供，工作台内部布局由 `default-layout` 插件提供。窗口外壳 `PageShell` 已由 `window-shell` 插件通过 `@lodestory/sdk/window-shell` 提供，`.app-shell` 和 `.window-titlebar` 专属样式归该插件；公共样式仍留在 `src/styles.css`，由导航布局和工作台显式导入。实际接口和停用边界见 [UI 插件说明](/Users/yinzhenpu/projects/Lodestory/src/plugins/ui/README.md)；本文提出的通用扩展项批次提交、在线增删和撤回失败保留依赖尚未实现。
 
 ## 1. 从当前入口找到缺少的能力
 

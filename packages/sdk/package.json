@@ -35,6 +35,10 @@
       "types": "./dist/navigation-layout.d.ts",
       "import": "./dist/navigation-layout.js"
     },
+    "./window-shell": {
+      "types": "./dist/window-shell.d.ts",
+      "import": "./dist/window-shell.js"
+    },
     "./workbench": {
       "types": "./dist/workbench.d.ts",
       "import": "./dist/workbench.js"

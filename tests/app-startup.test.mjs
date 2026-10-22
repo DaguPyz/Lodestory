@@ -84,7 +84,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "navigation-layout", "default-layout", "workbench", "documents", "project-management", "outline-design", "body-editor", "markdown-editor", "rich-text-editor", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "window-shell", "navigation-layout", "default-layout", "workbench", "documents", "project-management", "outline-design", "body-editor", "markdown-editor", "rich-text-editor", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings"]);
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "./MarkdownEditor"), false,
   "application startup does not import the Milkdown component");
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier.startsWith("@milkdown/")), false,
@@ -130,6 +130,9 @@ test("the entry delegates UI composition and page registration to the plugin cat
     "the context-menu plugin source should run in the fixture");
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/navigation-layout/navigationLayoutPlugin.tsx"),
     "the navigation layout plugin should own the shared welcome and settings frame");
+  assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/window-shell/windowShellPlugin.tsx"),
+    "the window shell plugin should own the shared platform window frame");
+  assert.ok(fixture.logs.indexOf("activate:window-shell:complete") < fixture.logs.indexOf("activate:navigation-layout:begin"));
   assert.ok(fixture.logs.indexOf("activate:navigation-layout:complete") < fixture.logs.indexOf("activate:welcome:begin"));
   assert.ok(fixture.logs.indexOf("activate:navigation-layout:complete") < fixture.logs.indexOf("activate:settings:begin"));
   assert.ok(fixture.lifecycle.includes("activate:error-ui:complete"));
@@ -197,7 +200,10 @@ test("the entry delegates UI composition and page registration to the plugin cat
   const visitedPageTree = fixture.UiPages(pagesElement.props);
   const renderedPages = visitedPageTree.props.children;
   const renderedPage = (id) => renderedPages.find((page) => page.key === id).props.children;
-  const welcomeLayout = renderedPage("welcome");
+  const welcomeShell = renderedPage("welcome");
+  assert.equal(welcomeShell.type, fixture.components.PageShell);
+  assert.equal(welcomeShell.props.showBrowserTitlebar, undefined, "the browser titlebar uses the shell default");
+  const welcomeLayout = welcomeShell.props.children;
   assert.equal(welcomeLayout.type, fixture.components.NavigationLayout);
   const welcomeBoundary = welcomeLayout.props.children;
   assert.equal(welcomeBoundary.type, fixture.components.ErrorBoundary);
@@ -208,7 +214,9 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.equal(editorShell.type, fixture.components.PageShell);
   assert.equal(editorShell.props.showBrowserTitlebar, false);
   const editorPage = editorShell.props.children;
-  const settingsLayout = renderedPage("settings");
+  const settingsShell = renderedPage("settings");
+  assert.equal(settingsShell.type, fixture.components.PageShell);
+  const settingsLayout = settingsShell.props.children;
   assert.equal(settingsLayout.type, fixture.components.NavigationLayout);
   const settingsBoundary = settingsLayout.props.children;
   assert.equal(settingsBoundary.type, fixture.components.ErrorBoundary);

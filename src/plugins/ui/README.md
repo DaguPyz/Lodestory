@@ -58,4 +58,6 @@ export function createSettingsPlugin(): Plugin {
 
 欢迎页和设置页共用的品牌区与应用导航由独立的 `navigation-layout` 插件呈现。两个页面插件分别通过 `navigationLayoutKey` 登记页面和导航元数据；布局插件负责品牌区、分组和顺序，点击入口时调用 `ui.openPage(id)`。页面身份、历史和守卫仍由 UI 插件管理；设置页自身的返回操作仍调用 `ui.back()`。`appPlugins` 静态装配默认实现，页面登记只在启动期进行，撤销已挂载页面会先卸载整棵 UI 树。它与仅用于工作台编辑页的 `default-layout` 是不同职责，详细接口和生命周期见[应用导航布局插件说明](../navigation-layout/README.md)。
 
+窗口外壳由 `window-shell` 插件通过 `windowShellKey` 提供。导航页和工作台声明该依赖，并用同一次激活期间身份稳定的 `View` 包装各自页面内容；导航页默认显示浏览器模拟标题栏，工作台传入 `showBrowserTitlebar={false}`。Tauri 窗口不显示模拟标题栏。UI 插件只装配已登记的页面，不拥有 `PageShell` 或窗口外壳样式；接入细节见[窗口外壳插件说明](../window-shell/README.md)。
+
 编辑页内部布局由独立的 `default-layout` 插件通过 `@lodestory/sdk/layout` 提供。`workbench` 页面按会话挂载布局的 `View`；`documents` 创建文档工作区，`project-management` 登记工程树并提供新建交互，`body-editor` 登记正文和写作状态，`workbench-toolbar` 登记顶部工具栏。布局负责排列和通用显隐，专注模式作为工具栏行为由 `workbench-toolbar` 组合 `layout.show/hide` 实现。UI 不认识这些用途，也不依赖某种布局实现。协议与清理边界见[工作台插件设计](../../../文档/需求设计/工作台插件.md)、[工作台工具栏插件设计](../../../文档/需求设计/工作台工具栏插件.md)、[布局插件设计](../../../文档/需求设计/布局插件.md)和[正文编辑插件设计](../../../文档/需求设计/正文编辑插件.md)。

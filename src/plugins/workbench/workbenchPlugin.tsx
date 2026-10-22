@@ -4,10 +4,11 @@ import {uiKey} from "@lodestory/sdk/ui";
 import {layoutKey} from "@lodestory/sdk/layout";
 import {themeKey} from "@lodestory/sdk/theme";
 import {errorUiKey} from "@lodestory/sdk/error";
+import {windowShellKey} from "@lodestory/sdk/window-shell";
 import {isTauri} from "@tauri-apps/api/core";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import {appPages} from "../../app/pages";
-import {PageShell} from "../../components/PageShell";
+import "../../styles.css";
 import {WorkbenchPage} from "./WorkbenchPage";
 import {createWorkbenchStore} from "./workbenchStore";
 
@@ -16,11 +17,12 @@ export function createWorkbenchPlugin(): Plugin {
   let cleanup: (() => Promise<void>) | undefined;
   return {
     id: "workbench",
-    requires: [uiKey, layoutKey, themeKey, errorUiKey],
+    requires: [uiKey, layoutKey, themeKey, errorUiKey, windowShellKey],
     provides: [workbenchKey],
     activate(context) {
       const ui = context.get(uiKey);
       const layout = context.get(layoutKey);
+      const WindowShell = context.get(windowShellKey).View;
       const {ErrorBoundary} = context.get(errorUiKey);
       let removePage: (() => void) | undefined;
       let removeGuard: (() => void) | undefined;
@@ -44,9 +46,9 @@ export function createWorkbenchPlugin(): Plugin {
       removeGuard = ui.registerNavigationGuard({id: "workbench", prepare: store.prepareNavigation});
       removePage = ui.registerPage({
         id: appPages.editor,
-        render: ({active}) => <ErrorBoundary><PageShell showBrowserTitlebar={false}>
+        render: ({active}) => <ErrorBoundary><WindowShell showBrowserTitlebar={false}>
           <WorkbenchPage workbench={store.service} layout={layout} active={active}/>
-        </PageShell></ErrorBoundary>,
+        </WindowShell></ErrorBoundary>,
       });
       removeWrapper = ui.addWrapper({
         id: "workbench", order: 40, wrap: children => children,

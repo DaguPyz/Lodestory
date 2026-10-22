@@ -137,7 +137,7 @@ import { Icon, Select } from "@lodestory/ui";
 - 本包是无业务状态的展示组件模块，不是运行时插件，不建立全局单例，也不新增能力 key。React 组件的挂载和卸载决定其生命周期。
 - 业务状态和保存流程仍由所属插件拥有；页面、布局贡献继续通过 SDK 的公开能力登记。组件库不导入 `src/`、Tauri、插件私有实现或 SDK 服务。
 - `@lodestory/sdk` 只维护跨插件契约，`@lodestory/ui` 维护可复用的 UI 实现，两者职责分开。
-- `PageShell` 是共享的平台窗口外壳，仍不纳入本包；应用导航布局和导航样式已移入独立的 `navigation-layout` 插件。页面内容的公共样式仍由各页面使用；文件树、文档标签栏和编辑器也属于应用或业务布局，不纳入本包。右键菜单仍由现有插件负责根包装和协调；普通输入框尚未迁入。新建项目、新建文档／文件夹和删除文档复用通用弹框，业务逻辑仍在原插件内。
+- `PageShell`、`.app-shell` 和 `.window-titlebar` 属于独立的 `window-shell` 插件，不纳入本包；应用导航布局和专属样式由 `navigation-layout` 插件管理。公共样式继续留在 `src/styles.css`，由 `navigation-layout` 和 `workbench` 显式导入。文件树、文档标签栏和编辑器也属于应用或业务布局，不纳入本包。右键菜单仍由现有插件负责根包装和协调；普通输入框尚未迁入。新建项目、新建文档／文件夹和删除文档复用通用弹框，业务逻辑仍在原插件内。
 - 后续新增组件放在 `src/`，在 `src/index.ts` 导出组件和属性类型，并把组件样式放入 `styles.css`。复杂交互可在包内封装 Base UI，消费者不应依赖其内部实例。
 - React 与 React DOM 是 peer dependencies，宿主和插件必须共享同一运行时；独立打包消费者时将 `react`、`react/jsx-runtime`、`react-dom` 和本包作为外部依赖。Base UI 是包内实现依赖，不通过公共属性暴露其类型。
 

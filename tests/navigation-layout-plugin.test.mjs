@@ -16,18 +16,23 @@ function registeredPage(fixture, ui, id) {
 
 function alternateProvider(sdk, registered, removed = []) {
   const {navigationLayoutKey} = sdk.requireSdk("@lodestory/sdk/navigation-layout");
+  const {windowShellKey} = sdk.requireSdk("@lodestory/sdk/window-shell");
   const {uiKey} = sdk.requireSdk("@lodestory/sdk/ui");
   const {themeKey} = sdk.requireSdk("@lodestory/sdk/theme");
   return {
     id: "navigation-layout",
-    requires: [uiKey, themeKey],
+    requires: [uiKey, themeKey, windowShellKey],
     provides: [navigationLayoutKey],
     activate(context) {
       const ui = context.get(uiKey);
+      const View = context.get(windowShellKey).View;
       context.provide(navigationLayoutKey, Object.freeze({
         registerPage(page) {
           registered.push({id: page.id, navigation: page.navigation});
-          const remove = ui.registerPage({id: page.id, render: page.render});
+          const remove = ui.registerPage({
+            id: page.id,
+            render: pageContext => ({type: View, props: {children: page.render(pageContext)}}),
+          });
           return () => {
             remove();
             removed.push(page.id);
@@ -46,16 +51,19 @@ test("welcome and settings contribute navigation metadata through the public lay
 
   const ui = uiFor(fixture);
   const welcome = registeredPage(fixture, ui, "welcome");
-  assert.equal(welcome.type, fixture.components.NavigationLayout);
-  assert.deepEqual(Array.from(welcome.props.items, ({id, label, group, order}) => ({id, label, group, order})), [
+  assert.equal(welcome.type, fixture.components.PageShell);
+  const welcomeLayout = welcome.props.children;
+  assert.equal(welcomeLayout.type, fixture.components.NavigationLayout);
+  assert.deepEqual(Array.from(welcomeLayout.props.items, ({id, label, group, order}) => ({id, label, group, order})), [
     {id: "welcome", label: "作品", group: "primary", order: 0},
     {id: "settings", label: "设置", group: "secondary", order: 0},
   ]);
-  assert.equal(welcome.props.pageId, "welcome");
+  assert.equal(welcomeLayout.props.pageId, "welcome");
   assert.equal(await uiFor(fixture).openPage("settings"), true);
   const settings = registeredPage(fixture, ui, "settings");
-  assert.equal(settings.type, fixture.components.NavigationLayout);
-  assert.equal(settings.props.pageId, "settings");
+  assert.equal(settings.type, fixture.components.PageShell);
+  assert.equal(settings.props.children.type, fixture.components.NavigationLayout);
+  assert.equal(settings.props.children.props.pageId, "settings");
   await fixture.createdCores.at(-1).unmountAll();
 });
 
@@ -86,7 +94,10 @@ test("a third page adds a sorted navigation entry without changing the layout pl
   await flushStartup();
 
   const shell = registeredPage(fixture, uiFor(fixture), "welcome");
-  assert.deepEqual(Array.from(shell.props.items, ({id}) => id), [
+  assert.equal(shell.type, fixture.components.PageShell);
+  const navigation = shell.props.children;
+  assert.equal(navigation.type, fixture.components.NavigationLayout);
+  assert.deepEqual(Array.from(navigation.props.items, ({id}) => id), [
     "welcome", "example.alpha", "example.beta", "example.zulu", "settings", "example.secondary",
   ]);
   assert.equal(fixture.moduleImports.some(({from}) => from === "plugins/navigation-layout/navigationLayoutPlugin.tsx"), true);
@@ -107,8 +118,11 @@ test("the built-in navigation layout can be replaced while page plugins keep the
   assert.equal(welcomeRegistration.navigation.icon.type.name, "Icon");
   assert.equal(welcomeRegistration.navigation.icon.props.name, "folder");
   const page = registeredPage(fixture, uiFor(fixture), "welcome");
-  assert.equal(page.type, fixture.components.WelcomePage);
-  assert.equal(typeof page.props.onOpenProject, "function");
+  assert.equal(page.type, fixture.components.PageShell);
+  assert.equal(page.props.children.type, fixture.components.ErrorBoundary);
+  const welcomePage = page.props.children.props.children;
+  assert.equal(welcomePage.type, fixture.components.WelcomePage);
+  assert.equal(typeof welcomePage.props.onOpenProject, "function");
   assert.equal(fixture.catalogPluginIds.includes("navigation-layout"), true);
   await fixture.createdCores.at(-1).unmountAll();
 });
@@ -168,6 +182,7 @@ test("navigation registration validates atomically, rejects duplicate and late e
   const {navigationLayoutKey} = fixture.requireSdk("@lodestory/sdk/navigation-layout");
   const {uiKey} = fixture.requireSdk("@lodestory/sdk/ui");
   const {themeKey} = fixture.requireSdk("@lodestory/sdk/theme");
+  const {windowShellKey} = fixture.requireSdk("@lodestory/sdk/window-shell");
   const registrations = new Map();
   const removals = [];
   let ready = false;
@@ -188,10 +203,12 @@ test("navigation registration validates atomically, rejects duplicate and late e
   };
   const services = new Map();
   const plugin = createNavigationLayoutPlugin();
+  const FakeWindowShell = function FakeWindowShell() {};
   plugin.activate({
     get(key) {
       if (key === uiKey) return ui;
       if (key === themeKey) return {};
+      if (key === windowShellKey) return Object.freeze({View: FakeWindowShell});
       throw new Error(`Unexpected dependency '${key.id}'.`);
     },
     provide(key, value) { services.set(key, value); },
@@ -221,10 +238,12 @@ test("navigation registration validates atomically, rejects duplicate and late e
   assert.equal(registrations.size, 4);
   const alpha = registrations.get("alpha");
   const rendered = alpha.render({active: true, params: undefined});
-  assert.equal(rendered.type, fixture.components.NavigationLayout);
-  assert.deepEqual(Array.from(rendered.props.items, ({id}) => id), ["welcome", "alpha", "zulu", "settings"]);
-  assert.equal(rendered.props.children.type, "page-content");
-  assert.equal(await rendered.props.onNavigate("settings"), "settings");
+  assert.equal(rendered.type, FakeWindowShell);
+  const navigationLayout = rendered.props.children;
+  assert.equal(navigationLayout.type, fixture.components.NavigationLayout);
+  assert.deepEqual(Array.from(navigationLayout.props.items, ({id}) => id), ["welcome", "alpha", "zulu", "settings"]);
+  assert.equal(navigationLayout.props.children.type, "page-content");
+  assert.equal(await navigationLayout.props.onNavigate("settings"), "settings");
 
   const originalIcon = {name: "folder"};
   const navigation = {label: "原始名称", icon: originalIcon, order: 3, group: "primary"};
@@ -243,14 +262,15 @@ test("navigation registration validates atomically, rejects duplicate and late e
   navigation.order = 0;
   navigation.group = "secondary";
   const oldPageElement = registrations.get("replaceable").render({params, active: false});
-  assert.equal(oldPageElement.props.active, false);
-  const registeredItem = oldPageElement.props.items.find(({id}) => id === "replaceable");
+  const oldNavigationLayout = oldPageElement.props.children;
+  assert.equal(oldNavigationLayout.props.active, false);
+  const registeredItem = oldNavigationLayout.props.items.find(({id}) => id === "replaceable");
   assert.equal(registeredItem.label, "原始名称");
   assert.strictEqual(registeredItem.icon, originalIcon);
   assert.equal(registeredItem.group, "primary");
   assert.equal(registeredItem.order, 3);
-  assert.strictEqual(oldPageElement.props.children.props.params, params);
-  assert.equal(oldPageElement.props.children.props.active, false);
+  assert.strictEqual(oldNavigationLayout.props.children.props.params, params);
+  assert.equal(oldNavigationLayout.props.children.props.active, false);
   removeOld();
   removeOld();
   assert.equal(registrations.has("replaceable"), false, "a disposer is idempotent");
@@ -261,7 +281,7 @@ test("navigation registration validates atomically, rejects duplicate and late e
   });
   removeOld();
   assert.equal(registrations.has("replaceable"), true, "an old disposer cannot revoke a later registration with the same ID");
-  assert.equal(registrations.get("replaceable").render({params, active: true}).props.items.find(({id}) => id === "replaceable").label, "新登记");
+  assert.equal(registrations.get("replaceable").render({params, active: true}).props.children.props.items.find(({id}) => id === "replaceable").label, "新登记");
   removeFresh();
   removeFresh();
   assert.equal(registrations.has("replaceable"), false);
@@ -307,7 +327,7 @@ test("a navigation guard rejection preserves the active project and route", asyn
   assert.equal(await ui.openPage("settings"), true);
 
   const settings = registeredPage(fixture, ui, "settings");
-  assert.equal(await settings.props.onNavigate("welcome"), false);
+  assert.equal(await settings.props.children.props.onNavigate("welcome"), false);
   assert.equal(ui.getSnapshot().current.id, "settings");
   assert.equal(workbench.getSnapshot().session.id, sessionId);
   assert.equal(workbench.getSnapshot().session.project.path, project.path);

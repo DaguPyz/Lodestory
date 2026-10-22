@@ -21,10 +21,11 @@ function renderRegisteredPage(fixture, ui, id) {
 }
 
 function renderPageContent(fixture, registeredPage) {
-  const content = registeredPage.type === fixture.components.NavigationLayout
-    ? registeredPage.props.children
-    : registeredPage;
-  return content?.type === fixture.components.ErrorBoundary ? content.props.children : content;
+  let content = registeredPage;
+  if (content?.type === fixture.components.PageShell) content = content.props.children;
+  if (content?.type === fixture.components.NavigationLayout) content = content.props.children;
+  if (content?.type === fixture.components.ErrorBoundary) content = content.props.children;
+  return content;
 }
 
 function renderEditor(fixture, ui) {
@@ -119,7 +120,9 @@ test("shared navigation opens settings and settings back returns to welcome", as
   const ui = getUi(fixture);
 
   assert.equal(ui.getSnapshot().current.id, "welcome");
-  const welcomeLayout = renderRegisteredPage(fixture, ui, "welcome");
+  const welcomeShell = renderRegisteredPage(fixture, ui, "welcome");
+  assert.equal(welcomeShell.type, fixture.components.PageShell);
+  const welcomeLayout = welcomeShell.props.children;
   assert.equal(welcomeLayout.type, fixture.components.NavigationLayout);
   assert.equal(welcomeLayout.props.pageId, "welcome");
   assert.deepEqual(Array.from(welcomeLayout.props.items, ({id, label, group}) => ({id, label, group})), [
@@ -132,7 +135,9 @@ test("shared navigation opens settings and settings back returns to welcome", as
   assert.equal(await welcomeLayout.props.onNavigate("settings"), true);
 
   assert.equal(ui.getSnapshot().current.id, "settings");
-  const settingsLayout = renderRegisteredPage(fixture, ui, "settings");
+  const settingsShell = renderRegisteredPage(fixture, ui, "settings");
+  assert.equal(settingsShell.type, fixture.components.PageShell);
+  const settingsLayout = settingsShell.props.children;
   assert.equal(settingsLayout.type, fixture.components.NavigationLayout);
   assert.equal(settingsLayout.props.pageId, "settings");
   const settings = renderPageContent(fixture, settingsLayout);

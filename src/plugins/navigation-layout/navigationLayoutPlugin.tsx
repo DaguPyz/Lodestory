@@ -2,6 +2,7 @@ import type {Plugin} from "@lodestory/sdk";
 import {navigationLayoutKey, type NavigationLayoutService} from "@lodestory/sdk/navigation-layout";
 import {uiKey} from "@lodestory/sdk/ui";
 import {themeKey} from "@lodestory/sdk/theme";
+import {windowShellKey} from "@lodestory/sdk/window-shell";
 import {NavigationLayout, type RegisteredNavigationItem} from "./NavigationLayout";
 
 /** 拥有应用导航布局；页面内容由各插件登记，页面状态和切换仍交给 UI。 */
@@ -10,10 +11,11 @@ export function createNavigationLayoutPlugin(): Plugin {
 
     return {
         id: "navigation-layout",
-        requires: [uiKey, themeKey],
+        requires: [uiKey, themeKey, windowShellKey],
         provides: [navigationLayoutKey],
         activate(context) {
             const ui = context.get(uiKey);
+            const WindowShell = context.get(windowShellKey).View;
             const entries = new Map<string, { item: RegisteredNavigationItem; remove: () => void }>();
             let active = true;
 
@@ -48,12 +50,12 @@ export function createNavigationLayoutPlugin(): Plugin {
                     // UI 拒绝迟到或冲突的登记时，导航目录也不发生变化。
                     const removePage = ui.registerPage({
                         id,
-                        render: pageContext => <NavigationLayout
+                        render: pageContext => <WindowShell><NavigationLayout
                             pageId={id}
                             active={pageContext.active}
                             items={items()}
                             onNavigate={target => ui.openPage(target)}
-                        >{render(pageContext)}</NavigationLayout>,
+                        >{render(pageContext)}</NavigationLayout></WindowShell>,
                     });
                     const entry = {
                         item,

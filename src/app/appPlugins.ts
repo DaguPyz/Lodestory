@@ -5,6 +5,7 @@ import {createThemePlugin} from "../plugins/theme/themePlugin";
 import {createBuiltinThemesPlugin} from "../plugins/builtin-themes";
 import {createDefaultLayoutPlugin} from "../plugins/default-layout/defaultLayoutPlugin";
 import {createNavigationLayoutPlugin} from "../plugins/navigation-layout/navigationLayoutPlugin";
+import {createWindowShellPlugin} from "../plugins/window-shell/windowShellPlugin";
 import {createContextMenuPlugin} from "../plugins/context-menu";
 import {createWelcomePlugin} from "../plugins/welcome/welcomePlugin";
 import {createWorkbenchPlugin} from "../plugins/workbench/workbenchPlugin";
@@ -29,6 +30,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createThemePlugin(),
         createBuiltinThemesPlugin(),
         createContextMenuPlugin(),
+        createWindowShellPlugin(),
         createNavigationLayoutPlugin(),
         createDefaultLayoutPlugin(),
         createWorkbenchPlugin(),

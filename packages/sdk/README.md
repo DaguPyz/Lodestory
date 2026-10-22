@@ -1,6 +1,6 @@
 # @lodestory/sdk
 
-Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及配置、UI、应用导航布局、主题、工作台布局、工作台和文档服务契约。它不包含宿主实现。
+Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及配置、UI、应用导航布局、窗口外壳、主题、工作台布局、工作台和文档服务契约。它不包含宿主实现。
 
 ## 导出入口
 
@@ -8,6 +8,7 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/config`：JSON 配置值、配置项、配置服务类型，以及共享单例 `configKey`。
 - `@lodestory/sdk/ui`：UI 服务类型与共享单例 `uiKey`。
 - `@lodestory/sdk/navigation-layout`：应用导航布局服务、页面与导航元数据类型，以及共享单例 `navigationLayoutKey`。
+- `@lodestory/sdk/window-shell`：窗口外壳属性与服务类型，以及共享单例 `windowShellKey`。
 - `@lodestory/sdk/error`：错误边界服务与共享单例 `errorUiKey`。
 - `@lodestory/sdk/layout`：内容用途、登记描述、布局视图、快照和服务类型，以及共享单例 `layoutKey`。
 - `@lodestory/sdk/workbench`：项目与工作台会话、参与者生命周期、快照和服务类型，以及共享单例 `workbenchKey`。
@@ -192,7 +193,15 @@ export const inkThemePlugin: Plugin = {
 
 替代实现须保留页面 ID、`params` 和 `active` 语义，并在切页后保留已访问页面的组件实例，以兼容 UI 服务的页面生命周期。
 
-页面只在启动期间登记。撤销页面时先调用 UI 页面撤销函数；页面已挂载时，UI 会卸载整棵 React 树，再移除导航条目。插件整体停用也先撤销页面登记，再清理布局服务。当前 UI 不支持运行中热装卸或撤销后的自动重新挂载。实现位于 [`src/plugins/navigation-layout/`](../../src/plugins/navigation-layout/README.md)。
+页面只在启动期间登记。撤销页面时先调用 UI 页面撤销函数；页面已挂载时，UI 会卸载整棵 React 树，再移除导航条目。整体停止时，运行时按逆依赖顺序停用消费者，消费者在各自清理中撤销页面登记；`navigation-layout` 自身清理再按登记逆序撤销残余页面并释放服务。当前 UI 不支持运行中热装卸或撤销后的自动重新挂载。实现位于 [`src/plugins/navigation-layout/`](../../src/plugins/navigation-layout/README.md)。
+
+## 窗口外壳
+
+`@lodestory/sdk/window-shell` 导出共享单例 `windowShellKey`（ID：`app/window-shell`）、`WindowShellProps` 和 `WindowShellService`。属性为 `{ children, showBrowserTitlebar? }`；服务只提供稳定的 `View: ComponentType<WindowShellProps>`，不创建 React root，也不管理页面导航。默认 `window-shell` 插件由 `appPlugins` 静态装配，以 `themeKey` 为依赖并通过 `windowShellKey` 提供 `PageShell`。
+
+`showBrowserTitlebar` 默认 `true`，只控制浏览器中的模拟标题栏；Tauri 始终不显示它。`navigation-layout` 使用默认值，`workbench` 传入 `false`。插件页面应声明 `windowShellKey` 依赖，并在其 UI 页面撤销前停止使用 `View`。同一次插件激活期间，替代实现提供的 `View` 身份须保持稳定，普通更新和页面切换不能重挂载 `children`。插件替换由下一次 `appPlugins` 静态装配选择，不承诺跨实现或重启保留 React 实例。
+
+`PageShell` 和专属的 `app-shell`、`window-titlebar` 样式由 `window-shell` 插件拥有。该插件不创建全局服务单例、不监听事件、不使用计时器；组件资源随 React 挂载管理。停用时由依赖顺序确保消费者先撤销 UI 页面，Core 随后清理能力；插件无需额外的空 `deactivate`。公共 `src/styles.css` 保留原位置，由 `navigation-layout` 和 `workbench` 显式导入。
 
 ## 布局服务
 

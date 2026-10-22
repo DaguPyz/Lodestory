@@ -1,6 +1,5 @@
 import {useCallback, useEffect, useRef} from "react";
-import {IconButton} from "../../components/Button";
-import {Icon} from "../../components/Icon";
+import { IconButton, Icon } from "@lodestory/ui";
 import type {EditorHandle} from "@lodestory/sdk/body-editor";
 import {getEditorFormat} from "./bodyEditorRegistry";
 import {BodyEditorInteractions, useBodyEditorContext} from "./BodyEditorContext";

@@ -1,6 +1,6 @@
 import { Dialog } from "@base-ui/react/dialog";
 import { useRef, useState } from "react";
-import { Button } from "../../components/Button";
+import { Button } from "@lodestory/ui";
 import type { CreateEntryKind, DocumentExtension, ProjectTreeEntry } from "./projectManagementModel";
 
 type NewDocumentDialogProps = {

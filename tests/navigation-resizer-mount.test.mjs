@@ -23,23 +23,22 @@ function missingChromium(error) {
 }
 
 function stubLayoutChrome() {
-  const button = '\0navigation-resizer-test-button';
-  const icon = '\0navigation-resizer-test-icon';
+  const ui = '\0navigation-resizer-test-ui';
   return {
     name: 'navigation-resizer-test-chrome',
     enforce: 'pre',
     resolveId(source, importer) {
       const from = importer?.split('?')[0].replaceAll('\\', '/') ?? '';
       if (!from.endsWith('/src/plugins/default-layout/DefaultLayout.tsx')) return undefined;
-      if (source === '../../components/Button') return button;
-      if (source === '../../components/Icon') return icon;
+      if (source === '@lodestory/ui') return ui;
       return undefined;
     },
     load(id) {
-      if (id === button) return `import React from 'react';
+      if (id === ui) return `import React from 'react';
         export function Button({children, ...props}) { return React.createElement('button', props, children); }
-        export function IconButton({label, children, ...props}) { return React.createElement('button', {...props, 'aria-label': label}, children); }`;
-      if (id === icon) return `import React from 'react'; export function Icon({name}) { return React.createElement('span', {'data-icon': name}); }`;
+        export function IconButton({label, children, ...props}) { return React.createElement('button', {...props, 'aria-label': label}, children); }
+        export function Icon({name}) { return React.createElement('span', {'data-icon': name}); }
+        export function SearchField(props) { return React.createElement('input', props); }`;
       return undefined;
     },
   };

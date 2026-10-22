@@ -1,7 +1,7 @@
 import type {Plugin} from "@lodestory/sdk";
 import {layoutKey} from "@lodestory/sdk/layout";
 import {workbenchKey} from "@lodestory/sdk/workbench";
-import {Icon} from "../../components/Icon";
+import { Icon } from "@lodestory/ui";
 import {OutlineDesignPanel} from "./OutlineDesignPanel";
 import "./outline-design.css";
 

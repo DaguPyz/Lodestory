@@ -1,6 +1,6 @@
 import {Dialog} from "@base-ui/react/dialog";
 import {useRef} from "react";
-import {Button} from "../../components/Button";
+import { Button } from "@lodestory/ui";
 
 export function DeleteDocumentDialog({path, busy, error, onClose, onDelete}: {
   path: string;
@@ -21,7 +21,7 @@ export function DeleteDocumentDialog({path, busy, error, onClose, onDelete}: {
         {error && <p className="project-error" role="alert">{error}</p>}
         <div className="project-dialog-actions" aria-busy={busy}>
           <Dialog.Close ref={cancel} className="button button--secondary" disabled={busy}>取消</Dialog.Close>
-          <Button variant="secondary" data-delete-confirm disabled={busy} onClick={() => { if (!busy) void onDelete(); }}>
+          <Button variant="danger" data-delete-confirm disabled={busy} onClick={() => { if (!busy) void onDelete(); }}>
             {busy ? "正在删除…" : "删除文档"}
           </Button>
         </div>

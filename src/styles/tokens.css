@@ -67,7 +67,7 @@
   --ui-radius-overlay: 0.75rem;
   --ui-radius-dialog: 1rem;
   --ui-focus-width: 1px;
-  --ui-focus-offset: calc(-1 * var(--ui-focus-width));
+  --ui-focus-offset: var(--ui-focus-width);
   --ui-indicator-width: 2px;
   --ui-duration-fast: 100ms;
   --ui-duration-normal: 160ms;

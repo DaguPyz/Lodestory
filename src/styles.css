@@ -1,5 +1,6 @@
 @import "./styles/theme-colors.css";
 @import "./styles/tokens.css";
+@import "@lodestory/ui/styles.css";
 
 :root {
   font-family: var(--ui-font-interface);
@@ -54,7 +55,7 @@ p {
 }
 
 ::selection {
-  color: var(--ui-text-primary);
+  color: var(--ui-selection-foreground);
   background: var(--ui-text-selection-bg);
 }
 
@@ -257,114 +258,6 @@ p {
   gap: var(--ui-icon-text-gap);
 }
 
-.button {
-  --cmp-button-height: var(--ui-control-height);
-  --cmp-button-padding: var(--ui-control-padding-inline);
-  --cmp-button-radius: var(--ui-radius-control);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--ui-icon-text-gap);
-  min-height: var(--cmp-button-height);
-  padding: var(--ui-space-3) var(--cmp-button-padding);
-  border: 1px solid transparent;
-  border-radius: var(--cmp-button-radius);
-  font-size: var(--ui-font-size-label);
-  line-height: var(--ui-line-height-label);
-  font-weight: 500;
-  white-space: nowrap;
-  transition:
-    background-color var(--ui-duration-fast) var(--ui-ease-enter),
-    border-color var(--ui-duration-fast) var(--ui-ease-enter);
-}
-
-.button--primary {
-  color: var(--ui-text-on-action);
-  background: var(--ui-action-bg);
-  border-color: var(--ui-accent-indicator);
-}
-
-.button--primary:hover:not(:disabled) {
-  background: var(--ui-action-bg-hover);
-}
-
-.button--primary:active:not(:disabled) {
-  background: var(--ui-action-bg-pressed);
-}
-
-.button--primary:focus-visible {
-  outline-color: var(--ui-text-on-action);
-}
-
-.button--secondary {
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-control);
-  border-color: var(--ui-border-decoration);
-}
-
-.button--secondary:hover:not(:disabled) {
-  background: var(--ui-surface-hover);
-  border-color: var(--ui-border-control);
-}
-
-.button--secondary:active:not(:disabled) {
-  background: var(--ui-surface-pressed);
-}
-
-.button--ghost {
-  color: var(--ui-text-secondary);
-  background: transparent;
-}
-
-.button--ghost:hover:not(:disabled) {
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-hover);
-}
-
-.button--ghost:active:not(:disabled) {
-  background: var(--ui-surface-pressed);
-}
-
-.button:disabled {
-  color: var(--ui-text-disabled);
-  background: var(--ui-surface-control);
-  border-color: var(--ui-border-divider);
-}
-
-.icon {
-  display: block;
-  flex-shrink: 0;
-}
-
-.icon > * {
-  vector-effect: non-scaling-stroke;
-}
-
-.icon--default {
-  width: var(--ui-icon-size);
-  height: var(--ui-icon-size);
-}
-
-.icon--small {
-  width: var(--ui-icon-small);
-  height: var(--ui-icon-small);
-}
-
-.icon--medium {
-  width: var(--ui-icon-medium);
-  height: var(--ui-icon-medium);
-}
-
-.icon--large {
-  width: var(--ui-icon-large);
-  height: var(--ui-icon-large);
-}
-
-.icon--brand {
-  width: var(--ui-icon-brand);
-  height: var(--ui-icon-brand);
-}
-
 .recent-projects {
   margin-top: var(--ui-section-gap);
 }
@@ -379,91 +272,14 @@ p {
   margin-bottom: var(--ui-space-7);
 }
 
+.section-toolbar > .search-field {
+  width: calc(var(--ui-navigation-width) + var(--ui-space-8));
+}
+
 .section-toolbar h2 {
   font-size: var(--ui-font-size-title);
   line-height: var(--ui-line-height-title);
   font-weight: 600;
-}
-
-.search-field {
-  --cmp-field-height: var(--ui-control-height);
-  display: flex;
-  align-items: center;
-  gap: var(--ui-icon-text-gap);
-  width: calc(var(--ui-navigation-width) + var(--ui-space-8));
-  max-width: 100%;
-  min-height: var(--cmp-field-height);
-  padding-inline: var(--ui-control-padding-inline);
-  color: var(--ui-text-secondary);
-  background: var(--ui-surface-control);
-  border: 1px solid var(--ui-border-control);
-  border-radius: var(--ui-radius-control);
-  transition: background-color var(--ui-duration-fast) var(--ui-ease-enter);
-}
-
-.search-field:focus-within {
-  border-color: var(--ui-focus-ring);
-  outline: none;
-}
-
-.search-field:hover:not(:has(input:disabled)) {
-  background: var(--ui-surface-hover);
-}
-
-.search-field input {
-  width: 100%;
-  min-width: 0;
-  padding: var(--ui-space-3) 0;
-  color: var(--ui-text-primary);
-  background: transparent;
-  border: 0;
-  font-size: var(--ui-font-size-label);
-  line-height: var(--ui-line-height-label);
-}
-
-.search-field input:focus-visible {
-  outline: none;
-}
-
-.search-field input::placeholder {
-  color: var(--ui-text-placeholder);
-  opacity: 1;
-}
-
-.search-field:has(input:disabled),
-.search-field input:disabled {
-  color: var(--ui-text-disabled);
-}
-
-.icon-button {
-  --cmp-icon-button-size: var(--ui-icon-button-size);
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  width: var(--cmp-icon-button-size);
-  height: var(--cmp-icon-button-size);
-  padding: 0;
-  color: var(--ui-text-secondary);
-  background: transparent;
-  border: 0;
-  border-radius: var(--ui-radius-control);
-  transition:
-    background-color var(--ui-duration-fast) var(--ui-ease-enter),
-    color var(--ui-duration-fast) var(--ui-ease-enter);
-}
-
-.icon-button:hover:not(:disabled) {
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-hover);
-}
-
-.icon-button:active:not(:disabled) {
-  background: var(--ui-surface-pressed);
-}
-
-.icon-button:disabled {
-  color: var(--ui-text-disabled);
 }
 
 .project-list {
@@ -793,7 +609,7 @@ p {
     align-items: flex-start;
   }
 
-  .search-field {
+  .section-toolbar > .search-field {
     width: 100%;
   }
 
@@ -822,15 +638,12 @@ p {
 
 @media (prefers-reduced-motion: reduce) {
   .navigation-item,
-  .button,
-  .icon-button,
-  .search-field,
   .project-row {
     transition: none;
   }
 }
 
-[data-ui-motion="reduce"] :is(.navigation-item, .button, .icon-button, .search-field, .project-row) {
+[data-ui-motion="reduce"] :is(.navigation-item, .project-row) {
   transition: none;
 }
 
@@ -850,19 +663,6 @@ p {
 
   .navigation-item[aria-current="page"]::before {
     background: HighlightText;
-  }
-
-  .button,
-  .search-field {
-    border-color: ButtonText;
-  }
-
-  .button--primary:focus-visible {
-    outline-color: Highlight;
-  }
-
-  .search-field:focus-within {
-    border-color: Highlight;
   }
 
   .project-row:not(:last-child)::after {

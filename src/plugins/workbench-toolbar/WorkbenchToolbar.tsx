@@ -1,8 +1,7 @@
 import {useEffect, useId, useRef, useSyncExternalStore} from "react";
 import type {LayoutService} from "@lodestory/sdk/layout";
 import type {WorkbenchService} from "@lodestory/sdk/workbench";
-import {Button, IconButton} from "../../components/Button";
-import {Icon} from "../../components/Icon";
+import { Button, IconButton, Icon } from "@lodestory/ui";
 import {useContextMenus} from "../context-menu";
 import type {WorkbenchToolbarModel} from "./workbenchToolbarModel";
 import {workbenchToolbarId} from "./workbenchToolbarIds";

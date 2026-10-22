@@ -22,9 +22,6 @@
 }
 .layout-actions { display: flex; flex: 1; align-items: center; gap: var(--ui-space-3); min-width: 0; width: 100%; }
 .layout-actions > .layout-content { flex: 1; flex-direction: row; align-items: center; }
-.layout-activitybar [aria-pressed="true"] {
-  color: var(--ui-accent-foreground); background: var(--ui-surface-selected);
-}
 .layout-workspace {
   --cmp-layout-rail-width: var(--ui-activitybar-width);
   --cmp-layout-navigation-width: 0px;
@@ -95,7 +92,4 @@
   .layout-workspace { --cmp-layout-rail-width: 0px; }
   .layout-activitybar { display: none; }
   .layout-toolbar { gap: var(--ui-space-3); padding-inline: var(--ui-space-3); }
-}
-@media (forced-colors: active) {
-  .layout-activitybar [aria-pressed="true"] { color: HighlightText; background: Highlight; }
 }

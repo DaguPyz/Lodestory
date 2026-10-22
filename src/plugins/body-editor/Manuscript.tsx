@@ -1,6 +1,5 @@
 import {Component, useCallback, useEffect, useRef, useState, type ComponentType, type ErrorInfo, type ReactNode} from "react";
-import {Button} from "../../components/Button";
-import {Icon} from "../../components/Icon";
+import { Button, Icon } from "@lodestory/ui";
 import type {OpenDocument} from "@lodestory/sdk/documents";
 import type {EditorDefinition, EditorFormat, EditorHandle, EditorProps} from "@lodestory/sdk/body-editor";
 import {ContextMenuRegion} from "../context-menu";

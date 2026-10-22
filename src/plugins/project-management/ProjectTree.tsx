@@ -1,6 +1,5 @@
 import { useEffect, useState, type CSSProperties } from "react";
-import { Button, IconButton } from "../../components/Button";
-import { Icon } from "../../components/Icon";
+import { Button, IconButton, Icon } from "@lodestory/ui";
 import type { DocumentExtension, ProjectTreeEntry } from "./projectManagementModel";
 import { ContextMenuRegion, type MenuEntry } from "../context-menu";
 

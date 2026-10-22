@@ -1,0 +1,306 @@
+/* Colors follow the shared registry's paintSets and stateRules, not theme IDs. */
+:where(.button, .icon-button, .icon, .search-field, .search-field input) {
+  box-sizing: border-box;
+}
+
+:where(.button, .icon-button, .search-field input) {
+  font: inherit;
+}
+
+:is(.button, .icon-button, .search-field) {
+  --cmp-focus-ring: var(--ui-focus-ring);
+}
+
+:is(.button, .icon-button, .search-field)[data-focus-surface="inverse"] {
+  --cmp-focus-ring: var(--ui-focus-inverse-ring);
+}
+
+:is(.button, .icon-button) {
+  position: relative;
+  cursor: pointer;
+}
+
+:is(.button, .icon-button):focus-visible,
+.search-field:focus-within {
+  outline: var(--ui-focus-width) solid var(--cmp-focus-ring);
+  outline-offset: var(--ui-focus-offset);
+}
+
+.button {
+  --cmp-button-height: var(--ui-control-height);
+  --cmp-button-padding: var(--ui-control-padding-inline);
+  --cmp-button-radius: var(--ui-radius-control);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-icon-text-gap);
+  min-height: var(--cmp-button-height);
+  padding: var(--ui-space-3) var(--cmp-button-padding);
+  border: 1px solid transparent;
+  border-radius: var(--cmp-button-radius);
+  font-size: var(--ui-font-size-label);
+  line-height: var(--ui-line-height-label);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.button--secondary {
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-control);
+  border-color: var(--ui-border-control);
+}
+
+.button--ghost,
+.icon-button {
+  color: var(--ui-text-secondary);
+  background: transparent;
+}
+
+:is(.button--ghost, .icon-button):where([data-focus-surface="inverse"]) {
+  color: var(--ui-text-inverse);
+}
+
+.icon-button {
+  --cmp-icon-button-size: var(--ui-icon-button-size);
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: var(--cmp-icon-button-size);
+  height: var(--cmp-icon-button-size);
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--ui-radius-control);
+}
+
+/* Equal specificity keeps the registry's priority explicit in source order. */
+:is(.button, .icon-button):where(:hover) {
+  color: var(--ui-state-hover-foreground);
+  background: var(--ui-surface-hover);
+}
+
+:is(.button, .icon-button):where(:active) {
+  color: var(--ui-state-pressed-foreground);
+  background: var(--ui-surface-pressed);
+}
+
+.button--primary {
+  color: var(--ui-action-foreground);
+  background: var(--ui-action-bg);
+}
+
+.button--primary:where(:hover) {
+  background: var(--ui-action-bg-hover);
+}
+
+.button--primary:where(:active) {
+  background: var(--ui-action-bg-pressed);
+}
+
+.button--danger {
+  color: var(--ui-danger-foreground);
+  background: var(--ui-danger-bg);
+}
+
+.button--danger:where(:hover) {
+  background: var(--ui-danger-bg-hover);
+}
+
+.button--danger:where(:active) {
+  background: var(--ui-danger-bg-pressed);
+}
+
+:is(.button, .icon-button):where([aria-pressed="true"], [aria-pressed="mixed"], [aria-selected="true"]) {
+  color: var(--ui-state-selected-foreground);
+  background: var(--ui-surface-selected);
+  border-color: transparent;
+}
+
+/* An independent border marker survives disabled borders and keyboard focus. */
+:is(.button, .icon-button):where([aria-pressed="true"], [aria-pressed="mixed"], [aria-selected="true"])::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--ui-accent-indicator);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+:is(.button, .icon-button):where([aria-pressed="mixed"])::after {
+  border-style: dashed;
+}
+
+:is(.button, .icon-button):where([aria-pressed="true"], [aria-pressed="mixed"], [aria-selected="true"]):where([data-selection-active="false"]) {
+  color: var(--ui-state-inactive-selected-foreground);
+  background: var(--ui-surface-selected-inactive);
+}
+
+:is(.button, .icon-button):where([aria-pressed="true"], [aria-pressed="mixed"], [aria-selected="true"]):where(:hover) {
+  color: var(--ui-state-selected-hover-foreground);
+  background: var(--ui-surface-selected-hover);
+}
+
+:is(.button, .icon-button):where([aria-pressed="true"], [aria-pressed="mixed"], [aria-selected="true"]):where(:active) {
+  color: var(--ui-state-selected-pressed-foreground);
+  background: var(--ui-state-selected-pressed-background);
+}
+
+:is(.button, .icon-button):where(:disabled, [aria-disabled="true"]) {
+  color: var(--ui-state-disabled-foreground);
+  background: var(--ui-state-disabled-background);
+  border-color: var(--ui-state-disabled-border);
+  cursor: not-allowed;
+}
+
+:is(.button, .icon-button):where(:disabled, [aria-disabled="true"]):where([aria-pressed="true"], [aria-pressed="mixed"], [aria-selected="true"]) {
+  color: var(--ui-state-disabled-selected-foreground);
+  background: var(--ui-state-disabled-selected-background);
+}
+
+.icon {
+  display: block;
+  flex-shrink: 0;
+}
+
+.icon > * {
+  vector-effect: non-scaling-stroke;
+}
+
+.icon--default { width: var(--ui-icon-size); height: var(--ui-icon-size); }
+.icon--small { width: var(--ui-icon-small); height: var(--ui-icon-small); }
+.icon--medium { width: var(--ui-icon-medium); height: var(--ui-icon-medium); }
+.icon--large { width: var(--ui-icon-large); height: var(--ui-icon-large); }
+.icon--brand { width: var(--ui-icon-brand); height: var(--ui-icon-brand); }
+
+.search-field {
+  --cmp-field-height: var(--ui-control-height);
+  --cmp-field-foreground: var(--ui-text-primary);
+  --cmp-field-placeholder: var(--ui-text-placeholder);
+  --cmp-field-caret: var(--ui-caret-foreground);
+  display: flex;
+  align-items: center;
+  gap: var(--ui-icon-text-gap);
+  width: 100%;
+  max-width: 100%;
+  min-height: var(--cmp-field-height);
+  padding-inline: var(--ui-control-padding-inline);
+  color: var(--ui-text-secondary);
+  background: var(--ui-surface-control);
+  border: 1px solid var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+}
+
+.search-field:where(:hover):not(:has(input:read-only)) {
+  --cmp-field-foreground: var(--ui-state-hover-foreground);
+  --cmp-field-placeholder: var(--ui-state-hover-foreground);
+  --cmp-field-caret: var(--ui-state-hover-foreground);
+  color: var(--ui-state-hover-foreground);
+  background: var(--ui-surface-hover);
+}
+
+.search-field:where(:active):not(:has(input:read-only)) {
+  --cmp-field-foreground: var(--ui-state-pressed-foreground);
+  --cmp-field-placeholder: var(--ui-state-pressed-foreground);
+  --cmp-field-caret: var(--ui-state-pressed-foreground);
+  color: var(--ui-state-pressed-foreground);
+  background: var(--ui-surface-pressed);
+}
+
+.search-field input {
+  width: 100%;
+  min-width: 0;
+  padding: var(--ui-space-3) 0;
+  color: var(--cmp-field-foreground);
+  background: transparent;
+  border: 0;
+  font-size: var(--ui-font-size-label);
+  line-height: var(--ui-line-height-label);
+  caret-color: var(--cmp-field-caret);
+}
+
+/* Keep the native clear action, drawing its glyph in the input's final foreground. */
+.search-field input::-webkit-search-cancel-button {
+  appearance: none;
+  width: var(--ui-icon-small);
+  height: var(--ui-icon-small);
+  margin-inline-start: var(--ui-space-2);
+  background: currentColor;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M18 6L6 18M6 6l12 12' fill='none' stroke='black' stroke-width='1.75' stroke-linecap='round'/%3E%3C/svg%3E") center / contain no-repeat;
+  cursor: pointer;
+}
+
+.search-field input:read-only::-webkit-search-cancel-button {
+  display: none;
+}
+
+.search-field input:focus-visible {
+  outline: none;
+}
+
+.search-field input::placeholder {
+  color: var(--cmp-field-placeholder);
+  opacity: 1;
+}
+
+/* A validation boundary does not replace the field's independent focus ring. */
+.search-field:where(:has(input:is([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"]))) {
+  border-color: var(--ui-status-danger-border);
+}
+
+.search-field:has(input:disabled) {
+  --cmp-field-foreground: var(--ui-state-disabled-foreground);
+  --cmp-field-placeholder: var(--ui-state-disabled-foreground);
+  color: var(--ui-state-disabled-foreground);
+  background: var(--ui-state-disabled-background);
+  border-color: var(--ui-state-disabled-border);
+  cursor: not-allowed;
+}
+
+.search-field input:disabled {
+  cursor: not-allowed;
+  opacity: 1;
+  -webkit-text-fill-color: currentColor;
+}
+
+:is(.button, .icon-button, .search-field, .search-field input)::selection,
+:is(.button, .icon-button, .search-field) ::selection {
+  color: var(--ui-selection-foreground);
+  background: var(--ui-text-selection-bg);
+}
+
+/* No palette transition: changing themes replaces foreground and background together. */
+@media (forced-colors: active) {
+  .search-field input::-webkit-search-cancel-button {
+    forced-color-adjust: none;
+    background: ButtonText;
+  }
+
+  :is(.button, .icon-button, .search-field),
+  :is(.button, .icon-button, .search-field)[data-focus-surface="inverse"] {
+    --cmp-focus-ring: Highlight;
+  }
+
+  :is(.button, .icon-button, .search-field) {
+    border-color: ButtonText;
+  }
+
+  :is(.button, .icon-button):where([aria-pressed="true"], [aria-pressed="mixed"], [aria-selected="true"])::after {
+    border-color: Highlight;
+  }
+
+  :is(.button, .icon-button):where(:disabled, [aria-disabled="true"]),
+  .search-field:has(input:disabled) {
+    border-color: GrayText;
+  }
+
+  .search-field:has(input:is([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"]):not(:disabled)) {
+    border-color: CanvasText;
+    border-style: dashed;
+  }
+
+  :is(.button, .icon-button, .search-field, .search-field input)::selection,
+  :is(.button, .icon-button, .search-field) ::selection {
+    color: HighlightText;
+    background: Highlight;
+  }
+}

@@ -1,5 +1,4 @@
-import {IconButton} from "../../components/Button";
-import {Icon} from "../../components/Icon";
+import { IconButton, Icon } from "@lodestory/ui";
 import type {OpenDocument} from "@lodestory/sdk/documents";
 import {ContextMenuRegion} from "../context-menu";
 

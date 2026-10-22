@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore, type CSSProperties } from "react";
-import { Button } from "../../components/Button";
-import { Icon } from "../../components/Icon";
+import { Button, Icon } from "@lodestory/ui";
 import type { ResolvedTheme, ThemePreference, ThemeService } from "@lodestory/sdk/theme";
 import { ProjectPageLayout } from "../../components/ProjectPageLayout";
 

@@ -120,8 +120,3 @@
 .project-delete-description {
   overflow-wrap: anywhere;
 }
-
-.project-dialog-actions [data-delete-confirm].button:not(:disabled) {
-  color: var(--ui-status-danger);
-  border-color: var(--ui-status-danger);
-}

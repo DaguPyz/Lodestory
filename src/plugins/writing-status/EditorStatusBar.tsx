@@ -1,4 +1,4 @@
-import {Icon} from "../../components/Icon";
+import { Icon } from "@lodestory/ui";
 import type {OpenDocument} from "@lodestory/sdk/documents";
 
 export function EditorStatusBar({document, text}: {document: OpenDocument | undefined; text?: string}) {

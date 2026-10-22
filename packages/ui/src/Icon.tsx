@@ -75,9 +75,12 @@ const shapes = {
   ),
 } satisfies Record<string, ReactNode>;
 
-type IconProps = {
-  name: keyof typeof shapes;
-  size?: "default" | "small" | "medium" | "large" | "brand";
+export type IconName = keyof typeof shapes;
+export type IconSize = "default" | "small" | "medium" | "large" | "brand";
+
+export type IconProps = {
+  name: IconName;
+  size?: IconSize;
 };
 
 export function Icon({ name, size = "default" }: IconProps) {

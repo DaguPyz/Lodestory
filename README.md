@@ -11,7 +11,7 @@ pnpm install
 pnpm dev:desktop
 ```
 
-`pnpm dev:desktop` starts Tauri and delegates the frontend to `pnpm dev`, which builds the SDK once and then watches SDK changes while running Vite. Use `pnpm dev` for frontend-only development, or `pnpm dev:sdk` to run the SDK watcher by itself.
+`pnpm dev:desktop` starts Tauri and delegates the frontend to `pnpm dev`, which builds the SDK and UI library once and then watches both packages while running Vite. Use `pnpm dev` for frontend-only development, or `pnpm dev:sdk` / `pnpm dev:ui` to run an individual package watcher.
 
 To build an application bundle:
 
@@ -37,6 +37,8 @@ The development-only `/tests/fixtures/project-index.html` page uses Tauri IPC mo
 The same fixture also supports document creation and writing; `?scenario=create-error`, `?scenario=save-error`, and `?scenario=slow-save` exercise document failure and pending-save flows without touching actual files.
 
 The public plugin contracts live in [`@lodestory/sdk`](packages/sdk/README.md), an independent ESM package with core, UI, error, config, theme, layout, workbench, and documents entry points. The app consumes it through the pnpm workspace. Dynamic plugin loading and marketplace installation are planned separately.
+
+Reusable React components live in [`@lodestory/ui`](packages/ui/README.md). It currently exports `Button`, `IconButton`, `Icon`, and `SearchField`, with component styles at `@lodestory/ui/styles.css`. The package consumes the existing theme variables and owns no application state; pages and business UI remain in their existing modules. Run `pnpm build:ui` to build its JavaScript and type declarations.
 
 The editor workbench provides `workbenchKey` for project sessions and coordinated leave checks; `default-layout` provides `layoutKey` for arranging the editor's main, navigation, auxiliary, actions, and status contents. The `workbench-toolbar` plugin contributes the top toolbar and uses the existing workbench, UI, and layout services. See [工作台插件设计](文档/需求设计/工作台插件.md), [工作台工具栏插件设计](文档/需求设计/工作台工具栏插件.md), and [布局插件设计](文档/需求设计/布局插件.md). The project fixture supports `?layout=alternative` for replacement verification and `?layout=probes` for multiple contributions and hidden-state checks.
 

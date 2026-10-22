@@ -7,6 +7,7 @@ import ts from "typescript";
 import { createSdkLoader } from "./sdkFixture.mjs";
 
 const sourceRoot = fileURLToPath(new URL("../../src/", import.meta.url));
+const uiPackageRoot = fileURLToPath(new URL("../../packages/ui/", import.meta.url));
 const requireFromHere = createRequire(import.meta.url);
 const React = requireFromHere("react");
 const jsxRuntime = requireFromHere("react/jsx-runtime");
@@ -121,6 +122,7 @@ export function fixture({ saved = null, preference, system = "dark", desktop = t
       exports,
       require(specifier) {
         if (specifier.startsWith("@lodestory/sdk")) return sdk.requireSdk(specifier, relative(sourceRoot, path));
+        if (specifier === "@lodestory/ui") return load(resolve(uiPackageRoot, "dist/index.js"));
         if (specifier === "@tauri-apps/api/core") return { isTauri: () => desktop };
         if (specifier === "@tauri-apps/api/window") return { getCurrentWindow: () => appWindow };
         if (specifier === "react") return React;

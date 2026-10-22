@@ -3,9 +3,7 @@ import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NewProjectDialog } from "./NewProjectDialog";
 import { ProjectPageLayout } from "../../components/ProjectPageLayout";
-import { Button } from "../../components/Button";
-import { Icon } from "../../components/Icon";
-import { SearchField } from "../../components/SearchField";
+import { Button, Icon, SearchField } from "@lodestory/ui";
 import { ContextMenuRegion, useContextMenus, type MenuAction } from "../context-menu";
 import {
   createProject, isUnavailableError, listRecentProjects, openProject, pickProjectDirectory,

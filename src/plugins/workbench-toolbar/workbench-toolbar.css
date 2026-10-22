@@ -87,7 +87,6 @@
 .toolbar-controls { margin-left: auto; }
 .toolbar-navigation-toggle { display: none; }
 .toolbar-auxiliary-toggle { display: inline-flex; }
-.toolbar-controls [aria-pressed="true"] { color: var(--ui-accent-foreground); background: var(--ui-surface-selected); }
 .toolbar-project-trigger[aria-disabled="true"] { cursor: default; color: var(--ui-text-muted); }
 .toolbar-content-menu { position: relative; }
 .toolbar-content-menu > summary { list-style: none; }
@@ -111,6 +110,5 @@
 }
 @container workbench-toolbar (max-width: 20rem) { .toolbar-common-actions { display: none; } }
 @media (forced-colors: active) {
-  .toolbar-controls [aria-pressed="true"] { color: HighlightText; background: Highlight; }
   .toolbar-project-popover, .toolbar-content-options { border-color: ButtonText; }
 }

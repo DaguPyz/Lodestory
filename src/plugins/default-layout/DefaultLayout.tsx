@@ -1,8 +1,7 @@
 import {useLayoutEffect, useRef, useSyncExternalStore} from "react";
 import type {LayoutContent, LayoutRole, LayoutViewProps} from "@lodestory/sdk/layout";
 import type {ErrorUiService} from "@lodestory/sdk/error";
-import {Button, IconButton} from "../../components/Button";
-import {Icon} from "../../components/Icon";
+import { Button, IconButton, Icon } from "@lodestory/ui";
 import type {LayoutStore} from "./layoutStore";
 import type {createNavigationWidthModel} from "./navigationWidth";
 import {NavigationResizer} from "./NavigationResizer";

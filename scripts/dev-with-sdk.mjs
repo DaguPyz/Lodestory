@@ -8,6 +8,7 @@ const projectRoot = fileURLToPath(new URL("../", import.meta.url));
 const viteCli = resolve(dirname(require.resolve("vite/package.json")), "bin/vite.js");
 const services = [
   ["SDK", [require.resolve("typescript/bin/tsc"), "-p", "packages/sdk/tsconfig.json", "--watch", "--preserveWatchOutput"]],
+  ["UI", [require.resolve("typescript/bin/tsc"), "-p", "packages/ui/tsconfig.json", "--watch", "--preserveWatchOutput"]],
   ["Vite", [viteCli, ...process.argv.slice(2)]],
 ];
 const children = new Set();

@@ -6,6 +6,7 @@ import ts from "typescript";
 import { createSdkLoader } from "./sdkFixture.mjs";
 
 const sourceRoot = fileURLToPath(new URL("../../src/", import.meta.url));
+const uiPackageRoot = fileURLToPath(new URL("../../packages/ui/", import.meta.url));
 
 export function deferred() {
   let resolvePromise;
@@ -343,6 +344,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       require(specifier) {
         moduleImports.push({ from: relativePath, specifier });
         if (specifier.startsWith("@lodestory/sdk")) return sdk.requireSdk(specifier, relativePath);
+        if (specifier === "@lodestory/ui") return load(resolve(uiPackageRoot, "dist/index.js"));
         if (specifier === "react") return React;
         if (specifier === "react-dom/client") return ReactDOM;
         if (specifier === "react/jsx-runtime") {

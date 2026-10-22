@@ -7,6 +7,7 @@ import ts from "typescript";
 import { createSdkLoader } from "./sdkFixture.mjs";
 
 const sourceRoot = fileURLToPath(new URL("../../src/", import.meta.url));
+const uiPackageRoot = fileURLToPath(new URL("../../packages/ui/", import.meta.url));
 const requireFromHere = createRequire(import.meta.url);
 const React = requireFromHere("react");
 const jsxRuntime = requireFromHere("react/jsx-runtime");
@@ -123,6 +124,7 @@ export function uiPluginFixture({ container = {}, documentRoot = { id: "root" },
       window,
       require(specifier) {
         if (specifier.startsWith("@lodestory/sdk")) return sdk.requireSdk(specifier, relative(sourceRoot, path));
+        if (specifier === "@lodestory/ui") return load(resolve(uiPackageRoot, "dist/index.js"));
         if (specifier === "react") return ReactWithHooks;
         if (specifier === "react/jsx-runtime") return jsxRuntime;
         if (specifier === "react/jsx-dev-runtime") return jsxDevRuntime;

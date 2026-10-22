@@ -85,6 +85,6 @@ function DocumentTabsSession({sessionId, active, workbench, workspace, requestCr
   }
 
   return <DocumentTabs documents={snapshot.documents} activeDocument={snapshot.activeId}
-    onSelect={workspace.select} onClose={workspace.close} onSave={workspace.save}
+    onSelect={workspace.select} onClose={workspace.close} onCloseMany={workspace.closeMany} onSave={workspace.save}
     onNewDocument={createDocument} newDisabled={newDisabled} disabled={disabled}/>;
 }

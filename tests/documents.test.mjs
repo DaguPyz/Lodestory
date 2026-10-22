@@ -647,6 +647,127 @@ test("close locks out concurrent edits until the current document is saved and r
   await workspace.dispose();
 });
 
+test("closeMany saves and closes documents in the requested order", async () => {
+  const writes = [];
+  const workspace = createWorkspaceFactory({ write: async (...args) => { writes.push(args); } })("/projects/book");
+  await workspace.service.create("", "第一章.md");
+  await workspace.service.create("", "第二章.md");
+  await workspace.service.create("", "第三章.md");
+  workspace.service.update(documentId("第一章.md"), "第一章修改");
+  workspace.service.update(documentId("第二章.md"), "第二章修改");
+  workspace.service.update(documentId("第三章.md"), "第三章修改");
+
+  assert.equal(await workspace.service.closeMany([
+    documentId("第二章.md"), documentId("第一章.md"), documentId("第三章.md"),
+  ]), true);
+  assert.deepEqual(writes.map(([, path]) => path), ["第二章.md", "第一章.md", "第三章.md"]);
+  assert.deepEqual(Array.from(workspace.service.getSnapshot().documents), []);
+  await workspace.dispose();
+});
+
+test("closeMany stops at a failed save, keeps later documents open, and selects the failure", async () => {
+  const writes = [];
+  let failSecondWrite = true;
+  const workspace = createWorkspaceFactory({
+    write: async (...args) => {
+      writes.push(args);
+      if (args[1] === "第二章.md" && failSecondWrite) {
+        failSecondWrite = false;
+        throw new Error("磁盘不可写");
+      }
+    },
+  })("/projects/book");
+  await workspace.service.create("", "第一章.md");
+  await workspace.service.create("", "第二章.md");
+  await workspace.service.create("", "第三章.md");
+  workspace.service.update(documentId("第一章.md"), "第一章修改");
+  workspace.service.update(documentId("第二章.md"), "第二章修改");
+  workspace.service.update(documentId("第三章.md"), "第三章修改");
+
+  assert.equal(await workspace.service.closeMany([
+    documentId("第一章.md"), documentId("第二章.md"), documentId("第三章.md"),
+  ]), false);
+  const snapshot = workspace.service.getSnapshot();
+  assert.deepEqual(Array.from(snapshot.documents, ({ path }) => path), ["第二章.md", "第三章.md"]);
+  assert.equal(snapshot.activeId, documentId("第二章.md"));
+  assert.equal(snapshot.documents[0].saveState, "error");
+  assert.equal(snapshot.documents[1].content, "第三章修改");
+  assert.deepEqual(writes.map(([, path]) => path), ["第一章.md", "第二章.md"]);
+  await workspace.dispose();
+});
+
+test("closeMany stops after an in-flight close when the workspace begins leaving", async () => {
+  const writeGate = deferred();
+  const firstWriteStarted = deferred();
+  const writes = [];
+  let canMutate = true;
+  const createWorkspace = createWorkspaceFactory({
+    write: async (...args) => { writes.push(args); firstWriteStarted.resolve(); await writeGate.promise; },
+  });
+  const workspace = createWorkspace("/projects/book", { canMutate: () => canMutate });
+  await workspace.service.create("", "第一章.md");
+  await workspace.service.create("", "第二章.md");
+  workspace.service.update(documentId("第一章.md"), "第一章修改");
+
+  const closing = workspace.service.closeMany([documentId("第一章.md"), documentId("第二章.md")]);
+  await firstWriteStarted.promise;
+  canMutate = false;
+  const leaving = workspace.beforeLeave();
+  writeGate.resolve();
+
+  assert.equal(await closing, false);
+  assert.equal(await leaving, true);
+  assert.deepEqual(Array.from(workspace.service.getSnapshot().documents, ({ path }) => path), ["第二章.md"]);
+  assert.deepEqual(writes.map(([, path]) => path), ["第一章.md"]);
+  await workspace.dispose();
+});
+
+test("closeMany skips a target closed and reopened at the same path", async () => {
+  const writeGate = deferred();
+  const firstWriteStarted = deferred();
+  const workspace = createWorkspaceFactory({
+    read: async (_projectPath, path) => record(path, "重开后的正文"),
+    write: async () => { firstWriteStarted.resolve(); await writeGate.promise; },
+  })("/projects/book");
+  await workspace.service.create("", "第一章.md");
+  await workspace.service.create("", "第二章.md");
+  workspace.service.update(documentId("第一章.md"), "第一章修改");
+
+  const closing = workspace.service.closeMany([documentId("第一章.md"), documentId("第二章.md")]);
+  await firstWriteStarted.promise;
+  assert.equal(await workspace.service.close(documentId("第二章.md")), true);
+  assert.equal(await workspace.service.open("第二章.md"), true);
+  writeGate.resolve();
+
+  assert.equal(await closing, true);
+  const snapshot = workspace.service.getSnapshot();
+  assert.deepEqual(Array.from(snapshot.documents, ({ path }) => path), ["第二章.md"]);
+  assert.equal(snapshot.documents[0].content, "重开后的正文");
+  assert.equal(snapshot.activeId, documentId("第二章.md"));
+  await workspace.dispose();
+});
+
+test("dispose drains an in-flight closeMany operation without processing later targets", async () => {
+  const writeGate = deferred();
+  const firstWriteStarted = deferred();
+  const writes = [];
+  const workspace = createWorkspaceFactory({
+    write: async (...args) => { writes.push(args); firstWriteStarted.resolve(); await writeGate.promise; },
+  })("/projects/book");
+  await workspace.service.create("", "第一章.md");
+  await workspace.service.create("", "第二章.md");
+  workspace.service.update(documentId("第一章.md"), "第一章修改");
+
+  const closing = workspace.service.closeMany([documentId("第一章.md"), documentId("第二章.md")]);
+  await firstWriteStarted.promise;
+  const disposal = workspace.dispose();
+  writeGate.resolve();
+
+  assert.equal(await closing, false);
+  await disposal;
+  assert.deepEqual(writes.map(([, path]) => path), ["第一章.md"]);
+});
+
 test("dispose invalidates handles and waits for accepted operations and in-flight saves", async () => {
   const pendingRead = deferred();
   const pendingWrite = deferred();

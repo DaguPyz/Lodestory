@@ -355,6 +355,19 @@ export function createDocumentWorkspace(projectPath: string, options: Options = 
       }).then(finish, fail);
       return operation;
     },
+    closeMany(ids: readonly string[]) {
+      if (blocked()) return Promise.resolve(false);
+      const targets = [...new Set(ids)].map(id => [id, sessions.get(id)] as const);
+      return run(async () => {
+        for (const [id, session] of targets) {
+          if (blocked()) return false;
+          // A tab reopened at the same path belongs to a new document session.
+          if (!session || sessions.get(id) !== session) continue;
+          if (!await service.close(id)) return false;
+        }
+        return true;
+      });
+    },
     save(id: string) {
       if (disposed) return Promise.resolve(false);
       const session = sessions.get(id);

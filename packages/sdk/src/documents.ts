@@ -45,6 +45,8 @@ export type DocumentWorkspace = {
   update(id: string, content: string): boolean;
   /** 先保存再关闭，保存失败时保留并选择该文档。 */
   close(id: string): Promise<boolean>;
+  /** 按传入顺序逐个关闭调用时的文档；失败或会话不可操作时停止，保留剩余文档。不包含之后新开的文档。 */
+  closeMany(ids: readonly string[]): Promise<boolean>;
   save(id: string): Promise<boolean>;
   saveAll(): Promise<boolean>;
   clearError(): void;

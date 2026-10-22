@@ -8,6 +8,7 @@ import * as packageRoot from "@lodestory/sdk";
 import * as packageUi from "@lodestory/sdk/ui";
 import * as packageError from "@lodestory/sdk/error";
 import * as packageLayout from "@lodestory/sdk/layout";
+import * as packageNavigationLayout from "@lodestory/sdk/navigation-layout";
 import * as packageTheme from "@lodestory/sdk/theme";
 import * as packageWorkbench from "@lodestory/sdk/workbench";
 import * as packageConfig from "@lodestory/sdk/config";
@@ -19,7 +20,7 @@ const packageManifest = JSON.parse(readFileSync(new URL("../packages/sdk/package
 
 test("SDK package exposes ESM root and all public capability entry points", () => {
   assert.equal(packageManifest.type, "module");
-  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./body-editor", "./config", "./documents", "./error", "./layout", "./theme", "./ui", "./workbench"]);
+  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./body-editor", "./config", "./documents", "./error", "./layout", "./navigation-layout", "./theme", "./ui", "./workbench"]);
 
   assert.equal(packageManifest.exports["./body-editor"].import, "./dist/body-editor.js");
   assert.equal(packageManifest.exports["./body-editor"].types, "./dist/body-editor.d.ts");
@@ -28,6 +29,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
     ["./error", "error"],
     ["./ui", "ui"],
     ["./layout", "layout"],
+    ["./navigation-layout", "navigation-layout"],
     ["./theme", "theme"],
     ["./workbench", "workbench"],
     ["./config", "config"],
@@ -43,11 +45,13 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.deepEqual(Object.keys(packageError), ["errorUiKey"]);
   assert.deepEqual(Object.keys(packageTheme).sort(), ["themeKey"]);
   assert.deepEqual(Object.keys(packageLayout), ["layoutKey"]);
+  assert.deepEqual(Object.keys(packageNavigationLayout), ["navigationLayoutKey"]);
   assert.deepEqual(Object.keys(packageWorkbench), ["workbenchKey"]);
   assert.deepEqual(Object.keys(packageConfig), ["configKey"]);
   assert.deepEqual(Object.keys(packageDocuments).sort(), ["documentCreateRequested", "documentRevealRequested", "documentsKey"]);
   assert.deepEqual(Object.keys(packageBodyEditor).sort(), ["bodyEditorDefaultEditorsConfig", "bodyEditorKey"]);
   assert.equal(packageLayout.layoutKey.id, "app/layout");
+  assert.equal(packageNavigationLayout.navigationLayoutKey.id, "app/navigation-layout");
   assert.equal(packageUi.uiKey.id, "app/ui");
   assert.equal(packageError.errorUiKey.id, "app/error-ui");
   assert.equal(packageTheme.themeKey.id, "app/theme");
@@ -117,6 +121,8 @@ test("SDK subpaths share one key module and need no host imports or runtime APIs
 
   const hostLayoutKey = sdk.requireSdk("@lodestory/sdk/layout").layoutKey;
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/layout").layoutKey, hostLayoutKey);
+  const hostNavigationLayoutKey = sdk.requireSdk("@lodestory/sdk/navigation-layout").navigationLayoutKey;
+  assert.strictEqual(sdk.requireSdk("@lodestory/sdk/navigation-layout").navigationLayoutKey, hostNavigationLayoutKey);
   const hostWorkbenchKey = sdk.requireSdk("@lodestory/sdk/workbench").workbenchKey;
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/workbench").workbenchKey, hostWorkbenchKey);
   const hostConfigKey = sdk.requireSdk("@lodestory/sdk/config").configKey;
@@ -134,6 +140,7 @@ test("SDK subpaths share one key module and need no host imports or runtime APIs
   assert.strictEqual(pluginThemeKey, hostThemeKey);
   assert.equal(sdk.evaluatedModules.filter((path) => path === "ServiceKey.ts").length, 1);
   assert.equal(hostWorkbenchKey.id, "app/workbench");
+  assert.equal(hostNavigationLayoutKey.id, "app/navigation-layout");
   assert.equal(hostConfigKey.id, "app/config");
   assert.equal(hostDocumentsKey.id, "app/documents");
   assert.deepEqual(hostAccesses, []);

@@ -14,7 +14,7 @@ export function deferred() {
   return { promise, resolve: resolvePromise };
 }
 
-export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, preference, configBaseValues, configOverrides, configStorageReadError, configStorageWriteError, layoutFactory, additionalPlugins = [], invokeHandler, moduleMocks = {}, mockWorkbenchToolbar = true } = {}) {
+export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, omitNavigationLayout = false, preference, configBaseValues, configOverrides, configStorageReadError, configStorageWriteError, layoutFactory, navigationLayoutFactory, additionalPlugins = [], invokeHandler, moduleMocks = {}, mockWorkbenchToolbar = true } = {}) {
   const modules = new Map();
   const sdk = createSdkLoader({ modules });
   const createdCores = [];
@@ -206,6 +206,10 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     ErrorBoundary: function ErrorBoundary({ children }) { return children; },
     ErrorView: function ErrorView() {},
     WelcomePage: function WelcomePage() {},
+    DocumentTabs: function DocumentTabs() {},
+    NavigationLayout: function NavigationLayout({ pageId, active, items, onNavigate, children }) {
+      return React.createElement("navigation-layout", { pageId, active, items, onNavigate, children });
+    },
     EditorPage: function EditorPage() {},
     BodyEditorContentProvider: function BodyEditorContentProvider({ workbench, models, resolveEditor, children }) {
       const session = workbench.getSnapshot().session;
@@ -248,7 +252,6 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     },
     ThemeSettingsPage: function ThemeSettingsPage() {},
     PageShell: function PageShell() {},
-    ProjectPageLayout: function ProjectPageLayout() {},
     ContextMenuProvider: function ContextMenuProvider() {},
     ThemeProvider: function ThemeProvider() {},
   };
@@ -256,6 +259,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   let activationError;
   let cleanupError;
   let omitThemeService = false;
+  let omitNavigationLayoutPlugin = omitNavigationLayout;
 
   function resolveLocal(fromPath, specifier) {
     if (!specifier.startsWith(".")) throw new Error(`Unexpected local import '${specifier}' from ${fromPath}`);
@@ -277,6 +281,8 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     const relativePath = relative(sourceRoot, path);
     if (Object.hasOwn(moduleMocks, relativePath)) return {...moduleMocks[relativePath], __esModule: true};
     if (relativePath === "plugins/welcome/WelcomePage.tsx") return { __esModule: true, WelcomePage: components.WelcomePage };
+    if (relativePath === "plugins/navigation-layout/NavigationLayout.tsx") return { __esModule: true, NavigationLayout: components.NavigationLayout };
+    if (relativePath === "plugins/document-tabs/DocumentTabs.tsx") return { __esModule: true, DocumentTabs: components.DocumentTabs };
     if (relativePath === "plugins/body-editor/BodyEditorContext.tsx") return {
       __esModule: true,
       BodyEditorContentProvider: components.BodyEditorContentProvider,
@@ -298,7 +304,6 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     if (relativePath === "plugins/workbench/WorkbenchPage.tsx") return { __esModule: true, WorkbenchPage: components.WorkbenchPage };
     if (relativePath === "plugins/settings/ThemeSettingsPage.tsx") return { __esModule: true, ThemeSettingsPage: components.ThemeSettingsPage };
     if (relativePath === "components/PageShell.tsx") return { __esModule: true, PageShell: components.PageShell };
-    if (relativePath === "components/ProjectPageLayout.tsx") return { __esModule: true, ProjectPageLayout: components.ProjectPageLayout };
     if (relativePath === "plugins/context-menu/ContextMenuProvider.tsx") {
       return {
         __esModule: true,
@@ -450,8 +455,14 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       const createAppPlugins = exports.createAppPlugins;
       exports.createAppPlugins = (...args) => {
         appPluginsCalls.push(args);
-        const plugins = createAppPlugins(...args).filter(plugin => !omitBuiltinThemes || plugin.id !== "builtin-themes")
-          .map(plugin => plugin.id === "default-layout" && layoutFactory ? layoutFactory(sdk.requireSdk("@lodestory/sdk/layout")) : plugin);
+        const plugins = createAppPlugins(...args).filter(plugin =>
+          (!omitBuiltinThemes || plugin.id !== "builtin-themes")
+          && (!omitNavigationLayoutPlugin || plugin.id !== "navigation-layout"))
+          .map(plugin => {
+            if (plugin.id === "default-layout" && layoutFactory) return layoutFactory(sdk.requireSdk("@lodestory/sdk/layout"));
+            if (plugin.id === "navigation-layout" && navigationLayoutFactory) return navigationLayoutFactory(sdk);
+            return plugin;
+          });
         const injectedPlugins = typeof additionalPlugins === "function"
           ? additionalPlugins({ requireSdk: (specifier) => sdk.requireSdk(specifier) })
           : additionalPlugins;
@@ -527,6 +538,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     },
     setCleanupError(error) { cleanupError = error; },
     omitThemeService() { omitThemeService = true; },
+    omitNavigationLayout() { omitNavigationLayoutPlugin = true; },
     getService(key) { return createdCores.at(-1)?.get(key); },
     bodyEditorModels,
     bodyEditorResolvers,

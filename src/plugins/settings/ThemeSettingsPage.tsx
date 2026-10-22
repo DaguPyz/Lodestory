@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useSyncExternalStore, type CSSPropertie
 import { Button, Icon, Select } from "@lodestory/ui";
 import type { ResolvedTheme, ThemePreference, ThemeService } from "@lodestory/sdk/theme";
 import type { ConfigService } from "@lodestory/sdk/config";
-import { ProjectPageLayout } from "../../components/ProjectPageLayout";
 import { MotionSettings } from "./MotionSettings";
 
 function ThemePreview({ theme }: { theme: ResolvedTheme }) {
@@ -52,7 +51,6 @@ export function ThemeSettingsPage({ service, config, active, onBack }: ThemeSett
   }, [active]);
 
   return (
-    <ProjectPageLayout section="settings" onOpenProjects={onBack} onOpenSettings={() => {}}>
       <main className="welcome-workspace appearance-workspace" aria-labelledby="appearance-page-heading">
         <div className="appearance-content">
           <header className="welcome-header">
@@ -157,6 +155,5 @@ export function ThemeSettingsPage({ service, config, active, onBack }: ThemeSett
         </div>
         <footer className="welcome-footer">一个目录，一部小说。</footer>
       </main>
-    </ProjectPageLayout>
   );
 }

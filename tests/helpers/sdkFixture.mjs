@@ -13,6 +13,7 @@ const publicEntries = {
   "@lodestory/sdk": ["index.ts"],
   "@lodestory/sdk/workbench": ["workbench.ts"],
   "@lodestory/sdk/layout": ["layout.ts"],
+  "@lodestory/sdk/navigation-layout": ["navigation-layout.ts"],
   "@lodestory/sdk/ui": ["ui.ts", "ui/index.ts"],
   "@lodestory/sdk/error": ["error.ts"],
   "@lodestory/sdk/theme": ["theme.ts", "theme/index.ts"],

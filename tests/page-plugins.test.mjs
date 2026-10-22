@@ -20,6 +20,13 @@ function renderRegisteredPage(fixture, ui, id) {
   return page.type === fixture.components.ErrorBoundary ? page.props.children : page;
 }
 
+function renderPageContent(fixture, registeredPage) {
+  const content = registeredPage.type === fixture.components.NavigationLayout
+    ? registeredPage.props.children
+    : registeredPage;
+  return content?.type === fixture.components.ErrorBoundary ? content.props.children : content;
+}
+
 function renderEditor(fixture, ui) {
   const shell = renderRegisteredPage(fixture, ui, "editor");
   assert.equal(shell.type, fixture.components.PageShell);
@@ -107,17 +114,28 @@ async function startFixture(options = {}) {
   return fixture;
 }
 
-test("welcome opens settings and settings back returns to welcome", async () => {
+test("shared navigation opens settings and settings back returns to welcome", async () => {
   const fixture = await startFixture();
   const ui = getUi(fixture);
 
   assert.equal(ui.getSnapshot().current.id, "welcome");
-  const welcome = renderRegisteredPage(fixture, ui, "welcome");
+  const welcomeLayout = renderRegisteredPage(fixture, ui, "welcome");
+  assert.equal(welcomeLayout.type, fixture.components.NavigationLayout);
+  assert.equal(welcomeLayout.props.pageId, "welcome");
+  assert.deepEqual(Array.from(welcomeLayout.props.items, ({id, label, group}) => ({id, label, group})), [
+    {id: "welcome", label: "作品", group: "primary"},
+    {id: "settings", label: "设置", group: "secondary"},
+  ]);
+  const welcome = renderPageContent(fixture, welcomeLayout);
   assert.equal(welcome.type, fixture.components.WelcomePage);
-  await welcome.props.onOpenSettings();
+  assert.equal("onOpenSettings" in welcome.props, false, "the welcome page owns no application navigation");
+  assert.equal(await welcomeLayout.props.onNavigate("settings"), true);
 
   assert.equal(ui.getSnapshot().current.id, "settings");
-  const settings = renderRegisteredPage(fixture, ui, "settings");
+  const settingsLayout = renderRegisteredPage(fixture, ui, "settings");
+  assert.equal(settingsLayout.type, fixture.components.NavigationLayout);
+  assert.equal(settingsLayout.props.pageId, "settings");
+  const settings = renderPageContent(fixture, settingsLayout);
   assert.equal(settings.type, fixture.components.ThemeSettingsPage);
   const themeKey = fixture.requireSdk("@lodestory/sdk/theme").themeKey;
   assert.strictEqual(settings.props.service, fixture.getService(themeKey));
@@ -139,7 +157,7 @@ test("workbench retains a project across settings and gives each reopened projec
   const layout = fixture.getService(fixture.requireSdk("@lodestory/sdk/layout").layoutKey);
   const firstProject = project("novel-1", "第一本", "/stories/first");
 
-  const welcome = renderRegisteredPage(fixture, ui, "welcome");
+  const welcome = renderPageContent(fixture, renderRegisteredPage(fixture, ui, "welcome"));
   assert.equal(await welcome.props.onOpenProject(firstProject), true);
   let editor = renderEditor(fixture, ui);
   const firstSessionId = workbench.getSnapshot().session.id;
@@ -165,7 +183,7 @@ test("workbench retains a project across settings and gives each reopened projec
   assert.equal(ui.getSnapshot().canGoBack, false, "closing a project clears consumed navigation history");
   await ui.back();
   assert.equal(workbench.getSnapshot().session, null, "back cannot reopen a closed project");
-  const welcomeAgain = renderRegisteredPage(fixture, ui, "welcome");
+  const welcomeAgain = renderPageContent(fixture, renderRegisteredPage(fixture, ui, "welcome"));
   assert.equal(await welcomeAgain.props.onOpenProject(firstProject), true);
   editor = renderEditor(fixture, ui);
   const reopenedSessionId = workbench.getSnapshot().session.id;

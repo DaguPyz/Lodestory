@@ -1,30 +1,31 @@
 import type {Plugin} from "@lodestory/sdk";
+import {Icon} from "@lodestory/ui";
+import {navigationLayoutKey} from "@lodestory/sdk/navigation-layout";
 import {appPages} from "../../app/pages";
 import {WelcomePage} from "./WelcomePage";
 import {workbenchKey} from "@lodestory/sdk/workbench";
 import {themeKey} from "@lodestory/sdk/theme";
-import {uiKey} from "@lodestory/sdk/ui";
 import {errorUiKey} from "@lodestory/sdk/error";
 
-/** 欢迎页独立登记，项目打开成功后通过 UI 能力进入编辑页。 */
+/** 向导航布局登记欢迎页；项目进入流程交给工作台能力。 */
 export function createWelcomePlugin(): Plugin {
     let removePage: (() => void) | undefined;
 
     return {
         id: "welcome",
-        requires: [uiKey, themeKey, errorUiKey, workbenchKey],
+        requires: [navigationLayoutKey, themeKey, errorUiKey, workbenchKey],
         provides: [],
 
         activate(context) {
-            const ui = context.get(uiKey);
+            const navigation = context.get(navigationLayoutKey);
             const workbench = context.get(workbenchKey);
             const {ErrorBoundary} = context.get(errorUiKey);
-            removePage = ui.registerPage({
+            removePage = navigation.registerPage({
                 id: appPages.welcome,
+                navigation: {label: "作品", icon: <Icon name="folder" />, group: "primary", order: 0},
                 render: ({active}) => <ErrorBoundary><WelcomePage
                     active={active}
                     onOpenProject={(project) => workbench.openProject(project)}
-                    onOpenSettings={() => ui.openPage(appPages.settings)}
                 /></ErrorBoundary>,
             });
         },

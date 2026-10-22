@@ -1,12 +1,13 @@
 # @lodestory/sdk
 
-Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及配置、UI、主题、布局、工作台和文档服务契约。它不包含宿主实现。
+Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及配置、UI、应用导航布局、主题、工作台布局、工作台和文档服务契约。它不包含宿主实现。
 
 ## 导出入口
 
 - `@lodestory/sdk`：`Plugin`、`PluginContext`、能力 key 与事件 key 类型和创建函数。
 - `@lodestory/sdk/config`：JSON 配置值、配置项、配置服务类型，以及共享单例 `configKey`。
 - `@lodestory/sdk/ui`：UI 服务类型与共享单例 `uiKey`。
+- `@lodestory/sdk/navigation-layout`：应用导航布局服务、页面与导航元数据类型，以及共享单例 `navigationLayoutKey`。
 - `@lodestory/sdk/error`：错误边界服务与共享单例 `errorUiKey`。
 - `@lodestory/sdk/layout`：内容用途、登记描述、布局视图、快照和服务类型，以及共享单例 `layoutKey`。
 - `@lodestory/sdk/workbench`：项目与工作台会话、参与者生命周期、快照和服务类型，以及共享单例 `workbenchKey`。
@@ -182,6 +183,16 @@ export const inkThemePlugin: Plugin = {
 设置页读取 `getSnapshot().fallbackThemeIds` 初始化系统槽位，不导入具体配色文件。内置和自定义贡献都可撤销；若配置的回退项也缺失，则依次选择同属性的其他项、任一剩余项，目录为空时返回 `null`。默认职责是 ID 配置，所有主题仍平级。
 
 当前注册处理同一进程中已加载的主题数据，检查格式、角色名称及透明度；主题包导入、持久化安装、B 对比度警告尚未接入。自定义主题须由插件在每次启动时重新登记。设计见[主题管理](../../文档/需求设计/主题管理.md)，数据契约见[主题标准 v1](../../文档/主题标准-v1.md)。
+
+## 应用导航布局
+
+`navigation-layout` 插件通过共享单例 `navigationLayoutKey` 提供应用级导航布局（ID：`app/navigation-layout`）。它面向欢迎页和设置页这类应用页面，与工作台内部的 `layoutKey` 分开。`NavigationLayoutService.registerPage(page)` 接收 `NavigationLayoutPage`，即 `UiPage` 加 `navigation: { label, icon?, order?, group?: "primary" | "secondary" }`。`group` 默认 `primary`，`order` 默认 `0`；默认实现先按分组排列，再按组内 `order` 升序和页面 ID 字符顺序稳定排序。登记返回撤销函数。
+
+欢迎页和设置页插件各自登记页面及其导航元数据。导航布局插件内部调用 `ui.registerPage`，并为同一登记保留导航条目；点击入口时调用 `ui.openPage(id)`，不传页面参数。路由、历史和导航守卫仍归 `uiKey` 的 UI 服务管理，设置页自己的返回按钮仍调用 `ui.back()`。默认提供者由 `appPlugins` 静态装配；其他提供同一 key 契约的插件可以替换它，无需修改页面插件。
+
+替代实现须保留页面 ID、`params` 和 `active` 语义，并在切页后保留已访问页面的组件实例，以兼容 UI 服务的页面生命周期。
+
+页面只在启动期间登记。撤销页面时先调用 UI 页面撤销函数；页面已挂载时，UI 会卸载整棵 React 树，再移除导航条目。插件整体停用也先撤销页面登记，再清理布局服务。当前 UI 不支持运行中热装卸或撤销后的自动重新挂载。实现位于 [`src/plugins/navigation-layout/`](../../src/plugins/navigation-layout/README.md)。
 
 ## 布局服务
 

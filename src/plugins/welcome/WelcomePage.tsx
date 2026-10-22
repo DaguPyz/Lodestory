@@ -2,7 +2,6 @@ import { isTauri } from "@tauri-apps/api/core";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { NewProjectDialog } from "./NewProjectDialog";
 import { ProjectActionsMenu } from "./ProjectActionsMenu";
-import { ProjectPageLayout } from "../../components/ProjectPageLayout";
 import { Button, Icon, SearchField } from "@lodestory/ui";
 import { ContextMenuRegion, useContextMenus, type MenuAction } from "../context-menu";
 import {
@@ -26,10 +25,9 @@ function ProjectPath({ path, id }: { path: string; id: string }) {
 type WelcomePageProps = {
   active: boolean;
   onOpenProject: (project: ProjectRecord) => void | Promise<unknown>;
-  onOpenSettings: () => void;
 };
 
-export function WelcomePage({ active, onOpenProject, onOpenSettings }: WelcomePageProps) {
+export function WelcomePage({ active, onOpenProject }: WelcomePageProps) {
   const menus = useContextMenus();
   const heading = useRef<HTMLHeadingElement>(null);
   const operationPending = useRef(false);
@@ -176,11 +174,7 @@ export function WelcomePage({ active, onOpenProject, onOpenSettings }: WelcomePa
   }
 
   return (
-    <ProjectPageLayout
-      section="projects"
-      onOpenProjects={() => {}}
-      onOpenSettings={onOpenSettings}
-    >
+    <>
       <main className="welcome-workspace" aria-labelledby="welcome-page-heading">
         <div className="welcome-content">
           <header className="welcome-header">
@@ -244,6 +238,6 @@ export function WelcomePage({ active, onOpenProject, onOpenSettings }: WelcomePa
       </main>
       {active && <NewProjectDialog open={createDialogOpen} busy={busy} error={error} onClose={() => setCreateDialogOpen(false)}
         onPickDirectory={() => runAction(() => pickProjectDirectory("选择项目保存位置"))} onCreate={create} />}
-    </ProjectPageLayout>
+    </>
   );
 }

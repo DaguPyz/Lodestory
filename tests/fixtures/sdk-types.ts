@@ -9,6 +9,7 @@ import {
   type ServiceKey,
 } from "@lodestory/sdk";
 import {layoutKey, type LayoutService, type LayoutContent} from "@lodestory/sdk/layout";
+import {navigationLayoutKey, type NavigationLayoutPage, type NavigationLayoutService} from "@lodestory/sdk/navigation-layout";
 import { uiKey, type UiService } from "@lodestory/sdk/ui";
 import type { UiNavigationRequest } from "@lodestory/sdk/ui";
 import { errorUiKey, type ErrorUiService } from "@lodestory/sdk/error";
@@ -82,7 +83,7 @@ const listener: EventListener<DocumentChanged> = ({ documentId, revision }) => {
 declare const context: PluginContext;
 const plugin: Plugin = {
   id: "sdk-types",
-requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, workbenchKey, configKey, documentsKey, bodyEditorKey],
+  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, navigationLayoutKey, workbenchKey, configKey, documentsKey, bodyEditorKey],
   provides: [],
   activate(pluginContext) {
     const document = pluginContext.get(documentKey);
@@ -199,6 +200,18 @@ requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, workbenchKey, co
     removeContent();
     void shown;
     void layout.View;
+    const navigationLayout: NavigationLayoutService = pluginContext.get(navigationLayoutKey);
+    const navigationPage: NavigationLayoutPage = {
+      id: "example.navigation-page",
+      navigation: {label: "示例", icon: "icon", order: 2, group: "secondary"},
+      render: ({params, active}) => `${String(params)}:${String(active)}`,
+    };
+    const removeNavigationPage: () => void = navigationLayout.registerPage(navigationPage);
+    // @ts-expect-error Navigation metadata requires an accessible label.
+    navigationLayout.registerPage({...navigationPage, navigation: {icon: "icon"}});
+    // @ts-expect-error Navigation groups use the public contract.
+    navigationLayout.registerPage({...navigationPage, navigation: {label: "错误", group: "tertiary"}});
+    removeNavigationPage();
     void ui;
     void enabled;
     void update;

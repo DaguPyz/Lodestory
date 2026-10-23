@@ -16,6 +16,8 @@ type DocumentTabsProps = {
 };
 
 export function DocumentTabs({documents, activeDocument, onSelect, onClose, onCloseMany, onSave, onNewDocument, newDisabled, disabled = false}: DocumentTabsProps) {
+  if (documents.length === 0) return null;
+
   function closeDocuments(id: string, scope: "all" | "others" | "left" | "right") {
     const index = documents.findIndex(document => document.id === id);
     if (disabled || index < 0) return;

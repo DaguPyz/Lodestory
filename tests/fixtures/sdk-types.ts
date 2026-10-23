@@ -38,12 +38,21 @@ import {
 } from "@lodestory/sdk/project-storage";
 import {
   bodyEditorKey,
+  bodyEditorContentIds,
   type BodyEditorService,
   type EditorDefinition,
   type EditorFormat,
   type EditorHandle,
   type EditorProps,
 } from "@lodestory/sdk/body-editor";
+import {
+  canvasKey,
+  type CanvasService,
+  type CanvasViewport,
+  type CanvasViewportSnapshot,
+  type CanvasSurfaceProps,
+  type CanvasZoomAnchor,
+} from "@lodestory/sdk/canvas";
 
 type Document = { read(): string };
 type DocumentChanged = { documentId: string; revision: number };
@@ -91,7 +100,7 @@ const listener: EventListener<DocumentChanged> = ({ documentId, revision }) => {
 declare const context: PluginContext;
 const plugin: Plugin = {
   id: "sdk-types",
-  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, navigationLayoutKey, windowShellKey, workbenchKey, configKey, projectStorageKey, documentsKey, bodyEditorKey],
+  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, navigationLayoutKey, windowShellKey, workbenchKey, configKey, projectStorageKey, documentsKey, bodyEditorKey, canvasKey],
   provides: [],
   activate(pluginContext) {
     const document = pluginContext.get(documentKey);
@@ -101,6 +110,31 @@ const plugin: Plugin = {
     const documents: DocumentsService = pluginContext.get(documentsKey);
     const storage: ProjectStorageService = pluginContext.get(projectStorageKey);
     const bodyEditor: BodyEditorService = pluginContext.get(bodyEditorKey);
+    const canvas: CanvasService = pluginContext.get(canvasKey);
+    const mainContentId: "body-editor.main" = bodyEditorContentIds.main;
+    const viewport: CanvasViewport = canvas.createViewport({center: {x: 0, y: 0}, zoom: 1});
+    const viewportState: CanvasViewportSnapshot = viewport.getSnapshot();
+    const anchor: CanvasZoomAnchor = {point: {x: 120, y: 80}, size: {width: 480, height: 320}};
+    const acceptedPan: boolean = viewport.panBy(24, -12);
+    const acceptedZoom: boolean = viewport.zoomTo(1.5, anchor);
+    const resetZoom: boolean = viewport.resetZoom();
+    const resetView: boolean = viewport.resetView();
+    const unsubscribeViewport: () => void = viewport.subscribe(() => void viewport.getSnapshot());
+    const surfaceProps: CanvasSurfaceProps = {viewport, active: true, label: "Timeline"};
+    void canvas.Surface;
+    void mainContentId;
+    void viewportState;
+    void acceptedPan;
+    void acceptedZoom;
+    void resetZoom;
+    void resetView;
+    void surfaceProps;
+    unsubscribeViewport();
+    viewport.dispose();
+    // @ts-expect-error Canvas viewport snapshots are read-only.
+    viewportState.zoom = 2;
+    // @ts-expect-error Canvas service exposes generic viewports, not outline business data.
+    canvas.createTimeline("timeline-1");
     const removeEditor: () => void = bodyEditor.registerEditor({
       id: "example.markdown",
       formats: ["markdown"],

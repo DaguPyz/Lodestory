@@ -76,7 +76,6 @@
 .layout-main { grid-column: 3; grid-row: 1; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
 .layout-tabs { display: flex; flex-direction: column; flex: 0 0 auto; min-width: 0; }
 .layout-tabs > .layout-content { flex: 0 0 auto; }
-.layout-main-switcher { display: flex; flex-shrink: 0; overflow: auto; }
 .layout-content { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
 .layout-status { display: flex; flex-shrink: 0; flex-wrap: wrap; background: var(--ui-surface-chrome); }
 .layout-empty { margin: auto; padding: var(--ui-panel-padding); color: var(--ui-text-secondary); }

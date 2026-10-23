@@ -5,6 +5,9 @@ import {createServiceKey} from "./ServiceKey.js";
 /** 持久化到文档工作区的正文格式。 */
 export type EditorFormat = "markdown" | "plain-text" | "rich-delta";
 
+/** 正文编辑插件登记到布局服务的主内容 ID；消费者可据此关联正文专属 UI。 */
+export const bodyEditorContentIds = Object.freeze({main: "body-editor.main"} as const);
+
 /** 编辑器通过公开契约向宿主贡献的通用正文上下文菜单操作。 */
 export type EditorContextMenuAction = Readonly<{
     id: string;

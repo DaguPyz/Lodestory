@@ -66,14 +66,93 @@ function services(f) {
   const storage = f.getService(storageKey);
   const layout = f.getService(f.requireSdk("@lodestory/sdk/layout").layoutKey);
   const contribution = layout.getSnapshot().contents.find(entry => entry.id === "outline-design.navigation");
+  const canvasContribution = layout.getSnapshot().contents.find(entry => entry.id === "outline-design.canvas");
+  const canvas = f.getService(f.requireSdk("@lodestory/sdk/canvas").canvasKey);
   const model = () => contribution.render({active: true}).props.models.get(workbench.getSnapshot().session.id);
   const outline = f.loadModule("plugins/outline-design/outlineDesignPlugin.tsx").createOutlineDesignPlugin();
   assert.ok(outline.requires.includes(storageKey), "outline declares its storage dependency");
   assert.ok(!outline.requires.includes(f.requireSdk("@lodestory/sdk/documents").documentsKey), "outline does not require documents");
-  return {workbench, documents, storage, layout, model};
+  return {workbench, documents, storage, layout, canvas, contribution, canvasContribution, model};
 }
 
 const project = {id: "book", name: "故事", path: "/projects/book"};
+
+test("outline opens its main canvas with a separate session-only viewport for each timeline", async () => {
+  const {f} = persistenceFixture();
+  f.start(); await flushStartup();
+  const {workbench, layout, canvas, contribution, canvasContribution, model} = services(f);
+  assert.ok(canvasContribution, "outline registers its canvas through the main layout role");
+  assert.equal(canvasContribution.role, "main");
+  assert.equal(canvasContribution.order, 10);
+  assert.ok(contribution, "outline keeps its navigation contribution separate");
+  assert.equal(await workbench.openProject(project), true);
+  const sessionId = workbench.getSnapshot().session.id;
+  const listModel = model();
+
+  async function createTimeline(title) {
+    listModel.beginCreate();
+    listModel.updateCreateDraft({title});
+    assert.equal(await listModel.create(), true);
+    return listModel.getSnapshot().selectedId;
+  }
+  function canvasElement() {
+    const active = layout.getSnapshot().shownIds.includes("outline-design.canvas");
+    const element = canvasContribution.render({active});
+    return {props: element.props, tree: element.type(element.props)};
+  }
+  function currentSurface() {
+    const {tree} = canvasElement();
+    const children = Array.isArray(tree.props.children) ? tree.props.children : [tree.props.children];
+    return children.find(child => child?.type === canvas.Surface);
+  }
+
+  const firstId = await createTimeline("第一条时间线");
+  const firstViewport = canvasElement().props.viewports.get(sessionId).get(firstId);
+  assert.ok(firstViewport);
+  assert.equal(firstViewport.getSnapshot().center.x, 0);
+  assert.equal(firstViewport.getSnapshot().center.y, 0);
+  firstViewport.panBy(120, -40);
+  firstViewport.zoomTo(2);
+  const nav = contribution.render({active: true});
+  layout.show("outline-design.navigation");
+  assert.ok(layout.getSnapshot().shownIds.includes("body-editor.main"), "showing the outline navigation alone preserves the current main view");
+  nav.props.onOpenTimeline(sessionId, firstId);
+  assert.ok(layout.getSnapshot().shownIds.includes("outline-design.navigation"), "opening the canvas leaves the outline navigation visible");
+  assert.ok(layout.getSnapshot().shownIds.includes("outline-design.canvas"), "timeline selection switches the main contribution to the canvas");
+  assert.equal(currentSurface().props.active, true);
+  layout.show("body-editor.main");
+  assert.equal(currentSurface().props.active, false, "hiding the canvas pauses its gestures");
+  layout.show("outline-design.canvas");
+  assert.equal(currentSurface().props.active, true);
+
+  listModel.beginCreate();
+  assert.equal(currentSurface().props.active, false, "the open create dialog pauses canvas input");
+  listModel.cancelCreate();
+  const secondId = await createTimeline("第二条时间线");
+  const viewports = canvasElement().props.viewports.get(sessionId);
+  const secondViewport = viewports.get(secondId);
+  assert.ok(secondViewport);
+  assert.notStrictEqual(secondViewport, firstViewport);
+  assert.equal(secondViewport.getSnapshot().center.x, 0);
+  assert.equal(secondViewport.getSnapshot().center.y, 0);
+  assert.equal(secondViewport.getSnapshot().zoom, 1);
+  assert.equal(secondViewport.getSnapshot().disposed, false);
+  assert.equal(firstViewport.getSnapshot().center.x, -120, "returning to the first timeline retains its view");
+  assert.equal(firstViewport.getSnapshot().center.y, 40);
+  assert.equal(firstViewport.getSnapshot().zoom, 2);
+
+  assert.equal(await listModel.remove(secondId), true);
+  assert.equal(listModel.getSnapshot().selectedId, firstId, "deleting the selected item selects the adjacent timeline");
+  assert.equal(secondViewport.getSnapshot().disposed, true);
+  assert.equal(viewports.has(secondId), false, "a deleted timeline releases its viewport");
+  assert.strictEqual(viewports.get(firstId), firstViewport);
+
+  assert.equal(await workbench.openProject({...project, id: "other", path: "/projects/other"}), true);
+  assert.equal(firstViewport.getSnapshot().disposed, true, "switching projects disposes every old-session viewport");
+  assert.equal(canvasElement().tree.props.className, "outline-design-canvas-empty", "a new session cannot display the previous project's canvas");
+  assert.equal(await workbench.closeProject(), true);
+  await f.createdCores.at(-1).unmountAll();
+});
 
 test("outline persists only list fields through shared project bytes and reads them in a fresh project session", async () => {
   const {f, disk, bytesOf, keyOf} = persistenceFixture();

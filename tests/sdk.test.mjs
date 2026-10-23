@@ -16,6 +16,7 @@ import * as packageConfig from "@lodestory/sdk/config";
 import * as packageDocuments from "@lodestory/sdk/documents";
 import * as packageStorage from "@lodestory/sdk/project-storage";
 import * as packageBodyEditor from "@lodestory/sdk/body-editor";
+import * as packageCanvas from "@lodestory/sdk/canvas";
 import * as packageContextMenu from "@lodestory/sdk/context-menu";
 import { createSdkLoader } from "./helpers/sdkFixture.mjs";
 
@@ -23,10 +24,12 @@ const packageManifest = JSON.parse(readFileSync(new URL("../packages/sdk/package
 
 test("SDK package exposes ESM root and all public capability entry points", () => {
   assert.equal(packageManifest.type, "module");
-  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./body-editor", "./config", "./context-menu", "./documents", "./error", "./layout", "./navigation-layout", "./project-storage", "./theme", "./ui", "./window-shell", "./workbench"]);
+  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./layout", "./navigation-layout", "./project-storage", "./theme", "./ui", "./window-shell", "./workbench"]);
 
   assert.equal(packageManifest.exports["./body-editor"].import, "./dist/body-editor.js");
   assert.equal(packageManifest.exports["./body-editor"].types, "./dist/body-editor.d.ts");
+  assert.equal(packageManifest.exports["./canvas"].import, "./dist/canvas.js");
+  assert.equal(packageManifest.exports["./canvas"].types, "./dist/canvas.d.ts");
   for (const [specifier, target] of [
     [".", "index"],
     ["./error", "error"],
@@ -40,6 +43,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
     ["./context-menu", "context-menu"],
     ["./documents", "documents"],
     ["./project-storage", "project-storage"],
+    ["./canvas", "canvas"],
   ]) {
     assert.equal(packageManifest.exports[specifier].import, `./dist/${target}.js`);
     assert.equal(packageManifest.exports[specifier].types, `./dist/${target}.d.ts`);
@@ -60,7 +64,8 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.deepEqual(Object.keys(packageDocuments).sort(), ["documentCreateRequested", "documentRevealRequested", "documentsKey"]);
   assert.deepEqual(Object.keys(packageStorage), ["projectStorageKey"]);
   assert.equal(packageStorage.projectStorageKey.id, "app/project-storage");
-  assert.deepEqual(Object.keys(packageBodyEditor).sort(), ["bodyEditorDefaultEditorsConfig", "bodyEditorKey"]);
+  assert.deepEqual(Object.keys(packageBodyEditor).sort(), ["bodyEditorContentIds", "bodyEditorDefaultEditorsConfig", "bodyEditorKey"]);
+  assert.deepEqual(Object.keys(packageCanvas), ["canvasKey"], "canvas behavior types do not add runtime exports");
   assert.equal(packageLayout.layoutKey.id, "app/layout");
   assert.equal(packageNavigationLayout.navigationLayoutKey.id, "app/navigation-layout");
   assert.equal(packageWindowShell.windowShellKey.id, "app/window-shell");
@@ -73,6 +78,8 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.equal(packageBodyEditor.bodyEditorKey.id, "app/body-editor");
   assert.equal(packageBodyEditor.bodyEditorDefaultEditorsConfig.id, "bodyEditor.defaultEditors");
   assert.equal(packageBodyEditor.bodyEditorDefaultEditorsConfig.effect, "restart");
+  assert.deepEqual(packageBodyEditor.bodyEditorContentIds, {main: "body-editor.main"});
+  assert.equal(packageCanvas.canvasKey.id, "app/canvas");
   const validateBodyEditorDefaults = packageBodyEditor.bodyEditorDefaultEditorsConfig.validate;
   assert.equal(validateBodyEditorDefaults({markdown: "milkdown", "plain-text": "textarea"}), true);
   assert.equal(validateBodyEditorDefaults({}), true, "unconfigured formats may remain unavailable");
@@ -150,6 +157,9 @@ test("SDK subpaths share one key module and need no host imports or runtime APIs
   const hostBodyEditorKey = sdk.requireSdk("@lodestory/sdk/body-editor").bodyEditorKey;
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/body-editor").bodyEditorKey, hostBodyEditorKey);
   assert.equal(hostBodyEditorKey.id, "app/body-editor");
+  const hostCanvasKey = sdk.requireSdk("@lodestory/sdk/canvas").canvasKey;
+  assert.strictEqual(sdk.requireSdk("@lodestory/sdk/canvas").canvasKey, hostCanvasKey);
+  assert.equal(hostCanvasKey.id, "app/canvas");
   const hostDocumentCreateRequested = sdk.requireSdk("@lodestory/sdk/documents").documentCreateRequested;
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/documents").documentCreateRequested, hostDocumentCreateRequested);
   const hostDocumentRevealRequested = sdk.requireSdk("@lodestory/sdk/documents").documentRevealRequested;

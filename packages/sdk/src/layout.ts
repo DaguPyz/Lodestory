@@ -40,7 +40,9 @@ export type LayoutService = {
   readonly View: ComponentType<LayoutViewProps>;
   /** 启动期间登记内容，重复 ID 或无效描述抛错；返回幂等、不会影响后续同名登记的撤销函数。 */
   registerContent(content: LayoutContent): () => void;
-  /** 展示内容，必要时展开容器或切换标签；未知 ID 抛错，不负责切换应用页面或聚焦正文。 */
+  /** 展示内容，必要时展开容器或切换标签；main 为单选，展示新 main 时隐藏原 main 并保留其实例。
+   * 未知 ID 抛错，不负责切换应用页面或聚焦正文。
+   */
   show(id: string): void;
   /** 隐藏内容但保留其组件实例；未知 ID 抛错，布局仍须保留再次展示它的入口。 */
   hide(id: string): void;

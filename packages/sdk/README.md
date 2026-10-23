@@ -1,6 +1,6 @@
 # @lodestory/sdk
 
-Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及配置、UI、应用导航布局、窗口外壳、主题、工作台布局、项目存储、工作台和文档服务契约。它不包含宿主实现。
+Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及配置、UI、应用导航布局、窗口外壳、主题、工作台布局、通用画布、项目存储、工作台和文档服务契约。它不包含宿主实现。
 
 ## 导出入口
 
@@ -11,10 +11,11 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/window-shell`：窗口外壳属性与服务类型，以及共享单例 `windowShellKey`。
 - `@lodestory/sdk/error`：错误边界服务与共享单例 `errorUiKey`。
 - `@lodestory/sdk/layout`：内容用途、登记描述、布局视图、快照和服务类型，以及共享单例 `layoutKey`。
+- `@lodestory/sdk/canvas`：通用视口与画布表面服务类型，以及共享单例 `canvasKey`。
 - `@lodestory/sdk/workbench`：项目与工作台会话、参与者生命周期、快照和服务类型，以及共享单例 `workbenchKey`。
 - `@lodestory/sdk/project-storage`：项目字节文件缓冲与存储服务类型，以及共享单例 `projectStorageKey`。
 - `@lodestory/sdk/documents`：打开文档与文档工作区类型，以及 `documentsKey` 和新建/显示请求事件。
-- `@lodestory/sdk/body-editor`：正文格式、编辑器定义与宿主传入的编辑器属性；`EditorHandle` 可按需贡献通用上下文菜单操作。
+- `@lodestory/sdk/body-editor`：正文格式、编辑器定义与宿主传入的编辑器属性、正文 main 内容 ID；`EditorHandle` 可按需贡献通用上下文菜单操作。
 - `@lodestory/sdk/context-menu`：共享菜单项类型、菜单区域属性类型，以及 context-menu 插件提供的 `contextMenuKey` 和 `ContextMenuService`。
 - `@lodestory/sdk/theme`：主题定义、仅含 ID 的选择配置、选择策略、管理服务和快照类型，以及共享单例 `themeKey`。
 
@@ -212,6 +213,14 @@ export const inkThemePlugin: Plugin = {
 登记描述可附带 `icon?: ReactNode` 作为入口的装饰图标，由贡献插件提供，不绑定宿主图标集合。默认布局用于左侧导航入口；未提供时沿用文件图标，其他布局也可使用文字入口。图标不替代 `title` 和无障碍名称。
 
 隐藏内容保留组件实例，并传入 `active: false`；工作台切到后台时所有内容也收到 false。登记函数必须在启动准备前调用，并在插件停用时调用返回的撤销函数。当前 UI 不支持热卸载，撤销已准备好的布局贡献会先停止 UI；布局实现的替换发生在下一次装配。此入口也只有 React 类型依赖，不导入 React 运行时代码。
+
+`main` 内容按用途互斥：`show(id)` 选择当前 main 项，布局快照的 `shownIds` 只包含选中的 main。标签等相关区域若只适用于某个 main，应订阅 `layoutKey` 的 `getSnapshot()` / `subscribe()`，并使用对应功能公开的内容 ID 判断是否展示；布局不解释 ID 的业务含义，也不需要增加业务事件。
+
+## 通用画布服务
+
+`@lodestory/sdk/canvas` 导出共享单例 `canvasKey`。通用 `canvas` 插件提供画布表面与视口状态：视口快照包含中心坐标、缩放比例和销毁状态；调用 `panBy`、`zoomTo`、`resetZoom`、`resetView` 可改变视口，返回布尔值表示操作是否接受。缩放以可选的指针锚点为中心，并限制在 25% 到 400%。画布表面接收 `viewport`、`active`、`label` 和可选子内容。
+
+画布服务只负责通用视口和手势，不定义时间线、事件或文件格式。具体功能插件通过 `canvasKey` 创建视口并拥有它们的用途和生命周期；当前大纲按项目会话和时间线条目保留视口，结束会话或删除条目时释放。视口位置只保留在当前会话内，不写入项目文件。
 
 ## 工作台服务
 

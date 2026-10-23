@@ -8,6 +8,7 @@ const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 const sdkSourceRoot = resolve(repositoryRoot, "packages/sdk/src");
 const publicEntries = {
   "@lodestory/sdk/body-editor": ["body-editor.ts"],
+  "@lodestory/sdk/canvas": ["canvas.ts"],
   "@lodestory/sdk/config": ["config.ts"],
   "@lodestory/sdk/context-menu": ["context-menu.ts"],
   "@lodestory/sdk/documents": ["documents.ts"],

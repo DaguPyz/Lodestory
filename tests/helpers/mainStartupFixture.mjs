@@ -139,6 +139,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     StrictMode: Symbol("StrictMode"),
     useSyncExternalStore(_subscribe, getSnapshot) { return getSnapshot(); },
     useEffect() {},
+    useLayoutEffect() {},
     useState(initialValue) {
       let value = typeof initialValue === "function" ? initialValue() : initialValue;
       return [value, next => { value = typeof next === "function" ? next(value) : next; }];

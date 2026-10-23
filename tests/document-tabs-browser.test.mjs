@@ -63,6 +63,16 @@ test("tab context menus close the requested range and disable empty ranges", asy
 
   await createTabs();
   await openMenu(names[2]);
+  await page.getByRole("button", {name: "布局内容", exact: true}).click();
+  await page.getByRole("menuitem", {name: "隐藏正文编辑", exact: true}).click();
+  await assertTabs([]);
+  await page.getByRole("menu", {name: `${names[2]}标签操作`, exact: true}).waitFor({state: "detached"});
+  await page.getByRole("menuitem", {name: "显示正文编辑", exact: true}).click();
+  await assertTabs(names);
+  assert.equal(await tab(names[3]).getAttribute("aria-current"), "page", "returning to the body restores the selected document");
+  await page.keyboard.press("Escape");
+
+  await openMenu(names[2]);
   assert.equal(await tab(names[3]).getAttribute("aria-current"), "page", "right-clicking a background tab preserves the active tab");
   assert.deepEqual(await page.getByRole("menuitem").allTextContents(), ["保存", "关闭", "关闭全部", "关闭其他", "关闭左侧", "关闭右侧"]);
   await capture("document-tabs-menu-dark");

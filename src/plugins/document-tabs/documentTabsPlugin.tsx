@@ -1,8 +1,9 @@
 import {useEffect, useSyncExternalStore} from "react";
 import {isTauri} from "@tauri-apps/api/core";
 import type {Plugin} from "@lodestory/sdk";
+import {bodyEditorContentIds} from "@lodestory/sdk/body-editor";
 import {documentCreateRequested, documentsKey, type DocumentWorkspace, type DocumentsService} from "@lodestory/sdk/documents";
-import {layoutKey, type LayoutContent} from "@lodestory/sdk/layout";
+import {layoutKey, type LayoutContent, type LayoutService} from "@lodestory/sdk/layout";
 import {workbenchKey, type WorkbenchService} from "@lodestory/sdk/workbench";
 import {useContextMenus} from "../context-menu";
 import {DocumentTabs} from "./DocumentTabs";
@@ -29,6 +30,7 @@ export function createDocumentTabsPlugin(): Plugin {
           active={active}
           workbench={workbench}
           documents={documents}
+          layout={layout}
           requestCreate={sessionId => context.emit(documentCreateRequested, {sessionId})}
         />,
       };
@@ -42,10 +44,11 @@ export function createDocumentTabsPlugin(): Plugin {
   };
 }
 
-function DocumentTabsContent({active, workbench, documents, requestCreate}: {
+function DocumentTabsContent({active, workbench, documents, layout, requestCreate}: {
   active: boolean;
   workbench: WorkbenchService;
   documents: DocumentsService;
+  layout: LayoutService;
   requestCreate(sessionId: string): Promise<void>;
 }) {
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
@@ -53,22 +56,25 @@ function DocumentTabsContent({active, workbench, documents, requestCreate}: {
   const workspace = session ? documents.getWorkspace(session.id) : null;
   return session && workspace
     ? <DocumentTabsSession key={session.id} sessionId={session.id} active={active} workbench={workbench}
-        workspace={workspace} requestCreate={requestCreate}/>
+        workspace={workspace} layout={layout} requestCreate={requestCreate}/>
     : null;
 }
 
-function DocumentTabsSession({sessionId, active, workbench, workspace, requestCreate}: {
+function DocumentTabsSession({sessionId, active, workbench, workspace, layout, requestCreate}: {
   sessionId: string;
   active: boolean;
   workbench: WorkbenchService;
   workspace: DocumentWorkspace;
+  layout: LayoutService;
   requestCreate(sessionId: string): Promise<void>;
 }) {
   const snapshot = useSyncExternalStore(workspace.subscribe, workspace.getSnapshot, workspace.getSnapshot);
   const workbenchState = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
+  const layoutSnapshot = useSyncExternalStore(layout.subscribe, layout.getSnapshot, layout.getSnapshot);
   const menus = useContextMenus();
+  const bodyVisible = layoutSnapshot.shownIds.includes(bodyEditorContentIds.main);
   const currentSession = workbenchState.session?.id === sessionId;
-  const interactive = active && currentSession && workbenchState.active && !workbenchState.busy && !snapshot.blocked;
+  const interactive = bodyVisible && active && currentSession && workbenchState.active && !workbenchState.busy && !snapshot.blocked;
   const disabled = !interactive;
   const newDisabled = disabled || !isTauri() || snapshot.creating;
 
@@ -79,12 +85,13 @@ function DocumentTabsSession({sessionId, active, workbench, workspace, requestCr
   function createDocument() {
     const current = workbench.getSnapshot();
     const currentWorkspace = workspace.getSnapshot();
-    if (!isTauri() || !active || current.session?.id !== sessionId || !current.active || current.busy
+    if (!isTauri() || !layout.getSnapshot().shownIds.includes(bodyEditorContentIds.main)
+      || !active || current.session?.id !== sessionId || !current.active || current.busy
       || currentWorkspace.blocked || currentWorkspace.creating) return;
     void requestCreate(sessionId).catch(error => console.error("Could not request document creation.", {error}));
   }
 
-  return <DocumentTabs documents={snapshot.documents} activeDocument={snapshot.activeId}
+  return bodyVisible && snapshot.documents.length > 0 ? <DocumentTabs documents={snapshot.documents} activeDocument={snapshot.activeId}
     onSelect={workspace.select} onClose={workspace.close} onCloseMany={workspace.closeMany} onSave={workspace.save}
-    onNewDocument={createDocument} newDisabled={newDisabled} disabled={disabled}/>;
+    onNewDocument={createDocument} newDisabled={newDisabled} disabled={disabled}/> : null;
 }

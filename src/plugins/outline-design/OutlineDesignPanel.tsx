@@ -6,7 +6,12 @@ import type {createTimelineListModel} from "./timelineListModel";
 
 type TimelineListModel = ReturnType<typeof createTimelineListModel>;
 
-function TimelineList({contextMenus, model, active}: {contextMenus: ContextMenuService; model: TimelineListModel; active: boolean}) {
+function TimelineList({contextMenus, model, active, onOpenTimeline}: {
+  contextMenus: ContextMenuService;
+  model: TimelineListModel;
+  active: boolean;
+  onOpenTimeline(id: string): void;
+}) {
   const MenuRegion = contextMenus.Region;
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const [creating, setCreating] = useState(false);
@@ -41,10 +46,20 @@ function TimelineList({contextMenus, model, active}: {contextMenus: ContextMenuS
     await model.remove(id);
   }
 
+  function selectTimeline(id: string) {
+    if (!active || snapshot.busy) return;
+    model.select(id);
+    onOpenTimeline(id);
+  }
+
   async function submitCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!active || !draft || titleLength < 1 || titleLength > 60 || summaryLength > 200 || snapshot.busy) return;
-    if (await model.create()) setCreating(false);
+    if (await model.create()) {
+      setCreating(false);
+      const selectedId = model.getSnapshot().selectedId;
+      if (selectedId) onOpenTimeline(selectedId);
+    }
   }
 
   const hasProblem = Boolean(snapshot.error) || snapshot.issues.length > 0;
@@ -72,7 +87,7 @@ function TimelineList({contextMenus, model, active}: {contextMenus: ContextMenuS
             ]}>
           <button type="button" className="outline-design-entry" aria-pressed={snapshot.selectedId === timeline.id}
             ref={snapshot.selectedId === timeline.id ? selectedEntry : undefined}
-            onClick={() => model.select(timeline.id)}>
+            onClick={() => selectTimeline(timeline.id)}>
             <span className="outline-design-entry-heading">
               <strong>{timeline.title}</strong>
               {snapshot.selectedId === timeline.id && <Icon name="check" size="small"/>}
@@ -135,10 +150,11 @@ function TimelineList({contextMenus, model, active}: {contextMenus: ContextMenuS
   </>;
 }
 
-export function OutlineDesignPanel({workbench, contextMenus, models, active}: {
+export function OutlineDesignPanel({workbench, contextMenus, models, onOpenTimeline, active}: {
   workbench: WorkbenchService;
   contextMenus: ContextMenuService;
   models: ReadonlyMap<string, TimelineListModel>;
+  onOpenTimeline(sessionId: string, timelineId: string): void;
   active: boolean;
 }) {
   const snapshot = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
@@ -147,7 +163,8 @@ export function OutlineDesignPanel({workbench, contextMenus, models, active}: {
 
   return <div className="outline-design-panel">
     {session && model
-      ? <TimelineList key={session.id} contextMenus={contextMenus} model={model} active={active}/>
+      ? <TimelineList key={session.id} contextMenus={contextMenus} model={model} active={active}
+          onOpenTimeline={timelineId => onOpenTimeline(session.id, timelineId)}/>
       : session
         ? <p className="outline-design-empty" role="status">正在准备时间线列表…</p>
         : <p className="outline-design-empty" role="status">请先打开一个项目。</p>}

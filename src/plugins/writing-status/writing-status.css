@@ -18,6 +18,10 @@
   line-height: var(--ui-line-height-caption);
 }
 
+.editor-statusbar[data-document-details-hidden="true"] {
+  justify-content: flex-end;
+}
+
 .editor-save-status,
 .editor-document-status {
   display: flex;

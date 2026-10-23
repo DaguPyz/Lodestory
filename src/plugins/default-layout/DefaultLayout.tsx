@@ -1,7 +1,7 @@
 import {useLayoutEffect, useRef, useState, useSyncExternalStore, type AnimationEvent, type RefObject} from "react";
 import type {LayoutContent, LayoutRole, LayoutViewProps} from "@lodestory/sdk/layout";
 import type {ErrorUiService} from "@lodestory/sdk/error";
-import { Button, IconButton, Icon, Select } from "@lodestory/ui";
+import { IconButton, Icon, Select } from "@lodestory/ui";
 import type {LayoutStore} from "./layoutStore";
 import type {createNavigationWidthModel} from "./navigationWidth";
 import {
@@ -267,10 +267,6 @@ export function DefaultLayout({store, widths, active, ErrorBoundary}: LayoutView
         <div className="layout-tabs" aria-label="文档标签">
           {contents("tabs").map(renderContent)}
         </div>
-        {contents("main").length > 1 && <nav className="layout-main-switcher" aria-label="切换主内容">
-          {contents("main").map(entry => <Button key={entry.id} variant="ghost" aria-pressed={shown(entry.id)}
-            onClick={() => store.show(entry.id)}>{entry.title}</Button>)}
-        </nav>}
         {contents("main").map(renderContent)}
         {!hasShown("main") && <p className="layout-empty">从“布局内容”菜单选择要展示的内容。</p>}
       </main>

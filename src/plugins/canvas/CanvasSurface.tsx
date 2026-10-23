@@ -164,7 +164,7 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots"}
     </div>
     <div className="canvas-controls" role="toolbar" aria-label="画布视图">
       <IconButton label="缩小画布" disabled={!enabled || snapshot.zoom <= 0.25} onClick={() => viewport.zoomTo(snapshot.zoom / 1.25)}>
-        <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+        <Icon name="minus"/>
       </IconButton>
       <span className="canvas-zoom-value"><Button variant="ghost" title="恢复到 100%" aria-label={`画布缩放 ${percentage}，恢复到 100%`}
         disabled={!enabled} onClick={() => viewport.resetZoom()}>{percentage}</Button></span>

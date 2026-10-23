@@ -9,6 +9,7 @@ const shapes = {
   ),
   folder: <path d="M3 5a1 1 0 0 1 1-1h5l2 3h9a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1Z" />,
   plus: <path d="M12 5v14M5 12h14" />,
+  minus: <path d="M5 12h14" />,
   arrowLeft: <path d="m10 5-7 7 7 7M3 12h18" />,
   file: (
     <>

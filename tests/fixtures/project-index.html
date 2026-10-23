@@ -11,16 +11,25 @@
       // Development-only IPC fixture. No native directory or index is modified.
       import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
       const scenario = new URLSearchParams(location.search).get("scenario");
-      const documentFiles = new Map([["正文/已有章节.md", "这是已有文稿。"], ["故事大纲.txt", "故事的大纲。"]]);
-      if (scenario === "save-as-conflict") {
-        documentFiles.set("故事大纲.lode", JSON.stringify({format: "quill-delta", version: 1, ops: [{insert: "已存在的富文本文档。\n"}]}));
+      const encode = text => Array.from(new TextEncoder().encode(text));
+      const equalBytes = (left, right) => left.length === right.length && left.every((byte, index) => byte === right[index]);
+      const projects = new Map();
+      const parentOf = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+      const timelineDirectory = ".lodestory/outline-design/timelines";
+      function projectFiles(projectPath) {
+        let state = projects.get(projectPath);
+        if (!state) {
+          const files = new Map([["正文/已有章节.md", encode("这是已有文稿。")], ["故事大纲.txt", encode("故事的大纲。")]]);
+          if (scenario === "save-as-conflict") files.set("故事大纲.lode", encode(JSON.stringify({format: "quill-delta", version: 1, ops: [{insert: "已存在的富文本文档。\n"}]})));
+          state = {files, directories: new Set(["", "正文", "资料"])};
+          projects.set(projectPath, state);
+        }
+        return state;
       }
-      const documentFolders = ["正文", "资料"];
-      const parentOf = (path) => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
-      function documentTree(parent = "") {
+      function documentTree(state, parent = "") {
         return [
-          ...documentFolders.filter((path) => parentOf(path) === parent).map((path) => ({ path, name: path.split("/").at(-1), children: documentTree(path) })),
-          ...[...documentFiles.keys()].filter((path) => parentOf(path) === parent).map((path) => ({ path, name: path.split("/").at(-1) })),
+          ...[...state.directories].filter(path => path && parentOf(path) === parent && !path.split("/").some(part => part.startsWith("."))).map(path => ({path, name: path.split("/").at(-1), children: documentTree(state, path)})),
+          ...[...state.files.keys()].filter(path => parentOf(path) === parent && /\.(md|markdown|txt|lode)$/i.test(path) && !path.split("/").some(part => part.startsWith("."))).map(path => ({path, name: path.split("/").at(-1)})),
         ];
       }
       let records = [
@@ -31,29 +40,62 @@
       mockWindows("main");
       mockIPC(async (command, args) => {
         if (command.startsWith("plugin:")) return command === "plugin:window|theme" ? "Dark" : 1;
-        if (command === "list_documents") return documentTree();
-        if (command === "create_document") {
-          if (scenario === "create-error") throw { code: "document_create_failed", message: "创建文档失败：保存目录不可写。" };
-          if (scenario === "save-as-error" && /\.lode$/i.test(args.name)) {
-            throw { code: "document_create_failed", message: "转换保存失败：模拟磁盘写入错误。" };
+        if (["list_documents", "read_project_file", "create_project_file", "save_project_file", "delete_project_file", "list_project_directory", "create_project_directory"].includes(command)) {
+          const state = projectFiles(args.projectPath);
+          const path = args.path ?? "";
+          const inTimeline = path === timelineDirectory || path.startsWith(`${timelineDirectory}/`);
+          function makeParents(directory) {
+            const parts = directory.split("/").filter(Boolean);
+            for (let index = 1; index <= parts.length; index++) {
+              const candidate = parts.slice(0, index).join("/");
+              if (state.files.has(candidate)) throw {message: "目录位置已有文件。"};
+              state.directories.add(candidate);
+            }
           }
-          if (/[<>:"/\\|?*]/.test(args.name) || args.name.startsWith(".")) throw { code: "invalid_document_name", message: "文档名称不能包含路径分隔符或特殊字符。" };
-          const name = /\.(md|markdown|txt|lode)$/i.test(args.name) ? args.name : `${args.name}.md`;
-          const path = args.parentPath ? `${args.parentPath}/${name}` : name;
-          if (documentFiles.has(path)) throw { code: "document_exists", message: "已存在同名文档，请换一个名称。" };
-          const content = args.content ?? "";
-          documentFiles.set(path, content);
-          return { path, fileName: name, content };
-        }
-        if (command === "read_document") {
-          if (!documentFiles.has(args.path)) throw { code: "document_unavailable", message: "文档已被移除。" };
-          return { path: args.path, fileName: args.path.split("/").at(-1), content: documentFiles.get(args.path) };
-        }
-        if (command === "save_document") {
-          if (scenario === "save-error") throw { code: "document_save_failed", message: "保存文档失败：磁盘不可写。" };
-          if (scenario === "slow-save") await new Promise((resolve) => setTimeout(resolve, 200));
-          if (documentFiles.get(args.path) !== args.expectedContent) throw { code: "document_changed", message: "文档已被其他程序修改。" };
-          documentFiles.set(args.path, args.content);
+          if (command === "list_documents") return documentTree(state);
+          if (command === "list_project_directory") {
+            if (scenario === "outline-read-error" && inTimeline) throw {message: "大纲列表读取失败：目录不可访问。"};
+            if (state.files.has(path)) throw {message: "路径不是目录。"};
+            const exists = state.directories.has(path);
+            const entries = exists ? [
+              ...[...state.directories].filter(candidate => candidate && parentOf(candidate) === path).map(candidate => ({path: candidate, name: candidate.split("/").at(-1), kind: "directory", size: null})),
+              ...[...state.files].filter(([candidate]) => parentOf(candidate) === path).map(([candidate, bytes]) => ({path: candidate, name: candidate.split("/").at(-1), kind: "file", size: bytes.length})),
+            ] : [];
+            return {exists, entries, issues: []};
+          }
+          if (command === "read_project_file") {
+            if (!state.files.has(path)) throw {message: "文件不存在。"};
+            return {path, fileName: path.split("/").at(-1), bytes: [...state.files.get(path)]};
+          }
+          if (command === "create_project_directory") {
+            if (args.recursive) makeParents(path);
+            else {
+              if (state.directories.has(path) || state.files.has(path)) throw {message: "目录或文件已存在。"};
+              if (!state.directories.has(parentOf(path))) throw {message: "父目录不存在。"};
+              state.directories.add(path);
+            }
+            return;
+          }
+          if (command === "create_project_file") {
+            if (scenario === "outline-slow-create" && inTimeline) await new Promise(resolve => setTimeout(resolve, 300));
+            if (scenario === "outline-create-error" && inTimeline) throw {message: "大纲创建失败：目录不可写。"};
+            if (scenario === "create-error" && !inTimeline) throw {message: "创建文档失败：保存目录不可写。"};
+            if (scenario === "save-as-error" && /\.lode$/i.test(path)) throw {message: "转换保存失败：模拟磁盘写入错误。"};
+            if (state.files.has(path)) {
+              if (!args.acceptIdentical || !equalBytes(state.files.get(path), args.bytes)) throw {message: "已存在同名文件。"};
+            } else {
+              if (args.createParents) makeParents(parentOf(path));
+              if (!state.directories.has(parentOf(path))) throw {message: "父目录不存在。"};
+              state.files.set(path, [...args.bytes]);
+            }
+            return {path, fileName: path.split("/").at(-1), bytes: [...state.files.get(path)]};
+          }
+          if (scenario === "save-error" && command === "save_project_file") throw {message: "保存文档失败：磁盘不可写。"};
+          if (scenario === "slow-save" && command === "save_project_file") await new Promise(resolve => setTimeout(resolve, 200));
+          if (scenario === "outline-delete-error" && command === "delete_project_file" && inTimeline) throw {message: "大纲删除失败：文件不可写。"};
+          if (!state.files.has(path) || !equalBytes(state.files.get(path), args.expectedBytes)) throw {message: "文件已被其他程序修改。"};
+          if (command === "delete_project_file") state.files.delete(path);
+          else state.files.set(path, [...args.bytes]);
           return;
         }
         if (command === "list_system_font_families") return ["Arial", "Noto Sans", "宋体"];

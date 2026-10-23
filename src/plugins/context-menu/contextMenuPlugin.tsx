@@ -1,5 +1,7 @@
 import type {Plugin} from "@lodestory/sdk";
+import {contextMenuKey} from "@lodestory/sdk/context-menu";
 import {uiKey} from "@lodestory/sdk/ui";
+import {ContextMenuRegion} from "./ContextMenuRegion";
 import {ContextMenuProvider} from "./ContextMenuProvider";
 
 /** 把上下文菜单能力登记为启动期 UI 包装层。 */
@@ -9,9 +11,10 @@ export function createContextMenuPlugin(): Plugin {
     return {
         id: "context-menu",
         requires: [uiKey],
-        provides: [],
+        provides: [contextMenuKey],
 
         activate(context) {
+            context.provide(contextMenuKey, {Region: ContextMenuRegion});
             removeUiWrapper = context.get(uiKey).addWrapper({
                 id: "context-menu",
                 order: 10,

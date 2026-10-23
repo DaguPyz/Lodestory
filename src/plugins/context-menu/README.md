@@ -37,3 +37,28 @@ const items: MenuEntry<Target>[] = [
 ## 验证
 
 `pnpm test` 检查菜单过滤、配置条件、执行前校验及窗口协调；开发页面 `/tests/fixtures/context-menu.html` 提供无业务依赖的交互检查、主题、密度、长菜单、子菜单、原生输入和对话框复用验证。`/tests/fixtures/project-index.html` 使用内存 IPC mock 检查业务接入，不修改实际文件。
+
+# Context Menu 插件
+
+插件在 UI 根包装层安装菜单运行环境，并通过 `@lodestory/sdk/context-menu` 提供 `contextMenuKey`。跨插件消费者声明 `requires: [contextMenuKey]`，再从服务取得 `Region` 来包裹支持右键菜单的元素；菜单项和区域属性类型也从该 SDK 入口导入。
+
+```tsx
+import type { Plugin } from "@lodestory/sdk";
+import { contextMenuKey, type MenuEntry } from "@lodestory/sdk/context-menu";
+
+const projectActions: readonly MenuEntry<string>[] = [
+  { id: "open", label: "打开", onSelect: (projectId) => openProject(projectId) },
+];
+
+export const projectPlugin: Plugin = {
+  id: "example.project",
+  requires: [contextMenuKey],
+  provides: [],
+  activate(context) {
+    const { Region } = context.get(contextMenuKey);
+    // 在 React 组件中使用：<Region context={projectId} items={projectActions}>…</Region>
+  },
+};
+```
+
+现有内置插件仍可从 `src/plugins/context-menu` 导入组件；该路径为应用内部兼容入口。新的跨插件接入应通过 SDK 能力，以便 EngineCore 检查依赖并在停用时撤销服务。

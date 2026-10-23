@@ -1,7 +1,8 @@
 import {createServiceKey} from "./ServiceKey.js";
 import {createEventKey, type EventKey} from "./EventKey.js";
+import type {ProjectSaveState} from "./project-storage.js";
 
-export type DocumentSaveState = "saved" | "pending" | "saving" | "error";
+export type DocumentSaveState = ProjectSaveState;
 
 /** 一次工作台会话内打开的文档；ID 由服务分配，路径相对于项目根目录。 */
 export type OpenDocument = Readonly<{
@@ -41,7 +42,7 @@ export type DocumentWorkspace = {
   /** 删除项目内的受支持文档；有未保存更改时须显式确认丢弃。 */
   deleteDocument(path: string, options?: { discardChanges?: boolean }): Promise<boolean>;
   select(id: string): boolean;
-  /** 更新共享内容，并由文档插件安排自动保存。 */
+  /** 更新项目存储拥有的共享内容缓冲，由项目存储安排自动保存。 */
   update(id: string, content: string): boolean;
   /** 先保存再关闭，保存失败时保留并选择该文档。 */
   close(id: string): Promise<boolean>;

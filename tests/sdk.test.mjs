@@ -14,14 +14,16 @@ import * as packageTheme from "@lodestory/sdk/theme";
 import * as packageWorkbench from "@lodestory/sdk/workbench";
 import * as packageConfig from "@lodestory/sdk/config";
 import * as packageDocuments from "@lodestory/sdk/documents";
+import * as packageStorage from "@lodestory/sdk/project-storage";
 import * as packageBodyEditor from "@lodestory/sdk/body-editor";
+import * as packageContextMenu from "@lodestory/sdk/context-menu";
 import { createSdkLoader } from "./helpers/sdkFixture.mjs";
 
 const packageManifest = JSON.parse(readFileSync(new URL("../packages/sdk/package.json", import.meta.url), "utf8"));
 
 test("SDK package exposes ESM root and all public capability entry points", () => {
   assert.equal(packageManifest.type, "module");
-  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./body-editor", "./config", "./documents", "./error", "./layout", "./navigation-layout", "./theme", "./ui", "./window-shell", "./workbench"]);
+  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./body-editor", "./config", "./context-menu", "./documents", "./error", "./layout", "./navigation-layout", "./project-storage", "./theme", "./ui", "./window-shell", "./workbench"]);
 
   assert.equal(packageManifest.exports["./body-editor"].import, "./dist/body-editor.js");
   assert.equal(packageManifest.exports["./body-editor"].types, "./dist/body-editor.d.ts");
@@ -35,7 +37,9 @@ test("SDK package exposes ESM root and all public capability entry points", () =
     ["./theme", "theme"],
     ["./workbench", "workbench"],
     ["./config", "config"],
+    ["./context-menu", "context-menu"],
     ["./documents", "documents"],
+    ["./project-storage", "project-storage"],
   ]) {
     assert.equal(packageManifest.exports[specifier].import, `./dist/${target}.js`);
     assert.equal(packageManifest.exports[specifier].types, `./dist/${target}.d.ts`);
@@ -51,7 +55,11 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.deepEqual(Object.keys(packageWindowShell), ["windowShellKey"]);
   assert.deepEqual(Object.keys(packageWorkbench), ["workbenchKey"]);
   assert.deepEqual(Object.keys(packageConfig), ["configKey"]);
+  assert.deepEqual(Object.keys(packageContextMenu), ["contextMenuKey"]);
+  assert.equal(packageContextMenu.contextMenuKey.id, "app/context-menu");
   assert.deepEqual(Object.keys(packageDocuments).sort(), ["documentCreateRequested", "documentRevealRequested", "documentsKey"]);
+  assert.deepEqual(Object.keys(packageStorage), ["projectStorageKey"]);
+  assert.equal(packageStorage.projectStorageKey.id, "app/project-storage");
   assert.deepEqual(Object.keys(packageBodyEditor).sort(), ["bodyEditorDefaultEditorsConfig", "bodyEditorKey"]);
   assert.equal(packageLayout.layoutKey.id, "app/layout");
   assert.equal(packageNavigationLayout.navigationLayoutKey.id, "app/navigation-layout");
@@ -133,7 +141,11 @@ test("SDK subpaths share one key module and need no host imports or runtime APIs
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/workbench").workbenchKey, hostWorkbenchKey);
   const hostConfigKey = sdk.requireSdk("@lodestory/sdk/config").configKey;
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/config").configKey, hostConfigKey);
+  const hostContextMenuKey = sdk.requireSdk("@lodestory/sdk/context-menu").contextMenuKey;
+  assert.strictEqual(sdk.requireSdk("@lodestory/sdk/context-menu").contextMenuKey, hostContextMenuKey);
   const hostDocumentsKey = sdk.requireSdk("@lodestory/sdk/documents").documentsKey;
+  const hostStorageKey = sdk.requireSdk("@lodestory/sdk/project-storage").projectStorageKey;
+  assert.strictEqual(sdk.requireSdk("@lodestory/sdk/project-storage").projectStorageKey, hostStorageKey);
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/documents").documentsKey, hostDocumentsKey);
   const hostBodyEditorKey = sdk.requireSdk("@lodestory/sdk/body-editor").bodyEditorKey;
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/body-editor").bodyEditorKey, hostBodyEditorKey);

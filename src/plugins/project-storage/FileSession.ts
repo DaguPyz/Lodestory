@@ -1,34 +1,37 @@
-import type {OpenDocument} from "@lodestory/sdk/documents";
-import { documentErrorMessage, type DocumentRecord } from "./documentApi";
+import type {ProjectFile, ProjectFileBytes, ProjectFileData} from "@lodestory/sdk/project-storage";
+import {storageErrorMessage, type FileRecord} from "./storageApi";
+import {copyBytes, equalBytes} from "./bytes";
 
-type WriteDocument = (path: string, content: string, expectedContent: string) => Promise<void>;
+type WriteBytes = (path: string, bytes: ProjectFileBytes, expectedBytes: ProjectFileBytes) => Promise<void>;
 
-// Serialize writes for each document and retain edits made during an earlier save.
-export class DocumentSession {
-  private value: OpenDocument;
-  private savedContent: string;
+// Serialize writes for each byte buffer and retain edits made during an earlier save.
+export class FileSession {
+  private value: ProjectFile;
+  private savedBytes: ProjectFileBytes;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private pending: Promise<boolean> | null = null;
   private deleting = false;
 
-  constructor(record: DocumentRecord, private write: WriteDocument, private changed: () => void) {
-    this.value = Object.freeze({ ...record, id: encodeURIComponent(record.path), saveState: "saved", saveError: null });
-    this.savedContent = record.content;
+  constructor(record: FileRecord, private persistBytes: WriteBytes, private changed: () => void) {
+    const bytes = copyBytes(record.bytes);
+    this.value = Object.freeze({ ...record, bytes, dirty: false, saveState: "saved", saveError: null });
+    this.savedBytes = bytes;
   }
 
-  get document(): OpenDocument { return this.value; }
-  get persistedContent(): string { return this.savedContent; }
-  get isDirty(): boolean { return this.value.content !== this.savedContent; }
+  get file(): ProjectFile { return this.value; }
+  get persistedBytes(): ProjectFileBytes { return this.savedBytes; }
+  get isDirty(): boolean { return !equalBytes(this.value.bytes, this.savedBytes); }
 
-  update(content: string) {
-    if (this.deleting || this.value.content === content) return;
+  write(data: ProjectFileData) {
+    const bytes = copyBytes(data);
+    if (this.deleting || equalBytes(this.value.bytes, bytes)) return;
     this.value = Object.freeze({
-      ...this.value, content, saveError: null,
-      saveState: this.pending ? "saving" : content === this.savedContent ? "saved" : "pending",
+      ...this.value, bytes, dirty: !equalBytes(bytes, this.savedBytes), saveError: null,
+      saveState: this.pending ? "saving" : equalBytes(bytes, this.savedBytes) ? "saved" : "pending",
     });
     this.notify();
     this.clearTimer();
-    if (content !== this.savedContent) this.timer = setTimeout(() => { void this.save(); }, 700);
+    if (!equalBytes(bytes, this.savedBytes)) this.timer = setTimeout(() => { void this.save(); }, 700);
   }
 
   save(): Promise<boolean> {
@@ -41,9 +44,9 @@ export class DocumentSession {
     this.pending = pending;
     const complete = (result: boolean) => {
       // An observer may edit during the saved notification or its following microtask.
-      if (result && !this.deleting && this.value.content !== this.savedContent) { void this.persist().then(complete, failed); return; }
+      if (result && !this.deleting && !equalBytes(this.value.bytes, this.savedBytes)) { void this.persist().then(complete, failed); return; }
       this.clearTimer();
-      if (result && this.deleting && this.value.content !== this.savedContent) {
+      if (result && this.deleting && !equalBytes(this.value.bytes, this.savedBytes)) {
         this.value = Object.freeze({...this.value, saveState: "pending", saveError: null});
         this.notify();
       }
@@ -51,7 +54,7 @@ export class DocumentSession {
       done(result);
     };
     const failed = (error: unknown) => {
-      this.value = Object.freeze({...this.value, saveState: "error", saveError: documentErrorMessage(error)});
+      this.value = Object.freeze({...this.value, saveState: "error", saveError: storageErrorMessage(error)});
       this.notify();
       complete(false);
     };
@@ -92,24 +95,25 @@ export class DocumentSession {
 
   private notify() {
     try { this.changed(); }
-    catch (error) { console.error("Document state notification failed.", {error}); }
+    catch (error) { console.error("File buffer notification failed.", {error}); }
   }
 
   private async persist(): Promise<boolean> {
-    while (!this.deleting && this.value.content !== this.savedContent) {
-      const content = this.value.content;
+    while (!this.deleting && !equalBytes(this.value.bytes, this.savedBytes)) {
+      const bytes = this.value.bytes;
       this.value = Object.freeze({ ...this.value, saveState: "saving", saveError: null });
       this.notify();
       try {
-        await this.write(this.value.path, content, this.savedContent);
-        this.savedContent = content;
+        await this.persistBytes(this.value.path, bytes, this.savedBytes);
+        this.savedBytes = bytes;
+        this.value = Object.freeze({...this.value, dirty: !equalBytes(this.value.bytes, this.savedBytes)});
       } catch (error) {
-        this.value = Object.freeze({ ...this.value, saveState: "error", saveError: documentErrorMessage(error) });
+        this.value = Object.freeze({ ...this.value, saveState: "error", saveError: storageErrorMessage(error) });
         this.notify();
         return false;
       }
     }
-    if (this.value.content === this.savedContent
+    if (equalBytes(this.value.bytes, this.savedBytes)
       && (this.value.saveState !== "saved" || this.value.saveError !== null)) {
       this.value = Object.freeze({ ...this.value, saveState: "saved", saveError: null });
       this.notify();

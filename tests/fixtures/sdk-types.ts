@@ -30,6 +30,13 @@ import {
   type OpenDocument,
 } from "@lodestory/sdk/documents";
 import {
+  projectStorageKey,
+  type ProjectStorageService,
+  type ProjectFiles,
+  type ProjectFile,
+  type ProjectDirectoryListing,
+} from "@lodestory/sdk/project-storage";
+import {
   bodyEditorKey,
   type BodyEditorService,
   type EditorDefinition,
@@ -84,7 +91,7 @@ const listener: EventListener<DocumentChanged> = ({ documentId, revision }) => {
 declare const context: PluginContext;
 const plugin: Plugin = {
   id: "sdk-types",
-  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, navigationLayoutKey, windowShellKey, workbenchKey, configKey, documentsKey, bodyEditorKey],
+  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, navigationLayoutKey, windowShellKey, workbenchKey, configKey, projectStorageKey, documentsKey, bodyEditorKey],
   provides: [],
   activate(pluginContext) {
     const document = pluginContext.get(documentKey);
@@ -92,6 +99,7 @@ const plugin: Plugin = {
     const ui: UiService = pluginContext.get(uiKey);
     const config: ConfigService = pluginContext.get(configKey);
     const documents: DocumentsService = pluginContext.get(documentsKey);
+    const storage: ProjectStorageService = pluginContext.get(projectStorageKey);
     const bodyEditor: BodyEditorService = pluginContext.get(bodyEditorKey);
     const removeEditor: () => void = bodyEditor.registerEditor({
       id: "example.markdown",
@@ -119,6 +127,26 @@ const plugin: Plugin = {
       },
     });
     const workspace: DocumentWorkspace | null = documents.getWorkspace("session-1");
+    // @ts-expect-error Generic files do not belong to DocumentsService.
+    documents.getFiles("session-1");
+    // @ts-expect-error Storage does not define business resources or directory layouts.
+    storage.getResources("session-1", "outline-design", "timelines");
+    const files: ProjectFiles | null = storage.getFiles("session-1");
+    if (files) {
+      const reading: Promise<ProjectFile | null> = files.read("any/path.bin");
+      const creating: Promise<ProjectFile | null> = files.create("any/path.bin", new Uint8Array([0, 255]), {createParents: true});
+      const writing: boolean = files.write("any/path.bin", [255, 0]);
+      const saving: Promise<boolean> = files.save("any/path.bin");
+      const listing: Promise<ProjectDirectoryListing | null> = files.list("any");
+      const deleting: Promise<boolean> = files.delete("any/path.bin", {discardChanges: true});
+      // @ts-expect-error Byte snapshots cannot be changed outside storage operations.
+      files.getSnapshot().files[0].bytes.push(1);
+      // @ts-expect-error Text decoding belongs to the caller.
+      files.getSnapshot().files[0].content = "bypass";
+      // @ts-expect-error Storage cannot accept strings as file contents.
+      files.write("any/path.bin", "text");
+      void reading; void creating; void writing; void saving; void listing; void deleting;
+    }
     if (workspace) {
       const snapshot: DocumentSnapshot = workspace.getSnapshot();
       const opened: Promise<boolean> = workspace.open("chapters/one.md");

@@ -1,28 +1,9 @@
 import type { ReactNode } from "react";
+import type { MenuAction, MenuConfig } from "@lodestory/sdk/context-menu";
+
+export type { MenuAction, MenuConfig, MenuEntry } from "@lodestory/sdk/context-menu";
 
 type Condition<T> = boolean | ((context: T) => boolean);
-type EntryBase<T> = {
-  id: string;
-  visible?: Condition<T>;
-};
-
-export type MenuAction<T = undefined> = EntryBase<T> & {
-  type?: "action";
-  label: string;
-  icon?: ReactNode;
-  shortcut?: string;
-  disabled?: Condition<T>;
-  onSelect: (context: T) => unknown | Promise<unknown>;
-  /** Set false when the action moves focus, navigates, or opens a dialog. */
-  restoreFocus?: boolean;
-};
-
-export type MenuEntry<T = undefined> = MenuAction<T>
-  | (EntryBase<T> & { type: "separator" })
-  | (EntryBase<T> & { type: "group"; label?: string; items: readonly MenuEntry<T>[] })
-  | (EntryBase<T> & { type: "submenu"; label: string; icon?: ReactNode; disabled?: Condition<T>; items: readonly MenuEntry<T>[] });
-
-export type MenuConfig<T = undefined> = readonly MenuEntry<T>[] | ((context: T) => readonly MenuEntry<T>[]);
 
 export type ResolvedEntry<T> = MenuAction<T> & { disabled: boolean }
   | { id: string; type: "separator" }

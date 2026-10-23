@@ -1,54 +1,89 @@
 import type {Plugin} from "@lodestory/sdk";
 import {documentsKey, documentRevealRequested, type DocumentsService} from "@lodestory/sdk/documents";
+import {projectStorageKey} from "@lodestory/sdk/project-storage";
 import {workbenchKey} from "@lodestory/sdk/workbench";
 import {createDocumentWorkspace} from "./createDocumentWorkspace";
+import {createDocumentFiles} from "./documentFiles";
 
-/** Owns document buffers and persistence for each workbench session; has no UI or layout dependency. */
+type ManagedSession = {
+  workspace: ReturnType<typeof createDocumentWorkspace>;
+  leaving: boolean;
+  disposed: boolean;
+  disposal?: Promise<void>;
+};
+
+/** Owns document tab membership and selection; project storage owns byte buffers and persistence. */
 export function createDocumentsPlugin(): Plugin {
   let cleanup: (() => Promise<void>) | undefined;
   return {
-    id: "documents", requires: [workbenchKey], provides: [documentsKey],
+    id: "documents", requires: [workbenchKey, projectStorageKey], provides: [documentsKey],
     activate(context) {
       const workbench = context.get(workbenchKey);
-      const workspaces = new Map<string, ReturnType<typeof createDocumentWorkspace>>();
+      const storage = context.get(projectStorageKey);
+      const sessions = new Map<string, ManagedSession>();
       let alive = true;
       const service: DocumentsService = Object.freeze({
-        getWorkspace(sessionId: string) { return alive ? workspaces.get(sessionId)?.service ?? null : null; },
+        getWorkspace(sessionId: string) {
+          const session = sessions.get(sessionId);
+          return alive && session && !session.disposed ? session.workspace.service : null;
+        },
       });
       let removeParticipant: (() => Promise<void>) | undefined;
       let removeSubscription: (() => void) | undefined;
       cleanup = async () => {
         alive = false;
         removeSubscription?.();
-        try { await removeParticipant?.(); }
-        finally { workspaces.clear(); }
+        await removeParticipant?.();
+        sessions.clear();
       };
       context.provide(documentsKey, service);
       removeSubscription = workbench.subscribe(() => {
-        for (const workspace of workspaces.values()) workspace.refreshBlocked();
+        for (const session of sessions.values()) session.workspace.refreshBlocked();
       });
       removeParticipant = workbench.registerParticipant({
         id: "documents",
         start(session) {
-          if (!alive || workspaces.has(session.id)) throw new Error(`Document session '${session.id}' cannot be started.`);
-          const workspace = createDocumentWorkspace(session.project.path, {
+          if (!alive || sessions.has(session.id)) throw new Error(`Document session '${session.id}' cannot be started.`);
+          const projectFiles = storage.getFiles(session.id);
+          if (!projectFiles) throw new Error(`Project files for document session '${session.id}' are unavailable.`);
+          const files = createDocumentFiles(projectFiles);
+          let managed!: ManagedSession;
+          const workspace = createDocumentWorkspace(files, {
             canMutate: () => {
               const state = workbench.getSnapshot();
-              return alive && !state.busy && state.session?.id === session.id;
+              return alive && !managed?.disposed && !managed?.leaving && !state.busy && state.session?.id === session.id;
             },
             onReveal(documentId) {
-              if (!alive || workspaces.get(session.id) !== workspace) return;
+              if (!alive || managed?.disposed || sessions.get(session.id) !== managed) return;
               void context.emit(documentRevealRequested, Object.freeze({sessionId: session.id, documentId}))
                 .catch(error => console.error("Document presentation request failed.", {error}));
             },
           });
-          workspaces.set(session.id, workspace);
+          managed = {workspace, leaving: false, disposed: false};
+          sessions.set(session.id, managed);
+          const refresh = () => workspace.refreshBlocked();
+          const dispose = (): Promise<void> => {
+            if (managed.disposal) return managed.disposal;
+            managed.disposed = true;
+            refresh();
+            managed.disposal = (async () => {
+              await workspace.dispose();
+              if (sessions.get(session.id) === managed) sessions.delete(session.id);
+            })();
+            return managed.disposal;
+          };
           return {
-            beforeLeave: workspace.beforeLeave,
-            async dispose() {
-              try { await workspace.dispose(); }
-              finally { if (workspaces.get(session.id) === workspace) workspaces.delete(session.id); }
+            async beforeLeave() {
+              if (managed.disposed) return true;
+              managed.leaving = true;
+              refresh();
+              try { return await workspace.beforeLeave(); }
+              finally {
+                managed.leaving = false;
+                refresh();
+              }
             },
+            dispose,
           };
         },
       });

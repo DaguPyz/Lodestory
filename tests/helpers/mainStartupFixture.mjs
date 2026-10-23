@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
+import { webcrypto } from "node:crypto";
 import ts from "typescript";
 import { createSdkLoader } from "./sdkFixture.mjs";
 import { resolveUiPackageImport } from "./uiPackageFixture.mjs";
@@ -312,7 +313,9 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         useContextMenus() { return {activate() {}, release() {}}; },
       };
     }
-    if (relativePath === "plugins/context-menu/ContextMenuRegion.tsx") return {};
+    if (relativePath === "plugins/context-menu/ContextMenuRegion.tsx") return {
+      ContextMenuRegion: function ContextMenuRegion({children}) { return children; },
+    };
     if (relativePath === "plugins/theme/ThemeProvider.tsx") {
       return { __esModule: true, ThemeProvider: components.ThemeProvider };
     }
@@ -365,6 +368,11 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       Promise,
       Error,
       Symbol,
+      crypto: webcrypto,
+      TextEncoder,
+      TextDecoder,
+      Uint8Array,
+      ArrayBuffer,
       Map,
       Set,
       Object,
@@ -389,13 +397,11 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
           async invoke(command, args) {
             tauriCalls.push({ command, args });
             if (invokeHandler) return invokeHandler(command, args);
+            if (command === "list_project_directory") return {exists: false, entries: [], issues: []};
             if (command === "list_documents") return [];
-            if (command === "create_document") {
-              const path = [args.parentPath, args.name].filter(Boolean).join("/");
-              return { path, fileName: args.name, content: "" };
-            }
-            if (command === "read_document") return { path: args.path, fileName: args.path.split("/").at(-1), content: "" };
-            if (command === "save_document") return undefined;
+            if (command === "create_project_file") return {path: args.path, fileName: args.path.split("/").at(-1), bytes: args.bytes};
+            if (command === "read_project_file") return {path: args.path, fileName: args.path.split("/").at(-1), bytes: []};
+            if (command === "save_project_file" || command === "delete_project_file" || command === "create_project_directory") return undefined;
             throw new Error(`Unexpected Tauri command '${command}'.`);
           },
         };

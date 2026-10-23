@@ -9,7 +9,9 @@ const sdkSourceRoot = resolve(repositoryRoot, "packages/sdk/src");
 const publicEntries = {
   "@lodestory/sdk/body-editor": ["body-editor.ts"],
   "@lodestory/sdk/config": ["config.ts"],
+  "@lodestory/sdk/context-menu": ["context-menu.ts"],
   "@lodestory/sdk/documents": ["documents.ts"],
+  "@lodestory/sdk/project-storage": ["project-storage.ts"],
   "@lodestory/sdk": ["index.ts"],
   "@lodestory/sdk/workbench": ["workbench.ts"],
   "@lodestory/sdk/layout": ["layout.ts"],

@@ -47,6 +47,10 @@
       "types": "./dist/config.d.ts",
       "import": "./dist/config.js"
     },
+    "./project-storage": {
+      "types": "./dist/project-storage.d.ts",
+      "import": "./dist/project-storage.js"
+    },
     "./documents": {
       "types": "./dist/documents.d.ts",
       "import": "./dist/documents.js"
@@ -54,6 +58,10 @@
     "./body-editor": {
       "types": "./dist/body-editor.d.ts",
       "import": "./dist/body-editor.js"
+    },
+    "./context-menu": {
+      "types": "./dist/context-menu.d.ts",
+      "import": "./dist/context-menu.js"
     }
   },
   "scripts": {

@@ -162,6 +162,11 @@ test("outline navigation switches independently while preserving editor contents
   const outline = layout.getSnapshot().contents.find(({id}) => id === "outline-design.navigation");
   assert.ok(outline, "the outline-design plugin contributes through the layout service");
   assert.ok(outline.icon, "the outline navigation contribution provides its own icon");
+  const contextMenus = f.getService(f.requireSdk("@lodestory/sdk/context-menu").contextMenuKey);
+  assert.equal(typeof contextMenus.Region, "function");
+  assert.strictEqual(outline.render({active: true}).props.contextMenus, contextMenus,
+    "outline receives the declared context-menu capability through its public key");
+  assert.equal(outline.render({active: false}).props.active, false, "hidden outline menus receive the inactive state");
   assert.ok(layout.getSnapshot().shownIds.includes("project-management.files"), "project files remain the initially selected navigation contribution");
   assert.ok(!layout.getSnapshot().shownIds.includes(outline.id));
   assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.id).sort(), [

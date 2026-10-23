@@ -2,6 +2,8 @@ mod app_config;
 mod document_commands;
 mod documents;
 mod project_commands;
+mod project_file_commands;
+mod project_files;
 mod project_index;
 mod system_fonts;
 
@@ -24,6 +26,7 @@ pub fn run() {
             let path = directory.join(project_index::INDEX_FILENAME);
             app.manage(project_index::ProjectIndex::new(path));
             app.manage(documents::Documents::default());
+            app.manage(project_files::ProjectFiles::default());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -35,11 +38,12 @@ pub fn run() {
             project_commands::remove_recent_project,
             project_commands::pick_project_directory,
             document_commands::list_documents,
-            document_commands::create_document,
-            document_commands::create_document_directory,
-            document_commands::delete_document,
-            document_commands::read_document,
-            document_commands::save_document,
+            project_file_commands::read_project_file,
+            project_file_commands::create_project_file,
+            project_file_commands::save_project_file,
+            project_file_commands::delete_project_file,
+            project_file_commands::list_project_directory,
+            project_file_commands::create_project_directory,
             system_fonts::list_system_font_families,
         ])
         .run(tauri::generate_context!())

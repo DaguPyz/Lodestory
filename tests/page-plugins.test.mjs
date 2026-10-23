@@ -383,7 +383,7 @@ test("project file UI and the independent dialog wrapper connect through the SDK
   assert.ok(snapshot.documents.some(document => document.path === "第二章.md"));
   assert.equal(snapshot.activeId, encodeURIComponent("第二章.md"));
   assert.ok(layout.getSnapshot().shownIds.includes("body-editor.main"), "creating a document should reveal the body editor main content");
-  assert.ok(fixture.tauriCalls.some(({command, args}) => command === "create_document" && args.parentPath === "" && args.name === "第二章.md"));
+  assert.ok(fixture.tauriCalls.some(({command, args}) => command === "create_project_file" && args.path === "第二章.md"));
   assert.equal(projectModel.getSnapshot().activeDocumentPath, "第二章.md");
 });
 
@@ -392,12 +392,13 @@ test("a failed document save blocks project close and keeps the draft available 
   const fixture = await startFixture({
     invokeHandler(command, args) {
       if (command === "list_documents") return [];
-      if (command === "read_document") return {path: args.path, fileName: args.path.split("/").at(-1), content: "原文"};
-      if (command === "save_document") {
+      if (command === "list_project_directory") return {exists: false, entries: [], issues: []};
+      if (command === "read_project_file") return {path: args.path, fileName: args.path.split("/").at(-1), bytes: Array.from(new TextEncoder().encode("原文"))};
+      if (command === "save_project_file") {
         if (failWrites) throw new Error("磁盘写入失败");
         return undefined;
       }
-      if (command === "create_document") return {path: [args.parentPath, args.name].filter(Boolean).join("/"), fileName: args.name, content: ""};
+      if (command === "create_project_file") return {path: args.path, fileName: args.path.split("/").at(-1), bytes: args.bytes};
       throw new Error(`Unexpected command: ${command}`);
     },
   });
@@ -438,8 +439,9 @@ test("a delayed document reveal request cannot replace a newer selection or its 
       {path: "old", name: "old", children: [{path: "old/第一章.md", name: "第一章.md"}]},
       {path: "current", name: "current", children: [{path: "current/第二章.md", name: "第二章.md"}]},
     ];
-    if (command === "read_document") return {path: args.path, fileName: args.path.split("/").at(-1), content: ""};
-    if (command === "save_document") return undefined;
+    if (command === "list_project_directory") return {exists: false, entries: [], issues: []};
+      if (command === "read_project_file") return {path: args.path, fileName: args.path.split("/").at(-1), bytes: []};
+    if (command === "save_project_file") return undefined;
     return undefined;
   }});
   const workbench = getWorkbench(fixture);

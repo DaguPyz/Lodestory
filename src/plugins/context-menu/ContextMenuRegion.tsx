@@ -5,22 +5,12 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useContextMenus } from "./ContextMenuProvider";
-import { findMenuAction, resolveMenu, type MenuConfig, type ResolvedEntry } from "./menuModel";
+import type { ContextMenuRegionProps } from "@lodestory/sdk/context-menu";
+import { findMenuAction, resolveMenu, type ResolvedEntry } from "./menuModel";
 import type { MenuCloseReason } from "./menuCoordinator";
 import "./context-menu.css";
 
-export type ContextMenuRegionProps<T = undefined> = {
-  /** The element must forward DOM props and its ref (React 19 supports ref as a prop). */
-  children: ReactElement;
-  items?: MenuConfig<T>;
-  context?: T;
-  mode?: "custom" | "native";
-  disabled?: boolean;
-  label?: string;
-  density?: "comfortable" | "spacious" | "compact";
-  onActionError?: (error: unknown) => void;
-  fallbackFocus?: () => HTMLElement | null;
-};
+export type { ContextMenuRegionProps } from "@lodestory/sdk/context-menu";
 
 type Session<T> = { context: T; focus: HTMLElement; density: string };
 const editableSelector = "input, textarea, [contenteditable]:not([contenteditable='false'])";

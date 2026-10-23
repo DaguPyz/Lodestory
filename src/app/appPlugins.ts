@@ -10,6 +10,7 @@ import {createContextMenuPlugin} from "../plugins/context-menu";
 import {createWelcomePlugin} from "../plugins/welcome/welcomePlugin";
 import {createWorkbenchPlugin} from "../plugins/workbench/workbenchPlugin";
 import {createDocumentsPlugin} from "../plugins/documents/documentsPlugin";
+import {createProjectStoragePlugin} from "../plugins/project-storage/projectStoragePlugin";
 import {createProjectManagementPlugin} from "../plugins/project-management/projectManagementPlugin";
 import {createOutlineDesignPlugin} from "../plugins/outline-design/outlineDesignPlugin";
 import {createBodyEditorPlugin} from "../plugins/body-editor/bodyEditorPlugin";
@@ -34,6 +35,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createNavigationLayoutPlugin(),
         createDefaultLayoutPlugin(),
         createWorkbenchPlugin(),
+        createProjectStoragePlugin(),
         createDocumentsPlugin(),
         createProjectManagementPlugin(),
         createOutlineDesignPlugin(),

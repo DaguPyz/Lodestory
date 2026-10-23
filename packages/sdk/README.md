@@ -1,6 +1,6 @@
 # @lodestory/sdk
 
-Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及配置、UI、应用导航布局、窗口外壳、主题、工作台布局、工作台和文档服务契约。它不包含宿主实现。
+Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及配置、UI、应用导航布局、窗口外壳、主题、工作台布局、项目存储、工作台和文档服务契约。它不包含宿主实现。
 
 ## 导出入口
 
@@ -12,8 +12,10 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/error`：错误边界服务与共享单例 `errorUiKey`。
 - `@lodestory/sdk/layout`：内容用途、登记描述、布局视图、快照和服务类型，以及共享单例 `layoutKey`。
 - `@lodestory/sdk/workbench`：项目与工作台会话、参与者生命周期、快照和服务类型，以及共享单例 `workbenchKey`。
-- `@lodestory/sdk/documents`：打开文档、文档工作区与文档服务类型，以及 `documentsKey` 和新建/显示请求事件。
+- `@lodestory/sdk/project-storage`：项目字节文件缓冲与存储服务类型，以及共享单例 `projectStorageKey`。
+- `@lodestory/sdk/documents`：打开文档与文档工作区类型，以及 `documentsKey` 和新建/显示请求事件。
 - `@lodestory/sdk/body-editor`：正文格式、编辑器定义与宿主传入的编辑器属性；`EditorHandle` 可按需贡献通用上下文菜单操作。
+- `@lodestory/sdk/context-menu`：共享菜单项类型、菜单区域属性类型，以及 context-menu 插件提供的 `contextMenuKey` 和 `ContextMenuService`。
 - `@lodestory/sdk/theme`：主题定义、仅含 ID 的选择配置、选择策略、管理服务和快照类型，以及共享单例 `themeKey`。
 
 正文格式插件可通过 `EditorHandle.getContextMenuActions()` 动态返回当前操作快照。每项操作由编辑器插件拥有，包含稳定的 `id`、`label`、可选 `disabled` 和 `run()`；正文宿主负责展示并在执行时复核编辑器生命周期与编辑状态。未提供该方法的编辑器无需贡献菜单操作。
@@ -213,13 +215,13 @@ export const inkThemePlugin: Plugin = {
 
 ## 工作台服务
 
-工作台通过 `workbenchKey` 提供项目会话服务。`openProject(project)` 创建会话或在异步离开检查通过后切换项目；`closeProject()` 检查并结束当前会话。两者以 `Promise<boolean>` 表示是否完成，离开被拒绝时返回 `false`，操作错误以 Promise rejection 报告。`getSnapshot()` 与 `subscribe()` 提供 `{session, active, busy}` 状态；`registerParticipant()` 登记应用级参与者并返回异步撤销函数 `() => Promise<void>`。工作台运行中撤销参与者会先停止 UI，并等待项目资源清理。
+工作台通过 `workbenchKey` 提供项目会话服务。`openProject(project)` 创建会话或在异步离开检查通过后切换项目；`closeProject()` 检查并结束当前会话。两者以 `Promise<boolean>` 表示是否完成，离开被拒绝时返回 `false`，操作错误以 Promise rejection 报告。`getSnapshot()` 与 `subscribe()` 提供 `{session, active, busy}` 状态；`registerParticipant()` 登记应用级参与者并返回异步撤销函数 `() => Promise<void>`。工作台运行中撤销参与者会先停止 UI，并等待会话数据清理。
 
 项目会话由 `{id, project: {id, name, path}}` 构成。参与者在项目打开时按登记顺序执行 `start(session)`，返回 `beforeLeave(reason)` 和 `dispose()`；项目真正结束时按启动逆序清理。`suspend` 代表暂时离开工作台，检查通过后保留会话和资源；`switch`、`close`、`shutdown` 在检查通过后结束当前会话。`busy` 期间 UI 应阻止新的编辑操作，已有保存继续执行。统一离开检查覆盖 UI 页面 `open`、`back`、同页项目替换和原生窗口关闭。详细规则见[工作台插件设计](../../文档/需求设计/工作台插件.md)。
 
 ## 文档服务
 
-`@lodestory/sdk/documents` 提供应用级 `documentsKey`，由文档管理插件实现。它按工作台会话返回同一个 `DocumentWorkspace`，负责打开、创建、选择、修改、关闭和保存文档。每个 workspace 的快照包含当前打开文档、选中文档、打开/创建状态和错误；正文插件可以订阅快照并从中派生当前文档。文档 ID 只在工作区内有效，文档路径相对于项目根目录。
+`@lodestory/sdk/documents` 提供应用级 `documentsKey`，由文档管理插件实现。它按工作台会话返回同一个 `DocumentWorkspace`，负责文档打开项、选择，以及打开、关闭和新建等文档业务流程。每个 workspace 的快照包含当前打开文档、选中文档、打开/创建状态和错误；正文插件可以订阅快照并从中派生当前文档。文档 ID 只在工作区内有效，文档路径相对于项目根目录。正文内容缓冲和磁盘保存由项目存储服务提供。
 
 ```ts
 import type { Plugin } from "@lodestory/sdk";
@@ -253,11 +255,41 @@ export const editorPlugin: Plugin = {
 };
 ```
 
-`open(path)` 已打开时复用现有项；延迟完成的读取不得抢回后来选择的文档。`create(parentPath, name)` 创建文件并直接加入打开列表，返回落盘后的文件名和相对路径。`update` 更新共享内容并安排自动保存；调用方不另建保存副本或定时器。`close` 先保存，保存失败会保留文档并重新选择它。`closeMany(ids)` 按传入顺序逐个关闭调用时已有的文档，遇到失败或会话不可操作时立即停止并返回 `false`，保留其余文档；已经关闭的目标会跳过，调用后新开或重新打开的文档不受影响。`save` 和 `saveAll` 返回布尔值表示是否保存成功；操作错误可从快照或具体文档的 `saveError` 读取。关闭工作区不会删除物理文件。
+`open(path)` 已打开时复用现有项；延迟完成的读取不得抢回后来选择的文档。`create(parentPath, name)` 创建文件并直接加入打开列表，返回落盘后的文件名和相对路径。`update` 更新共享内容；具体缓冲和自动保存由 `projectStorageKey` 持有。`close` 先确保内容保存，失败时保留文档并重新选择它。`closeMany(ids)` 按传入顺序逐个关闭调用时已有的文档，遇到失败或会话不可操作时立即停止并返回 `false`，保留其余文档；已经关闭的目标会跳过，调用后新开或重新打开的文档不受影响。`save` 和 `saveAll` 返回布尔值表示是否保存成功；操作错误可从快照或具体文档的 `saveError` 读取。关闭工作区不会删除物理文件。
+
+## 项目存储服务
+
+`@lodestory/sdk/project-storage` 提供应用级 `projectStorageKey`，由项目存储插件实现。它按工作台会话返回一个共享 `ProjectFiles`，按项目相对路径管理不透明字节；正文通过 `DocumentWorkspace` 管理打开项和当前选择，大纲等业务插件使用同一字节服务，不创建正文标签，也不更改正文选择。
+
+```ts
+import {projectStorageKey} from "@lodestory/sdk/project-storage";
+import {workbenchKey} from "@lodestory/sdk/workbench";
+
+const storage = context.get(projectStorageKey);
+const workbench = context.get(workbenchKey);
+const removeParticipant = workbench.registerParticipant({
+  id: "example.storage-consumer",
+  start(session) {
+    const files = storage.getFiles(session.id);
+    if (!files) throw new Error("Project storage is unavailable.");
+    const unsubscribe = files.subscribe(() => {
+      const snapshot = files.getSnapshot();
+      // 由当前业务插件解释 snapshot.files 中的 bytes。
+    });
+    return {dispose: unsubscribe};
+  },
+});
+```
+
+`ProjectStorageService.getFiles(sessionId)` 返回稳定的 `ProjectFiles`，提供 `read`、`create`、`write`、`save`、`saveAll`、`delete`、`list`、`createDirectory` 和 `clearError`。`ProjectFile` 快照包含相对路径、文件名、只读字节数组、dirty 标记和保存状态。同一会话同一路径共享一个缓冲、保存队列、冲突检查和 700 毫秒自动保存。`read(path)` 使用完整相对路径；`create(path, bytes, options)` 使用调用方给定的完整路径和字节；目录是否递归创建及相同内容重试由显式选项决定。项目存储不解码 UTF-8、不解释 JSON，也不根据扩展名推断格式。
+
+统一字节命令是 `read_project_file`、`create_project_file`、`save_project_file`、`delete_project_file`、`list_project_directory` 和 `create_project_directory`。宿主处理相对路径、符号链接和 expected-bytes 冲突保护，不知道文本或业务格式。documents 自己将正文数据解码为字符串；outline-design 自己定义 UTF-8 与 `.lodestory/outline-design/timelines/<uuid>.json` 目录和 JSON 格式。存储契约只提供路径文件操作。
+
+统一字节服务接入不会搬动或转码既有项目文件。旧文档文本读写命令已移除，正文和大纲消费者使用上述统一字节命令；`list_documents` 仅供工程文件树查询。配置与主题偏好仍保存在 `localStorage`，最近项目索引仍保存在应用配置目录；它们不由项目存储迁移。离开项目时，项目存储统一保存已接受的字节缓冲修改；保存失败会阻止离开并保留当前会话。
 
 SDK 还定义两个窄事件，避免文档服务依赖文件树和正文界面：`documentCreateRequested` 携带 `{ sessionId, parentPath? }`，由当前提供新建交互的插件接收并展示自己的对话框；确认后再调用 `workspace.create`。`documentRevealRequested` 携带 `{ sessionId, documentId }`，由正文插件核对当前会话并显示对应文档；工程管理插件也监听它来同步文件树选择。文档插件在成功打开或创建文档、以及保存失败需要定位该文档时发布显示请求。事件监听失败会被报告，但不会撤销已提交的文档数据操作。
 
-文档插件作为工作台参与者，在每次 `start(session)` 创建工作区。离开时先阻止新的修改，等待已接受的打开、创建和保存操作完成，再执行 `saveAll` 覆盖所有已接收的编辑；失败会阻止离开并保留会话。项目结束且视图已停止使用后，工作区才释放，旧工作区句柄随后失效。文档插件的实现位于 `src/plugins/documents/`。独立的 `project-management` 插件在 `src/plugins/project-management/` 管理目录列表、文件树和新建对话框；它不新增 SDK 服务，通过 `documentsKey` 操作文档，并通过 `layoutKey` 登记导航内容。详见[文档管理插件设计](../../文档/需求设计/文档管理插件.md)和[工程管理插件设计](../../文档/需求设计/工程管理插件.md)。
+项目存储插件作为工作台参与者，在每次 `start(session)` 建立共享字节文件服务；离开时锁定修改、排空已接受的操作并保存所有内容。项目结束且视图已停止使用后才释放共享缓冲。文档插件仍通过 `documentsKey` 管理打开项、选择和文档业务交互；工程管理插件仍负责目录树和新建对话框。详见[项目存储插件设计](../../文档/需求设计/项目存储插件.md)、[文档管理插件设计](../../文档/需求设计/文档管理插件.md)和[工程管理插件设计](../../文档/需求设计/工程管理插件.md)。
 
 ## 构建与打包
 

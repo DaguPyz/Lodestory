@@ -84,7 +84,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "window-shell", "navigation-layout", "default-layout", "workbench", "project-storage", "documents", "project-management", "canvas", "outline-design", "body-editor", "markdown-editor", "rich-text-editor", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "window-shell", "navigation-layout", "default-layout", "workbench", "project-storage", "documents", "project-management", "canvas", "timeline", "outline-design", "body-editor", "markdown-editor", "rich-text-editor", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings"]);
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "./MarkdownEditor"), false,
   "application startup does not import the Milkdown component");
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier.startsWith("@milkdown/")), false,
@@ -145,12 +145,14 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/documents/documentsPlugin.ts"), "the documents plugin source should run in the fixture");
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/project-management/projectManagementPlugin.tsx"), "the project management plugin source should run in the fixture");
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/canvas/canvasPlugin.tsx"), "the generic canvas plugin source should run in the fixture");
+  assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/timeline/timelinePlugin.tsx"), "the timeline plugin source should run in the fixture");
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/outline-design/outlineDesignPlugin.tsx"), "the outline-design plugin source should run in the fixture");
   assert.ok(fixture.lifecycle.includes("activate:documents:complete"), "the documents service should activate");
   assert.ok(fixture.logs.indexOf("activate:workbench:complete") < fixture.logs.indexOf("activate:documents:begin"));
   assert.ok(fixture.logs.indexOf("activate:documents:complete") < fixture.logs.indexOf("activate:project-management:begin"), "the document service must be available before project management activation");
   assert.ok(fixture.logs.indexOf("activate:project-management:complete") < fixture.logs.indexOf("activate:canvas:begin"), "the canvas service activates after project management");
-  assert.ok(fixture.logs.indexOf("activate:canvas:complete") < fixture.logs.indexOf("activate:outline-design:begin"), "the canvas service is available before outline-design");
+  assert.ok(fixture.logs.indexOf("activate:canvas:complete") < fixture.logs.indexOf("activate:timeline:begin"), "the canvas service is available before timeline");
+  assert.ok(fixture.logs.indexOf("activate:timeline:complete") < fixture.logs.indexOf("activate:outline-design:begin"), "timeline is available before outline-design");
   assert.ok(fixture.logs.indexOf("activate:project-management:complete") < fixture.logs.indexOf("activate:body-editor:begin"), "documents and project management activate before the body editor");
   assert.ok(fixture.logs.indexOf("activate:body-editor:complete") < fixture.logs.indexOf("activate:workbench-toolbar:begin"), "the body editor activates before the workbench toolbar");
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/body-editor/bodyEditorPlugin.tsx"),
@@ -161,6 +163,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.ok(fixture.lifecycle.includes("activate:workbench-toolbar:complete"), "the workbench toolbar plugin should activate");
   assert.ok(fixture.lifecycle.includes("activate:project-management:complete"), "the project management plugin should activate");
   assert.ok(fixture.lifecycle.includes("activate:canvas:complete"), "the generic canvas service should activate");
+  assert.ok(fixture.lifecycle.includes("activate:timeline:complete"), "the timeline service should activate");
   assert.ok(fixture.lifecycle.includes("activate:outline-design:complete"), "the outline-design plugin should activate");
   const {canvasKey} = fixture.requireSdk("@lodestory/sdk/canvas");
   const viewport = fixture.getService(canvasKey).createViewport();

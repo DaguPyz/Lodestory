@@ -17,6 +17,7 @@ import * as packageDocuments from "@lodestory/sdk/documents";
 import * as packageStorage from "@lodestory/sdk/project-storage";
 import * as packageBodyEditor from "@lodestory/sdk/body-editor";
 import * as packageCanvas from "@lodestory/sdk/canvas";
+import * as packageTimeline from "@lodestory/sdk/timeline";
 import * as packageContextMenu from "@lodestory/sdk/context-menu";
 import { createSdkLoader } from "./helpers/sdkFixture.mjs";
 
@@ -24,7 +25,7 @@ const packageManifest = JSON.parse(readFileSync(new URL("../packages/sdk/package
 
 test("SDK package exposes ESM root and all public capability entry points", () => {
   assert.equal(packageManifest.type, "module");
-  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./layout", "./navigation-layout", "./project-storage", "./theme", "./ui", "./window-shell", "./workbench"]);
+  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./layout", "./navigation-layout", "./project-storage", "./theme", "./timeline", "./ui", "./window-shell", "./workbench"]);
 
   assert.equal(packageManifest.exports["./body-editor"].import, "./dist/body-editor.js");
   assert.equal(packageManifest.exports["./body-editor"].types, "./dist/body-editor.d.ts");
@@ -44,6 +45,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
     ["./documents", "documents"],
     ["./project-storage", "project-storage"],
     ["./canvas", "canvas"],
+    ["./timeline", "timeline"],
   ]) {
     assert.equal(packageManifest.exports[specifier].import, `./dist/${target}.js`);
     assert.equal(packageManifest.exports[specifier].types, `./dist/${target}.d.ts`);
@@ -66,6 +68,8 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.equal(packageStorage.projectStorageKey.id, "app/project-storage");
   assert.deepEqual(Object.keys(packageBodyEditor).sort(), ["bodyEditorContentIds", "bodyEditorDefaultEditorsConfig", "bodyEditorKey"]);
   assert.deepEqual(Object.keys(packageCanvas), ["canvasKey"], "canvas behavior types do not add runtime exports");
+  assert.deepEqual(Object.keys(packageTimeline), ["timelineKey"], "timeline behavior types do not add runtime exports");
+  assert.equal(packageTimeline.timelineKey.id, "app/timeline");
   assert.equal(packageLayout.layoutKey.id, "app/layout");
   assert.equal(packageNavigationLayout.navigationLayoutKey.id, "app/navigation-layout");
   assert.equal(packageWindowShell.windowShellKey.id, "app/window-shell");

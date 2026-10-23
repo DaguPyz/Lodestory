@@ -35,6 +35,8 @@ export type CanvasSurfaceProps = Readonly<{
   /** False ends gestures and disables input, without resetting the viewport. */
   active: boolean;
   label: string;
+  /** Optional background guide; omitted uses dots. Business content stays in children. */
+  grid?: "dots" | "none";
   /** World-space content; this layer is translated and scaled by the surface. */
   children?: ReactNode;
 }>;

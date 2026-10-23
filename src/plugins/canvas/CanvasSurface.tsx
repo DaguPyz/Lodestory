@@ -10,7 +10,7 @@ const isTextInput = (target: EventTarget | null) => target instanceof Element
   && Boolean(target.closest("input,textarea,select,[contenteditable]:not([contenteditable='false'])"));
 
 /** All DOM listeners and pointer capture belong to this mounted surface, not the viewport model. */
-export function CanvasSurface({viewport, active, label, children}: CanvasSurfaceProps) {
+export function CanvasSurface({viewport, active, label, children, grid = "dots"}: CanvasSurfaceProps) {
   const snapshot = useSyncExternalStore(viewport.subscribe, viewport.getSnapshot, viewport.getSnapshot);
   const surface = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
@@ -153,12 +153,12 @@ export function CanvasSurface({viewport, active, label, children}: CanvasSurface
       if (movement) { event.preventDefault(); viewport.panBy(...movement); }
       if (event.key === "Home") { event.preventDefault(); viewport.resetView(); }
     }}>
-    <svg className="canvas-grid" aria-hidden="true" width="100%" height="100%">
+    {grid === "dots" && <svg className="canvas-grid" aria-hidden="true" width="100%" height="100%">
       <defs><pattern id={patternId} width={pitch} height={pitch} x={gridOffset.x} y={gridOffset.y} patternUnits="userSpaceOnUse">
         <circle cx={pitch / 2} cy={pitch / 2} r="1" fill="currentColor"/>
       </pattern></defs>
       <rect width="100%" height="100%" fill={`url(#${patternId})`}/>
-    </svg>
+    </svg>}
     <div className="canvas-world" style={{transform: `translate(${offset.x}px, ${offset.y}px) scale(${snapshot.zoom})`}}>
       {children}
     </div>

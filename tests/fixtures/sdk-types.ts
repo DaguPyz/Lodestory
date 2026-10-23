@@ -53,6 +53,7 @@ import {
   type CanvasSurfaceProps,
   type CanvasZoomAnchor,
 } from "@lodestory/sdk/canvas";
+import {timelineKey, type TimelineListModel, type TimelineListSnapshot, type TimelineService} from "@lodestory/sdk/timeline";
 
 type Document = { read(): string };
 type DocumentChanged = { documentId: string; revision: number };
@@ -100,7 +101,7 @@ const listener: EventListener<DocumentChanged> = ({ documentId, revision }) => {
 declare const context: PluginContext;
 const plugin: Plugin = {
   id: "sdk-types",
-  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, navigationLayoutKey, windowShellKey, workbenchKey, configKey, projectStorageKey, documentsKey, bodyEditorKey, canvasKey],
+  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, navigationLayoutKey, windowShellKey, workbenchKey, configKey, projectStorageKey, documentsKey, bodyEditorKey, canvasKey, timelineKey],
   provides: [],
   activate(pluginContext) {
     const document = pluginContext.get(documentKey);
@@ -111,6 +112,28 @@ const plugin: Plugin = {
     const storage: ProjectStorageService = pluginContext.get(projectStorageKey);
     const bodyEditor: BodyEditorService = pluginContext.get(bodyEditorKey);
     const canvas: CanvasService = pluginContext.get(canvasKey);
+    const timelines: TimelineService = pluginContext.get(timelineKey);
+    const timelineModel: TimelineListModel | null = timelines.getModel("session-1");
+    if (timelineModel) {
+      const timelineSnapshot: TimelineListSnapshot = timelineModel.getSnapshot();
+      const unsubscribeTimeline = timelineModel.subscribe(() => void timelineModel.getSnapshot());
+      timelineModel.beginCreate();
+      timelineModel.updateCreateDraft({title: "新时间线", summary: "故事梗概"});
+      timelineModel.cancelCreate();
+      const createTimeline: Promise<boolean> = timelineModel.create();
+      const deleteTimeline: Promise<boolean> = timelineModel.remove("timeline-id");
+      const retryTimeline: Promise<boolean> = timelineModel.retry();
+      const saveTimeline: Promise<boolean> = timelineModel.save("timeline-id");
+      // @ts-expect-error Timeline selection is changed through the service's guarded open command.
+      timelineModel.select("timeline-id");
+      // @ts-expect-error Timeline navigation consumers cannot dispose the timeline-owned model.
+      timelineModel.dispose();
+      // @ts-expect-error Timeline snapshots are immutable to consumers.
+      timelineSnapshot.entries.push({} as TimelineListSnapshot["entries"][number]);
+      unsubscribeTimeline();
+      void createTimeline; void deleteTimeline; void retryTimeline; void saveTimeline;
+    }
+    const openedTimeline: boolean = timelines.open("session-1", "timeline-id");
     const mainContentId: "body-editor.main" = bodyEditorContentIds.main;
     const viewport: CanvasViewport = canvas.createViewport({center: {x: 0, y: 0}, zoom: 1});
     const viewportState: CanvasViewportSnapshot = viewport.getSnapshot();
@@ -122,6 +145,7 @@ const plugin: Plugin = {
     const unsubscribeViewport: () => void = viewport.subscribe(() => void viewport.getSnapshot());
     const surfaceProps: CanvasSurfaceProps = {viewport, active: true, label: "Timeline"};
     void canvas.Surface;
+    void openedTimeline;
     void mainContentId;
     void viewportState;
     void acceptedPan;

@@ -42,7 +42,7 @@ function timelinePath(id: string): string {
   return `${DIRECTORY}/${id}.json`;
 }
 
-/** Outline owns this private path and UTF-8 JSON convention; project storage owns the shared bytes. */
+/** Timeline owns this private path and UTF-8 JSON convention; project storage owns the shared bytes. */
 export function createTimelineListFiles(source: ProjectFiles) {
   const listeners = new Set<() => void>();
   let knownPaths = new Set<string>();
@@ -82,7 +82,7 @@ export function createTimelineListFiles(source: ProjectFiles) {
       creating,
       deletingId,
       blocked: sourceSnapshot.blocked,
-      error: error ?? sourceSnapshot.error,
+      error: error ?? (sourceSnapshot.blocked ? sourceSnapshot.error : null),
     });
   }
 
@@ -115,7 +115,10 @@ export function createTimelineListFiles(source: ProjectFiles) {
       try {
         const listing = await listingOperation;
         if (!alive || requestGeneration !== generation) return false;
-        if (!listing) throw new Error(source.getSnapshot().error ?? "当前项目存储不可用。");
+        if (!listing) {
+          const current = source.getSnapshot();
+          throw new Error((current.blocked ? current.error : null) ?? "当前项目存储不可用。");
+        }
 
         const nextPaths = new Set<string>();
         const nextIssues: TimelineListFileIssue[] = listing.issues.map(issue => ({name: issue.path, message: issue.message}));
@@ -160,7 +163,8 @@ export function createTimelineListFiles(source: ProjectFiles) {
         }
         if (!alive || requestGeneration !== generation) return false;
         loading = false;
-        error = source.getSnapshot().error;
+        const currentStorage = source.getSnapshot();
+        error = currentStorage.blocked ? currentStorage.error : null;
         publish();
         return true;
       } catch (cause) {
@@ -196,7 +200,8 @@ export function createTimelineListFiles(source: ProjectFiles) {
       const file = await createOperation;
       if (!alive) return null;
       if (!file) {
-        error = source.getSnapshot().error ?? "创建时间线文件失败。";
+        const current = source.getSnapshot();
+        error = (current.blocked ? current.error : null) ?? "创建时间线文件失败。";
         return null;
       }
       knownPaths.add(path);
@@ -236,7 +241,8 @@ export function createTimelineListFiles(source: ProjectFiles) {
       const deleted = await deleteOperation;
       if (!alive) return false;
       if (!deleted) {
-        error = source.getSnapshot().error ?? "删除时间线文件失败。";
+        const current = source.getSnapshot();
+        error = (current.blocked ? current.error : null) ?? "删除时间线文件失败。";
         return false;
       }
       knownPaths.delete(path);
@@ -253,7 +259,12 @@ export function createTimelineListFiles(source: ProjectFiles) {
   async function save(id: string): Promise<boolean> {
     if (!alive || snapshot.blocked) return false;
     const saved = await source.save(timelinePath(id));
-    if (alive && !saved) { error = source.getSnapshot().error ?? "保存时间线文件失败。"; publish(); }
+    if (alive && !saved) {
+      const current = source.getSnapshot();
+      const file = current.files.find(item => item.path === timelinePath(id));
+      error = file?.saveError ?? (current.blocked ? current.error : null) ?? "保存时间线文件失败。";
+      publish();
+    }
     return saved;
   }
 

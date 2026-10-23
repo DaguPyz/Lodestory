@@ -18,54 +18,6 @@
 
 .outline-design-empty { padding: var(--ui-panel-padding); }
 
-.outline-design-canvas {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-  min-height: 0;
-}
-
-.outline-design-canvas > :first-child { width: 100%; height: 100%; min-width: 0; min-height: 0; }
-
-.outline-design-canvas-empty {
-  display: grid;
-  width: 100%;
-  height: 100%;
-  place-items: center;
-  color: var(--ui-text-muted);
-  font-size: var(--ui-font-size-label);
-}
-
-.outline-design-canvas-header {
-  position: absolute;
-  z-index: 1;
-  top: var(--ui-space-6);
-  left: var(--ui-space-6);
-  max-width: min(28rem, calc(100% - 3rem));
-  pointer-events: none;
-}
-
-.outline-design-canvas-header h1 {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
-  margin: 0;
-  color: var(--ui-text-primary);
-  font-size: var(--ui-font-size-title);
-  font-weight: 600;
-  line-height: var(--ui-line-height-title);
-  overflow-wrap: anywhere;
-}
-
-.outline-design-canvas-header p {
-  margin: var(--ui-space-2) 0 0;
-  color: var(--ui-text-muted);
-  font-size: var(--ui-font-size-caption);
-  line-height: var(--ui-line-height-caption);
-}
-
 .outline-design-list-scroll {
   flex: 1;
   min-height: 0;

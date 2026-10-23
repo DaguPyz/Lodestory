@@ -4,8 +4,8 @@ import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
 
-const source = await readFile(new URL("../src/plugins/outline-design/timelineListModel.ts", import.meta.url), "utf8");
-const filesSource = await readFile(new URL("../src/plugins/outline-design/timelineListFiles.ts", import.meta.url), "utf8");
+const source = await readFile(new URL("../src/plugins/timeline/timelineListModel.ts", import.meta.url), "utf8");
+const filesSource = await readFile(new URL("../src/plugins/timeline/timelineListFiles.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS},
 }).outputText;
@@ -177,6 +177,28 @@ test("outline byte adapter distinguishes an absent directory from read failure a
   assert.equal(adapter.getSnapshot().loaded, true);
   assert.deepEqual(Array.from(adapter.getSnapshot().files), [], "missing directory is a successfully loaded empty list");
   assert.equal(adapter.getSnapshot().error, null);
+  adapter.dispose();
+});
+
+test("an unrelated shared-storage error does not leak into the timeline list unless the session is blocked", async () => {
+  let snapshot = {files: [], blocked: false, error: null};
+  const listeners = new Set();
+  const storage = {
+    getSnapshot: () => snapshot,
+    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    async list() { return {exists: false, entries: [], issues: []}; },
+    async read() { return null; }, async create() { return null; }, write() { return false; },
+    async save() { return false; }, async saveAll() { return false; }, async delete() { return false; },
+    async createDirectory() { return false; }, clearError() {},
+  };
+  const adapter = createTimelineListFiles(storage);
+  assert.equal(await adapter.load(), true);
+  snapshot = {...snapshot, error: "其他时间轴文件读取失败"};
+  for (const listener of [...listeners]) listener();
+  assert.equal(adapter.getSnapshot().error, null);
+  snapshot = {...snapshot, blocked: true, error: "项目存储已阻塞"};
+  for (const listener of [...listeners]) listener();
+  assert.equal(adapter.getSnapshot().error, "项目存储已阻塞");
   adapter.dispose();
 });
 

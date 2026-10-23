@@ -1,6 +1,6 @@
 # @lodestory/sdk
 
-Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及配置、UI、应用导航布局、窗口外壳、主题、工作台布局、通用画布、项目存储、工作台和文档服务契约。它不包含宿主实现。
+Lodestory 插件使用的共享契约包，提供插件生命周期类型、能力与事件 key，以及配置、UI、应用导航布局、窗口外壳、主题、工作台布局、通用画布、时间线、项目存储、工作台和文档服务契约。它不包含宿主实现。
 
 ## 导出入口
 
@@ -12,6 +12,7 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/error`：错误边界服务与共享单例 `errorUiKey`。
 - `@lodestory/sdk/layout`：内容用途、登记描述、布局视图、快照和服务类型，以及共享单例 `layoutKey`。
 - `@lodestory/sdk/canvas`：通用视口与画布表面服务类型，以及共享单例 `canvasKey`。
+- `@lodestory/sdk/timeline`：时间线列表快照、命令与打开服务，以及共享单例 `timelineKey`。
 - `@lodestory/sdk/workbench`：项目与工作台会话、参与者生命周期、快照和服务类型，以及共享单例 `workbenchKey`。
 - `@lodestory/sdk/project-storage`：项目字节文件缓冲与存储服务类型，以及共享单例 `projectStorageKey`。
 - `@lodestory/sdk/documents`：打开文档与文档工作区类型，以及 `documentsKey` 和新建/显示请求事件。
@@ -218,9 +219,15 @@ export const inkThemePlugin: Plugin = {
 
 ## 通用画布服务
 
-`@lodestory/sdk/canvas` 导出共享单例 `canvasKey`。通用 `canvas` 插件提供画布表面与视口状态：视口快照包含中心坐标、缩放比例和销毁状态；调用 `panBy`、`zoomTo`、`resetZoom`、`resetView` 可改变视口，返回布尔值表示操作是否接受。缩放以可选的指针锚点为中心，并限制在 25% 到 400%。画布表面接收 `viewport`、`active`、`label` 和可选子内容。
+`@lodestory/sdk/canvas` 导出共享单例 `canvasKey`。通用 `canvas` 插件提供画布表面与视口状态：视口快照包含中心坐标、缩放比例和销毁状态；调用 `panBy`、`zoomTo`、`resetZoom`、`resetView` 可改变视口，返回布尔值表示操作是否接受。缩放以可选的指针锚点为中心，并限制在 25% 到 400%。画布表面接收 `viewport`、`active`、`label` 和可选子内容；`grid` 可选 `"dots"`（默认）或 `"none"`，不含业务语义。
 
-画布服务只负责通用视口和手势，不定义时间线、事件或文件格式。具体功能插件通过 `canvasKey` 创建视口并拥有它们的用途和生命周期；当前大纲按项目会话和时间线条目保留视口，结束会话或删除条目时释放。视口位置只保留在当前会话内，不写入项目文件。
+画布服务只负责通用视口和手势，不定义时间线、事件或文件格式。具体功能插件通过 `canvasKey` 创建视口并拥有它们的用途和生命周期；当前时间线插件按项目会话和时间线条目保留视口，结束会话或删除条目时释放。视口位置只保留在当前会话内，不写入项目文件。
+
+## 时间线服务
+
+`@lodestory/sdk/timeline` 提供共享 `timelineKey`。`timeline` 拥有时间线列表元信息、当前选中项、数值轴设置和视口，通过工作台参与者管理项目会话。`outline-design` 通过公开服务订阅列表并发出新建、删除、打开请求；不直接导入列表模型、读写文件或创建视口。打开操作校验当前会话并通过布局显示时间线 main 内容。
+
+原点世界坐标表示故事起点，其显示数值、刻度间隔和单位由作者设置。数值轴实现与配置 JSON 属于提供者内部，不加入通用画布接口。现有列表文件路径和格式保持兼容；轴设置使用独立文件。契约消费方不拥有服务的清理权，插件在撤回 UI 后释放模型和视口。详见[时间线插件](../../src/plugins/timeline/README.md)。
 
 ## 工作台服务
 
@@ -292,7 +299,7 @@ const removeParticipant = workbench.registerParticipant({
 
 `ProjectStorageService.getFiles(sessionId)` 返回稳定的 `ProjectFiles`，提供 `read`、`create`、`write`、`save`、`saveAll`、`delete`、`list`、`createDirectory` 和 `clearError`。`ProjectFile` 快照包含相对路径、文件名、只读字节数组、dirty 标记和保存状态。同一会话同一路径共享一个缓冲、保存队列、冲突检查和 700 毫秒自动保存。`read(path)` 使用完整相对路径；`create(path, bytes, options)` 使用调用方给定的完整路径和字节；目录是否递归创建及相同内容重试由显式选项决定。项目存储不解码 UTF-8、不解释 JSON，也不根据扩展名推断格式。
 
-统一字节命令是 `read_project_file`、`create_project_file`、`save_project_file`、`delete_project_file`、`list_project_directory` 和 `create_project_directory`。宿主处理相对路径、符号链接和 expected-bytes 冲突保护，不知道文本或业务格式。documents 自己将正文数据解码为字符串；outline-design 自己定义 UTF-8 与 `.lodestory/outline-design/timelines/<uuid>.json` 目录和 JSON 格式。存储契约只提供路径文件操作。
+统一字节命令是 `read_project_file`、`create_project_file`、`save_project_file`、`delete_project_file`、`list_project_directory` 和 `create_project_directory`。宿主处理相对路径、符号链接和 expected-bytes 冲突保护，不知道文本或业务格式。documents 自己将正文数据解码为字符串；timeline 自己定义 UTF-8 与 `.lodestory/outline-design/timelines/<uuid>.json` 目录和 JSON 格式。存储契约只提供路径文件操作。
 
 统一字节服务接入不会搬动或转码既有项目文件。旧文档文本读写命令已移除，正文和大纲消费者使用上述统一字节命令；`list_documents` 仅供工程文件树查询。配置与主题偏好仍保存在 `localStorage`，最近项目索引仍保存在应用配置目录；它们不由项目存储迁移。离开项目时，项目存储统一保存已接受的字节缓冲修改；保存失败会阻止离开并保留当前会话。
 

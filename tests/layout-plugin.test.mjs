@@ -169,13 +169,13 @@ test("outline navigation switches independently while preserving editor contents
   assert.equal(outline.render({active: false}).props.active, false, "hidden outline menus receive the inactive state");
   assert.ok(layout.getSnapshot().shownIds.includes("project-management.files"), "project files remain the initially selected navigation contribution");
   assert.ok(!layout.getSnapshot().shownIds.includes(outline.id));
-  const canvas = layout.getSnapshot().contents.find(({id}) => id === "outline-design.canvas");
-  assert.ok(canvas, "the outline-design plugin contributes its canvas as main content");
+  const canvas = layout.getSnapshot().contents.find(({id}) => id === "timeline.main");
+  assert.ok(canvas, "the timeline plugin contributes its canvas as main content");
   assert.equal(canvas.role, "main");
   assert.equal(canvas.order, 10);
   assert.ok(!layout.getSnapshot().shownIds.includes(canvas.id), "the body editor remains the default main content");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.id).sort(), [
-    "body-editor.main", "document-tabs.tabs", "outline-design.canvas", "outline-design.navigation", "project-management.files", "workbench-toolbar.main", "writing-status.status",
+    "body-editor.main", "document-tabs.tabs", "outline-design.navigation", "project-management.files", "timeline.main", "workbench-toolbar.main", "writing-status.status",
   ]);
   assert.ok(f.lifecycle.indexOf("activate:default-layout:complete") < f.lifecycle.indexOf("activate:body-editor:begin"));
   assert.ok(f.lifecycle.indexOf("activate:project-management:complete") < f.lifecycle.indexOf("activate:body-editor:begin"));
@@ -219,8 +219,10 @@ test("outline navigation switches independently while preserving editor contents
   assert.strictEqual(workbench.getSnapshot().session, session, "temporary page navigation retains the current project session");
   await f.createdCores.at(-1).unmount("outline-design");
   assert.ok(!layout.getSnapshot().contents.some(({id}) => id === outline.id), "unmounting outline-design revokes its contribution");
-  assert.ok(!layout.getSnapshot().contents.some(({id}) => id === canvas.id), "unmounting outline-design revokes its canvas contribution too");
+  assert.ok(layout.getSnapshot().contents.some(({id}) => id === canvas.id), "unmounting outline-design leaves the timeline-owned canvas registered");
   assert.ok(layout.getSnapshot().contents.some(({id}) => id === "project-management.files"), "revoking the outline leaves the project-files contribution registered");
+  await f.createdCores.at(-1).unmount("timeline");
+  assert.ok(!layout.getSnapshot().contents.some(({id}) => id === canvas.id), "unmounting timeline revokes its main contribution");
   await f.createdCores.at(-1).unmount("workbench-toolbar");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
     "body-editor.main", "document-tabs.tabs", "project-management.files", "writing-status.status",
@@ -287,7 +289,7 @@ test("another provider of layoutKey receives the editor contributions and is inj
   f.start(); await flushStartup();
 assert.equal(contributions.length, 7);
   assert.deepEqual(contributions.map(({id}) => id).sort(), [
-  "body-editor.main", "document-tabs.tabs", "outline-design.canvas", "outline-design.navigation", "project-management.files", "workbench-toolbar.main", "writing-status.status",
+  "body-editor.main", "document-tabs.tabs", "outline-design.navigation", "project-management.files", "timeline.main", "workbench-toolbar.main", "writing-status.status",
   ]);
   const ui = f.getService(f.requireSdk("@lodestory/sdk/ui").uiKey);
   await ui.openPage("editor", {project: {id: "test", name: "test", path: "/test"}});

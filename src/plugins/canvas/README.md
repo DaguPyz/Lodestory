@@ -4,7 +4,7 @@
 
 `canvas` 插件实现可复用的二维画布底座：视口坐标、平移与缩放，以及接收业务内容的画布表面。它不读取项目文件，不了解时间线、事件、人物、连线或业务目录。
 
-公开契约位于 [`@lodestory/sdk/canvas`](../../../packages/sdk/src/canvas.ts)。插件提供共享 `canvasKey`；使用方通过 `context.get(canvasKey)` 创建独立视口，并把视口、`active` 状态、无障碍标签和自己的内容交给 `Surface` 呈现。SDK 只定义契约，React 与指针事件处理属于本插件实现。
+公开契约位于 [`@lodestory/sdk/canvas`](../../../packages/sdk/src/canvas.ts)。插件提供共享 `canvasKey`；使用方通过 `context.get(canvasKey)` 创建独立视口，并把视口、`active` 状态、无障碍标签和自己的内容交给 `Surface` 呈现。`grid` 默认为 `"dots"`，可传 `"none"` 使用纯色背景。SDK 只定义契约，React 与指针事件处理属于本插件实现。
 
 ## 基础交互
 
@@ -19,10 +19,10 @@
 
 ## 生命周期与接入
 
-视口由创建它的业务插件拥有。当前 `outline-design` 在工作台项目会话内按时间线 ID 缓存视口；删除时间线、结束项目会话或停用大纲时调用 `dispose()`。视口中心和缩放比例不写入 `project-storage`，也不跨项目会话保留。
+视口由创建它的业务插件拥有。当前 `timeline` 在工作台项目会话内按时间线 ID 缓存视口；删除时间线、结束项目会话或停用时间线插件时调用 `dispose()`。视口中心和缩放比例不写入 `project-storage`，也不跨项目会话保留。
 
-当前应用由 `appPlugins` 显式装配此插件，`outline-design` 声明对 `canvasKey` 的依赖。大纲把画布登记为布局的 `main` 内容；布局决定呈现位置，通用画布插件不引用布局或大纲实现。
+当前应用由 `appPlugins` 显式装配此插件，`timeline` 声明对 `canvasKey` 的依赖，并把时间线画布登记为布局的 `main` 内容；布局决定呈现位置，通用画布插件不引用布局或时间线实现。
 
 ## 范围
 
-本轮只提供画布底座及其手势交互，不包含事件卡片、时间轴刻度、连线、选择、拖放、撤销重做或画布内容持久化。大纲领域和画布数据结构仍由 `outline-design` 后续设计。
+本插件只提供画布底座及其手势交互，不包含时间轴数值、刻度、单位、事件或文件格式。数值时间轴及其设置保存由 [`timeline`](../timeline/README.md) 实现；事件卡片、连线、拖放和撤销重做仍未实现。

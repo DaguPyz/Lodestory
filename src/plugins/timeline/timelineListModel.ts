@@ -1,39 +1,7 @@
 import type {TimelineListFile, TimelineListFilesSnapshot} from "./timelineListFiles";
+import type {TimelineCreateDraft, TimelineListEntry, TimelineListIssue, TimelineListSnapshot} from "@lodestory/sdk/timeline";
 
-export type TimelineListEntry = Readonly<{
-  id: string;
-  title: string;
-  summary: string;
-  createdAt: string;
-  updatedAt: string;
-  period: string;
-  eventCount: number;
-  saveState: TimelineListFile["saveState"];
-  saveError: string | null;
-}>;
-
-export type TimelineCreateDraft = Readonly<{
-  id: string;
-  createdAt: string;
-  title: string;
-  summary: string;
-}>;
-
-export type TimelineListIssue = Readonly<{name: string; message: string}>;
-
-export type TimelineListSnapshot = Readonly<{
-  entries: readonly TimelineListEntry[];
-  selectedId: string | null;
-  createDraft: TimelineCreateDraft | null;
-  issues: readonly TimelineListIssue[];
-  loaded: boolean;
-  loading: boolean;
-  creating: boolean;
-  busy: boolean;
-  retryDisabled: boolean;
-  error: string | null;
-  retryLabel: string;
-}>;
+export type {TimelineCreateDraft, TimelineListEntry, TimelineListIssue, TimelineListSnapshot} from "@lodestory/sdk/timeline";
 
 type TimelineListFailure = {kind: "load"} | {kind: "create"} | {kind: "delete"; id: string} | {kind: "save"; id: string};
 

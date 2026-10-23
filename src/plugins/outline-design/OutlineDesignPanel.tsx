@@ -1,16 +1,14 @@
 import {useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
 import type {WorkbenchService} from "@lodestory/sdk/workbench";
 import type {ContextMenuService} from "@lodestory/sdk/context-menu";
+import type {TimelineListModel, TimelineService} from "@lodestory/sdk/timeline";
 import {Button, Dialog, DialogActions, Icon} from "@lodestory/ui";
-import type {createTimelineListModel} from "./timelineListModel";
-
-type TimelineListModel = ReturnType<typeof createTimelineListModel>;
 
 function TimelineList({contextMenus, model, active, onOpenTimeline}: {
   contextMenus: ContextMenuService;
   model: TimelineListModel;
   active: boolean;
-  onOpenTimeline(id: string): void;
+  onOpenTimeline(id: string): boolean;
 }) {
   const MenuRegion = contextMenus.Region;
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
@@ -48,7 +46,6 @@ function TimelineList({contextMenus, model, active, onOpenTimeline}: {
 
   function selectTimeline(id: string) {
     if (!active || snapshot.busy) return;
-    model.select(id);
     onOpenTimeline(id);
   }
 
@@ -150,21 +147,20 @@ function TimelineList({contextMenus, model, active, onOpenTimeline}: {
   </>;
 }
 
-export function OutlineDesignPanel({workbench, contextMenus, models, onOpenTimeline, active}: {
+export function OutlineDesignPanel({workbench, contextMenus, timelines, active}: {
   workbench: WorkbenchService;
   contextMenus: ContextMenuService;
-  models: ReadonlyMap<string, TimelineListModel>;
-  onOpenTimeline(sessionId: string, timelineId: string): void;
+  timelines: TimelineService;
   active: boolean;
 }) {
   const snapshot = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
   const session = snapshot.session;
-  const model = session ? models.get(session.id) : undefined;
+  const model = session ? timelines.getModel(session.id) : undefined;
 
   return <div className="outline-design-panel">
     {session && model
       ? <TimelineList key={session.id} contextMenus={contextMenus} model={model} active={active}
-          onOpenTimeline={timelineId => onOpenTimeline(session.id, timelineId)}/>
+          onOpenTimeline={timelineId => timelines.open(session.id, timelineId)}/>
       : session
         ? <p className="outline-design-empty" role="status">正在准备时间线列表…</p>
         : <p className="outline-design-empty" role="status">请先打开一个项目。</p>}

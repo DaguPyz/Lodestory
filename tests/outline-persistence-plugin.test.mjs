@@ -2,10 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {createMainFixture, flushStartup} from "./helpers/mainStartupFixture.mjs";
 
-function persistenceFixture({failFirstRead = false} = {}) {
+function persistenceFixture({failFirstRead = false, deferAxisSave = false} = {}) {
   const disk = new Map();
   let readFailed = false;
   const calls = [];
+  let axisSaveStartedResolve;
+  let finishAxisSave;
+  const axisSaveStarted = new Promise(resolve => { axisSaveStartedResolve = resolve; });
   const keyOf = (projectPath, path) => JSON.stringify([projectPath, path]);
   const bytesOf = value => Array.from(new TextEncoder().encode(value));
   const f = createMainFixture({
@@ -27,6 +30,17 @@ function persistenceFixture({failFirstRead = false} = {}) {
       }
       if (command === "save_project_file" || command === "delete_project_file") {
         const key = keyOf(args.projectPath, args.path);
+        if (command === "save_project_file" && deferAxisSave
+          && args.path.startsWith(".lodestory/timeline/axes/") && !finishAxisSave) {
+          axisSaveStartedResolve();
+          return new Promise(resolve => {
+            finishAxisSave = () => {
+              if (JSON.stringify(disk.get(key)) !== JSON.stringify(args.expectedBytes)) throw new Error("磁盘内容已经改变");
+              disk.set(key, Array.from(args.bytes));
+              resolve();
+            };
+          });
+        }
         if (JSON.stringify(disk.get(key)) !== JSON.stringify(args.expectedBytes)) throw new Error("磁盘内容已经改变");
         if (command === "delete_project_file") disk.delete(key);
         else disk.set(key, Array.from(args.bytes));
@@ -56,7 +70,7 @@ function persistenceFixture({failFirstRead = false} = {}) {
       throw new Error(`Unexpected command: ${command}`);
     },
   });
-  return {f, disk, bytesOf, keyOf, calls};
+  return {f, disk, bytesOf, keyOf, calls, axisSaveStarted, finishAxisSave: () => finishAxisSave?.()};
 }
 
 function services(f) {
@@ -66,25 +80,30 @@ function services(f) {
   const storage = f.getService(storageKey);
   const layout = f.getService(f.requireSdk("@lodestory/sdk/layout").layoutKey);
   const contribution = layout.getSnapshot().contents.find(entry => entry.id === "outline-design.navigation");
-  const canvasContribution = layout.getSnapshot().contents.find(entry => entry.id === "outline-design.canvas");
-  const canvas = f.getService(f.requireSdk("@lodestory/sdk/canvas").canvasKey);
-  const model = () => contribution.render({active: true}).props.models.get(workbench.getSnapshot().session.id);
+  const canvasContribution = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main");
+  const timelines = f.getService(f.requireSdk("@lodestory/sdk/timeline").timelineKey);
+  const model = () => timelines.getModel(workbench.getSnapshot().session.id);
   const outline = f.loadModule("plugins/outline-design/outlineDesignPlugin.tsx").createOutlineDesignPlugin();
-  assert.ok(outline.requires.includes(storageKey), "outline declares its storage dependency");
+  const canvasKey = f.requireSdk("@lodestory/sdk/canvas").canvasKey;
+  assert.ok(outline.requires.includes(f.requireSdk("@lodestory/sdk/timeline").timelineKey), "outline consumes the public timeline capability");
+  assert.ok(!outline.requires.includes(storageKey), "outline does not own project file storage");
+  assert.ok(!outline.requires.includes(canvasKey), "outline does not own the canvas viewport");
   assert.ok(!outline.requires.includes(f.requireSdk("@lodestory/sdk/documents").documentsKey), "outline does not require documents");
-  return {workbench, documents, storage, layout, canvas, contribution, canvasContribution, model};
+  return {workbench, documents, storage, layout, timelines, contribution, canvasContribution, model};
 }
 
 const project = {id: "book", name: "故事", path: "/projects/book"};
 
-test("outline opens its main canvas with a separate session-only viewport for each timeline", async () => {
+test("timeline owns the main canvas and one session-only viewport per timeline while outline only navigates", async () => {
   const {f} = persistenceFixture();
   f.start(); await flushStartup();
-  const {workbench, layout, canvas, contribution, canvasContribution, model} = services(f);
-  assert.ok(canvasContribution, "outline registers its canvas through the main layout role");
+  const {workbench, layout, timelines, contribution, canvasContribution, model} = services(f);
+  assert.ok(canvasContribution, "timeline registers its canvas through the main layout role");
   assert.equal(canvasContribution.role, "main");
   assert.equal(canvasContribution.order, 10);
-  assert.ok(contribution, "outline keeps its navigation contribution separate");
+  assert.ok(contribution, "outline registers navigation separately from the timeline main view");
+  assert.strictEqual(contribution.render({active: true}).props.timelines, timelines,
+    "outline consumes the public timeline capability rather than a private model import");
   assert.equal(await workbench.openProject(project), true);
   const sessionId = workbench.getSnapshot().session.id;
   const listModel = model();
@@ -96,18 +115,13 @@ test("outline opens its main canvas with a separate session-only viewport for ea
     return listModel.getSnapshot().selectedId;
   }
   function canvasElement() {
-    const active = layout.getSnapshot().shownIds.includes("outline-design.canvas");
+    const active = layout.getSnapshot().shownIds.includes("timeline.main");
     const element = canvasContribution.render({active});
     return {props: element.props, tree: element.type(element.props)};
   }
-  function currentSurface() {
-    const {tree} = canvasElement();
-    const children = Array.isArray(tree.props.children) ? tree.props.children : [tree.props.children];
-    return children.find(child => child?.type === canvas.Surface);
-  }
 
   const firstId = await createTimeline("第一条时间线");
-  const firstViewport = canvasElement().props.viewports.get(sessionId).get(firstId);
+  const firstViewport = canvasElement().props.sessions.get(sessionId).viewports.get(firstId);
   assert.ok(firstViewport);
   assert.equal(firstViewport.getSnapshot().center.x, 0);
   assert.equal(firstViewport.getSnapshot().center.y, 0);
@@ -116,20 +130,21 @@ test("outline opens its main canvas with a separate session-only viewport for ea
   const nav = contribution.render({active: true});
   layout.show("outline-design.navigation");
   assert.ok(layout.getSnapshot().shownIds.includes("body-editor.main"), "showing the outline navigation alone preserves the current main view");
-  nav.props.onOpenTimeline(sessionId, firstId);
+  assert.equal(timelines.open(sessionId, firstId), true);
   assert.ok(layout.getSnapshot().shownIds.includes("outline-design.navigation"), "opening the canvas leaves the outline navigation visible");
-  assert.ok(layout.getSnapshot().shownIds.includes("outline-design.canvas"), "timeline selection switches the main contribution to the canvas");
-  assert.equal(currentSurface().props.active, true);
+  assert.ok(layout.getSnapshot().shownIds.includes("timeline.main"), "timeline selection switches the main contribution to the canvas");
+  assert.equal(canvasElement().tree.props.active, true);
   layout.show("body-editor.main");
-  assert.equal(currentSurface().props.active, false, "hiding the canvas pauses its gestures");
-  layout.show("outline-design.canvas");
-  assert.equal(currentSurface().props.active, true);
+  assert.equal(canvasElement().tree.props.active, false, "hiding the canvas pauses its gestures");
+  layout.show("timeline.main");
+  assert.equal(canvasElement().tree.props.active, true);
 
   listModel.beginCreate();
-  assert.equal(currentSurface().props.active, false, "the open create dialog pauses canvas input");
+  assert.equal(canvasElement().tree.props.active, false, "the open create dialog pauses canvas input");
   listModel.cancelCreate();
   const secondId = await createTimeline("第二条时间线");
-  const viewports = canvasElement().props.viewports.get(sessionId);
+  assert.equal(await timelines.open(sessionId, secondId), true);
+  const viewports = canvasElement().props.sessions.get(sessionId).viewports;
   const secondViewport = viewports.get(secondId);
   assert.ok(secondViewport);
   assert.notStrictEqual(secondViewport, firstViewport);
@@ -149,7 +164,7 @@ test("outline opens its main canvas with a separate session-only viewport for ea
 
   assert.equal(await workbench.openProject({...project, id: "other", path: "/projects/other"}), true);
   assert.equal(firstViewport.getSnapshot().disposed, true, "switching projects disposes every old-session viewport");
-  assert.equal(canvasElement().tree.props.className, "outline-design-canvas-empty", "a new session cannot display the previous project's canvas");
+  assert.equal(canvasElement().tree.props.className, "timeline-canvas-empty", "a new session cannot display the previous project's canvas");
   assert.equal(await workbench.closeProject(), true);
   await f.createdCores.at(-1).unmountAll();
 });
@@ -269,5 +284,44 @@ test("an unfinished outline form keeps its project session until the author comp
   assert.equal([...disk.keys()].some(key => key.includes(".lodestory/outline-design/timelines/")), false, "unsubmitted input is not written as a file");
   originalModel.cancelCreate();
   assert.equal(await workbench.closeProject(), true);
+  await f.createdCores.at(-1).unmountAll();
+});
+
+test("timeline commands reject new drafts during an awaited leave flush and preserve existing drafts when leave is rejected", async () => {
+  const {f, axisSaveStarted, finishAxisSave} = persistenceFixture({deferAxisSave: true});
+  f.start(); await flushStartup();
+  const {workbench, layout, timelines, model} = services(f);
+  assert.equal(await workbench.openProject(project), true);
+  const sessionId = workbench.getSnapshot().session.id;
+  const listModel = model();
+  listModel.beginCreate();
+  listModel.updateCreateDraft({title: "保留的草稿"});
+  assert.equal(await workbench.closeProject(), false);
+  assert.equal(listModel.getSnapshot().createDraft.title, "保留的草稿");
+  listModel.cancelCreate();
+
+  listModel.beginCreate();
+  listModel.updateCreateDraft({title: "已提交时间线"});
+  assert.equal(await listModel.create(), true);
+  const timelineId = listModel.getSnapshot().selectedId;
+  assert.equal(timelines.open(sessionId, timelineId), true);
+  const canvasContribution = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main");
+  const resources = canvasContribution.render({active: true}).props.sessions.get(sessionId);
+  const axis = resources.axes.get(timelineId);
+  assert.equal(await axis.load(), true);
+  assert.equal(await axis.update({origin: 0, step: 5, unit: "年"}), true);
+  const update = axis.update({origin: 100, step: 5, unit: "年"});
+  await axisSaveStarted;
+  assert.equal(axis.getSnapshot().dirty, true);
+
+  const close = workbench.closeProject();
+  assert.equal(workbench.getSnapshot().busy, true);
+  assert.equal(listModel.beginCreate(), null, "the session facade rejects a new draft while leave awaits axis persistence");
+  listModel.updateCreateDraft({title: "不应进入项目切换的窗口"});
+  assert.equal(listModel.getSnapshot().createDraft, null);
+  finishAxisSave();
+  assert.equal(await update, true);
+  assert.equal(await close, true);
+  assert.equal(listModel.getSnapshot().createDraft, null, "no draft is lost when the session closes");
   await f.createdCores.at(-1).unmountAll();
 });

@@ -4,10 +4,12 @@ import {canvasKey, type CanvasService, type CanvasViewport} from "@lodestory/sdk
 import {layoutKey} from "@lodestory/sdk/layout";
 import {workbenchKey, type WorkbenchService} from "@lodestory/sdk/workbench";
 import {projectStorageKey, type ProjectFiles} from "@lodestory/sdk/project-storage";
-import {timelineKey, type TimelineListModel, type TimelineService} from "@lodestory/sdk/timeline";
+import {timelineKey, type TimelineListEntry, type TimelineListModel, type TimelineListSnapshot, type TimelineService} from "@lodestory/sdk/timeline";
 import {createTimelineListFiles} from "./timelineListFiles";
 import {createTimelineListModel} from "./timelineListModel";
 import {createTimelineAxisStore, type TimelineAxisStore} from "./timelineAxisStore";
+import {createTimelineEventStore, type TimelineEventStore} from "./timelineEventStore";
+import {timelineValueAtOffset} from "./timelineAxisGeometry";
 import {TimelineCanvas} from "./TimelineCanvas";
 import "./timeline.css";
 
@@ -19,7 +21,12 @@ type TimelineSessionResources = {
   publicModel: TimelineListModel;
   viewports: Map<string, CanvasViewport>;
   axes: Map<string, TimelineAxisStore>;
+  events: Map<string, TimelineEventStore>;
+  axisUnsubscribes: Map<string, () => void>;
+  eventUnsubscribes: Map<string, () => void>;
   editing: Set<string>;
+  listeners: Set<() => void>;
+  snapshot: TimelineListSnapshot;
   unsubscribe: () => void;
   selectedId: string | null;
 };
@@ -51,6 +58,24 @@ export function createTimelinePlugin(): Plugin {
         return axis;
       }
 
+      function publishSession(resource: TimelineSessionResources) {
+        const base = resource.model.getSnapshot();
+        const entries = base.entries.map(entry => enrichEntry(entry, resource.events.get(entry.id), resource.axes.get(entry.id)));
+        resource.snapshot = Object.freeze({...base, entries: Object.freeze(entries)});
+        for (const listener of [...resource.listeners]) listener();
+      }
+
+      function createEvents(files: ProjectFiles, resource: TimelineSessionResources, timelineId: string): TimelineEventStore {
+        let events = resource.events.get(timelineId);
+        if (!events) {
+          events = createTimelineEventStore(files, timelineId);
+          resource.events.set(timelineId, events);
+          resource.eventUnsubscribes.set(timelineId, events.subscribe(() => publishSession(resource)));
+          void events.load().catch(() => false);
+        }
+        return events;
+      }
+
       function createViewport(resource: TimelineSessionResources, timelineId: string): CanvasViewport {
         let viewport = resource.viewports.get(timelineId);
         if (!viewport) {
@@ -72,17 +97,35 @@ export function createTimelinePlugin(): Plugin {
           if (present.has(timelineId)) continue;
           resource.axes.delete(timelineId);
           resource.editing.delete(timelineId);
+          resource.axisUnsubscribes.get(timelineId)?.();
+          resource.axisUnsubscribes.delete(timelineId);
           axis.dispose();
         }
-        for (const entry of snapshot.entries) createAxis(files, resource, entry.id);
+        for (const [timelineId, events] of resource.events) {
+          if (present.has(timelineId)) continue;
+          resource.events.delete(timelineId);
+          resource.eventUnsubscribes.get(timelineId)?.();
+          resource.eventUnsubscribes.delete(timelineId);
+          events.dispose();
+        }
+        for (const entry of snapshot.entries) {
+          let axis = resource.axes.get(entry.id);
+          if (!axis) {
+            axis = createAxis(files, resource, entry.id);
+            resource.axisUnsubscribes.set(entry.id, axis.subscribe(() => publishSession(resource)));
+            void axis.load().catch(() => false);
+          }
+          createEvents(files, resource, entry.id);
+        }
 
         const selectionChanged = resource.selectedId !== snapshot.selectedId;
         resource.selectedId = snapshot.selectedId;
         if (snapshot.selectedId) {
           createViewport(resource, snapshot.selectedId);
           const axis = createAxis(files, resource, snapshot.selectedId);
-          if (selectionChanged) void axis.load().catch(() => false);
+          if (selectionChanged && !axis.getSnapshot().loaded && !axis.getSnapshot().loading) void axis.load().catch(() => false);
         }
+        publishSession(resource);
       }
 
       removeParticipant = workbench.registerParticipant({
@@ -97,7 +140,12 @@ export function createTimelinePlugin(): Plugin {
             publicModel: undefined as unknown as TimelineListModel,
             viewports: new Map(),
             axes: new Map(),
+            events: new Map(),
+            axisUnsubscribes: new Map(),
+            eventUnsubscribes: new Map(),
             editing: new Set(),
+            listeners: new Set(),
+            snapshot: model.getSnapshot(),
             unsubscribe: () => {},
             selectedId: null,
           };
@@ -107,8 +155,11 @@ export function createTimelinePlugin(): Plugin {
             return current.session?.id === session.id && current.active && !current.busy;
           };
           resource.publicModel = Object.freeze({
-            getSnapshot: model.getSnapshot,
-            subscribe: model.subscribe,
+            getSnapshot() { return resource.snapshot; },
+            subscribe(listener: () => void) {
+              resource.listeners.add(listener);
+              return () => { resource.listeners.delete(listener); };
+            },
             beginCreate() { return canMutate() && resource.editing.size === 0 ? model.beginCreate() : null; },
             updateCreateDraft(values) { if (canMutate() && resource.editing.size === 0) model.updateCreateDraft(values); },
             cancelCreate: model.cancelCreate,
@@ -116,8 +167,16 @@ export function createTimelinePlugin(): Plugin {
             async remove(id) {
               if (!canMutate() || resource.editing.size > 0) return false;
               const axis = resource.axes.get(id);
-              if (axis?.getSnapshot().dirty && !await axis.retry()) return false;
-              if (!canMutate() || resource.editing.size > 0 || axis?.getSnapshot().dirty) return false;
+              const events = resource.events.get(id);
+              if (axis?.getSnapshot().dirty) {
+                if (!await axis.retry()) return false;
+                if (!canMutate() || resource.editing.size > 0 || axis.getSnapshot().dirty) return false;
+              }
+              if (events?.getSnapshot().dirty) {
+                if (!await events.retry()) return false;
+                if (!canMutate() || resource.editing.size > 0 || events.getSnapshot().dirty) return false;
+              }
+              if (!canMutate() || resource.editing.size > 0 || axis?.getSnapshot().dirty || events?.getSnapshot().dirty) return false;
               return model.remove(id);
             },
             save(id) { return canMutate() && resource.editing.size === 0 ? model.save(id) : Promise.resolve(false); },
@@ -130,7 +189,10 @@ export function createTimelinePlugin(): Plugin {
           } catch (error) {
             resource.unsubscribe();
             for (const viewport of resource.viewports.values()) viewport.dispose();
+            for (const unsubscribe of resource.axisUnsubscribes.values()) unsubscribe();
             for (const axis of resource.axes.values()) axis.dispose();
+            for (const unsubscribe of resource.eventUnsubscribes.values()) unsubscribe();
+            for (const events of resource.events.values()) events.dispose();
             model.dispose();
             if (sessions.get(session.id) === resource) sessions.delete(session.id);
             throw error;
@@ -139,11 +201,21 @@ export function createTimelinePlugin(): Plugin {
             async beforeLeave() {
               const canLeave = () => model.getSnapshot().createDraft === null && resource.editing.size === 0;
               if (!canLeave()) return false;
-              for (const axis of resource.axes.values()) {
-                if (axis.getSnapshot().dirty && !await axis.retry()) return false;
-                if (!canLeave() || axis.getSnapshot().dirty) return false;
+              for (const [id, axis] of resource.axes) {
+                if (axis.getSnapshot().dirty) {
+                  if (!await axis.retry()) return false;
+                  if (!canLeave() || axis.getSnapshot().dirty) return false;
+                }
+                const events = resource.events.get(id);
+                if (events?.getSnapshot().dirty) {
+                  if (!await events.retry()) return false;
+                  if (!canLeave() || events.getSnapshot().dirty) return false;
+                }
+                if (!canLeave() || axis.getSnapshot().dirty || events?.getSnapshot().dirty) return false;
               }
-              return canLeave() && [...resource.axes.values()].every(axis => !axis.getSnapshot().dirty);
+              return canLeave()
+                && [...resource.axes.values()].every(axis => !axis.getSnapshot().dirty)
+                && [...resource.events.values()].every(events => !events.getSnapshot().dirty);
             },
             dispose() {
               try { resource.unsubscribe(); }
@@ -153,11 +225,29 @@ export function createTimelinePlugin(): Plugin {
                   resource.viewports.clear();
                 } finally {
                   try {
-                    for (const axis of resource.axes.values()) axis.dispose();
-                    resource.axes.clear();
+                    for (const unsubscribe of resource.axisUnsubscribes.values()) unsubscribe();
+                    resource.axisUnsubscribes.clear();
                   } finally {
-                    try { model.dispose(); }
-                    finally { if (sessions.get(session.id) === resource) sessions.delete(session.id); }
+                    try {
+                      for (const axis of resource.axes.values()) axis.dispose();
+                      resource.axes.clear();
+                    } finally {
+                      try {
+                        for (const unsubscribe of resource.eventUnsubscribes.values()) unsubscribe();
+                        resource.eventUnsubscribes.clear();
+                      } finally {
+                        try {
+                          for (const events of resource.events.values()) events.dispose();
+                          resource.events.clear();
+                        } finally {
+                          try { model.dispose(); }
+                          finally {
+                            resource.listeners.clear();
+                            if (sessions.get(session.id) === resource) sessions.delete(session.id);
+                          }
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -222,18 +312,19 @@ function TimelineMain({workbench, canvas, sessions, active, onEditingChange}: {
   const workbenchSnapshot = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
   const session = workbenchSnapshot.session;
   const resource = session ? sessions.get(session.id) : undefined;
-  const subscribe = resource?.model.subscribe ?? emptySubscribe;
-  const getSnapshot = resource?.model.getSnapshot ?? emptySnapshot;
+  const subscribe = resource?.publicModel.subscribe ?? emptySubscribe;
+  const getSnapshot = resource?.publicModel.getSnapshot ?? emptySnapshot;
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   const entry = snapshot.entries.find(item => item.id === snapshot.selectedId);
   const viewport = entry ? resource?.viewports.get(entry.id) : undefined;
   const axis = entry ? resource?.axes.get(entry.id) : undefined;
+  const events = entry ? resource?.events.get(entry.id) : undefined;
   const current = Boolean(active && session && workbenchSnapshot.active && !workbenchSnapshot.busy
-    && !snapshot.busy && !snapshot.createDraft && entry && viewport && axis);
-  if (!entry || !viewport || !axis || !session || !resource) {
+    && !snapshot.busy && !snapshot.createDraft && entry && viewport && axis && events);
+  if (!entry || !viewport || !axis || !events || !session || !resource) {
     return <div className="timeline-canvas-empty" role="status">选择或新建一条时间线以打开画布。</div>;
   }
-  return <TimelineCanvas canvas={canvas} viewport={viewport} active={current} title={entry.title} axis={axis}
+  return <TimelineCanvas canvas={canvas} viewport={viewport} active={current} title={entry.title} axis={axis} events={events}
     onEditingChange={editing => onEditingChange(session.id, entry.id, editing)}/>;
 }
 
@@ -241,3 +332,30 @@ function emptySubscribe() { return () => {}; }
 const EMPTY_SNAPSHOT = Object.freeze({entries: Object.freeze([]), selectedId: null, createDraft: null, issues: Object.freeze([]),
   loaded: false, loading: false, creating: false, busy: true, retryDisabled: true, error: null, retryLabel: "重试读取"});
 function emptySnapshot() { return EMPTY_SNAPSHOT; }
+
+function enrichEntry(entry: TimelineListEntry, eventStore?: TimelineEventStore, axisStore?: TimelineAxisStore): TimelineListEntry {
+  const eventSnapshot = eventStore?.getSnapshot();
+  const axisSnapshot = axisStore?.getSnapshot();
+  const events = eventSnapshot?.events ?? [];
+  let period = "";
+  if (eventSnapshot?.loaded && axisSnapshot?.loaded && events.length > 0) {
+    let minimum = Number.POSITIVE_INFINITY;
+    let maximum = Number.NEGATIVE_INFINITY;
+    for (const event of events) {
+      const value = timelineValueAtOffset(event.offset, axisSnapshot.settings);
+      minimum = Math.min(minimum, value);
+      maximum = Math.max(maximum, value);
+    }
+    const start = formatPeriodValue(minimum);
+    const end = formatPeriodValue(maximum);
+    period = minimum === maximum
+      ? `${start} ${axisSnapshot.settings.unit}`
+      : `${start}–${end} ${axisSnapshot.settings.unit}`;
+  }
+  return Object.freeze({...entry, eventCount: events.length, period});
+}
+
+function formatPeriodValue(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  return Object.is(value, -0) ? "0" : String(value);
+}

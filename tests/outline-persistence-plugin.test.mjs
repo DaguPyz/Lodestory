@@ -2,13 +2,16 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {createMainFixture, flushStartup} from "./helpers/mainStartupFixture.mjs";
 
-function persistenceFixture({failFirstRead = false, deferAxisSave = false} = {}) {
+function persistenceFixture({failFirstRead = false, deferAxisSave = false, failEventCreate = false, deferEventCreate = false} = {}) {
   const disk = new Map();
   let readFailed = false;
   const calls = [];
   let axisSaveStartedResolve;
   let finishAxisSave;
+  let eventCreateStartedResolve;
+  let finishEventCreate;
   const axisSaveStarted = new Promise(resolve => { axisSaveStartedResolve = resolve; });
+  const eventCreateStarted = new Promise(resolve => { eventCreateStartedResolve = resolve; });
   const keyOf = (projectPath, path) => JSON.stringify([projectPath, path]);
   const bytesOf = value => Array.from(new TextEncoder().encode(value));
   const f = createMainFixture({
@@ -21,6 +24,17 @@ function persistenceFixture({failFirstRead = false, deferAxisSave = false} = {})
       }
       if (command === "create_project_file") {
         const key = keyOf(args.projectPath, args.path);
+        if (args.path.startsWith(".lodestory/timeline/events/") && failEventCreate) throw new Error("事件目录不可写");
+        if (args.path.startsWith(".lodestory/timeline/events/") && deferEventCreate && !finishEventCreate) {
+          eventCreateStartedResolve();
+          return new Promise(resolve => {
+            finishEventCreate = () => {
+              if (disk.has(key)) throw new Error("文件已存在");
+              disk.set(key, Array.from(args.bytes));
+              resolve({path: args.path, fileName: args.path.split("/").at(-1), bytes: disk.get(key)});
+            };
+          });
+        }
         if (disk.has(key)) {
           if (args.acceptIdentical && JSON.stringify(disk.get(key)) === JSON.stringify(args.bytes)) return {path: args.path, fileName: args.path.split("/").at(-1), bytes: disk.get(key)};
           throw new Error("文件已存在");
@@ -70,7 +84,8 @@ function persistenceFixture({failFirstRead = false, deferAxisSave = false} = {})
       throw new Error(`Unexpected command: ${command}`);
     },
   });
-  return {f, disk, bytesOf, keyOf, calls, axisSaveStarted, finishAxisSave: () => finishAxisSave?.()};
+  return {f, disk, bytesOf, keyOf, calls, axisSaveStarted, finishAxisSave: () => finishAxisSave?.(),
+    eventCreateStarted, finishEventCreate: () => finishEventCreate?.()};
 }
 
 function services(f) {
@@ -323,5 +338,127 @@ test("timeline commands reject new drafts during an awaited leave flush and pres
   assert.equal(await update, true);
   assert.equal(await close, true);
   assert.equal(listModel.getSnapshot().createDraft, null, "no draft is lost when the session closes");
+  await f.createdCores.at(-1).unmountAll();
+});
+
+test("timeline event counts and ranges load from project storage and return after reopening the project", async () => {
+  const {f} = persistenceFixture();
+  f.start(); await flushStartup();
+  const {workbench, layout, model} = services(f);
+  assert.equal(await workbench.openProject(project), true);
+  const list = model();
+  list.beginCreate();
+  list.updateCreateDraft({title: "事件统计"});
+  assert.equal(await list.create(), true);
+  const timelineId = list.getSnapshot().selectedId;
+  const sessionId = workbench.getSnapshot().session.id;
+  const resources = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main").render({active: true}).props.sessions.get(sessionId);
+  const axis = resources.axes.get(timelineId);
+  const events = resources.events.get(timelineId);
+  assert.equal(await Promise.all([axis.load(), events.load()]).then(results => results.every(Boolean)), true);
+  assert.equal(await axis.update({origin: 100, step: 5, unit: "年"}), true);
+  assert.equal(await events.upsert({id: "00000000-0000-4000-8000-000000000201", title: "离开故乡", summary: "", offset: -18, placement: "above", important: false}), true);
+  assert.equal(await events.upsert({id: "00000000-0000-4000-8000-000000000202", title: "归来", summary: "", offset: 23, placement: "below", important: true}), true);
+  assert.equal(list.getSnapshot().entries[0].eventCount, 2);
+  assert.equal(list.getSnapshot().entries[0].period, "82–123 年");
+
+  assert.equal(await workbench.closeProject(), true);
+  assert.equal(await workbench.openProject(project), true);
+  const restoredList = model();
+  const restoredSessionId = workbench.getSnapshot().session.id;
+  const restoredResources = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main").render({active: true}).props.sessions.get(restoredSessionId);
+  const restoredAxis = restoredResources.axes.get(timelineId);
+  const restoredEvents = restoredResources.events.get(timelineId);
+  assert.ok(restoredAxis && restoredEvents);
+  assert.equal(await Promise.all([restoredAxis.load(), restoredEvents.load()]).then(results => results.every(Boolean)), true);
+  assert.equal(restoredList.getSnapshot().entries[0].eventCount, 2);
+  assert.equal(restoredList.getSnapshot().entries[0].period, "82–123 年");
+  await f.createdCores.at(-1).unmountAll();
+});
+
+test("a failed event write blocks project leave and retains its event draft", async () => {
+  const {f} = persistenceFixture({failEventCreate: true});
+  f.start(); await flushStartup();
+  const {workbench, layout, model} = services(f);
+  assert.equal(await workbench.openProject(project), true);
+  const list = model();
+  list.beginCreate();
+  list.updateCreateDraft({title: "保留事件"});
+  assert.equal(await list.create(), true);
+  const timelineId = list.getSnapshot().selectedId;
+  const sessionId = workbench.getSnapshot().session.id;
+  const resources = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main").render({active: true}).props.sessions.get(sessionId);
+  const events = resources.events.get(timelineId);
+  assert.equal(await events.load(), true);
+  assert.equal(await events.upsert({id: "00000000-0000-4000-8000-000000000203", title: "不能丢失", summary: "待重试", offset: 4, placement: "above", important: false}), false);
+  assert.equal(events.getSnapshot().dirty, true);
+  assert.equal(events.getSnapshot().events[0].title, "不能丢失");
+  assert.equal(await workbench.closeProject(), false);
+  assert.equal(workbench.getSnapshot().session.id, sessionId);
+  assert.equal(list.getSnapshot().entries[0].eventCount, 1);
+  assert.equal(events.getSnapshot().events[0].summary, "待重试");
+  await f.createdCores.at(-1).unmountAll();
+});
+
+test("deleting a timeline waits for dirty events to reach project storage", async () => {
+  const {f, disk, keyOf, eventCreateStarted, finishEventCreate} = persistenceFixture({deferEventCreate: true});
+  f.start(); await flushStartup();
+  const {workbench, layout, model} = services(f);
+  assert.equal(await workbench.openProject(project), true);
+  const list = model();
+  list.beginCreate();
+  list.updateCreateDraft({title: "删除前保存"});
+  assert.equal(await list.create(), true);
+  const timelineId = list.getSnapshot().selectedId;
+  const sessionId = workbench.getSnapshot().session.id;
+  const resources = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main").render({active: true}).props.sessions.get(sessionId);
+  const events = resources.events.get(timelineId);
+  assert.equal(await events.load(), true);
+  const upsert = events.upsert({id: "00000000-0000-4000-8000-000000000206", title: "保存后删除", summary: "", offset: -3, placement: "above", important: false});
+  await eventCreateStarted;
+  const remove = list.remove(timelineId);
+  await Promise.resolve();
+  assert.ok(list.getSnapshot().entries.some(entry => entry.id === timelineId), "metadata remains until the event write finishes");
+  finishEventCreate();
+  assert.equal(await upsert, true);
+  assert.equal(await remove, true);
+  assert.equal(disk.has(keyOf(project.path, `.lodestory/outline-design/timelines/${timelineId}.json`)), false);
+  const storedEvents = disk.get(keyOf(project.path, `.lodestory/timeline/events/${timelineId}.json`));
+  assert.ok(storedEvents, "the saved event file remains recoverable after timeline metadata removal");
+  assert.equal(JSON.parse(new TextDecoder().decode(new Uint8Array(storedEvents))).events[0].title, "保存后删除");
+  await f.createdCores.at(-1).unmountAll();
+});
+
+test("event flush keeps list commands closed while the workbench is busy and disposes its session subscription", async () => {
+  const {f, eventCreateStarted, finishEventCreate, calls} = persistenceFixture({deferEventCreate: true});
+  f.start(); await flushStartup();
+  const {workbench, layout, model} = services(f);
+  assert.equal(await workbench.openProject(project), true);
+  const list = model();
+  list.beginCreate();
+  list.updateCreateDraft({title: "离开时保存"});
+  assert.equal(await list.create(), true);
+  const timelineId = list.getSnapshot().selectedId;
+  const sessionId = workbench.getSnapshot().session.id;
+  const resources = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main").render({active: true}).props.sessions.get(sessionId);
+  const events = resources.events.get(timelineId);
+  assert.equal(await events.load(), true);
+  const upsert = events.upsert({id: "00000000-0000-4000-8000-000000000204", title: "离开前的事件", summary: "", offset: 1, placement: "below", important: false});
+  await eventCreateStarted;
+  const metadataCreatesBeforeLeave = calls.filter(call => call.command === "create_project_file" && call.args.path.startsWith(".lodestory/outline-design/timelines/")).length;
+  const close = workbench.closeProject();
+  assert.equal(workbench.getSnapshot().busy, true);
+  assert.equal(list.beginCreate(), null);
+  list.updateCreateDraft({title: "不能写入"});
+  assert.equal(list.getSnapshot().createDraft, null);
+  assert.equal(calls.filter(call => call.command === "create_project_file" && call.args.path.startsWith(".lodestory/outline-design/timelines/")).length, metadataCreatesBeforeLeave);
+  finishEventCreate();
+  assert.equal(await upsert, true);
+  assert.equal(await close, true);
+  assert.equal(events.getSnapshot().blocked, true);
+  let notifications = 0;
+  events.subscribe(() => notifications++);
+  assert.equal(await events.upsert({id: "00000000-0000-4000-8000-000000000205", title: "已关闭", summary: "", offset: 2, placement: "above", important: false}), false);
+  assert.equal(notifications, 0);
   await f.createdCores.at(-1).unmountAll();
 });

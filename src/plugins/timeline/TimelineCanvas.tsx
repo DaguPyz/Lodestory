@@ -2,7 +2,9 @@ import {useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent}
 import type {CanvasService, CanvasViewport} from "@lodestory/sdk/canvas";
 import {Button, Dialog, DialogActions} from "@lodestory/ui";
 import type {TimelineAxisStore, TimelineAxisSettings} from "./timelineAxisStore";
-import {formatTimelineAxisValue, getTimelineAxisGeometry, type TimelineAxisTick} from "./timelineAxisGeometry";
+import type {TimelineEventStore} from "./timelineEventStore";
+import {TimelineEvents} from "./TimelineEvents";
+import {formatTimelineAxisValue, getTimelineAxisGeometry, TIMELINE_AXIS_LABEL_LAYOUT, type TimelineAxisTick} from "./timelineAxisGeometry";
 
 type Draft = {origin: string; step: string; unit: string};
 type Size = {width: number; height: number};
@@ -21,6 +23,7 @@ function draftIsDirty(draft: Draft | null, settings: TimelineAxisSettings): bool
 
 function AxisTicks({ticks, axisY, zoom}: {ticks: readonly TimelineAxisTick[]; axisY: number; zoom: number}) {
   const inverseZoom = 1 / zoom;
+  const layout = TIMELINE_AXIS_LABEL_LAYOUT;
   return <g className="timeline-axis-ticks">
     {ticks.map(tick => <g key={tick.key}>
       <line className={tick.origin ? "timeline-axis-tick timeline-axis-tick-origin" : "timeline-axis-tick"}
@@ -28,22 +31,23 @@ function AxisTicks({ticks, axisY, zoom}: {ticks: readonly TimelineAxisTick[]; ax
         vectorEffect="non-scaling-stroke"/>
       {tick.labelVisible && <>
         <text className={tick.origin ? "timeline-axis-label timeline-axis-label-origin" : "timeline-axis-label"}
-          x={tick.x} y={axisY + 21 * inverseZoom} fontSize={14 * inverseZoom} textAnchor="middle" dominantBaseline="hanging">
+          x={tick.x} y={axisY + layout.valueTop * inverseZoom} fontSize={layout.valueFontSize * inverseZoom} textAnchor="middle" dominantBaseline="hanging">
           {formatTimelineAxisValue(tick.value)}
         </text>
-        {tick.origin && <text className="timeline-axis-origin-caption" x={tick.x} y={axisY + 41 * inverseZoom}
-          fontSize={11 * inverseZoom} textAnchor="middle" dominantBaseline="hanging">故事起点</text>}
+        {tick.origin && <text className="timeline-axis-origin-caption" x={tick.x} y={axisY + layout.originTop * inverseZoom}
+          fontSize={layout.originFontSize * inverseZoom} textAnchor="middle" dominantBaseline="hanging">故事起点</text>}
       </>}
     </g>)}
   </g>;
 }
 
-export function TimelineCanvas({canvas, viewport, active, title, axis, onEditingChange}: {
+export function TimelineCanvas({canvas, viewport, active, title, axis, events, onEditingChange}: {
   canvas: CanvasService;
   viewport: CanvasViewport;
   active: boolean;
   title: string;
   axis: TimelineAxisStore;
+  events: TimelineEventStore;
   onEditingChange?: (editing: boolean) => void;
 }) {
   const snapshot = useSyncExternalStore(axis.subscribe, axis.getSnapshot, axis.getSnapshot);
@@ -53,10 +57,12 @@ export function TimelineCanvas({canvas, viewport, active, title, axis, onEditing
   const onEditingChangeRef = useRef(onEditingChange);
   const editingOwnerRef = useRef<((editing: boolean) => void) | null>(null);
   const editingRef = useRef(false);
-  const resourcesRef = useRef({viewport, axis});
+  const eventEditingRef = useRef(false);
+  const resourcesRef = useRef({viewport, axis, events});
   const operationEpochRef = useRef(0);
   const [size, setSize] = useState<Size>({width: 0, height: 0});
   const [editing, setEditing] = useState(false);
+  const [eventEditing, setEventEditing] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -83,8 +89,9 @@ export function TimelineCanvas({canvas, viewport, active, title, axis, onEditing
 
   useLayoutEffect(() => () => {
     operationEpochRef.current++;
-    if (editingRef.current) {
+    if (editingRef.current || eventEditingRef.current) {
       editingRef.current = false;
+      eventEditingRef.current = false;
       editingOwnerRef.current?.(false);
       editingOwnerRef.current = null;
     }
@@ -92,9 +99,22 @@ export function TimelineCanvas({canvas, viewport, active, title, axis, onEditing
 
   function setIsEditing(next: boolean) {
     setEditing(next);
-    if (editingRef.current !== next) {
-      editingRef.current = next;
-      if (next) {
+    const wasEditing = editingRef.current || eventEditingRef.current;
+    editingRef.current = next;
+    updateEditingOwner(wasEditing);
+  }
+
+  function setIsEventEditing(next: boolean) {
+    setEventEditing(next);
+    const wasEditing = editingRef.current || eventEditingRef.current;
+    eventEditingRef.current = next;
+    updateEditingOwner(wasEditing);
+  }
+
+  function updateEditingOwner(wasEditing: boolean) {
+    const isEditing = editingRef.current || eventEditingRef.current;
+    if (wasEditing !== isEditing) {
+      if (isEditing) {
         editingOwnerRef.current = onEditingChangeRef.current ?? null;
         editingOwnerRef.current?.(true);
       } else {
@@ -106,18 +126,19 @@ export function TimelineCanvas({canvas, viewport, active, title, axis, onEditing
   }
 
   useLayoutEffect(() => {
-    const resourcesChanged = resourcesRef.current.viewport !== viewport || resourcesRef.current.axis !== axis;
-    resourcesRef.current = {viewport, axis};
+    const resourcesChanged = resourcesRef.current.viewport !== viewport || resourcesRef.current.axis !== axis
+      || resourcesRef.current.events !== events;
+    resourcesRef.current = {viewport, axis, events};
     if (resourcesChanged) {
       operationEpochRef.current++;
       setSubmitting(false);
       setOperationError(null);
       if (editingRef.current || draft) discardDraft();
     }
-  }, [viewport, axis, draft]);
+  }, [viewport, axis, events, draft]);
 
   function beginEditing() {
-    if (!active || !snapshot.loaded || snapshot.blocked || snapshot.loading) return;
+    if (!active || eventEditingRef.current || !snapshot.loaded || snapshot.blocked || snapshot.loading) return;
     setDraft(draftFromSettings(snapshot.settings));
     setOperationError(null);
     setIsEditing(true);
@@ -221,7 +242,7 @@ export function TimelineCanvas({canvas, viewport, active, title, axis, onEditing
   const Surface = canvas.Surface;
 
   return <div className="timeline-canvas-frame" ref={frame}>
-    <Surface viewport={viewport} active={active} label={`${title}时间轴`} grid="none">
+    <Surface viewport={viewport} active={active && !editing && !eventEditing} label={`${title}时间轴`} grid="none">
       {snapshot.loaded && geometry.width > 0 && geometry.height > 0 && <svg className="timeline-axis-svg" role="img"
         aria-label={`${title}，单位${snapshot.settings.unit}，故事起点为${formatTimelineAxisValue(snapshot.settings.origin)}`}
         width={geometry.worldWidth} height={geometry.worldHeight}
@@ -235,10 +256,14 @@ export function TimelineCanvas({canvas, viewport, active, title, axis, onEditing
           <path className="timeline-axis-arrow" d={`M ${geometry.arrowBaseX} ${geometry.axisY - 4 / view.zoom} L ${geometry.arrowTipX} ${geometry.axisY} L ${geometry.arrowBaseX} ${geometry.axisY + 4 / view.zoom} Z`}/>
         </g>}
       </svg>}
+      {snapshot.loaded && <TimelineEvents store={events} settings={snapshot.settings} view={view} size={size}
+        axisLabelBounds={geometry.labelBounds}
+        active={active && snapshot.loaded && !snapshot.loading && !snapshot.blocked && !editing}
+        onEditingChange={setIsEventEditing}/>}
     </Surface>
 
     <div className="timeline-axis-unit" style={{top: unitTop}}>
-      <Button variant="ghost" disabled={!active || !snapshot.loaded || snapshot.blocked || snapshot.loading} onClick={beginEditing}>
+      <Button variant="ghost" disabled={!active || eventEditing || !snapshot.loaded || snapshot.blocked || snapshot.loading} onClick={beginEditing}>
         单位：{snapshot.loaded ? snapshot.settings.unit : "—"}
       </Button>
     </div>

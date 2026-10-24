@@ -14,14 +14,23 @@ const module = {exports: {}};
 vm.runInNewContext(compiled, {module, exports: module.exports, Math, Number, Object, String});
 const {
   TIMELINE_AXIS_BASE_PIXEL_INTERVAL,
+  TIMELINE_AXIS_LABEL_LAYOUT,
   formatTimelineAxisValue,
   getTimelineAxisGeometry,
   timelineMajorFactor,
   timelineValueAtWorldX,
+  timelineValueAtOffset,
   timelineWorldXForValue,
 } = module.exports;
 const near = (actual, expected, epsilon = 1e-9) => assert.ok(Math.abs(actual - expected) <= epsilon, `${actual} should be close to ${expected}`);
 const settings = {origin: 12.5, step: 5, unit: "天"};
+
+test("story-relative event positions keep readable decimal values after origin changes", () => {
+  assert.equal(timelineValueAtOffset(0.2, {origin: 0.1}), 0.3);
+  assert.equal(timelineValueAtOffset(-0.1, {origin: 0.3}), 0.2);
+  assert.equal(timelineValueAtOffset(14, {origin: 100}), 114);
+  assert.equal(timelineValueAtOffset(0, {origin: 1e-14}), 1e-14);
+});
 
 test("custom origin anchors x=0 and values grow to the right and shrink to the left", () => {
   assert.equal(timelineValueAtWorldX(0, settings), 12.5);
@@ -95,4 +104,35 @@ test("only visible ticks are generated and malformed dimensions cannot create un
   }));
   const malformed = getTimelineAxisGeometry({center: {x: 0, y: 0}, zoom: 0.25, width: 1e12, height: 640, settings});
   assert.equal(malformed.ticks.length, 0);
+});
+
+test("visible axis labels expose screen-space bounds, including the origin caption", () => {
+  const width = 960;
+  const height = 640;
+  const geometry = getTimelineAxisGeometry({center: {x: 0, y: 0}, zoom: 1, width, height,
+    settings: {origin: 1_000_000_000, step: 5, unit: "年"}});
+  const visibleTicks = geometry.ticks.filter(tick => tick.labelVisible);
+  assert.equal(geometry.labelBounds.length, visibleTicks.length + 1,
+    "the origin contributes its numeric label and its separate caption");
+  assert.ok(geometry.labelBounds.every(bounds => bounds.left >= 0 && bounds.left + bounds.width <= width
+    && bounds.top >= 0 && bounds.top + bounds.height <= height));
+  const yearBounds = geometry.labelBounds.find(bounds => bounds.top === height / 2 + TIMELINE_AXIS_LABEL_LAYOUT.valueTop
+    && bounds.left < width / 2 && bounds.left + bounds.width > width / 2);
+  assert.ok(yearBounds);
+  assert.ok(yearBounds.width >= String(1_000_000_000).length * 8 + 16,
+    "long numeric years reserve enough horizontal space for collision checks");
+  const originCaptionBounds = geometry.labelBounds.find(bounds => bounds.top === height / 2 + TIMELINE_AXIS_LABEL_LAYOUT.originTop);
+  assert.ok(originCaptionBounds);
+});
+
+test("labels on clipped ticks do not create collision bounds", () => {
+  const geometry = getTimelineAxisGeometry({center: {x: 90, y: 0}, zoom: 1, width: 200, height: 400,
+    settings: {origin: 1994, step: 5, unit: "年"}});
+  const origin = geometry.ticks.find(tick => tick.origin);
+  assert.ok(origin);
+  assert.equal(origin.labelVisible, false);
+  const originScreenX = 100 - 90;
+  assert.ok(geometry.labelBounds.every(bounds => bounds.left > originScreenX + 48
+    || bounds.left + bounds.width < originScreenX - 48),
+  "other visible ticks may contribute bounds, but the clipped origin contributes none");
 });

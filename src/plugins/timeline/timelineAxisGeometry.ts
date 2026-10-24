@@ -1,5 +1,13 @@
 export type TimelineAxisSettings = Readonly<{origin: number; step: number; unit: string}>;
 
+/** Text occupancy in CSS pixels, independent of the canvas zoom. */
+export type TimelineLabelBounds = Readonly<{left: number; top: number; width: number; height: number}>;
+
+export const TIMELINE_AXIS_LABEL_LAYOUT = Object.freeze({
+  valueTop: 21, valueFontSize: 14, valueHeight: 18,
+  originTop: 41, originFontSize: 11, originWidth: 56, originHeight: 16,
+});
+
 export type TimelineAxisTick = Readonly<{
   /** X coordinate relative to the viewport's world-space center. */
   x: number;
@@ -24,6 +32,7 @@ export type TimelineAxisGeometry = Readonly<{
   arrowBaseX: number;
   arrowTipX: number;
   ticks: readonly TimelineAxisTick[];
+  labelBounds: readonly TimelineLabelBounds[];
   majorFactor: number;
   majorWorldSpacing: number;
 }>;
@@ -77,6 +86,13 @@ function decimalPlaces(value: number): number {
   return Math.max(0, fractionDigits - Number(exponentText ?? 0));
 }
 
+/** Add a stored story-relative position without exposing binary rounding tails in labels. */
+export function timelineValueAtOffset(offset: number, settings: Pick<TimelineAxisSettings, "origin">): number {
+  const value = settings.origin + offset;
+  const precision = Math.max(decimalPlaces(settings.origin), decimalPlaces(offset));
+  return precision <= 100 && Math.abs(value) < 1e21 ? Number(value.toFixed(precision)) : value;
+}
+
 function mappedTickValue(index: number, majorFactor: number, settings: TimelineAxisSettings): number {
   // Compute each tick from the origin and index; never accumulate a rounded interval.
   const coefficientPrecision = Math.min(100, decimalPlaces(majorFactor) + 1);
@@ -108,6 +124,8 @@ export function getTimelineAxisGeometry(input: TimelineAxisGeometryInput): Timel
   const lastIndex = Math.floor(right / minorWorldSpacing + Number.EPSILON * 4);
   const visibleTickCount = lastIndex - firstIndex + 1;
   const ticks: TimelineAxisTick[] = [];
+  const labelBounds: TimelineLabelBounds[] = [];
+  const axisScreenY = safeHeight / 2 - centerY * safeZoom;
 
   // A viewport is small enough that this should never be reached at supported zooms.
   // Keep a hard bound in case a malformed or future viewport supplies extreme dimensions.
@@ -121,15 +139,23 @@ export function getTimelineAxisGeometry(input: TimelineAxisGeometryInput): Timel
       const relativeX = worldX - centerX;
       const screenX = (relativeX + worldWidth / 2) * safeZoom;
       const labelWidth = Math.max(formatTimelineAxisValue(value).length * 8, index === 0 ? 56 : 0) + 16;
+      const labelVisible = major && screenX >= labelWidth / 2 && safeWidth - screenX >= labelWidth / 2;
       ticks.push(Object.freeze({
         x: relativeX,
         worldX,
         value,
         major,
-        labelVisible: major && screenX >= labelWidth / 2 && safeWidth - screenX >= labelWidth / 2,
+        labelVisible,
         origin: index === 0,
         key: index,
       }));
+      if (labelVisible && axisScreenY >= 0 && axisScreenY <= safeHeight) {
+        const layout = TIMELINE_AXIS_LABEL_LAYOUT;
+        labelBounds.push(Object.freeze({left: screenX - labelWidth / 2,
+          top: axisScreenY + layout.valueTop, width: labelWidth, height: layout.valueHeight}));
+        if (index === 0) labelBounds.push(Object.freeze({left: screenX - layout.originWidth / 2,
+          top: axisScreenY + layout.originTop, width: layout.originWidth, height: layout.originHeight}));
+      }
     }
   }
 
@@ -144,6 +170,7 @@ export function getTimelineAxisGeometry(input: TimelineAxisGeometryInput): Timel
     arrowBaseX: worldWidth / 2 - 12 / safeZoom,
     arrowTipX: worldWidth / 2 - 2 / safeZoom,
     ticks: Object.freeze(ticks),
+    labelBounds: Object.freeze(labelBounds),
     majorFactor,
     majorWorldSpacing,
   });

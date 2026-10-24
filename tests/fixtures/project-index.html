@@ -10,7 +10,8 @@
     <script type="module">
       // Development-only IPC fixture. No native directory or index is modified.
       import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
-      const scenario = new URLSearchParams(location.search).get("scenario");
+      const query = new URLSearchParams(location.search);
+      const scenario = query.get("scenario");
       const encode = text => Array.from(new TextEncoder().encode(text));
       const equalBytes = (left, right) => left.length === right.length && left.every((byte, index) => byte === right[index]);
       const projects = new Map();
@@ -22,6 +23,43 @@
           const files = new Map([["正文/已有章节.md", encode("这是已有文稿。")], ["故事大纲.txt", encode("故事的大纲。")]]);
           if (scenario === "save-as-conflict") files.set("故事大纲.lode", encode(JSON.stringify({format: "quill-delta", version: 1, ops: [{insert: "已存在的富文本文档。\n"}]})));
           state = {files, directories: new Set(["", "正文", "资料"])};
+          // Timeline-only visual/interaction scenarios; all examples live in this in-memory fixture.
+          if (scenario?.startsWith("timeline-events")) {
+            const timelineId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+            for (const directory of [".lodestory", ".lodestory/outline-design", timelineDirectory,
+              ".lodestory/timeline", ".lodestory/timeline/axes", ".lodestory/timeline/events"]) state.directories.add(directory);
+            files.set(`${timelineDirectory}/${timelineId}.json`, encode(JSON.stringify({
+              format: "lodestory.timeline-list-entry", schemaVersion: 1, id: timelineId,
+              title: "归乡之路", summary: "一封旧信，将她带回阔别多年的故乡。",
+              createdAt: "2026-10-23T12:00:00Z", updatedAt: "2026-10-23T12:00:00Z",
+            })));
+            files.set(`.lodestory/timeline/axes/${timelineId}.json`, encode(JSON.stringify({
+              format: "lodestory.timeline-axis-settings", schemaVersion: 1, id: timelineId,
+              origin: scenario === "timeline-events-collisions" ? 1994 : 0, step: 5,
+              unit: scenario === "timeline-events-collisions" ? "年" : "天",
+            })));
+            if (scenario !== "timeline-events-create-once") {
+              const examples = scenario === "timeline-events-collisions" ? [
+                ["公共", "扣扣空间接口连接", 0, "above", true],
+                ["校园相遇", "第一次参加社团活动", 1, "above", true],
+                ["好友来信", "多年后重新取得联系", 2, "above", true],
+              ] : [
+                ["故乡来信", "一封没有署名的信", -18, "above", false],
+                ["旧友失联", "", -8, "below", false],
+                ["踏上归途", "故事从这里开始", 0, "above", false],
+                ["雨夜重逢", "熟悉的人，说着陌生的话", 7, "below", false],
+                ["旧信揭晓", "她发现，寄信人早已离世。", 14, "above", true],
+                ["抵达故乡", "", 23, "below", false],
+              ];
+              files.set(`.lodestory/timeline/events/${timelineId}.json`, encode(JSON.stringify({
+                format: "lodestory.timeline-events", schemaVersion: 1, timelineId,
+                events: examples.map(([title, summary, offset, placement, important], index) => ({
+                  id: `bbbbbbbb-bbbb-4bbb-8bbb-${String(index + 1).padStart(12, "0")}`,
+                  title, summary, offset, placement, important,
+                })),
+              })));
+            }
+          }
           projects.set(projectPath, state);
         }
         return state;
@@ -39,11 +77,12 @@
       window.isTauri = true;
       mockWindows("main");
       mockIPC(async (command, args) => {
-        if (command.startsWith("plugin:")) return command === "plugin:window|theme" ? "Dark" : 1;
+        if (command.startsWith("plugin:")) return command === "plugin:window|theme" ? (query.get("theme") === "Light" ? "Light" : "Dark") : 1;
         if (["list_documents", "read_project_file", "create_project_file", "save_project_file", "delete_project_file", "list_project_directory", "create_project_directory"].includes(command)) {
           const state = projectFiles(args.projectPath);
           const path = args.path ?? "";
           const inTimeline = path === timelineDirectory || path.startsWith(`${timelineDirectory}/`);
+          const inTimelineEvents = path.startsWith(".lodestory/timeline/events/");
           function makeParents(directory) {
             const parts = directory.split("/").filter(Boolean);
             for (let index = 1; index <= parts.length; index++) {
@@ -77,6 +116,10 @@
             return;
           }
           if (command === "create_project_file") {
+            if (scenario === "timeline-events-create-once" && inTimelineEvents && !state.eventCreateFailed) {
+              state.eventCreateFailed = true;
+              throw {message: "事件保存失败：模拟首次创建失败，请重试。"};
+            }
             if (scenario === "outline-slow-create" && inTimeline) await new Promise(resolve => setTimeout(resolve, 300));
             if (scenario === "outline-create-error" && inTimeline) throw {message: "大纲创建失败：目录不可写。"};
             if (scenario === "create-error" && !inTimeline) throw {message: "创建文档失败：保存目录不可写。"};
@@ -91,6 +134,10 @@
             return {path, fileName: path.split("/").at(-1), bytes: [...state.files.get(path)]};
           }
           if (scenario === "save-error" && command === "save_project_file") throw {message: "保存文档失败：磁盘不可写。"};
+          if (scenario === "timeline-events-save-once" && command === "save_project_file" && inTimelineEvents && !state.eventSaveFailed) {
+            state.eventSaveFailed = true;
+            throw {message: "事件保存失败：模拟首次写入失败，请重试。"};
+          }
           if (scenario === "slow-save" && command === "save_project_file") await new Promise(resolve => setTimeout(resolve, 200));
           if (scenario === "outline-delete-error" && command === "delete_project_file" && inTimeline) throw {message: "大纲删除失败：文件不可写。"};
           if (!state.files.has(path) || !equalBytes(state.files.get(path), args.expectedBytes)) throw {message: "文件已被其他程序修改。"};
@@ -137,6 +184,28 @@
         await createAppRuntime(plugins);
       } else {
         await import("/src/main.tsx");
+        if (query.get("autoTimeline") === "1") {
+          let openedProject = false;
+          let shownNavigation = false;
+          const openTimeline = () => {
+            if (document.querySelector(".timeline-canvas-frame")) { clearInterval(retryOpen); return; }
+            if (!openedProject) {
+              const project = document.querySelector('button[aria-label="打开项目 测试故事"]');
+              if (project) { openedProject = true; project.click(); }
+              return;
+            }
+            if (!shownNavigation) {
+              const navigation = document.querySelector('.layout-activitybar button[aria-label="大纲设计"]');
+              if (navigation) { shownNavigation = true; navigation.click(); }
+            }
+            document.querySelector(".outline-design-entry")?.click();
+          };
+          // The list may exist before its panel becomes active; retry until the
+          // canvas is actually mounted instead of treating an ignored click as success.
+          const retryOpen = setInterval(openTimeline, 50);
+          setTimeout(() => clearInterval(retryOpen), 15000);
+          openTimeline();
+        }
       }
     </script>
   </body>

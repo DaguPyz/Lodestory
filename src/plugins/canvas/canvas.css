@@ -7,7 +7,7 @@
   overflow: hidden;
   overscroll-behavior: contain;
   touch-action: none;
-  background: var(--ui-surface-content);
+  background: var(--ui-surface-workspace);
   outline-offset: calc(-1 * var(--ui-focus-width));
 }
 .canvas-surface[data-canvas-hand="true"] { cursor: grab; }

@@ -9,9 +9,9 @@ export type TimelineListEntry = Readonly<{
     summary: string;
     createdAt: string;
     updatedAt: string;
-    /** Placeholder until event time ranges are implemented. */
+    /** Numeric range of event positions, formatted with the axis unit; empty when no range is known. */
     period: string;
-    /** Placeholder until timeline events are available. */
+    /** Number of loaded events in this timeline. */
     eventCount: number;
     saveState: TimelineSaveState;
     saveError: string | null;

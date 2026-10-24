@@ -13,6 +13,7 @@ import {createDocumentsPlugin} from "../plugins/documents/documentsPlugin";
 import {createProjectStoragePlugin} from "../plugins/project-storage/projectStoragePlugin";
 import {createProjectManagementPlugin} from "../plugins/project-management/projectManagementPlugin";
 import {createOutlineDesignPlugin} from "../plugins/outline-design/outlineDesignPlugin";
+import {createAssetManagementPlugin} from "../plugins/asset-management/assetManagementPlugin";
 import {createCanvasPlugin} from "../plugins/canvas/canvasPlugin";
 import {createTimelinePlugin} from "../plugins/timeline/timelinePlugin";
 import {createBodyEditorPlugin} from "../plugins/body-editor/bodyEditorPlugin";
@@ -43,6 +44,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createCanvasPlugin(),
         createTimelinePlugin(),
         createOutlineDesignPlugin(),
+        createAssetManagementPlugin(),
         createBodyEditorPlugin(),
         createMarkdownEditorPlugin(),
         createRichTextEditorPlugin(),

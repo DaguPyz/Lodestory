@@ -1,0 +1,9 @@
+.asset-management-panel {
+  min-width: 0;
+  padding: var(--ui-panel-padding);
+  color: var(--ui-text-muted);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+.asset-management-panel p { margin: 0; }

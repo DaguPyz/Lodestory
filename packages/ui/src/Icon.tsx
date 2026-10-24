@@ -25,6 +25,12 @@ const shapes = {
       <rect x="12" y="16" width="9" height="4" rx="1" />
     </>
   ),
+  assets: (
+    <>
+      <path d="m12 3 9 5v8l-9 5-9-5V8Z" />
+      <path d="m3 8 9 5 9-5M12 13v8M7.5 5.5l9 5" />
+    </>
+  ),
   textColor: <path d="m5 20 7-16 7 16M8 13h8" />,
   highlight: (
     <>

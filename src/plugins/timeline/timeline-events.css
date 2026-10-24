@@ -2,10 +2,15 @@
   position: absolute;
   z-index: 2;
   transform-origin: 0 0;
-  pointer-events: none;
+  pointer-events: auto;
   color: var(--ui-text-primary);
   font-family: var(--ui-font-interface);
   font-variant-numeric: tabular-nums;
+}
+
+.timeline-events-overlay:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: calc(-1 * var(--ui-focus-width));
 }
 
 .timeline-events-svg,
@@ -177,26 +182,15 @@
 .timeline-event-label-important .timeline-event-title-rule { color: var(--ui-status-warning); }
 .timeline-event-label-important .timeline-event-title-rule { background: var(--ui-status-warning); }
 
-.timeline-events-controls {
-  position: absolute;
-  z-index: 3;
-  top: var(--ui-space-4);
-  left: var(--ui-space-4);
-  pointer-events: auto;
-}
-
-.timeline-events-controls .button { color: var(--ui-text-secondary); }
-.timeline-events-controls .button:hover { color: var(--ui-text-primary); }
-
 .timeline-events-feedback {
   position: absolute;
   z-index: 3;
   top: var(--ui-space-4);
-  left: calc(var(--ui-space-4) + 8.5rem);
+  left: var(--ui-space-4);
   display: flex;
   align-items: center;
   gap: var(--ui-space-2);
-  max-width: min(30rem, calc(100% - 12rem));
+  max-width: min(30rem, calc(100% - 2 * var(--ui-space-4)));
   color: var(--ui-text-secondary);
   font-size: var(--ui-font-size-caption);
   line-height: var(--ui-line-height-caption);

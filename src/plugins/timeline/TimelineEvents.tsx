@@ -1,5 +1,6 @@
 import {useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
 import type {CanvasViewportSnapshot} from "@lodestory/sdk/canvas";
+import type {ContextMenuService} from "@lodestory/sdk/context-menu";
 import {Button, Dialog, DialogActions, Icon, TextField, Textarea} from "@lodestory/ui";
 import type {TimelineAxisSettings} from "./timelineAxisStore";
 import type {TimelineEvent, TimelineEventStore} from "./timelineEventStore";
@@ -132,7 +133,8 @@ function EventLabels({events, settings, geometry, onEdit}: {
   </div>;
 }
 
-export function TimelineEvents({store, settings, view, size, axisLabelBounds, active, onEditingChange}: {
+export function TimelineEvents({contextMenus, store, settings, view, size, axisLabelBounds, active, onEditingChange}: {
+  contextMenus: ContextMenuService;
   store: TimelineEventStore;
   settings: TimelineAxisSettings;
   view: Pick<CanvasViewportSnapshot, "center" | "zoom">;
@@ -143,7 +145,7 @@ export function TimelineEvents({store, settings, view, size, axisLabelBounds, ac
 }) {
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const formId = useId();
-  const addButton = useRef<HTMLButtonElement>(null);
+  const menuSurface = useRef<HTMLDivElement>(null);
   const titleInput = useRef<HTMLInputElement>(null);
   const onEditingChangeRef = useRef(onEditingChange);
   const editingOwnerRef = useRef<((editing: boolean) => void) | null>(null);
@@ -214,7 +216,7 @@ export function TimelineEvents({store, settings, view, size, axisLabelBounds, ac
   }
 
   function beginCreate() {
-    if (!active || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.saving) return;
+    if (!active || editingRef.current || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.saving) return;
     setDraft({...draftFromEvent(), id: crypto.randomUUID()});
     setIsNewDraft(true);
     setOperationError(null);
@@ -388,33 +390,36 @@ export function TimelineEvents({store, settings, view, size, axisLabelBounds, ac
     height: size.height,
     transform: `scale(${scale})`,
   };
+  const MenuRegion = contextMenus.Region;
 
   return <>
-    <div className="timeline-events-overlay" style={overlayStyle} data-active={active}>
+    <MenuRegion context={store} label="时间线画布操作" disabled={!active || editing || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.saving}
+      items={target => target === store
+        ? [{id: "add-event", label: "添加事件", icon: <Icon name="plus"/>, restoreFocus: false, onSelect: beginCreate}]
+        : []}>
+    <div ref={menuSurface} className="timeline-events-overlay" style={overlayStyle} data-active={active}
+      tabIndex={active ? 0 : -1} aria-label="时间线事件画布">
       {snapshot.loaded && geometry.width > 0 && geometry.height > 0 && <>
         <EventAxisMarkers events={snapshot.events} settings={settings} geometry={geometry} active={active}
           onEdit={beginEdit} />
         <EventLabels events={snapshot.events} settings={settings} geometry={geometry}
           onEdit={beginEdit} />
       </>}
-      <div className="timeline-events-controls" data-canvas-interactive>
-        <Button ref={addButton} variant="ghost" disabled={!active || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.saving}
-          onClick={beginCreate} aria-label="添加时间线事件"><Icon name="plus" size="small"/>添加事件</Button>
-      </div>
       {snapshot.loading && <div className="timeline-events-feedback" role="status">正在读取时间线事件…</div>}
       {!snapshot.loading && snapshot.error && <div className="timeline-events-feedback" role="alert">
         <span>{snapshot.error}</span>
         <Button variant="ghost" disabled={!active || snapshot.loading || snapshot.saving || submitting} onClick={() => void retryLastOperation()}>重试</Button>
       </div>}
     </div>
+    </MenuRegion>
 
-      <Dialog open={editing && active} onOpenChange={open => {
+    <Dialog open={editing && active} onOpenChange={open => {
       if (open) return;
       if (active && !submitting && !snapshot.saving) cancelDraft();
     }} title={confirmDelete ? "删除事件" : !isNewDraft && draft?.id ? "编辑事件" : "添加时间线事件"} size={confirmDelete ? "narrow" : "regular"}
       description={confirmDelete ? "删除后会立即保存到当前项目。" : "记录故事中的重要时刻。"}
       busy={submitting || snapshot.saving} initialFocus={titleInput}
-      finalFocus={addButton}>
+      finalFocus={menuSurface}>
       {confirmDelete ? <div className="timeline-event-delete-confirm">
         <p>确定删除「{draft?.title || "未命名事件"}」吗？</p>
         {(operationError || snapshot.error) && <p className="timeline-event-form-error" role="alert">{operationError ?? snapshot.error}</p>}

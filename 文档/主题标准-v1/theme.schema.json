@@ -115,6 +115,11 @@
           "description": "非必要装饰边界",
           "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
         },
+        "border.default": {
+          "type": "string",
+          "description": "中性承载面上的常态必要边界；交互反馈使用强边界",
+          "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
+        },
         "border.strong": {
           "type": "string",
           "description": "识别可操作对象所需的必要边界",

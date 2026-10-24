@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { Button, Dialog, DialogActions, DialogClose, Icon } from "@lodestory/ui";
+import { Button, Dialog, DialogActions, DialogClose, Icon, TextField } from "@lodestory/ui";
 
 type NewProjectDialogProps = {
   open?: boolean;
@@ -40,13 +40,13 @@ export function NewProjectDialog({ open = true, busy, error, onClose, onCloseCom
       }}>
         <label className="project-form-field">
           <span>小说名称</span>
-          <input ref={nameInput} name="projectName" value={name} onChange={(event) => setName(event.target.value)}
+          <TextField ref={nameInput} name="projectName" value={name} onChange={(event) => setName(event.target.value)}
             required maxLength={255} autoComplete="off" placeholder="请输入小说名称" disabled={busy} />
         </label>
         <div className="project-form-field">
           <label htmlFor="project-parent-path">保存位置</label>
           <div className="project-directory-field">
-            <input id="project-parent-path" value={parentPath} readOnly placeholder="选择父目录" title={parentPath} />
+            <TextField id="project-parent-path" value={parentPath} readOnly placeholder="选择父目录" title={parentPath} />
             <Button onClick={() => void chooseParent()} disabled={busy}><Icon name="folder" />选择目录</Button>
           </div>
           <p className="project-form-hint">将在此目录下创建与小说同名的文件夹。</p>

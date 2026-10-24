@@ -3,7 +3,7 @@ import { createRoot } from "react-dom/client";
 import type { Plugin } from "@lodestory/sdk";
 import { uiKey, type UiService, type UiWrapper } from "@lodestory/sdk/ui";
 import { themeKey, type ThemeDefinition, type ThemeService } from "@lodestory/sdk/theme";
-import { Button, Icon, IconButton, SearchField } from "@lodestory/ui";
+import { Button, Icon, IconButton, SearchField, TextField, Textarea, Select } from "@lodestory/ui";
 import "@lodestory/ui/styles.css";
 import "../../src/styles/tokens.css";
 import "./ui-theme.css";
@@ -343,6 +343,13 @@ function Fixture({ service }: { service: ThemeService }) {
         <section className="fixture__panel" aria-labelledby="search-title">
           <div className="fixture__section-heading"><h2 id="search-title">SearchField · 输入状态</h2></div>
           <div className="search-samples">
+            <TextField aria-label="共享单行输入" defaultValue="主题切换保留单行输入" data-testid="text-field-editable" />
+            <Textarea aria-label="共享多行输入" defaultValue="主题切换保留多行输入" data-testid="textarea-editable" />
+            <fieldset disabled>
+              <TextField aria-label="继承禁用的输入" aria-invalid="true" defaultValue="禁用抑制错误状态" data-testid="text-field-disabled" />
+              <Textarea aria-label="继承禁用的多行输入" aria-invalid="spelling" defaultValue="禁用抑制错误状态" data-testid="textarea-disabled" />
+            </fieldset>
+            <Select aria-label="共享表单选择" value="current" options={[{value: "current", label: "当前选项"}]} onValueChange={() => {}} data-testid="field-select" />
             <SearchField
               label="可编辑搜索（测试光标与选区）"
               data-testid="search-editable"

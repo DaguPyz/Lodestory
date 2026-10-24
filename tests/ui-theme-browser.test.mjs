@@ -264,6 +264,7 @@ async function assertSearchFieldStates(page, colors) {
   const selectionPaint = registry.paintSets.selection;
   const validationPaint = registry.paintSets.validationDanger;
   const inputStyle = await readSearchStyle(editable);
+  assert.equal(inputStyle.border, colors['border.default'], 'SearchField resting border uses the quiet role');
   assert.equal(inputStyle.foreground, colors['text.primary'], 'SearchField input foreground follows the primary text role');
   assert.equal(inputStyle.background, colors['surface.control'], 'SearchField background follows its neutral control surface');
   assert.equal(inputStyle.placeholder, colors['text.placeholder'], 'SearchField placeholder follows its placeholder role');
@@ -279,6 +280,7 @@ async function assertSearchFieldStates(page, colors) {
 
   await editable.hover();
   await assertSearchPaint(editable, 'hover', colors, 'editable SearchField hover');
+  assert.equal((await readSearchStyle(editable)).border, colors['border.strong'], 'SearchField hover restores the strong border');
   await page.mouse.down();
   await assertSearchPaint(editable, 'pressed', colors, 'editable SearchField pressed');
   await page.mouse.up();
@@ -317,6 +319,52 @@ async function assertSearchFieldStates(page, colors) {
   const disabledInvalidStyle = await readSearchStyle(disabledInvalid);
   assert.equal(disabledInvalidStyle.border, colors[disabledPaint.border], 'disabled state suppresses validation border');
   assert.equal(disabledInvalidStyle.placeholder, colors[disabledPaint.foreground], 'disabled placeholder uses disabled foreground');
+}
+
+async function assertNativeFieldStates(page, colors) {
+  const styleOf = locator => locator.evaluate(element => {
+    const style = getComputedStyle(element);
+    return {border: style.borderTopColor, background: style.backgroundColor, foreground: style.color,
+      outline: style.outlineColor, width: style.outlineWidth, offset: style.outlineOffset};
+  });
+  for (const id of ['text-field', 'textarea']) {
+    const field = page.getByTestId(`${id}-editable`);
+    await field.evaluate(element => element.blur());
+    await page.mouse.move(0, 0);
+    assert.equal((await styleOf(field)).border, colors['border.default'], `${id}: quiet rest`);
+    await field.hover();
+    assert.equal((await styleOf(field)).border, colors['border.strong'], `${id}: hover identifies interaction`);
+    await field.focus();
+    const focused = await styleOf(field);
+    assert.equal(focused.border, colors['focus.ring'], `${id}: visible focus`);
+    assert.equal(focused.outline, focused.border);
+    assert.equal(focused.width, '2px');
+    assert.equal(focused.offset, '-2px');
+    for (const invalid of ['true', 'grammar', 'spelling']) {
+      await field.evaluate((element, value) => element.setAttribute('aria-invalid', value), invalid);
+      assert.equal((await styleOf(field)).border, colors['status.dangerBorder'], `${id}: invalid focus ${invalid}`);
+      assert.equal((await styleOf(field)).outline, colors['status.dangerBorder']);
+    }
+    await field.evaluate(element => { element.removeAttribute('aria-invalid'); element.readOnly = true; element.blur(); });
+    await field.hover();
+    assert.equal((await styleOf(field)).border, colors['border.default'], `${id}: readonly keeps rest paint`);
+    await field.focus();
+    assert.equal((await styleOf(field)).border, colors['focus.ring'], `${id}: readonly remains focusable`);
+    await field.evaluate(element => { element.readOnly = false; element.blur(); });
+    const disabled = await styleOf(page.getByTestId(`${id}-disabled`));
+    assert.equal(disabled.border, colors['state.disabledBorder'], `${id}: fieldset disabled suppresses validation`);
+    assert.equal(disabled.background, colors['state.disabledBackground']);
+    assert.equal(disabled.foreground, colors['state.disabledForeground']);
+  }
+  const select = page.getByTestId('field-select');
+  await page.mouse.move(0, 0);
+  assert.equal((await styleOf(select)).border, colors['border.default'], 'field Select shares the quiet rest border');
+  await select.hover();
+  assert.equal((await styleOf(select)).border, colors['border.strong'], 'field Select hover keeps a strong boundary');
+  await select.focus();
+  assert.equal((await styleOf(select)).border, colors['focus.ring'], 'field Select focus stays clear');
+  await select.evaluate(element => element.blur());
+  await page.mouse.move(0, 0);
 }
 
 async function tabTo(page, locator) {
@@ -404,6 +452,7 @@ test('UI components follow registry state paints across themes in a real browser
       }
       await assertIconButtonStates(page, colors);
       await assertSearchFieldStates(page, colors);
+      await assertNativeFieldStates(page, colors);
       for (const testId of ['inverse-ghost-button', 'inverse-icon-button']) {
         const inverseStyle = await readButtonStyle(page.getByTestId(testId));
         assert.equal(inverseStyle.foreground, colors['text.inverse'], `${testId} uses inverse foreground on its transparent surface`);

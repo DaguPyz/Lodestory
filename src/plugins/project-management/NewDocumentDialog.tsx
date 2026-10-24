@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from "react";
-import { Dialog } from "@lodestory/ui";
+import { Dialog, TextField } from "@lodestory/ui";
 import type { CreateEntryKind, DocumentExtension } from "./projectManagementModel";
 
 type NewDocumentDialogProps = {
@@ -39,7 +39,7 @@ export function NewDocumentDialog({ open = true, initialParent, kind = "document
         if (name.trim() && !busy) void onCreate(parentPath, name.trim());
       }}>
         <div className="project-form-field">
-          <input ref={input} id="new-document-name" name="documentName" value={name} onChange={(event) => setName(event.target.value)}
+          <TextField ref={input} id="new-document-name" name="documentName" value={name} onChange={(event) => setName(event.target.value)}
             aria-label={directory ? "文件夹名称" : "文档名称"}
             onKeyDown={(event) => {
               if (event.key === "Enter" && (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229)) event.preventDefault();

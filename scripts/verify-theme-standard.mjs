@@ -380,6 +380,8 @@ const inherited = resolveColors({ type: "dark", colors: { "text.onAction": "#FDF
 assert.equal(inherited["action.foreground"], "#FDFDFD");
 assert.equal(inherited["danger.foreground"], "#FDFDFD");
 assert.equal(inherited["state.inactiveSelectedForeground"], "#B5C4BA");
+assert.equal(resolveColors({type: "dark", colors: {"border.strong": "#AABBCC"}})["border.default"], "#AABBCC", "缺少常态边界时继承同一主题的强边界");
+assert.deepEqual(paintRoles("neutralRest", {surface: "surface.control"}), {foreground: "text.primary", background: "surface.control", border: "border.default"});
 assert.equal(resolveColors({ type: "light", colors: {} })["text.primary"], "#23392F");
 const extendedInherited = resolveColors({ type: "dark", colors: { "status.success": "#AABBCC", "status.successBackground": "#101820", "category.1.foreground": "#DDEEFF" } });
 assert.equal(extendedInherited["status.successForeground"], "#AABBCC");

@@ -15,6 +15,7 @@ export type ThemeColorId =
   | "text.onAction"
   | "border.divider"
   | "border.decoration"
+  | "border.default"
   | "border.strong"
   | "accent.foreground"
   | "accent.indicator"

@@ -97,6 +97,7 @@
 | `text.reading` | `#23392F` | `#DFE8E1` | 无作者自定义格式的阅读文字 |
 | `border.divider` | `#DEE6DF` | `#2A382F` | 结构分隔，不独自承担识别 |
 | `border.decoration` | `#CFD9D1` | `#3D4D42` | 装饰性轮廓 |
+| `border.default` | `#7C8B81` | `#6B8072` | 中性承载面上的常态必要边界；按各中性表面校验 3:1 对比度 |
 | `border.strong` | `#78867D` | `#82968A` | 识别控件所必需的边界；已按按下态背景校验 3:1 对比度 |
 | `action.background` | `#2D7560` | `#2F7C61` | 主操作常态 |
 | `action.hoverBackground` | `#256651` | `#318067` | 主操作悬停 |
@@ -143,6 +144,8 @@
 ### MAT-01｜边界与阴影
 
 默认边线为 1px，相邻面板共享一条分隔线。必要控件边界保持可识别；已有明确图标、文字和布局识别的对象不额外增加亮色框线。
+
+TextField、Textarea、SearchField 与 `field` Select 的未聚焦常态使用 `border.default`，可编辑控件悬停、按下或展开时使用 `border.strong`；只读保持常态边界，聚焦仍清晰可见。两者是不同视觉用途，不能将强边界整体调暗，也不能以装饰边界代替必要边界。旧主题缺少 `border.default` 时引用该主题最终的 `border.strong`；内置主题显式提供较弱的常态值。选中、焦点、校验与禁用继续使用各自状态角色，不随常态边界弱化。
 
 停靠面板和列表不使用外投影。控件的轻微触感优先由边界、填充与状态明度建立，不为每个按钮加浮层阴影。浮层使用[阴影配方](../文档/主题标准-v1/颜色角色登记表.md#6-阴影配方)：几何全局固定，颜色来自主题的 `shadow.*`，遮罩来自 `overlay.scrim`。
 
@@ -309,7 +312,7 @@ Spacious 预设中的控件标签使用 16 / 24，元信息使用 14 / 20。Comp
 
 ### CMP-02｜共享实现
 
-公共组件统一定义语义角色、尺寸、预设、状态、键盘模型、溢出策略与主题映射。页面只选择已定义的角色和预设，不以覆盖内部样式的方式重新配色。已有 Button、IconButton、Icon、SearchField、Select、Dialog 必须从 `@lodestory/ui` 复用；本节列出的其他组件是统一设计要求，不表示 UI 包已经导出对应实现。
+公共组件统一定义语义角色、尺寸、预设、状态、键盘模型、溢出策略与主题映射。页面只选择已定义的角色和预设，不以覆盖内部样式的方式重新配色。已有 Button、IconButton、Icon、TextField、Textarea、SearchField、Select、Dialog 必须从 `@lodestory/ui` 复用；本节列出的其他组件是统一设计要求，不表示 UI 包已经导出对应实现。应用表单的文本、数字输入及多行说明统一采用共享 TextField / Textarea；作者正文与第三方编辑器仍由所属格式插件管理。
 
 Button 使用 primary / secondary / ghost / danger 四种角色。主操作保持明确，轻量操作使用中性或透明表面。加载、错误与悬停不改变控件宽度和文字起点。
 
@@ -478,7 +481,7 @@ Portal 浮层必须取得触发上下文的密度，主题则来自同一应用�
 | --- | --- | --- |
 | 内置主题 JSON | 仍以蓝色为 action／accent，主要表面为微冷中性色 | 待迁移至本版浅色／深色目标，复核缺省解析、全部状态与对比度 |
 | [共享 tokens](../src/styles/tokens.css) | 已有三种密度、40px 常规控件、8px 控件圆角；分组标题 24/32、浮层圆角 12px、弹框圆角 16px、焦点宽 1px | 待同步本版 Title 20/28、浮层 10px、弹框 12px、焦点 2px 与 1px 间隔等基线 |
-| [UI 包](../packages/ui/README.md) | 已导出 Button、IconButton、Icon、SearchField、Select、Dialog 及弹框辅助组件 | 仍需按本版统一视觉基线校准，不因已封装而视为通过验收 |
+| [UI 包](../packages/ui/README.md) | 已导出 Button、IconButton、Icon、TextField、Textarea、SearchField、Select、Dialog 及弹框辅助组件；表单文本输入共用状态和常态边界规则 | 仍需跨平台客户端验收，不因已封装而视为通过全局验收 |
 | 消费方 | 文档目录、主题映射、布局切换与富文本选择器已复用 Select；三处业务弹框已复用 Dialog | 各页面、右键菜单及编辑器周边界面仍须做全局一致性复核 |
 | 主题服务 | 已有主题登记、按 ID 选择和跟随系统策略 | 本规范不宣称外部主题安装、市场或任意插件热装卸已经实现 |
 

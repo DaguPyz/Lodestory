@@ -7,7 +7,7 @@ import {createElement} from "react";
 import {renderToStaticMarkup} from "react-dom/server";
 import * as ui from "@lodestory/ui";
 
-const {Button, Dialog, DialogActions, DialogClose, Icon, IconButton, SearchField, Select} = ui;
+const {Button, Dialog, DialogActions, DialogClose, Icon, IconButton, SearchField, Select, TextField, Textarea} = ui;
 
 test("the UI package exposes its components, React peer, declaration build, and separate stylesheet", async () => {
   const manifest = JSON.parse(await readFile(new URL("../packages/ui/package.json", import.meta.url), "utf8"));
@@ -19,7 +19,7 @@ test("the UI package exposes its components, React peer, declaration build, and 
   assert.equal(manifest.peerDependencies["react-dom"], "^19.1.0");
   assert.ok(manifest.dependencies["@base-ui/react"], "Base UI is declared by the package that wraps it");
   assert.equal(manifest.exports["./styles.css"], "./styles.css");
-  assert.deepEqual(Object.keys(ui).sort(), ["Button", "Dialog", "DialogActions", "DialogClose", "Icon", "IconButton", "SearchField", "Select"]);
+  assert.deepEqual(Object.keys(ui).sort(), ["Button", "Dialog", "DialogActions", "DialogClose", "Icon", "IconButton", "SearchField", "Select", "TextField", "Textarea"]);
   assert.match(declarations, /ButtonProps/);
   assert.match(declarations, /DialogProps/);
   assert.match(declarations, /DialogActionsProps/);
@@ -27,6 +27,9 @@ test("the UI package exposes its components, React peer, declaration build, and 
   assert.match(declarations, /IconName/);
   assert.match(declarations, /IconSize/);
   assert.match(declarations, /SearchFieldProps/);
+  assert.match(declarations, /TextFieldProps/);
+  assert.match(declarations, /TextFieldType/);
+  assert.match(declarations, /TextareaProps/);
   assert.match(declarations, /SelectProps/);
   assert.match(declarations, /SelectOption/);
   assert.match(stylesheet, /\.button--primary/);
@@ -53,6 +56,12 @@ test("the UI package exposes its components, React peer, declaration build, and 
     "theme colors remain synchronous so a switch cannot interpolate an unreadable palette");
   assert.match(stylesheet, /\.icon-button/);
   assert.match(stylesheet, /\.search-field/);
+  assert.match(stylesheet, /\.ui-text-control/);
+  assert.match(stylesheet, /border:\s*1px solid var\(--ui-border-default, var\(--ui-border-control\)\)/);
+  assert.match(stylesheet, /font-family:\s*var\(--ui-font-interface\)/);
+  assert.match(stylesheet, /caret-color:\s*var\(--ui-caret-foreground\)/);
+  assert.match(stylesheet, /--ui-selection-foreground/);
+  assert.match(stylesheet, /\.ui-text-control:is\(\[aria-invalid="true"\], \[aria-invalid="grammar"\], \[aria-invalid="spelling"\]\)/);
   assert.match(stylesheet, /\.ui-select\s*\{/);
   assert.match(stylesheet, /\.ui-select-trigger/);
   assert.match(stylesheet, /\.ui-select-option/);
@@ -66,6 +75,8 @@ test("public UI components render on the server without browser globals", () => 
     createElement(Button, {variant: "primary"}, "保存"),
     createElement(IconButton, {label: "关闭"}, createElement(Icon, {name: "close"})),
     createElement(SearchField, {label: "搜索项目", value: "项目", readOnly: true}),
+    createElement(TextField, {type: "number", name: "offset", min: -4, max: 8, step: "any", defaultValue: "2", required: true, "aria-invalid": "grammar"}),
+    createElement(Textarea, {name: "summary", placeholder: "补充说明", defaultValue: "故事梗概"}),
     createElement(Select, {value: "", "aria-label": "选择目录", options: [{value: "", label: "项目根目录"}, {value: "chapter", label: "项目/chapter"}]}),
   ));
   const closedDialog = renderToStaticMarkup(createElement(Dialog, {
@@ -82,6 +93,13 @@ test("public UI components render on the server without browser globals", () => 
   assert.match(html, /class="icon-button"[^>]*aria-label="关闭"/);
   assert.match(html, /<input[^>]*type="search"[^>]*aria-label="搜索项目"/);
   assert.match(html, /value="项目"/);
+  assert.match(html, /type="number"/);
+  assert.match(html, /name="offset"/);
+  assert.match(html, /min="-4"[^>]*max="8"[^>]*step="any"/);
+  assert.match(html, /aria-invalid="grammar"/);
+  assert.match(html, /<textarea[^>]*name="summary"[^>]*class="ui-text-control ui-textarea"/);
+  assert.match(html, /placeholder="补充说明"[^>]*rows="3"/);
+  assert.match(html, /故事梗概/);
   assert.match(html, /class="ui-select-trigger"/);
   assert.match(html, /选择目录/);
   assert.match(html, /项目根目录/);

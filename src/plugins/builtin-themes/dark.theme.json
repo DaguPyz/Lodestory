@@ -19,6 +19,7 @@
     "text.onAction": "#FFFFFF",
     "border.divider": "#2A382F",
     "border.decoration": "#3D4D42",
+    "border.default": "#6B8072",
     "border.strong": "#82968A",
     "accent.foreground": "#8BD2B3",
     "accent.indicator": "#83CBA9",

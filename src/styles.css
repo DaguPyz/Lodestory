@@ -374,37 +374,12 @@ p {
   line-height: var(--ui-line-height-label);
 }
 
-.project-form-field input {
-  width: 100%;
-  min-width: 0;
-  min-height: var(--ui-control-height);
-  padding: var(--ui-space-3) var(--ui-control-padding-inline);
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-control);
-  border: 1px solid var(--ui-border-control);
-  border-radius: var(--ui-radius-control);
-}
-
-.project-form-field input::placeholder {
-  color: var(--ui-text-placeholder);
-}
-
-.project-form-field input:hover:not(:disabled) { border-color: var(--ui-border-strong); }
-.project-form-field input:focus-visible:not(:disabled) {
-  border-color: var(--ui-focus-ring);
-  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
-  outline-offset: calc(-1 * var(--ui-focus-width));
-}
-.project-form-field input:disabled { color: var(--ui-state-disabled-foreground); background: var(--ui-state-disabled-background); border-color: var(--ui-state-disabled-border); }
-.project-form-field input:is([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"]):not(:disabled) {
-  border-color: var(--ui-status-danger-border);
-  outline-color: var(--ui-status-danger-border);
-}
-
 .project-directory-field {
   display: flex;
   gap: var(--ui-space-3);
 }
+
+.project-directory-field > .ui-text-field { flex: 1; }
 
 .project-form-hint {
   color: var(--ui-text-muted);
@@ -479,16 +454,6 @@ p {
 @media (forced-colors: active) {
   :root {
     --ui-focus-ring: Highlight !important;
-  }
-
-  .project-form-field input:focus-visible:not(:disabled) { border-color: Highlight; outline-color: Highlight; }
-  .project-form-field input:is([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"]):not(:disabled) {
-    border-style: dashed;
-    outline-color: Highlight;
-  }
-  .project-form-field input:is([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"]):focus-visible:not(:disabled) {
-    border-color: Highlight;
-    outline-style: dashed;
   }
 
   .project-row:not(:last-child)::after {

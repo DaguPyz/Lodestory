@@ -10,23 +10,27 @@ Lodestory 自有 React 基础组件库。组件、公开属性类型和组件样
 | `IconButton` | 图标按钮 | 必填 `label`，同时提供无障碍名称和悬停提示 |
 | `Icon` | 装饰性 SVG 图标 | `name`，`size`: `default` / `small` / `medium` / `large` / `brand` |
 | `SearchField` | 带图标的搜索输入框 | 必填 `label`，默认也用作 `placeholder` |
+| `TextField` | 单行文本或数字输入 | 原生输入属性与 `ref`；`type` 限定为文本类和数字类，默认 `text` |
+| `Textarea` | 多行文本输入 | 原生多行输入属性与 `ref`；默认 `rows=3`，支持显式覆盖 |
 | `Select` | 受控单选下拉框 | `value`、`options`、`onValueChange`；`variant`: `field`（默认）/ `title` / `toolbar`；支持占位、禁用、只读、表单属性、颜色样本及 `triggerIcon` / `iconOnly` 图标触发器 |
 | `Dialog` | 受控模态弹框 | `open`、`onOpenChange`、`title`，可选 `onOpenChangeComplete`、`size`（`regular` 默认、`narrow`、`wide`、`large`）、`description`、`busy`、`initialFocus`、`finalFocus` |
 | `DialogActions` | 弹框操作区 | 统一右对齐、间距与换行 |
 | `DialogClose` | 关闭弹框的按钮 | 支持 `Button` 属性和 `ref`，固定为非提交按钮 |
 
-按钮默认 `type="button"`，表单提交时显式指定 `type="submit"`。按钮与搜索框支持原生属性及事件，通过公开类型约束，不开放任意 `className` / `style`，视觉差异优先扩展语义明确的变体。`Icon` 标记为装饰内容，操作的文字含义由外层按钮或标签提供。
+按钮默认 `type="button"`，表单提交时显式指定 `type="submit"`。按钮、搜索框和文本输入支持原生属性及事件，通过公开类型约束，不开放任意 `className` / `style`，视觉差异优先扩展语义明确的变体。`TextField` 不能用于 checkbox、radio、按钮等非文本输入；`type="number"` 保留原生 `min`、`max`、`step` 属性。`Icon` 标记为装饰内容，操作的文字含义由外层按钮或标签提供。
 
 ## 接入
 
 ```tsx
-import { Button, Icon, IconButton, SearchField } from "@lodestory/ui";
+import { Button, Icon, IconButton, SearchField, TextField, Textarea } from "@lodestory/ui";
 
 export function Example() {
   return <>
     <Button variant="primary"><Icon name="plus" />新建</Button>
     <IconButton label="关闭"><Icon name="close" /></IconButton>
     <SearchField label="搜索作品" />
+    <TextField name="chapterCount" type="number" min={1} step="1" />
+    <Textarea name="summary" placeholder="补充说明" />
   </>;
 }
 ```
@@ -39,7 +43,7 @@ export function Example() {
 
 Lodestory 已在 `src/styles.css` 接入该入口，插件无需重复导入。组件继承现有 `--ui-*` 配色、排版、尺寸和密度变量；库不写入主题、不读取主题存储，也不重复提供默认色值。单独预览或其他宿主使用时，须由宿主提供符合[主题标准](../../文档/主题标准-v1.md)和 [UI 设计规范](../../UI规范/UI设计规范.md)的变量；当前应用的基础尺寸变量位于 `src/styles/tokens.css`，配色由主题插件提供。缺少这些变量时不保证视觉正确。
 
-组件 CSS 包含自身尺寸计算、字体继承、交互状态与强制颜色模式规则，不导入应用全局样式。配色不做过渡动画，主题变化时前景、背景和边界同步替换，也符合减少动效设置。页面负责外部布局和宽度，组件负责内部结构与状态；例如搜索框默认占父容器宽度，欢迎页另行设置工具栏搜索区的宽度。
+组件 CSS 包含自身尺寸计算、字体继承、交互状态与强制颜色模式规则，不导入应用全局样式。配色不做过渡动画，主题变化时前景、背景和边界同步替换，也符合减少动效设置。页面负责外部布局，组件负责控件宽度、边界和内部状态；例如搜索框、TextField、Textarea 默认占父容器宽度，欢迎页另行设置工具栏搜索区的宽度。
 
 ## 主题与交互状态
 
@@ -57,7 +61,7 @@ Lodestory 已在 `src/styles.css` 接入该入口，插件无需重复导入。�
 
 按钮通过原生 `aria-pressed`（包括 `mixed`）或适用角色下的 `aria-selected` 表达选中；混合选中额外用虚线标记。选择状态仍由使用方拥有。`selectionActive={false}` 表示所属选择上下文失焦，不等同于按钮自身没有键盘焦点。优先级为：禁用选中 → 禁用 → 选中按下 → 选中悬停 → 失焦选中 → 选中 → 操作用途的按下、悬停、默认态。
 
-SearchField、表单文本输入和 `variant="field"` 的 Select 聚焦时，在原边界内侧显示 2px 焦点线，与原边框合成一条，不留外侧间距、不改变尺寸；该焦点线邻接字段自身中性填充，使用 `focus.ring`。SearchField 由外层边界承载焦点，内部输入框不重复绘制。无效且聚焦时保留 `status.dangerBorder`，用加粗的同一条边界表示焦点，并保留错误文字或图标；禁用控件不显示焦点。`variant="title"` 的 Select、按钮和无边框控件沿用独立外侧焦点环；此类焦点环按 `focusSurface` 描述的外侧邻接表面选择角色。高对比模式使用系统焦点色；强制色模式下，无效边界可以用虚线保留错误差异。
+TextField、Textarea、SearchField 和 `variant="field"` 的 Select 常态边界使用 `border.default`，可编辑控件悬停、按下或展开时提升到 `border.strong`。只读字段维持常态边界，仍可聚焦与选择文字；`variant="title"`、`variant="toolbar"` 的 Select 保持无边框语义。文本输入控件聚焦时，在原边界内侧显示 2px 焦点线，与原边框合成一条，不留外侧间距、不改变尺寸；该焦点线邻接字段自身中性填充，使用 `focus.ring`。SearchField 由外层边界承载焦点，内部输入框不重复绘制。无效且聚焦时保留 `status.dangerBorder`，用加粗的同一条边界表示焦点，并保留错误文字或图标；禁用控件不显示焦点。按钮和无边框控件沿用独立外侧焦点环；此类焦点环按 `focusSurface` 描述的外侧邻接表面选择角色。高对比模式使用系统焦点色；强制色模式下，无效边界可以用虚线保留错误差异。
 
 禁用操作使用原生 `disabled`，也支持父级 `fieldset disabled`；`aria-disabled` 只声明语义和配色，保留可聚焦行为，使用方须拦截操作。只读搜索框保留普通配色、焦点与文字选择，不采用禁用配色。
 
@@ -137,7 +141,7 @@ import { Icon, Select } from "@lodestory/ui";
 - 本包是无业务状态的展示组件模块，不是运行时插件，不建立全局单例，也不新增能力 key。React 组件的挂载和卸载决定其生命周期。
 - 业务状态和保存流程仍由所属插件拥有；页面、布局贡献继续通过 SDK 的公开能力登记。组件库不导入 `src/`、Tauri、插件私有实现或 SDK 服务。
 - `@lodestory/sdk` 只维护跨插件契约，`@lodestory/ui` 维护可复用的 UI 实现，两者职责分开。
-- `PageShell`、`.app-shell` 和 `.window-titlebar` 属于独立的 `window-shell` 插件，不纳入本包；应用导航布局和专属样式由 `navigation-layout` 插件管理。公共样式继续留在 `src/styles.css`，由 `navigation-layout` 和 `workbench` 显式导入。文件树、文档标签栏和编辑器也属于应用或业务布局，不纳入本包。右键菜单仍由现有插件负责根包装和协调；普通输入框尚未迁入。新建项目、新建文档／文件夹和删除文档复用通用弹框，业务逻辑仍在原插件内。
+- `PageShell`、`.app-shell` 和 `.window-titlebar` 属于独立的 `window-shell` 插件，不纳入本包；应用导航布局和专属样式由 `navigation-layout` 插件管理。公共样式继续留在 `src/styles.css`，由 `navigation-layout` 和 `workbench` 显式导入。文件树、文档标签栏和编辑器也属于应用或业务布局，不纳入本包。右键菜单仍由现有插件负责根包装和协调；应用表单的文本与数字字段通过共享 TextField / Textarea 接入，正文编辑器不属于这些控件。新建项目、新建文档／文件夹和删除文档复用通用弹框，业务逻辑仍在原插件内。
 - 后续新增组件放在 `src/`，在 `src/index.ts` 导出组件和属性类型，并把组件样式放入 `styles.css`。复杂交互可在包内封装 Base UI，消费者不应依赖其内部实例。
 - React 与 React DOM 是 peer dependencies，宿主和插件必须共享同一运行时；独立打包消费者时将 `react`、`react/jsx-runtime`、`react-dom` 和本包作为外部依赖。Base UI 是包内实现依赖，不通过公共属性暴露其类型。
 

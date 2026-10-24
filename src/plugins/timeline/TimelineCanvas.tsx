@@ -1,6 +1,6 @@
 import {useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
 import type {CanvasService, CanvasViewport} from "@lodestory/sdk/canvas";
-import {Button, Dialog, DialogActions} from "@lodestory/ui";
+import {Button, Dialog, DialogActions, TextField} from "@lodestory/ui";
 import type {TimelineAxisStore, TimelineAxisSettings} from "./timelineAxisStore";
 import type {TimelineEventStore} from "./timelineEventStore";
 import {TimelineEvents} from "./TimelineEvents";
@@ -280,7 +280,7 @@ export function TimelineCanvas({canvas, viewport, active, title, axis, events, o
       busy={snapshot.saving || submitting} initialFocus={originInput}>
       <form className="timeline-axis-form" onSubmit={submitSettings}>
         <label className="timeline-axis-field"><span>故事起点数值</span>
-          <input ref={originInput} name="origin" type="number" min="-1000000000" max="1000000000" step="any" required value={draft?.origin ?? ""}
+          <TextField ref={originInput} name="origin" type="number" min="-1000000000" max="1000000000" step="any" required value={draft?.origin ?? ""}
             onChange={event => { setOperationError(null); setDraft(current => current ? {...current, origin: event.target.value} : current); }}
             aria-describedby="timeline-axis-origin-help"
             aria-invalid={Boolean(draft?.origin.trim()) && (!Number.isFinite(parsedOrigin) || Math.abs(parsedOrigin) > 1_000_000_000) || undefined}
@@ -288,7 +288,7 @@ export function TimelineCanvas({canvas, viewport, active, title, axis, events, o
           <span id="timeline-axis-origin-help" className="timeline-axis-field-help">故事开始时的数值，例如 100。</span>
         </label>
         <label className="timeline-axis-field"><span>主刻度间隔</span>
-          <input name="step" type="number" min="0.000001" max="1000000000" step="any" required value={draft?.step ?? ""}
+          <TextField name="step" type="number" min="0.000001" max="1000000000" step="any" required value={draft?.step ?? ""}
             onChange={event => { setOperationError(null); setDraft(current => current ? {...current, step: event.target.value} : current); }}
             aria-describedby="timeline-axis-step-help"
             aria-invalid={Boolean(draft?.step.trim()) && (!Number.isFinite(parsedStep) || parsedStep < 0.000001 || parsedStep > 1_000_000_000) || undefined}
@@ -296,7 +296,7 @@ export function TimelineCanvas({canvas, viewport, active, title, axis, events, o
           <span id="timeline-axis-step-help" className="timeline-axis-field-help">相邻主刻度的数值增量。</span>
         </label>
         <label className="timeline-axis-field"><span>单位</span>
-          <input name="unit" type="text" required value={draft?.unit ?? ""}
+          <TextField name="unit" type="text" required value={draft?.unit ?? ""}
             onChange={event => { setOperationError(null); setDraft(current => current ? {...current, unit: event.target.value} : current); }}
             aria-describedby="timeline-axis-unit-help" disabled={submitting || snapshot.saving}/>
           <span id="timeline-axis-unit-help" className="timeline-axis-field-help">1–20 个字符，例如天、年或轮次。</span>

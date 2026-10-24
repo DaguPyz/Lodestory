@@ -17,6 +17,7 @@
   --ui-text-on-action: #FFFFFF;
   --ui-border-divider: #2A382F;
   --ui-border-decoration: #3D4D42;
+  --ui-border-default: #6B8072;
   --ui-border-control: #82968A;
   --ui-accent-foreground: #8BD2B3;
   --ui-accent-indicator: #83CBA9;
@@ -131,6 +132,7 @@
   --ui-text-on-action: #FFFFFF;
   --ui-border-divider: #DEE6DF;
   --ui-border-decoration: #CFD9D1;
+  --ui-border-default: #7C8B81;
   --ui-border-control: #78867D;
   --ui-accent-foreground: #256651;
   --ui-accent-indicator: #2D7560;

@@ -74,7 +74,7 @@ test("themes with the same type are peers and switch their entire palettes by ID
   assert.equal(snapshot.theme.colors["state.selectedHoverForeground"], "#E3F6EC", "missing roles use the standard role default");
   assert.equal(f.root.style["--ui-surface-workspace"], "#171A23");
   assert.equal(f.root.dataset.uiThemeId, definition.id);
-  assert.equal(Object.keys(snapshot.theme.colors).length, 108);
+  assert.equal(Object.keys(snapshot.theme.colors).length, 109);
   assert.equal(Object.isFrozen(snapshot.theme.colors), true);
   assert.equal(notifications, 1);
   f.api.setThemePreference(fixed("dark"));
@@ -96,6 +96,23 @@ test("missing colors come from standard defaults, never another theme's palette"
   manager.registerTheme(custom());
   manager.setPreference({ mode: "fixed", themeId: custom().id });
   assert.equal(manager.getSnapshot().theme.colors["surface.content"], "#151C19");
+});
+
+test("normal borders preserve old theme overrides and allow an independent explicit color", () => {
+  const f = fixture();
+  const {resolveThemeDefinition} = f.loadModule("plugins/theme/resolveTheme.ts");
+  for (const type of ["dark", "light"]) {
+    const original = custom(`example.border.${type}`, type, {"border.strong": "#AABBCC"});
+    const legacy = resolveThemeDefinition(original);
+    assert.equal(legacy.colors["border.default"], "#AABBCC", "missing normal border follows the author's resolved strong border");
+    assert.equal(legacy.cssVariables["--ui-border-default"], "#AABBCC");
+    const explicit = resolveThemeDefinition({...original, colors: {...original.colors, "border.default": "#778899"}});
+    assert.equal(explicit.colors["border.default"], "#778899");
+    assert.equal(explicit.colors["border.strong"], legacy.colors["border.strong"]);
+    for (const role of ["focus.ring", "accent.indicator", "status.dangerBorder", "state.disabledBorder"]) {
+      assert.equal(explicit.colors[role], legacy.colors[role], `${role} is independent of normal borders`);
+    }
+  }
 });
 
 test("duplicate IDs, invalid colors and incompatible system slots leave the catalog unchanged", () => {

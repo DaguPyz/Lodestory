@@ -2,7 +2,7 @@ import {useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent}
 import type {WorkbenchService} from "@lodestory/sdk/workbench";
 import type {ContextMenuService} from "@lodestory/sdk/context-menu";
 import type {TimelineListModel, TimelineService} from "@lodestory/sdk/timeline";
-import {Button, Dialog, DialogActions, Icon} from "@lodestory/ui";
+import {Button, Dialog, DialogActions, Icon, TextField} from "@lodestory/ui";
 
 function TimelineList({contextMenus, model, active, onOpenTimeline}: {
   contextMenus: ContextMenuService;
@@ -120,13 +120,13 @@ function TimelineList({contextMenus, model, active, onOpenTimeline}: {
       description="围绕一条故事线，梳理它的起点、经过与结局。创建未完成时，请先完成或取消再切换项目。" initialFocus={nameInput} finalFocus={listSurface}>
       <form className="outline-design-form" onSubmit={event => void submitCreate(event)}>
         <label className="outline-design-field"><span>时间线名称</span>
-          <input ref={nameInput} value={draft?.title ?? ""} disabled={snapshot.creating}
+          <TextField ref={nameInput} value={draft?.title ?? ""} disabled={snapshot.creating}
             onChange={event => model.updateCreateDraft({title: event.target.value})}
             placeholder="输入时间线名称" required autoComplete="off" aria-invalid={titleLength > 60}/>
           <span className="outline-design-field-count">{titleLength} / 60</span>
         </label>
         <label className="outline-design-field"><span>故事梗概 <span className="outline-design-optional">（选填）</span></span>
-          <input value={draft?.summary ?? ""} disabled={snapshot.creating} onChange={event => model.updateCreateDraft({summary: event.target.value})}
+          <TextField value={draft?.summary ?? ""} disabled={snapshot.creating} onChange={event => model.updateCreateDraft({summary: event.target.value})}
             placeholder="这条故事线讲述了什么？" aria-invalid={summaryLength > 200}/>
           <span className="outline-design-field-count">{summaryLength} / 200</span>
         </label>

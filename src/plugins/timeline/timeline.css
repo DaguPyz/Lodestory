@@ -88,25 +88,6 @@
   line-height: var(--ui-line-height-label);
 }
 
-.timeline-axis-field input {
-  width: 100%;
-  min-width: 0;
-  min-height: var(--ui-control-height);
-  padding: var(--ui-space-3) var(--ui-control-padding-inline);
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-control);
-  border: 1px solid var(--ui-border-control);
-  border-radius: var(--ui-radius-control);
-  font: inherit;
-}
-
-.timeline-axis-field input:hover { border-color: var(--ui-border-control); }
-.timeline-axis-field input:focus-visible {
-  border-color: var(--ui-focus-ring);
-  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
-  outline-offset: calc(-1 * var(--ui-focus-width));
-}
-
 .timeline-axis-field-help {
   color: var(--ui-text-muted);
   font-size: var(--ui-font-size-caption);

@@ -153,6 +153,20 @@
       }
     },
     {
+      "id": "border.default",
+      "description": "中性承载面上的常态必要边界；交互反馈使用强边界",
+      "cssVariable": "--ui-border-default",
+      "alphaAllowed": false,
+      "defaults": {
+        "dark": {
+          "ref": "border.strong"
+        },
+        "light": {
+          "ref": "border.strong"
+        }
+      }
+    },
+    {
       "id": "border.strong",
       "description": "识别可操作对象所需的必要边界",
       "cssVariable": "--ui-border-control",
@@ -1752,6 +1766,48 @@
       "background": "danger.pressedBackground",
       "minRatio": 4.5,
       "description": "危险操作前景与对应底色对比。"
+    },
+    {
+      "id": "border.default.on.surface.root",
+      "foreground": "border.default",
+      "background": "surface.root",
+      "minRatio": 3,
+      "description": "常态必要边界与中性承载面保持可辨识对比。"
+    },
+    {
+      "id": "border.default.on.surface.content",
+      "foreground": "border.default",
+      "background": "surface.content",
+      "minRatio": 3,
+      "description": "常态必要边界与中性承载面保持可辨识对比。"
+    },
+    {
+      "id": "border.default.on.surface.secondary",
+      "foreground": "border.default",
+      "background": "surface.secondary",
+      "minRatio": 3,
+      "description": "常态必要边界与中性承载面保持可辨识对比。"
+    },
+    {
+      "id": "border.default.on.surface.tonal",
+      "foreground": "border.default",
+      "background": "surface.tonal",
+      "minRatio": 3,
+      "description": "常态必要边界与中性承载面保持可辨识对比。"
+    },
+    {
+      "id": "border.default.on.surface.control",
+      "foreground": "border.default",
+      "background": "surface.control",
+      "minRatio": 3,
+      "description": "常态必要边界与中性承载面保持可辨识对比。"
+    },
+    {
+      "id": "border.default.on.surface.floating",
+      "foreground": "border.default",
+      "background": "surface.floating",
+      "minRatio": 3,
+      "description": "常态必要边界与中性承载面保持可辨识对比。"
     },
     {
       "id": "border.strong.on.surface.root",
@@ -3757,6 +3813,16 @@
     }
   },
   "paintSets": {
+    "neutralRest": {
+      "description": "中性底色上的安静常态；必要边界仍保持可辨识，交互时改用强边界。",
+      "foreground": {
+        "context": "foreground"
+      },
+      "background": {
+        "context": "surface"
+      },
+      "border": "border.default"
+    },
     "neutral": {
       "description": "中性表面上的普通内容；前景从允许的用途角色中选择。",
       "foreground": {

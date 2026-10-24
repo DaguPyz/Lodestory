@@ -157,23 +157,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-.outline-design-field input[aria-invalid="true"] { border-color: var(--ui-status-danger-foreground); }
-
 .outline-design-optional { color: var(--ui-text-muted); }
-.outline-design-field input {
-  width: 100%;
-  min-width: 0;
-  min-height: var(--ui-control-height);
-  padding: var(--ui-space-3) var(--ui-control-padding-inline);
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-control);
-  border: 1px solid var(--ui-border-control);
-  border-radius: var(--ui-radius-control);
-}
-
-.outline-design-field input::placeholder { color: var(--ui-text-placeholder); }
-.outline-design-field input:hover { border-color: var(--ui-border-strong); }
-.outline-design-field input:focus-visible { border-color: var(--ui-focus-ring); outline: var(--ui-focus-width) solid var(--ui-focus-ring); outline-offset: calc(-1 * var(--ui-focus-width)); }
 
 @media (forced-colors: active) {
   .outline-design-entry[aria-pressed="true"] { outline: 1px solid Highlight; }

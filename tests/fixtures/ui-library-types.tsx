@@ -1,4 +1,4 @@
-import {Button, Dialog, DialogActions, DialogClose, Icon, IconButton, SearchField, Select} from "@lodestory/ui";
+import {Button, Dialog, DialogActions, DialogClose, Icon, IconButton, SearchField, Select, TextField, Textarea} from "@lodestory/ui";
 import {createRef} from "react";
 import type {
   ButtonProps,
@@ -9,6 +9,9 @@ import type {
   IconName,
   IconSize,
   SearchFieldProps,
+  TextFieldProps,
+  TextFieldType,
+  TextareaProps,
   SelectOption,
   SelectProps,
 } from "@lodestory/ui";
@@ -16,6 +19,9 @@ import type {
 const buttonProps: ButtonProps = {variant: "danger", type: "submit", "aria-pressed": true, selectionActive: false};
 const iconButtonProps: IconButtonProps = {label: "关闭", disabled: false, focusSurface: "inverse"};
 const searchFieldProps: SearchFieldProps = {label: "搜索项目", value: "", focusSurface: "neutral", "aria-invalid": true, onChange() {}};
+const textFieldProps: TextFieldProps = {type: "number", min: -100, max: 100, step: "any", value: "0", required: true, ref: createRef<HTMLInputElement>()};
+const textareaProps: TextareaProps = {rows: 4, maxLength: 500, value: "", ref: createRef<HTMLTextAreaElement>()};
+const textFieldType: TextFieldType = "email";
 const selectOptions: readonly SelectOption[] = [
   {value: "", label: "项目根目录"},
   {value: "chapter", label: "章节", disabled: true},
@@ -50,6 +56,8 @@ export const components = [
   <Button {...buttonProps}>保存</Button>,
   <IconButton {...iconButtonProps}><Icon name="close" /></IconButton>,
   <SearchField {...searchFieldProps} />,
+  <TextField {...textFieldProps} />,
+  <Textarea {...textareaProps} />,
   <Select {...selectProps} />,
   <Dialog {...dialogProps} />,
   <DialogActions {...actionsProps}>
@@ -68,6 +76,12 @@ const invalidIconButton: IconButtonProps = {};
 const invalidIconName: IconName = "not-an-icon";
 // @ts-expect-error className is managed by DialogActions
 const invalidDialogActions = <DialogActions className="host-class" />;
+// @ts-expect-error className is managed by TextField
+const invalidTextFieldClass = <TextField className="host-class" />;
+// @ts-expect-error style is managed by Textarea
+const invalidTextareaStyle = <Textarea style={{width: 200}} />;
+// @ts-expect-error TextField only accepts text and number-like input types
+const invalidTextFieldType = <TextField type="checkbox" />;
 // @ts-expect-error DialogClose owns its button type
 const invalidDialogClose = <DialogClose type="submit">提交</DialogClose>;
 // @ts-expect-error Dialog title is required for accessible naming
@@ -78,5 +92,6 @@ const invalidDialogSize = <Dialog open onOpenChange={() => {}} title="弹框" si
 const invalidSelectClass = <Select className="host-select" value="" options={[]} onValueChange={() => {}} />;
 // @ts-expect-error style is managed by Select
 const invalidSelectStyle = <Select style={{width: 200}} value="" options={[]} onValueChange={() => {}} />;
-void [invalidButton, invalidIconButton, invalidIconName, invalidSurface,
+void [textFieldType, invalidButton, invalidIconButton, invalidIconName, invalidSurface,
+  invalidTextFieldClass, invalidTextareaStyle, invalidTextFieldType,
   invalidDialogActions, invalidDialogClose, invalidDialog, invalidDialogSize, invalidSelectClass, invalidSelectStyle];

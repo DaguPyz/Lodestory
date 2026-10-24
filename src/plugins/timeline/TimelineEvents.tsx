@@ -1,6 +1,6 @@
 import {useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
 import type {CanvasViewportSnapshot} from "@lodestory/sdk/canvas";
-import {Button, Dialog, DialogActions, Icon} from "@lodestory/ui";
+import {Button, Dialog, DialogActions, Icon, TextField, Textarea} from "@lodestory/ui";
 import type {TimelineAxisSettings} from "./timelineAxisStore";
 import type {TimelineEvent, TimelineEventStore} from "./timelineEventStore";
 import {getTimelineEventsGeometry, TIMELINE_TURNING_CAPTION_FONT_SIZE} from "./timelineEventsGeometry";
@@ -142,6 +142,7 @@ export function TimelineEvents({store, settings, view, size, axisLabelBounds, ac
   onEditingChange?: (editing: boolean) => void;
 }) {
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+  const formId = useId();
   const addButton = useRef<HTMLButtonElement>(null);
   const titleInput = useRef<HTMLInputElement>(null);
   const onEditingChangeRef = useRef(onEditingChange);
@@ -410,8 +411,8 @@ export function TimelineEvents({store, settings, view, size, axisLabelBounds, ac
       <Dialog open={editing && active} onOpenChange={open => {
       if (open) return;
       if (active && !submitting && !snapshot.saving) cancelDraft();
-    }} title={confirmDelete ? "删除事件" : !isNewDraft && draft?.id ? "编辑事件" : "添加时间线事件"} size="narrow"
-      description={confirmDelete ? "删除后会立即保存到当前项目。" : "用一个节点标记故事中发生的重要时刻。"}
+    }} title={confirmDelete ? "删除事件" : !isNewDraft && draft?.id ? "编辑事件" : "添加时间线事件"} size={confirmDelete ? "narrow" : "regular"}
+      description={confirmDelete ? "删除后会立即保存到当前项目。" : "记录故事中的重要时刻。"}
       busy={submitting || snapshot.saving} initialFocus={titleInput}
       finalFocus={addButton}>
       {confirmDelete ? <div className="timeline-event-delete-confirm">
@@ -426,41 +427,52 @@ export function TimelineEvents({store, settings, view, size, axisLabelBounds, ac
           </Button>
         </DialogActions>
       </div> : <form className="timeline-event-form" onSubmit={event => void submitEvent(event)}>
-        <label className="timeline-event-field"><span>事件名称</span>
-          <input ref={titleInput} type="text" required autoComplete="off" value={draft?.title ?? ""}
+        <div className="timeline-event-field">
+          <div className="timeline-event-field-heading">
+            <label htmlFor={`${formId}-title`}>事件名称</label>
+            <span id={`${formId}-title-count`} className="timeline-event-field-count">{[...(draft?.title.trim() ?? "")].length} / 60</span>
+          </div>
+          <TextField ref={titleInput} id={`${formId}-title`} type="text" required autoComplete="off" placeholder="例如：收到故乡来信" value={draft?.title ?? ""}
             onChange={event => updateDraft({title: event.target.value})} aria-invalid={Boolean(draft?.title.trim()) && !validTitle || undefined}
-            aria-describedby="timeline-event-title-count" disabled={submitting || snapshot.saving}/>
-          <span id="timeline-event-title-count" className="timeline-event-field-count">{[...(draft?.title.trim() ?? "")].length} / 60</span>
-        </label>
-        <label className="timeline-event-field"><span>距故事起点</span>
-          <input type="number" step="any" min="-1000000000" max="1000000000" required value={draft?.offset ?? ""}
-            onChange={event => updateDraft({offset: event.target.value})} aria-invalid={invalidOffset || (Boolean(draft?.offset.trim()) && !validOffset) || undefined}
-            aria-describedby="timeline-event-offset-help" disabled={submitting || snapshot.saving}/>
-          <span id="timeline-event-offset-help" className="timeline-event-field-help">{formatOffsetHint(settings, draft?.offset ?? "")}</span>
-        </label>
-        <label className="timeline-event-field"><span>事件说明 <span className="timeline-event-optional">（选填）</span></span>
-          <textarea rows={3} value={draft?.summary ?? ""} onChange={event => updateDraft({summary: event.target.value})}
-            aria-invalid={!validSummary || undefined} aria-describedby="timeline-event-summary-count" disabled={submitting || snapshot.saving}/>
-          <span id="timeline-event-summary-count" className="timeline-event-field-count">{[...(draft?.summary ?? "")].length} / 200</span>
-        </label>
-        <fieldset className="timeline-event-placement">
-          <legend>节点在线轴上的位置</legend>
-          <div role="group" aria-label="节点位置">
-            <Button type="button" variant={draft?.placement === "above" ? "secondary" : "ghost"} aria-pressed={draft?.placement === "above"}
-              disabled={submitting || snapshot.saving} onClick={() => updateDraft({placement: "above"})}>轴线上方</Button>
-            <Button type="button" variant={draft?.placement === "below" ? "secondary" : "ghost"} aria-pressed={draft?.placement === "below"}
-              disabled={submitting || snapshot.saving} onClick={() => updateDraft({placement: "below"})}>轴线下方</Button>
-    </div>
-        </fieldset>
+            aria-describedby={`${formId}-title-count`} disabled={submitting || snapshot.saving}/>
+        </div>
+        <div className="timeline-event-position-row">
+          <label className="timeline-event-field"><span>距故事起点</span>
+            <TextField type="number" step="any" min="-1000000000" max="1000000000" required value={draft?.offset ?? ""}
+              onChange={event => updateDraft({offset: event.target.value})} aria-invalid={invalidOffset || (Boolean(draft?.offset.trim()) && !validOffset) || undefined}
+              aria-describedby={`${formId}-offset-help`} disabled={submitting || snapshot.saving}/>
+            <span id={`${formId}-offset-help`} className="timeline-event-field-help">{formatOffsetHint(settings, draft?.offset ?? "")}</span>
+          </label>
+          <fieldset className="timeline-event-placement">
+            <legend>节点位置</legend>
+            <div role="group" aria-label="节点位置">
+              <Button type="button" variant="ghost" aria-pressed={draft?.placement === "above"}
+                disabled={submitting || snapshot.saving} onClick={() => updateDraft({placement: "above"})}>轴线上方</Button>
+              <Button type="button" variant="ghost" aria-pressed={draft?.placement === "below"}
+                disabled={submitting || snapshot.saving} onClick={() => updateDraft({placement: "below"})}>轴线下方</Button>
+            </div>
+          </fieldset>
+        </div>
+        <div className="timeline-event-field">
+          <div className="timeline-event-field-heading">
+            <label htmlFor={`${formId}-summary`}>事件说明 <span className="timeline-event-optional">选填</span></label>
+            <span id={`${formId}-summary-count`} className="timeline-event-field-count">{[...(draft?.summary ?? "")].length} / 200</span>
+          </div>
+          <Textarea id={`${formId}-summary`} rows={3} placeholder="发生了什么，对故事有什么影响…" value={draft?.summary ?? ""} onChange={event => updateDraft({summary: event.target.value})}
+            aria-invalid={!validSummary || undefined} aria-describedby={`${formId}-summary-count`} disabled={submitting || snapshot.saving}/>
+        </div>
         <label className="timeline-event-important">
-          <input type="checkbox" checked={draft?.important ?? false} onChange={event => updateDraft({important: event.target.checked})}
-            disabled={submitting || snapshot.saving}/>
+          <span className="timeline-event-checkbox">
+            <input type="checkbox" checked={draft?.important ?? false} onChange={event => updateDraft({important: event.target.checked})}
+              disabled={submitting || snapshot.saving}/>
+            <Icon name="check" size="small"/>
+          </span>
           <span>标记为关键转折</span>
         </label>
         {(operationError || snapshot.error) && <p className="timeline-event-form-error" role="alert">{operationError ?? snapshot.error}</p>}
         <DialogActions>
           {draft?.id && !isNewDraft && <Button type="button" variant="danger" disabled={submitting || snapshot.saving} onClick={() => setConfirmDelete(true)}>删除事件</Button>}
-          <Button type="button" disabled={submitting || snapshot.saving} onClick={() => cancelDraft()}>取消</Button>
+          <Button type="button" variant="ghost" disabled={submitting || snapshot.saving} onClick={() => cancelDraft()}>取消</Button>
           <Button type="submit" variant="primary" disabled={!formValid || submitting || snapshot.saving}>
             {submitting || snapshot.saving ? "正在保存…" : snapshot.error ? "重试保存" : "保存事件"}
           </Button>

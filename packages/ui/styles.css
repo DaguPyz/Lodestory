@@ -171,6 +171,58 @@
 .icon--large { width: var(--ui-icon-large); height: var(--ui-icon-large); }
 .icon--brand { width: var(--ui-icon-brand); height: var(--ui-icon-brand); }
 
+.ui-text-control {
+  --cmp-text-control-focus: var(--ui-focus-ring);
+  --cmp-text-control-placeholder: var(--ui-text-placeholder);
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--ui-control-height);
+  padding: var(--ui-space-3) var(--ui-control-padding-inline);
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-control);
+  border: 1px solid var(--ui-border-default, var(--ui-border-control));
+  border-radius: var(--ui-radius-control);
+  font-family: var(--ui-font-interface);
+  font-size: var(--ui-font-size-label);
+  line-height: var(--ui-line-height-label);
+  caret-color: var(--ui-caret-foreground);
+}
+
+.ui-text-control::placeholder { color: var(--cmp-text-control-placeholder); opacity: 1; }
+
+.ui-text-control:where(:hover, :active):not(:disabled, :read-only) {
+  border-color: var(--ui-border-control);
+}
+
+.ui-text-control:is([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"]):not(:disabled) {
+  --cmp-text-control-focus: var(--ui-status-danger-border);
+  border-color: var(--ui-status-danger-border);
+}
+
+.ui-text-control:focus-visible:not(:disabled) {
+  border-color: var(--cmp-text-control-focus);
+  outline: var(--ui-focus-width) solid var(--cmp-text-control-focus);
+  outline-offset: calc(-1 * var(--ui-focus-width));
+}
+
+.ui-text-control:disabled {
+  --cmp-text-control-placeholder: var(--ui-state-disabled-foreground);
+  color: var(--ui-state-disabled-foreground);
+  background: var(--ui-state-disabled-background);
+  border-color: var(--ui-state-disabled-border);
+  outline: none;
+  cursor: not-allowed;
+  opacity: 1;
+  -webkit-text-fill-color: currentColor;
+}
+
+.ui-textarea {
+  min-height: calc(2 * var(--ui-control-height));
+  resize: vertical;
+}
+
 .search-field {
   --cmp-field-focus-color: var(--ui-focus-ring);
   --cmp-field-height: var(--ui-control-height);
@@ -186,24 +238,26 @@
   padding-inline: var(--ui-control-padding-inline);
   color: var(--ui-text-secondary);
   background: var(--ui-surface-control);
-  border: 1px solid var(--ui-border-control);
+  border: 1px solid var(--ui-border-default, var(--ui-border-control));
   border-radius: var(--ui-radius-control);
 }
 
-.search-field:where(:hover):not(:has(input:read-only)) {
+.search-field:where(:hover):not(:has(input:read-only, input:disabled)) {
   --cmp-field-foreground: var(--ui-state-hover-foreground);
   --cmp-field-placeholder: var(--ui-state-hover-foreground);
   --cmp-field-caret: var(--ui-state-hover-foreground);
   color: var(--ui-state-hover-foreground);
   background: var(--ui-surface-hover);
+  border-color: var(--ui-border-control);
 }
 
-.search-field:where(:active):not(:has(input:read-only)) {
+.search-field:where(:active):not(:has(input:read-only, input:disabled)) {
   --cmp-field-foreground: var(--ui-state-pressed-foreground);
   --cmp-field-placeholder: var(--ui-state-pressed-foreground);
   --cmp-field-caret: var(--ui-state-pressed-foreground);
   color: var(--ui-state-pressed-foreground);
   background: var(--ui-surface-pressed);
+  border-color: var(--ui-border-control);
 }
 
 .search-field input {
@@ -250,7 +304,7 @@
 }
 
 /* Validation keeps its color; the thicker edge still identifies keyboard focus. */
-.search-field:where(:has(input:is([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"]))) {
+.search-field:has(input:is([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"])):not(:has(input:disabled)) {
   --cmp-field-focus-color: var(--ui-status-danger-border);
   border-color: var(--ui-status-danger-border);
 }
@@ -271,8 +325,8 @@
   -webkit-text-fill-color: currentColor;
 }
 
-:is(.button, .icon-button, .search-field, .search-field input)::selection,
-:is(.button, .icon-button, .search-field) ::selection {
+:is(.button, .icon-button, .search-field, .search-field input, .ui-text-control)::selection,
+:is(.button, .icon-button, .search-field, .ui-text-control) ::selection {
   color: var(--ui-selection-foreground);
   background: var(--ui-text-selection-bg);
 }
@@ -300,7 +354,7 @@
   min-height: var(--ui-control-height);
   height: auto;
   padding: var(--ui-space-3) var(--ui-control-padding-inline);
-  border: 1px solid var(--ui-border-control);
+  border: 1px solid var(--ui-border-default, var(--ui-border-control));
   border-radius: var(--ui-radius-control);
   color: var(--ui-text-primary);
   background: var(--cmp-select-background);
@@ -385,9 +439,10 @@
 .ui-select-trigger:where([data-ui-placeholder]) { color: var(--ui-text-placeholder); }
 .ui-select-trigger:where(:hover) { color: var(--ui-state-hover-foreground); background: var(--ui-surface-hover); }
 .ui-select-trigger:where(:active, [data-pressed], [data-popup-open]) { color: var(--ui-state-pressed-foreground); background: var(--ui-surface-pressed); }
+.ui-select-trigger:where([data-variant="field"]):where(:hover, :active, [data-pressed], [data-popup-open]):not(:disabled, [data-disabled], [data-readonly]) { border-color: var(--ui-border-control); }
 .ui-select-trigger:where([data-readonly]) { color: var(--ui-text-primary); background: var(--cmp-select-background); }
 .ui-select-trigger:where([data-readonly][data-ui-placeholder]) { color: var(--ui-text-placeholder); }
-.ui-select-trigger:where([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"]) {
+.ui-select-trigger:is([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"]):not(:disabled, [data-disabled]) {
   --cmp-select-focus-color: var(--ui-status-danger-border);
   border-color: var(--ui-status-danger-border);
 }
@@ -655,6 +710,24 @@
 }
 
 @media (forced-colors: active) {
+  .ui-text-control {
+    color: CanvasText;
+    background: Canvas;
+    border-color: ButtonText;
+    --cmp-text-control-focus: Highlight;
+  }
+  .ui-text-control::placeholder { color: GrayText; }
+  .ui-text-control:is([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"]):not(:disabled) {
+    --cmp-text-control-focus: Highlight;
+    border-style: dashed;
+  }
+  .ui-text-control:is([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"]):focus-visible:not(:disabled) {
+    outline-color: Highlight;
+    outline-style: dashed;
+  }
+  .ui-text-control:focus-visible:not(:disabled) { outline-color: Highlight; }
+  .ui-text-control:disabled { color: GrayText; background: Canvas; border-color: GrayText; }
+
   .ui-select-trigger, .ui-select-popup, .ui-select-option { color: CanvasText; background: Canvas; border-color: ButtonText; box-shadow: none; }
   .ui-select-trigger { --cmp-select-focus-color: Highlight; }
   .ui-select-trigger:where([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"]):not(:disabled, [data-disabled]) {

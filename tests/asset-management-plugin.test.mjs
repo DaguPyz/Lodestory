@@ -100,7 +100,8 @@ test("asset schema sessions own their stores, guard project leave, and release r
   assert.ok(plugin.requires.includes(f.requireSdk("@lodestory/sdk/workbench").workbenchKey));
   assert.ok(plugin.requires.includes(f.requireSdk("@lodestory/sdk/project-storage").projectStorageKey));
   assert.ok(plugin.requires.includes(contextMenuKey), "asset management declares its context-menu service dependency");
-  assert.equal(plugin.provides.length, 0, "asset schema state remains private to the owning plugin");
+  assert.deepEqual(Array.from(plugin.provides, key => key.id), ["app/asset-catalog"],
+    "the plugin exposes only the public read-only catalog capability");
   assert.equal(navigation.order, 20);
   assert.equal(navigation.title, "资产管理");
   assert.equal(main.role, "main");

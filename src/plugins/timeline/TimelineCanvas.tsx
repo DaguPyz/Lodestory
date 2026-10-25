@@ -1,6 +1,7 @@
 import {useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
 import type {CanvasService, CanvasViewport} from "@lodestory/sdk/canvas";
 import type {ContextMenuService} from "@lodestory/sdk/context-menu";
+import type {AssetCatalog} from "@lodestory/sdk/asset-catalog";
 import {Button, Dialog, DialogActions, TextField} from "@lodestory/ui";
 import type {TimelineAxisStore, TimelineAxisSettings} from "./timelineAxisStore";
 import type {TimelineEventStore} from "./timelineEventStore";
@@ -42,9 +43,10 @@ function AxisTicks({ticks, axisY, zoom}: {ticks: readonly TimelineAxisTick[]; ax
   </g>;
 }
 
-export function TimelineCanvas({canvas, contextMenus, viewport, active, title, axis, events, onEditingChange}: {
+export function TimelineCanvas({canvas, contextMenus, assetCatalog, viewport, active, title, axis, events, onEditingChange}: {
   canvas: CanvasService;
   contextMenus: ContextMenuService;
+  assetCatalog: AssetCatalog | null;
   viewport: CanvasViewport;
   active: boolean;
   title: string;
@@ -258,7 +260,7 @@ export function TimelineCanvas({canvas, contextMenus, viewport, active, title, a
           <path className="timeline-axis-arrow" d={`M ${geometry.arrowBaseX} ${geometry.axisY - 4 / view.zoom} L ${geometry.arrowTipX} ${geometry.axisY} L ${geometry.arrowBaseX} ${geometry.axisY + 4 / view.zoom} Z`}/>
         </g>}
       </svg>}
-      {snapshot.loaded && <TimelineEvents contextMenus={contextMenus} store={events} settings={snapshot.settings} view={view} size={size}
+      {snapshot.loaded && <TimelineEvents contextMenus={contextMenus} assetCatalog={assetCatalog} store={events} settings={snapshot.settings} view={view} size={size}
         axisLabelBounds={geometry.labelBounds}
         active={active && snapshot.loaded && !snapshot.loading && !snapshot.blocked && !editing}
         onEditingChange={setIsEventEditing}/>}

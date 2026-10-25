@@ -1,5 +1,6 @@
 import type {Plugin} from "@lodestory/sdk";
 import {contextMenuKey} from "@lodestory/sdk/context-menu";
+import {assetCatalogKey, type AssetCatalog} from "@lodestory/sdk/asset-catalog";
 import {layoutKey} from "@lodestory/sdk/layout";
 import {projectStorageKey, type ProjectFiles} from "@lodestory/sdk/project-storage";
 import {workbenchKey} from "@lodestory/sdk/workbench";
@@ -7,6 +8,7 @@ import {Icon} from "@lodestory/ui";
 import {createAssetSchemaStore, type AssetSchemaStore} from "./assetSchemaStore";
 import {AssetTypeEditor, AssetTypeNavigation} from "./AssetManagementView";
 import {AssetRecordsEditor} from "./AssetRecordsView";
+import {createAssetCatalog} from "./assetCatalog";
 import "./asset-management.css";
 
 const MAIN_CONTENT_ID = "asset-management.types";
@@ -15,6 +17,7 @@ const ASSETS_CONTENT_ID = "asset-management.assets";
 /** One project's asset data and form-edit guards; resources never cross workbench sessions. */
 export type AssetSessionResources = {
   store: AssetSchemaStore;
+  catalog: AssetCatalog;
   editing: Set<symbol>;
   handledTypeCreationRequest?: number;
 };
@@ -31,13 +34,16 @@ export function createAssetManagementPlugin(): Plugin {
   return {
     id: "asset-management",
     requires: [layoutKey, workbenchKey, projectStorageKey, contextMenuKey],
-    provides: [],
+    provides: [assetCatalogKey],
     async activate(context) {
       alive = true;
       const layout = context.get(layoutKey);
       const workbench = context.get(workbenchKey);
       const storage = context.get(projectStorageKey);
       const contextMenus = context.get(contextMenuKey);
+      context.provide(assetCatalogKey, Object.freeze({
+        getCatalog(sessionId: string) { return sessions.get(sessionId)?.catalog ?? null; },
+      }));
       const onOpenTypes = () => layout.show(MAIN_CONTENT_ID);
       const onOpenAssets = () => layout.show(ASSETS_CONTENT_ID);
 
@@ -76,15 +82,23 @@ export function createAssetManagementPlugin(): Plugin {
             const files: ProjectFiles | null = storage.getFiles(session.id);
             if (!files) throw new Error(`Project storage for session '${session.id}' is unavailable.`);
             const store = createAssetSchemaStore(files);
-            const resource: AssetSessionResources = {store, editing: new Set()};
+            const catalogController = createAssetCatalog(store);
+            const resource: AssetSessionResources = {
+              store,
+              catalog: catalogController.catalog,
+              editing: new Set(),
+            };
             // Publish before loading so the mounted view can observe loading and any recoverable error.
             sessions.set(session.id, resource);
             try {
               await store.load();
             } catch (error) {
-              try { store.dispose(); }
+              try { catalogController.dispose(); }
               finally {
-                if (sessions.get(session.id) === resource) sessions.delete(session.id);
+                try { store.dispose(); }
+                finally {
+                  if (sessions.get(session.id) === resource) sessions.delete(session.id);
+                }
               }
               throw error;
             }
@@ -98,10 +112,13 @@ export function createAssetManagementPlugin(): Plugin {
                 return resource.editing.size === 0 && !store.getSnapshot().dirty;
               },
               dispose() {
-                try { store.dispose(); }
+                try { catalogController.dispose(); }
                 finally {
-                  resource.editing.clear();
-                  if (sessions.get(session.id) === resource) sessions.delete(session.id);
+                  try { store.dispose(); }
+                  finally {
+                    resource.editing.clear();
+                    if (sessions.get(session.id) === resource) sessions.delete(session.id);
+                  }
                 }
               },
             };

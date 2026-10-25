@@ -67,6 +67,10 @@
       "types": "./dist/timeline.d.ts",
       "import": "./dist/timeline.js"
     },
+    "./asset-catalog": {
+      "types": "./dist/asset-catalog.d.ts",
+      "import": "./dist/asset-catalog.js"
+    },
     "./context-menu": {
       "types": "./dist/context-menu.d.ts",
       "import": "./dist/context-menu.js"

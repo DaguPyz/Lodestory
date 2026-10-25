@@ -357,8 +357,8 @@ test("timeline event counts and ranges load from project storage and return afte
   const events = resources.events.get(timelineId);
   assert.equal(await Promise.all([axis.load(), events.load()]).then(results => results.every(Boolean)), true);
   assert.equal(await axis.update({origin: 100, step: 5, unit: "年"}), true);
-  assert.equal(await events.upsert({id: "00000000-0000-4000-8000-000000000201", title: "离开故乡", summary: "", offset: -18, placement: "above", important: false}), true);
-  assert.equal(await events.upsert({id: "00000000-0000-4000-8000-000000000202", title: "归来", summary: "", offset: 23, placement: "below", important: true}), true);
+  assert.equal(await events.upsert({id: "00000000-0000-4000-8000-000000000201", title: "离开故乡", summary: "", offset: -18, placement: "above", important: false, assetIds: []}), true);
+  assert.equal(await events.upsert({id: "00000000-0000-4000-8000-000000000202", title: "归来", summary: "", offset: 23, placement: "below", important: true, assetIds: []}), true);
   assert.equal(list.getSnapshot().entries[0].eventCount, 2);
   assert.equal(list.getSnapshot().entries[0].period, "82–123 年");
 
@@ -390,7 +390,7 @@ test("a failed event write blocks project leave and retains its event draft", as
   const resources = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main").render({active: true}).props.sessions.get(sessionId);
   const events = resources.events.get(timelineId);
   assert.equal(await events.load(), true);
-  assert.equal(await events.upsert({id: "00000000-0000-4000-8000-000000000203", title: "不能丢失", summary: "待重试", offset: 4, placement: "above", important: false}), false);
+  assert.equal(await events.upsert({id: "00000000-0000-4000-8000-000000000203", title: "不能丢失", summary: "待重试", offset: 4, placement: "above", important: false, assetIds: []}), false);
   assert.equal(events.getSnapshot().dirty, true);
   assert.equal(events.getSnapshot().events[0].title, "不能丢失");
   assert.equal(await workbench.closeProject(), false);
@@ -414,7 +414,7 @@ test("deleting a timeline waits for dirty events to reach project storage", asyn
   const resources = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main").render({active: true}).props.sessions.get(sessionId);
   const events = resources.events.get(timelineId);
   assert.equal(await events.load(), true);
-  const upsert = events.upsert({id: "00000000-0000-4000-8000-000000000206", title: "保存后删除", summary: "", offset: -3, placement: "above", important: false});
+  const upsert = events.upsert({id: "00000000-0000-4000-8000-000000000206", title: "保存后删除", summary: "", offset: -3, placement: "above", important: false, assetIds: []});
   await eventCreateStarted;
   const remove = list.remove(timelineId);
   await Promise.resolve();
@@ -443,7 +443,7 @@ test("event flush keeps list commands closed while the workbench is busy and dis
   const resources = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main").render({active: true}).props.sessions.get(sessionId);
   const events = resources.events.get(timelineId);
   assert.equal(await events.load(), true);
-  const upsert = events.upsert({id: "00000000-0000-4000-8000-000000000204", title: "离开前的事件", summary: "", offset: 1, placement: "below", important: false});
+  const upsert = events.upsert({id: "00000000-0000-4000-8000-000000000204", title: "离开前的事件", summary: "", offset: 1, placement: "below", important: false, assetIds: []});
   await eventCreateStarted;
   const metadataCreatesBeforeLeave = calls.filter(call => call.command === "create_project_file" && call.args.path.startsWith(".lodestory/outline-design/timelines/")).length;
   const close = workbench.closeProject();
@@ -458,7 +458,100 @@ test("event flush keeps list commands closed while the workbench is busy and dis
   assert.equal(events.getSnapshot().blocked, true);
   let notifications = 0;
   events.subscribe(() => notifications++);
-  assert.equal(await events.upsert({id: "00000000-0000-4000-8000-000000000205", title: "已关闭", summary: "", offset: 2, placement: "above", important: false}), false);
+  assert.equal(await events.upsert({id: "00000000-0000-4000-8000-000000000205", title: "已关闭", summary: "", offset: 2, placement: "above", important: false, assetIds: []}), false);
   assert.equal(notifications, 0);
+  await f.createdCores.at(-1).unmountAll();
+});
+
+test("timeline receives the current session asset catalog and keeps opaque asset IDs across removal and reopen", async () => {
+  const {f, disk, bytesOf, keyOf} = persistenceFixture();
+  const assetTypeId = "10000000-0000-4000-8000-000000000001";
+  const assetId = "10000000-0000-4000-8000-000000000002";
+  const assetSchemaPath = ".lodestory/assets/schema.json";
+  disk.set(keyOf(project.path, assetSchemaPath), bytesOf(JSON.stringify({
+    format: "lodestory.asset-schema",
+    schemaVersion: 2,
+    types: [{id: assetTypeId, name: "人物", description: "故事人物", order: 0, status: "active"}],
+    assets: [{id: assetId, name: "林遥", description: "主角", typeId: assetTypeId, values: {}}],
+    fields: [],
+  })));
+  f.start(); await flushStartup();
+  const {workbench, layout, storage, timelines, model} = services(f);
+  const assetCatalogKey = f.requireSdk("@lodestory/sdk/asset-catalog").assetCatalogKey;
+  const assetCatalogService = f.getService(assetCatalogKey);
+  assert.ok(assetCatalogService, "asset management publishes its public session catalog service");
+  assert.equal(await workbench.openProject(project), true);
+
+  const createSelectedTimeline = async () => {
+    const list = model();
+    if (list.getSnapshot().entries.length === 0) {
+      list.beginCreate();
+      list.updateCreateDraft({title: "人物关联"});
+      assert.equal(await list.create(), true);
+    }
+    return list.getSnapshot().selectedId;
+  };
+  const currentSessionId = workbench.getSnapshot().session.id;
+  const timelineId = await createSelectedTimeline();
+  const timelineMain = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main");
+  const catalog = assetCatalogService.getCatalog(currentSessionId);
+  assert.ok(catalog);
+  assert.equal(catalog.getSnapshot().loaded, true);
+  assert.deepEqual(Array.from(catalog.getSnapshot().assets, asset => asset.id), [assetId]);
+  const renderCanvas = () => {
+    const mainElement = timelineMain.render({active: true});
+    return mainElement.type(mainElement.props);
+  };
+  assert.strictEqual(renderCanvas().props.assetCatalog, catalog,
+    "timeline.main resolves the public catalog for the active project session before passing it to its canvas");
+
+  const timelineResources = timelineMain.render({active: true}).props.sessions.get(currentSessionId);
+  const events = timelineResources.events.get(timelineId);
+  assert.equal(await events.load(), true);
+  const eventId = "00000000-0000-4000-8000-000000000207";
+  assert.equal(await events.upsert({id: eventId, title: "林遥返乡", summary: "", offset: 2, placement: "above", important: false, assetIds: [assetId]}), true);
+  assert.equal(await workbench.closeProject(), true);
+  assert.equal(assetCatalogService.getCatalog(currentSessionId), null, "closing the project releases its catalog");
+
+  assert.equal(await workbench.openProject(project), true);
+  const restoredSessionId = workbench.getSnapshot().session.id;
+  assert.equal(timelines.open(restoredSessionId, timelineId), true);
+  const restoredCatalog = assetCatalogService.getCatalog(restoredSessionId);
+  assert.ok(restoredCatalog);
+  assert.notStrictEqual(restoredCatalog, catalog);
+  assert.deepEqual(Array.from(restoredCatalog.getSnapshot().assets, asset => asset.id), [assetId]);
+  const restoredTimelineEntry = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main");
+  const restoredMainElement = restoredTimelineEntry.render({active: true});
+  assert.strictEqual(restoredMainElement.type(restoredMainElement.props).props.assetCatalog, restoredCatalog,
+    "the canvas receives the catalog belonging to the restored session");
+  const restoredResources = restoredMainElement.props.sessions.get(restoredSessionId);
+  const restoredEvents = restoredResources.events.get(timelineId);
+  assert.equal(await restoredEvents.load(), true);
+  assert.deepEqual(Array.from(restoredEvents.getSnapshot().events[0].assetIds), [assetId], "the event association survives close and reopen");
+
+  const files = storage.getFiles(restoredSessionId);
+  const schemaFile = files.getSnapshot().files.find(file => file.path === assetSchemaPath);
+  assert.ok(schemaFile);
+  const schema = JSON.parse(new TextDecoder().decode(new Uint8Array(schemaFile.bytes)));
+  assert.equal(files.write(assetSchemaPath, bytesOf(JSON.stringify({...schema, assets: []}))), true);
+  assert.equal(await files.save(assetSchemaPath), true);
+  assert.equal(restoredCatalog.getSnapshot().assets.some(asset => asset.id === assetId), false,
+    "the catalog reflects an asset removed through the project's canonical file buffer");
+  assert.deepEqual(Array.from(restoredEvents.getSnapshot().events[0].assetIds), [assetId],
+    "asset removal does not rewrite the timeline's opaque reference");
+
+  assert.equal(await workbench.closeProject(), true);
+  assert.equal(await workbench.openProject(project), true);
+  const finalSessionId = workbench.getSnapshot().session.id;
+  assert.equal(timelines.open(finalSessionId, timelineId), true);
+  const finalCatalog = assetCatalogService.getCatalog(finalSessionId);
+  assert.deepEqual(Array.from(finalCatalog.getSnapshot().assets), []);
+  const finalTimelineEntry = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main");
+  const finalMainElement = finalTimelineEntry.render({active: true});
+  const finalResources = finalMainElement.props.sessions.get(finalSessionId);
+  const finalEvents = finalResources.events.get(timelineId);
+  assert.equal(await finalEvents.load(), true);
+  assert.deepEqual(Array.from(finalEvents.getSnapshot().events[0].assetIds), [assetId],
+    "the unresolved asset ID remains persisted after a second project session");
   await f.createdCores.at(-1).unmountAll();
 });

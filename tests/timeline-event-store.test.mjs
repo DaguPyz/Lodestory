@@ -36,7 +36,7 @@ function seedFile(f, targetPath, content) {
 }
 
 function event(patch = {}) {
-  return {id: eventId, title: "归乡", summary: "收到一封信", offset: 3.25, placement: "above", important: false, ...patch};
+  return {id: eventId, title: "归乡", summary: "收到一封信", offset: 3.25, placement: "above", important: false, assetIds: [], ...patch};
 }
 
 function plain(value) {
@@ -44,7 +44,11 @@ function plain(value) {
 }
 
 function storedEvents(events, patch = {}) {
-  return {format: "lodestory.timeline-events", schemaVersion: 1, timelineId, events, ...patch};
+  return {format: "lodestory.timeline-events", schemaVersion: 2, timelineId, events, ...patch};
+}
+
+function legacyStoredEvents(events) {
+  return {format: "lodestory.timeline-events", schemaVersion: 1, timelineId, events};
 }
 
 function diskEvents(f) {
@@ -78,6 +82,23 @@ test("missing event file loads an empty list without creating a file; CRUD persi
   await controller.dispose();
 });
 
+test("asset associations roundtrip, and legacy version 1 events upgrade only on first mutation", async () => {
+  const f = byteStorageFixture();
+  seedFile(f, path, JSON.stringify(legacyStoredEvents([{id: eventId, title: "归乡", summary: "收到一封信", offset: 3.25, placement: "above", important: false}])));
+  const controller = f.files();
+  const store = storeFor(controller.service);
+
+  assert.equal(await store.load(), true);
+  assert.deepEqual(plain(store.getSnapshot().events), [event()]);
+  assert.equal(diskEvents(f).schemaVersion, 1, "reading legacy data must not write or migrate it");
+  const associated = event({assetIds: [nextEventId]});
+  assert.equal(await store.upsert(associated), true);
+  assert.deepEqual(diskEvents(f), storedEvents([associated]));
+
+  store.dispose();
+  await controller.dispose();
+});
+
 test("event validation keeps existing events and reports invalid UUID, title, summary and offsets", async () => {
   const f = byteStorageFixture();
   const controller = f.files();
@@ -94,6 +115,10 @@ test("event validation keeps existing events and reports invalid UUID, title, su
   assert.equal(await store.upsert(event({offset: Infinity})), false);
   assert.match(store.getSnapshot().error, /有限数字/);
   assert.equal(await store.upsert(event({offset: 1_000_000_001})), false);
+  assert.equal(await store.upsert(event({assetIds: ["not-a-uuid"]})), false);
+  assert.match(store.getSnapshot().error, /关联资产编号/);
+  assert.equal(await store.upsert(event({assetIds: [nextEventId, nextEventId]})), false);
+  assert.match(store.getSnapshot().error, /关联资产编号/);
   assert.deepEqual(plain(store.getSnapshot().events), [event()]);
 
   store.dispose();
@@ -109,19 +134,19 @@ test("failed first creation retains a pending draft and retry creates the file",
   const store = storeFor(controller.service);
   await store.load();
 
-  assert.equal(await store.upsert(event({offset: -4.5})), false);
+  assert.equal(await store.upsert(event({offset: -4.5, assetIds: [nextEventId]})), false);
   assert.equal(store.getSnapshot().pendingCreate, true);
   assert.equal(store.getSnapshot().dirty, true);
   assert.equal(store.getSnapshot().saveState, "error");
   assert.match(store.getSnapshot().error, /事件目录暂不可写/);
-  assert.deepEqual(plain(store.getSnapshot().events), [event({offset: -4.5})]);
+  assert.deepEqual(plain(store.getSnapshot().events), [event({offset: -4.5, assetIds: [nextEventId]})]);
   assert.equal(f.disk.has(f.key("/book", path)), false);
 
   failCreate = false;
   assert.equal(await store.retry(), true);
   assert.equal(store.getSnapshot().pendingCreate, false);
   assert.equal(store.getSnapshot().dirty, false);
-  assert.deepEqual(diskEvents(f), storedEvents([event({offset: -4.5})]));
+  assert.deepEqual(diskEvents(f), storedEvents([event({offset: -4.5, assetIds: [nextEventId]})]));
   store.dispose();
   await controller.dispose();
 });
@@ -137,18 +162,18 @@ test("failed saves keep shared dirty bytes and retry flushes the latest event", 
   await store.upsert(event());
 
   failSave = true;
-  assert.equal(await store.upsert(event({offset: 11.125, summary: "最新草稿"})), false);
+  assert.equal(await store.upsert(event({offset: 11.125, summary: "最新草稿", assetIds: [nextEventId]})), false);
   assert.equal(await store.retry(), false);
   const buffered = controller.service.getSnapshot().files.find(file => file.path === path);
   assert.equal(buffered.dirty, true);
   assert.equal(buffered.saveState, "error");
-  assert.deepEqual(JSON.parse(new TextDecoder().decode(new Uint8Array(buffered.bytes))), storedEvents([event({offset: 11.125, summary: "最新草稿"})]));
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(new Uint8Array(buffered.bytes))), storedEvents([event({offset: 11.125, summary: "最新草稿", assetIds: [nextEventId]})]));
   assert.match(store.getSnapshot().error, /磁盘暂不可写/);
 
   failSave = false;
   assert.equal(await store.retry(), true);
   assert.equal(controller.service.getSnapshot().files.find(file => file.path === path).dirty, false);
-  assert.deepEqual(diskEvents(f), storedEvents([event({offset: 11.125, summary: "最新草稿"})]));
+  assert.deepEqual(diskEvents(f), storedEvents([event({offset: 11.125, summary: "最新草稿", assetIds: [nextEventId]})]));
   store.dispose();
   await controller.dispose();
 });
@@ -156,7 +181,7 @@ test("failed saves keep shared dirty bytes and retry flushes the latest event", 
 test("unsupported or malformed files are preserved and never overwritten", async t => {
   for (const [name, content] of [
     ["malformed JSON", "{"],
-    ["unsupported version", JSON.stringify(storedEvents([], {schemaVersion: 2}))],
+    ["unsupported version", JSON.stringify(storedEvents([], {schemaVersion: 3}))],
     ["mismatched timeline id", JSON.stringify(storedEvents([], {timelineId: nextEventId}))],
     ["duplicate event ids", JSON.stringify(storedEvents([event(), event({title: "冲突事件"})]))],
   ]) {
@@ -171,6 +196,28 @@ test("unsupported or malformed files are preserved and never overwritten", async
       assert.equal(await store.upsert(event({title: "不应保存"})), false);
       assert.deepEqual(f.disk.get(f.key("/book", path)), original);
       assert.equal(f.calls.some(call => call.command === "create_project_file" || call.command === "save_project_file"), false);
+      store.dispose();
+      await controller.dispose();
+    });
+  }
+});
+
+test("version 2 files reject missing, invalid, or duplicate asset ids without overwriting", async t => {
+  const withoutAssociations = {id: eventId, title: "归乡", summary: "收到一封信", offset: 3.25, placement: "above", important: false};
+  for (const [name, candidate] of [
+    ["missing assetIds", withoutAssociations],
+    ["invalid asset id", event({assetIds: ["bad"]})],
+    ["duplicate asset ids", event({assetIds: [nextEventId, nextEventId]})],
+  ]) {
+    await t.test(name, async () => {
+      const f = byteStorageFixture();
+      seedFile(f, path, JSON.stringify(storedEvents([candidate])));
+      const original = [...f.disk.get(f.key("/book", path))];
+      const controller = f.files();
+      const store = storeFor(controller.service);
+      assert.equal(await store.load(), false);
+      assert.equal(store.getSnapshot().blocked, true);
+      assert.deepEqual(f.disk.get(f.key("/book", path)), original);
       store.dispose();
       await controller.dispose();
     });
@@ -215,13 +262,13 @@ test("shared ProjectFiles bytes stay canonical and concurrent mutations cannot o
   assert.deepEqual(plain(second.getSnapshot().events), [event()]);
 
   pauseSave = true;
-  const pending = first.upsert(event({offset: 9}));
+  const pending = first.upsert(event({assetIds: [nextEventId]}));
   await entered.promise;
   assert.equal(await first.upsert(event({id: nextEventId, title: "不覆盖"})), false);
-  assert.equal(second.getSnapshot().events[0].offset, 9, "the shared byte notification exposes the pending canonical draft");
+  assert.deepEqual(plain(second.getSnapshot().events[0].assetIds), [nextEventId], "a change to associations alone reaches subscribers through shared bytes");
   release.resolve();
   assert.equal(await pending, true);
-  assert.deepEqual(diskEvents(f), storedEvents([event({offset: 9})]));
+  assert.deepEqual(diskEvents(f), storedEvents([event({assetIds: [nextEventId]})]));
 
   first.dispose();
   second.dispose();

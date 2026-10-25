@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Timeline asset association browser fixture</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/plugins/timeline/timeline-events.css" />
+    <style>
+      * { box-sizing: border-box; }
+      html, body, #root { margin: 0; min-height: 100%; font-family: var(--ui-font-interface); }
+      body { padding: 24px; background: var(--ui-surface-workspace); color: var(--ui-text-primary); }
+      .fixture-canvas { position: relative; width: min(900px, 100%); height: 560px; }
+    </style>
+  </head>
+  <body>
+    <main id="root"></main>
+    <script type="module">
+      import React from "react";
+      import {createRoot} from "react-dom/client";
+      import TimelineEvents from "/src/plugins/timeline/TimelineEvents.tsx";
+
+      const params = new URLSearchParams(location.search);
+      document.documentElement.dataset.uiThemeId = `lodestory.builtin.${params.get("theme") ?? "dark"}`;
+
+      const event = {
+        id: "00000000-0000-4000-8000-000000000001",
+        title: "归乡",
+        summary: "收到一封信",
+        offset: 3.25,
+        placement: "above",
+        important: false,
+        assetIds: ["20000000-0000-4000-8000-000000000099"],
+      };
+      const initial = {...event};
+      let events = [event];
+      let listeners = new Set();
+      let saves = 0;
+      let snapshot = {events, loaded: true, loading: false, saving: false, dirty: false,
+        pendingCreate: false, error: null, blocked: false, saveState: "saved"};
+      const publish = () => {
+        snapshot = {...snapshot, events};
+        for (const listener of [...listeners]) listener();
+      };
+      const store = {
+        getSnapshot: () => snapshot,
+        subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+        async load() { return true; },
+        async upsert(next) {
+          saves++;
+          events = events.some(item => item.id === next.id)
+            ? events.map(item => item.id === next.id ? {...next} : item)
+            : [...events, {...next}];
+          publish();
+          return true;
+        },
+        async remove(id) { events = events.filter(item => item.id !== id); publish(); return true; },
+        async retry() { return true; },
+        dispose() {},
+      };
+      let catalogSnapshot = {
+        types: [
+          {id: "10000000-0000-4000-8000-000000000001", name: "人物", status: "active"},
+          {id: "10000000-0000-4000-8000-000000000002", name: "地点", status: "active"},
+        ],
+        assets: [
+          {id: "20000000-0000-4000-8000-000000000001", name: "林舟", description: "故事主角", typeId: "10000000-0000-4000-8000-000000000001"},
+          {id: "20000000-0000-4000-8000-000000000002", name: "陈师傅", description: "修表匠，住在旧街", typeId: "10000000-0000-4000-8000-000000000001"},
+          {id: "20000000-0000-4000-8000-000000000003", name: "旧街", description: "林舟童年生活的地方", typeId: "10000000-0000-4000-8000-000000000002"},
+          {id: "20000000-0000-4000-8000-000000000004", name: "褪色车票", description: "未分类的纪念物", typeId: null},
+        ],
+        loaded: true, loading: false, error: null, blocked: false,
+      };
+      const catalogListeners = new Set();
+      let failNextRetry = false;
+      let retryAttempts = 0;
+      const assetCatalog = {
+        getSnapshot: () => catalogSnapshot,
+        subscribe(listener) { catalogListeners.add(listener); return () => catalogListeners.delete(listener); },
+        async retry() {
+          retryAttempts++;
+          if (failNextRetry) { failNextRetry = false; return false; }
+          catalogSnapshot = {...catalogSnapshot, loaded: true, loading: false, blocked: false, error: null};
+          for (const listener of [...catalogListeners]) listener();
+          return true;
+        },
+      };
+      const contextMenus = {Region: ({children}) => React.createElement(React.Fragment, null, children)};
+      const settings = {origin: 1994, step: 5, unit: "年"};
+      const view = {center: {x: 0, y: 0}, zoom: 1};
+      const root = createRoot(document.querySelector("#root"));
+      root.render(React.createElement("div", {className: "fixture-canvas"}, React.createElement(TimelineEvents, {
+        contextMenus, store, assetCatalog, settings, view, size: {width: 900, height: 560},
+        axisLabelBounds: [], active: true,
+      })));
+
+      window.__timelineAssetFixture = {
+        open() {
+          document.querySelector(".timeline-event-endpoint")?.dispatchEvent(new MouseEvent("click", {bubbles: true}));
+        },
+        events() { return events.map(item => ({...item, assetIds: [...item.assetIds]})); },
+        saves() { return saves; },
+        retryAttempts() { return retryAttempts; },
+        catalogState(patch) {
+          catalogSnapshot = {...catalogSnapshot, ...patch};
+          for (const listener of [...catalogListeners]) listener();
+        },
+        failNextRetry() { failNextRetry = true; },
+        reset() { events = [initial]; saves = 0; publish(); },
+      };
+      if (params.get("open") === "1") setTimeout(() => window.__timelineAssetFixture.open(), 200);
+    </script>
+  </body>
+</html>

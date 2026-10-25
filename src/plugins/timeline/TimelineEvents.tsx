@@ -1,21 +1,23 @@
 import {useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
 import type {CanvasViewportSnapshot} from "@lodestory/sdk/canvas";
 import type {ContextMenuService} from "@lodestory/sdk/context-menu";
+import type {AssetCatalog} from "@lodestory/sdk/asset-catalog";
 import {Button, Dialog, DialogActions, Icon, TextField, Textarea} from "@lodestory/ui";
 import type {TimelineAxisSettings} from "./timelineAxisStore";
 import type {TimelineEvent, TimelineEventStore} from "./timelineEventStore";
 import {getTimelineEventsGeometry, TIMELINE_TURNING_CAPTION_FONT_SIZE} from "./timelineEventsGeometry";
 import {formatTimelineAxisValue, timelineValueAtOffset, type TimelineLabelBounds} from "./timelineAxisGeometry";
+import {EventAssetPicker} from "./EventAssetPicker";
 import "./timeline-events.css";
 
 type Size = Readonly<{width: number; height: number}>;
-type Draft = {id: string | null; title: string; summary: string; offset: string; placement: "above" | "below"; important: boolean};
+type Draft = {id: string | null; title: string; summary: string; offset: string; placement: "above" | "below"; important: boolean; assetIds: readonly string[]};
 type Operation = {kind: "upsert"; draft: Draft} | {kind: "remove"; id: string};
 
 function draftFromEvent(event?: TimelineEvent): Draft {
   return event
-    ? {id: event.id, title: event.title, summary: event.summary, offset: String(event.offset), placement: event.placement, important: event.important}
-    : {id: null, title: "", summary: "", offset: "0", placement: "above", important: false};
+    ? {id: event.id, title: event.title, summary: event.summary, offset: String(event.offset), placement: event.placement, important: event.important, assetIds: [...event.assetIds]}
+    : {id: null, title: "", summary: "", offset: "0", placement: "above", important: false, assetIds: []};
 }
 
 function signedAxisValue(value: number): string {
@@ -133,8 +135,9 @@ function EventLabels({events, settings, geometry, onEdit}: {
   </div>;
 }
 
-export function TimelineEvents({contextMenus, store, settings, view, size, axisLabelBounds, active, onEditingChange}: {
+export function TimelineEvents({contextMenus, assetCatalog, store, settings, view, size, axisLabelBounds, active, onEditingChange}: {
   contextMenus: ContextMenuService;
+  assetCatalog: AssetCatalog | null;
   store: TimelineEventStore;
   settings: TimelineAxisSettings;
   view: Pick<CanvasViewportSnapshot, "center" | "zoom">;
@@ -265,7 +268,7 @@ export function TimelineEvents({contextMenus, store, settings, view, size, axisL
     if (value.placement !== "above" && value.placement !== "below") return {event: null, error: "请选择节点在线轴上方或下方。"};
     const id = value.id;
     if (!id) return {event: null, error: "事件编号尚未准备好，请重新打开添加事件。"};
-    return {event: Object.freeze({id, title, summary, offset: Object.is(offset, -0) ? 0 : offset, placement: value.placement, important: value.important}), error: null};
+    return {event: Object.freeze({id, title, summary, offset: Object.is(offset, -0) ? 0 : offset, placement: value.placement, important: value.important, assetIds: [...value.assetIds]}), error: null};
   }
 
   async function submitEvent(event: FormEvent<HTMLFormElement>) {
@@ -474,6 +477,8 @@ export function TimelineEvents({contextMenus, store, settings, view, size, axisL
           </span>
           <span>标记为关键转折</span>
         </label>
+        {draft && <EventAssetPicker catalog={assetCatalog} selectedIds={draft.assetIds}
+          disabled={submitting || snapshot.saving} onChange={assetIds => updateDraft({assetIds})} />}
         {(operationError || snapshot.error) && <p className="timeline-event-form-error" role="alert">{operationError ?? snapshot.error}</p>}
         <DialogActions>
           {draft?.id && !isNewDraft && <Button type="button" variant="danger" disabled={submitting || snapshot.saving} onClick={() => setConfirmDelete(true)}>删除事件</Button>}

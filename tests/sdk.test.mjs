@@ -18,6 +18,7 @@ import * as packageStorage from "@lodestory/sdk/project-storage";
 import * as packageBodyEditor from "@lodestory/sdk/body-editor";
 import * as packageCanvas from "@lodestory/sdk/canvas";
 import * as packageTimeline from "@lodestory/sdk/timeline";
+import * as packageAssetCatalog from "@lodestory/sdk/asset-catalog";
 import * as packageContextMenu from "@lodestory/sdk/context-menu";
 import { createSdkLoader } from "./helpers/sdkFixture.mjs";
 
@@ -25,7 +26,7 @@ const packageManifest = JSON.parse(readFileSync(new URL("../packages/sdk/package
 
 test("SDK package exposes ESM root and all public capability entry points", () => {
   assert.equal(packageManifest.type, "module");
-  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./layout", "./navigation-layout", "./project-storage", "./theme", "./timeline", "./ui", "./window-shell", "./workbench"]);
+  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./asset-catalog", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./layout", "./navigation-layout", "./project-storage", "./theme", "./timeline", "./ui", "./window-shell", "./workbench"]);
 
   assert.equal(packageManifest.exports["./body-editor"].import, "./dist/body-editor.js");
   assert.equal(packageManifest.exports["./body-editor"].types, "./dist/body-editor.d.ts");
@@ -46,6 +47,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
     ["./project-storage", "project-storage"],
     ["./canvas", "canvas"],
     ["./timeline", "timeline"],
+    ["./asset-catalog", "asset-catalog"],
   ]) {
     assert.equal(packageManifest.exports[specifier].import, `./dist/${target}.js`);
     assert.equal(packageManifest.exports[specifier].types, `./dist/${target}.d.ts`);
@@ -69,7 +71,9 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.deepEqual(Object.keys(packageBodyEditor).sort(), ["bodyEditorContentIds", "bodyEditorDefaultEditorsConfig", "bodyEditorKey"]);
   assert.deepEqual(Object.keys(packageCanvas), ["canvasKey"], "canvas behavior types do not add runtime exports");
   assert.deepEqual(Object.keys(packageTimeline), ["timelineKey"], "timeline behavior types do not add runtime exports");
+  assert.deepEqual(Object.keys(packageAssetCatalog), ["assetCatalogKey"], "catalog behavior types do not add runtime exports");
   assert.equal(packageTimeline.timelineKey.id, "app/timeline");
+  assert.equal(packageAssetCatalog.assetCatalogKey.id, "app/asset-catalog");
   assert.equal(packageLayout.layoutKey.id, "app/layout");
   assert.equal(packageNavigationLayout.navigationLayoutKey.id, "app/navigation-layout");
   assert.equal(packageWindowShell.windowShellKey.id, "app/window-shell");
@@ -164,6 +168,9 @@ test("SDK subpaths share one key module and need no host imports or runtime APIs
   const hostCanvasKey = sdk.requireSdk("@lodestory/sdk/canvas").canvasKey;
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/canvas").canvasKey, hostCanvasKey);
   assert.equal(hostCanvasKey.id, "app/canvas");
+  const hostAssetCatalogKey = sdk.requireSdk("@lodestory/sdk/asset-catalog").assetCatalogKey;
+  assert.strictEqual(sdk.requireSdk("@lodestory/sdk/asset-catalog").assetCatalogKey, hostAssetCatalogKey);
+  assert.equal(hostAssetCatalogKey.id, "app/asset-catalog");
   const hostDocumentCreateRequested = sdk.requireSdk("@lodestory/sdk/documents").documentCreateRequested;
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/documents").documentCreateRequested, hostDocumentCreateRequested);
   const hostDocumentRevealRequested = sdk.requireSdk("@lodestory/sdk/documents").documentRevealRequested;

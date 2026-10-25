@@ -13,6 +13,7 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/layout`：内容用途、登记描述、布局视图、快照和服务类型，以及共享单例 `layoutKey`。
 - `@lodestory/sdk/canvas`：通用视口与画布表面服务类型，以及共享单例 `canvasKey`。
 - `@lodestory/sdk/timeline`：时间线列表快照、命令与打开服务，以及共享单例 `timelineKey`。
+- `@lodestory/sdk/asset-catalog`：按工作台会话读取只读资产目录快照，以及共享单例 `assetCatalogKey`。
 - `@lodestory/sdk/workbench`：项目与工作台会话、参与者生命周期、快照和服务类型，以及共享单例 `workbenchKey`。
 - `@lodestory/sdk/project-storage`：项目字节文件缓冲与存储服务类型，以及共享单例 `projectStorageKey`。
 - `@lodestory/sdk/documents`：打开文档与文档工作区类型，以及 `documentsKey` 和新建/显示请求事件。
@@ -226,6 +227,8 @@ export const inkThemePlugin: Plugin = {
 ## 时间线服务
 
 `@lodestory/sdk/timeline` 提供共享 `timelineKey`。`timeline` 拥有时间线列表元信息、事件数据、当前选中项、数值轴设置和视口，通过工作台参与者管理项目会话。`outline-design` 通过公开服务订阅列表并发出新建、删除、打开请求；不直接导入列表模型、读写文件或创建视口。列表快照中的 `eventCount` 和 `period` 是事件与轴设置派生出的展示值，不写入既有列表元信息文件。事件编辑和事件文件格式由 `timeline` 插件内部拥有，当前不另设跨插件事件 CRUD 契约。打开操作校验当前会话并通过布局显示时间线 main 内容。
+
+`@lodestory/sdk/asset-catalog` 提供共享 `assetCatalogKey`。资产管理插件拥有资产类型、资产记录及其属性，并按工作台会话发布只读目录；类型与资产条目仅包含类型 ID、名称和状态，以及资产 ID、名称、说明和类型 ID，不暴露属性值或私有 store；快照另含 `loaded`、`loading`、`error`、`blocked` 状态。类型和资产 ID 都是稳定的规范小写 UUID，消费者可以将资产 ID 作为不透明引用保存；类型 ID 与资产的 `typeId` 对应，未分类资产使用 `typeId: null`。目录提供稳定快照、订阅和重试能力，会话结束后失效且不能再重试；没有对应活动会话时 `getCatalog` 返回 `null`。类型保留 `active` 和 `archived` 状态。消费者可自行按类型筛选或搜索目录内容，资产目录不提供查询或修改命令。
 
 原点世界坐标表示故事起点，其显示数值、刻度间隔和单位由作者设置。事件保存相对故事起点的 `offset`；其标签数值按 `origin + offset` 计算，所以修改起点会同步更新显示值。数值轴实现、事件 JSON 与配置 JSON 属于提供者内部，不加入通用画布接口。现有列表文件路径和格式保持兼容；轴和事件数据分别使用独立文件。契约消费方不拥有服务的清理权，插件在撤回 UI 后释放模型和视口。详见[时间线插件](../../src/plugins/timeline/README.md)。
 

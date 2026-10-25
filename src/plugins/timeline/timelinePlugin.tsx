@@ -2,6 +2,7 @@ import {useSyncExternalStore} from "react";
 import type {Plugin} from "@lodestory/sdk";
 import {canvasKey, type CanvasService, type CanvasViewport} from "@lodestory/sdk/canvas";
 import {contextMenuKey, type ContextMenuService} from "@lodestory/sdk/context-menu";
+import {assetCatalogKey, type AssetCatalogService} from "@lodestory/sdk/asset-catalog";
 import {layoutKey} from "@lodestory/sdk/layout";
 import {workbenchKey, type WorkbenchService} from "@lodestory/sdk/workbench";
 import {projectStorageKey, type ProjectFiles} from "@lodestory/sdk/project-storage";
@@ -41,7 +42,7 @@ export function createTimelinePlugin(): Plugin {
 
   return {
     id: "timeline",
-    requires: [layoutKey, workbenchKey, projectStorageKey, canvasKey, contextMenuKey],
+    requires: [layoutKey, workbenchKey, projectStorageKey, canvasKey, contextMenuKey, assetCatalogKey],
     provides: [timelineKey],
     activate(context) {
       alive = true;
@@ -50,6 +51,7 @@ export function createTimelinePlugin(): Plugin {
       const storage = context.get(projectStorageKey);
       const canvas = context.get(canvasKey);
       const contextMenus = context.get(contextMenuKey);
+      const assetCatalog = context.get(assetCatalogKey);
 
       function createAxis(files: ProjectFiles, resource: TimelineSessionResources, timelineId: string): TimelineAxisStore {
         let axis = resource.axes.get(timelineId);
@@ -281,7 +283,7 @@ export function createTimelinePlugin(): Plugin {
         title: "时间线画布",
         role: "main",
         order: 10,
-        render: ({active}) => <TimelineMain workbench={workbench} canvas={canvas} contextMenus={contextMenus} sessions={sessions} active={active}
+        render: ({active}) => <TimelineMain workbench={workbench} canvas={canvas} contextMenus={contextMenus} assetCatalog={assetCatalog} sessions={sessions} active={active}
           onEditingChange={(sessionId, timelineId, editing) => {
             const resource = sessions.get(sessionId);
             if (!resource || !alive) return;
@@ -304,10 +306,11 @@ export function createTimelinePlugin(): Plugin {
   };
 }
 
-function TimelineMain({workbench, canvas, contextMenus, sessions, active, onEditingChange}: {
+function TimelineMain({workbench, canvas, contextMenus, assetCatalog, sessions, active, onEditingChange}: {
   workbench: WorkbenchService;
   canvas: CanvasService;
   contextMenus: ContextMenuService;
+  assetCatalog: AssetCatalogService;
   sessions: ReadonlyMap<string, TimelineSessionResources>;
   active: boolean;
   onEditingChange(sessionId: string, timelineId: string, editing: boolean): void;
@@ -327,7 +330,7 @@ function TimelineMain({workbench, canvas, contextMenus, sessions, active, onEdit
   if (!entry || !viewport || !axis || !events || !session || !resource) {
     return <div className="timeline-canvas-empty" role="status">选择或新建一条时间线以打开画布。</div>;
   }
-  return <TimelineCanvas canvas={canvas} contextMenus={contextMenus} viewport={viewport} active={current} title={entry.title} axis={axis} events={events}
+  return <TimelineCanvas canvas={canvas} contextMenus={contextMenus} assetCatalog={assetCatalog.getCatalog(session.id)} viewport={viewport} active={current} title={entry.title} axis={axis} events={events}
     onEditingChange={editing => onEditingChange(session.id, entry.id, editing)}/>;
 }
 

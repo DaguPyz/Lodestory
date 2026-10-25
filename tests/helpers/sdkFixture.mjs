@@ -10,6 +10,7 @@ const publicEntries = {
   "@lodestory/sdk/body-editor": ["body-editor.ts"],
   "@lodestory/sdk/canvas": ["canvas.ts"],
   "@lodestory/sdk/timeline": ["timeline.ts"],
+  "@lodestory/sdk/asset-catalog": ["asset-catalog.ts"],
   "@lodestory/sdk/config": ["config.ts"],
   "@lodestory/sdk/context-menu": ["context-menu.ts"],
   "@lodestory/sdk/documents": ["documents.ts"],

@@ -4,6 +4,8 @@ export type TimelineEvent = Readonly<{
   id: string;
   title: string;
   summary: string;
+  /** Asset IDs are owned by asset management and remain opaque here. */
+  assetIds: readonly string[];
   /** Signed distance from the story origin, in the axis unit. */
   offset: number;
   placement: "above" | "below";
@@ -34,10 +36,12 @@ export type TimelineEventStore = Readonly<{
 
 const DIRECTORY = ".lodestory/timeline/events";
 const FORMAT = "lodestory.timeline-events";
-const SCHEMA_VERSION = 1;
+const LEGACY_SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const TIMELINE_FIELDS = ["events", "format", "schemaVersion", "timelineId"];
-const EVENT_FIELDS = ["id", "important", "offset", "placement", "summary", "title"];
+const EVENT_FIELDS = ["assetIds", "id", "important", "offset", "placement", "summary", "title"];
+const LEGACY_EVENT_FIELDS = ["id", "important", "offset", "placement", "summary", "title"];
 const MAX_OFFSET = 1_000_000_000;
 const MAX_TITLE = 60;
 const MAX_SUMMARY = 200;
@@ -64,12 +68,15 @@ function keysMatch(value: Record<string, unknown>, expectedFields: readonly stri
   return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
 
-function normalizeEvent(value: unknown): {event: TimelineEvent | null; error: string | null} {
+function normalizeEvent(value: unknown, allowLegacyAssetIds = false): {event: TimelineEvent | null; error: string | null} {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return {event: null, error: "时间线事件必须是对象。"};
   }
   const record = value as Record<string, unknown>;
-  if (!keysMatch(record, EVENT_FIELDS)) return {event: null, error: "时间线事件字段不完整或包含未知字段。"};
+  const fieldsMatch = allowLegacyAssetIds
+    ? keysMatch(record, LEGACY_EVENT_FIELDS) || keysMatch(record, EVENT_FIELDS)
+    : keysMatch(record, EVENT_FIELDS);
+  if (!fieldsMatch) return {event: null, error: "时间线事件字段不完整或包含未知字段。"};
   if (!isUuid(record.id)) return {event: null, error: "事件编号必须是规范 UUID。"};
   if (typeof record.title !== "string") return {event: null, error: "事件标题必须是文本。"};
   const title = record.title.trim();
@@ -86,11 +93,16 @@ function normalizeEvent(value: unknown): {event: TimelineEvent | null; error: st
     return {event: null, error: "事件位置只能是 above 或 below。"};
   }
   if (typeof record.important !== "boolean") return {event: null, error: "关键事件标记必须是布尔值。"};
+  const assetIds = record.assetIds === undefined && allowLegacyAssetIds ? [] : record.assetIds;
+  if (!Array.isArray(assetIds) || assetIds.some(id => !isUuid(id)) || new Set(assetIds).size !== assetIds.length) {
+    return {event: null, error: "关联资产编号必须是无重复的规范 UUID。"};
+  }
   return {
     event: Object.freeze({
       id: record.id,
       title,
       summary: record.summary,
+      assetIds: Object.freeze([...assetIds]),
       offset: Object.is(record.offset, -0) ? 0 : record.offset,
       placement: record.placement,
       important: record.important,
@@ -113,7 +125,7 @@ function parseEvents(bytes: ProjectFileBytes, timelineId: string): {events: read
 
   const record = value as Record<string, unknown>;
   if (!keysMatch(record, TIMELINE_FIELDS)) return {events: null, error: "时间线事件文件字段与格式不匹配，已保留原始文件。"};
-  if (record.format !== FORMAT || record.schemaVersion !== SCHEMA_VERSION) {
+  if (record.format !== FORMAT || record.schemaVersion !== LEGACY_SCHEMA_VERSION && record.schemaVersion !== SCHEMA_VERSION) {
     return {events: null, error: "时间线事件文件格式或版本不受支持，已保留原始文件。"};
   }
   if (!isUuid(record.timelineId) || record.timelineId !== timelineId) {
@@ -124,7 +136,7 @@ function parseEvents(bytes: ProjectFileBytes, timelineId: string): {events: read
   const events: TimelineEvent[] = [];
   const ids = new Set<string>();
   for (const candidate of record.events) {
-    const normalized = normalizeEvent(candidate);
+    const normalized = normalizeEvent(candidate, record.schemaVersion === LEGACY_SCHEMA_VERSION);
     if (!normalized.event) return {events: null, error: `${normalized.error} 已保留原始文件。`};
     if (ids.has(normalized.event.id)) return {events: null, error: "时间线事件编号重复，已保留原始文件。"};
     ids.add(normalized.event.id);
@@ -141,7 +153,8 @@ function sameEvents(left: readonly TimelineEvent[], right: readonly TimelineEven
   return left.length === right.length && left.every((event, index) => {
     const other = right[index];
     return event.id === other.id && event.title === other.title && event.summary === other.summary
-      && event.offset === other.offset && event.placement === other.placement && event.important === other.important;
+      && event.offset === other.offset && event.placement === other.placement && event.important === other.important
+      && event.assetIds.length === other.assetIds.length && event.assetIds.every((id, assetIndex) => id === other.assetIds[assetIndex]);
   });
 }
 

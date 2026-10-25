@@ -1,4 +1,4 @@
-import {useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
+import {memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
 import type {CanvasViewportSnapshot} from "@lodestory/sdk/canvas";
 import type {ContextMenuService} from "@lodestory/sdk/context-menu";
 import type {AssetCatalog} from "@lodestory/sdk/asset-catalog";
@@ -6,7 +6,7 @@ import {Button, Dialog, DialogActions, Icon, TextField, Textarea} from "@lodesto
 import type {TimelineAxisSettings} from "./timelineAxisStore";
 import type {TimelineEvent, TimelineEventStore} from "./timelineEventStore";
 import {getTimelineEventsGeometry, TIMELINE_TURNING_CAPTION_FONT_SIZE} from "./timelineEventsGeometry";
-import {formatTimelineAxisValue, timelineValueAtOffset, type TimelineLabelBounds} from "./timelineAxisGeometry";
+import {formatTimelineAxisValue, timelineValueAtOffset, TIMELINE_AXIS_BASE_PIXEL_INTERVAL, type TimelineLabelBounds} from "./timelineAxisGeometry";
 import {EventAssetPicker} from "./EventAssetPicker";
 import "./timeline-events.css";
 
@@ -43,15 +43,77 @@ function formatOffsetHint(settings: TimelineAxisSettings, offsetText: string): s
     : `故事起点为 ${formatTimelineAxisValue(settings.origin)} ${settings.unit}`;
 }
 
-function EventAxisMarkers({events, settings, geometry, active, onEdit}: {
-  events: readonly TimelineEvent[];
-  settings: TimelineAxisSettings;
-  geometry: ReturnType<typeof getTimelineEventsGeometry>;
+const AxisMarkerGlyph = memo(function AxisMarkerGlyph({important, origin}: {important: boolean; origin: boolean}) {
+  return important
+    ? <><rect x="-5.5" y="-5.5" width="11" height="11" transform="rotate(45)" /><circle r="1.8" /></>
+    : <circle r={origin ? 5 : 4} />;
+});
+
+const EndpointGlyph = memo(function EndpointGlyph() {
+  return <>
+    <circle className="timeline-event-endpoint-hit" r="18" />
+    <circle className="timeline-event-endpoint-ring" r="11" />
+    <circle className="timeline-event-endpoint-dot" r="5" />
+  </>;
+});
+
+const AxisAnchor = memo(function AxisAnchor({event, x, active, onEdit}: {
+  event: TimelineEvent;
+  x: number;
   active: boolean;
   onEdit(event: TimelineEvent): void;
 }) {
-  const eventById = new Map(events.map(event => [event.id, event]));
+  const origin = event.offset === 0;
+  const markerClass = ["timeline-event-axis-marker", origin ? "timeline-event-axis-marker-origin" : "",
+    event.important ? "timeline-event-axis-marker-important" : ""].filter(Boolean).join(" ");
+  return <g className="timeline-event-markers" data-active={active}>
+    <g className={markerClass} aria-hidden="true" data-canvas-interactive
+      transform={`translate(${x} 0)`} onClick={() => { if (active) onEdit(event); }}>
+      <AxisMarkerGlyph important={event.important} origin={origin} />
+    </g>
+  </g>;
+});
+
+/** A stable set of native hit targets; panning only translates the enclosing group. */
+const AxisAnchors = memo(function AxisAnchors({events, step, zoom, originWorldX, active, onEdit}: {
+  events: readonly TimelineEvent[];
+  step: number;
+  zoom: number;
+  originWorldX: number;
+  active: boolean;
+  onEdit(event: TimelineEvent): void;
+}) {
+  return <>{events.map(event => {
+    const x = ((event.offset / step) * TIMELINE_AXIS_BASE_PIXEL_INTERVAL - originWorldX) * zoom;
+    return <AxisAnchor key={event.id} event={event} x={x} active={active} onEdit={onEdit} />;
+  })}</>;
+});
+
+function EventAxisMarkers({eventById, settings, geometry, centerX, zoom, active, onEdit}: {
+  eventById: ReadonlyMap<string, TimelineEvent>;
+  settings: TimelineAxisSettings;
+  geometry: ReturnType<typeof getTimelineEventsGeometry>;
+  centerX: number;
+  zoom: number;
+  active: boolean;
+  onEdit(event: TimelineEvent): void;
+}) {
   const stemMaskId = useId();
+  // Only membership/data/zoom changes rebuild the anchors; view movement does not.
+  const markerIds = geometry.events.map(point => point.id).join(",");
+  const markerEvents = useMemo(() => markerIds ? markerIds.split(",").flatMap(id => {
+    const event = eventById.get(id);
+    return event ? [event] : [];
+  }) : [], [eventById, markerIds]);
+  // Nearby world-space origins keep SVG coordinates small without relocating all
+  // existing anchors whenever one event enters/leaves the viewport.
+  const originWorldX = Math.floor(centerX / 4096) * 4096;
+  const stems = [[], []] as [string[], string[]];
+  for (const point of geometry.events) {
+    // The viewport clips the same straight leaders; keep their original endpoints so
+    // labels and turning captions retain the exact same relationship to the axis.
+    stems[Number(point.important)].push(`M${point.x} ${point.axisY}V${point.endpointY}`);
+  }
   return <svg className="timeline-events-svg" aria-hidden="false" width={geometry.width} height={geometry.height}
     viewBox={`0 0 ${geometry.width} ${geometry.height}`}>
     <defs>
@@ -62,37 +124,30 @@ function EventAxisMarkers({events, settings, geometry, active, onEdit}: {
       </mask>
     </defs>
     <g mask={`url(#${stemMaskId})`} aria-hidden="true">
-      {geometry.events.map(point => <line key={point.id}
-        className={point.important ? "timeline-event-stem timeline-event-stem-important" : "timeline-event-stem"}
-        x1={point.x} x2={point.x} y1={point.axisY} y2={point.endpointY} />)}
+      {stems[0].length > 0 && <path className="timeline-event-stem" d={stems[0].join("")} />}
+      {stems[1].length > 0 && <path className="timeline-event-stem timeline-event-stem-important" d={stems[1].join("")} />}
+    </g>
+    <g transform={`translate(${geometry.width / 2 + (originWorldX - centerX) * zoom} ${geometry.axisY})`}>
+      <AxisAnchors events={markerEvents} step={settings.step} zoom={zoom} originWorldX={originWorldX}
+        active={active} onEdit={onEdit} />
     </g>
     {geometry.events.map(point => {
+      if (!point.endpointVisible && !point.turningCaptionVisible) return null;
       const event = eventById.get(point.id);
       if (!event) return null;
       const originEvent = event.offset === 0;
-      const endpointVisible = point.endpointY >= 18 && point.endpointY <= geometry.height - 18;
-      const markerClass = [
-        "timeline-event-axis-marker",
-        originEvent ? "timeline-event-axis-marker-origin" : "",
-        event.important ? "timeline-event-axis-marker-important" : "",
-      ].filter(Boolean).join(" ");
-      return <g key={event.id} className="timeline-event-markers" data-active={active && endpointVisible}>
-        <g className={markerClass} aria-hidden="true"
-          data-canvas-interactive
-          onClick={() => onEdit(event)}
-        >
-          {event.important
-            ? <><rect x={point.x - 5.5} y={point.axisY - 5.5} width="11" height="11" transform={`rotate(45 ${point.x} ${point.axisY})`} />
-              <circle cx={point.x} cy={point.axisY} r="1.8" /></>
-            : <circle cx={point.x} cy={point.axisY} r={originEvent ? 5 : 4} />}
-          {point.turningCaption && <text className="timeline-event-turning-caption"
-            x={point.turningCaption.left + point.turningCaption.width / 2} y={point.turningCaption.top}
-            fontSize={TIMELINE_TURNING_CAPTION_FONT_SIZE} textAnchor="middle" dominantBaseline="hanging">关键转折</text>}
-        </g>
-        <g className={["timeline-event-endpoint", originEvent ? "timeline-event-endpoint-origin" : "",
+      return <g key={event.id}>
+        {point.turningCaptionVisible && point.turningCaption && <g className="timeline-event-axis-marker"
+          aria-hidden="true" data-canvas-interactive transform={`translate(${point.x} ${point.axisY})`}
+          onClick={() => { if (active) onEdit(event); }}>
+          <text className="timeline-event-turning-caption"
+            x={point.turningCaption.left + point.turningCaption.width / 2 - point.x} y={point.turningCaption.top - point.axisY}
+            fontSize={TIMELINE_TURNING_CAPTION_FONT_SIZE} textAnchor="middle" dominantBaseline="hanging">关键转折</text>
+        </g>}
+        {point.endpointVisible && <g className={["timeline-event-endpoint", originEvent ? "timeline-event-endpoint-origin" : "",
           event.important ? "timeline-event-endpoint-important" : ""].filter(Boolean).join(" ")}
-          role="button" tabIndex={active && endpointVisible ? 0 : -1}
-          aria-hidden={!endpointVisible || undefined} aria-label={eventAccessibleName(settings, event)} aria-disabled={!active}
+          role="button" tabIndex={active ? 0 : -1}
+          aria-label={eventAccessibleName(settings, event)} aria-disabled={!active}
           data-canvas-interactive transform={`translate(${point.x} ${point.endpointY})`}
           onClick={() => { if (active) onEdit(event); }}
           onKeyDown={nativeEvent => {
@@ -101,35 +156,39 @@ function EventAxisMarkers({events, settings, geometry, active, onEdit}: {
               onEdit(event);
             }
           }}>
-          <circle className="timeline-event-endpoint-hit" r="18" />
-          <circle className="timeline-event-endpoint-ring" r="11" />
-          <circle className="timeline-event-endpoint-dot" r="5" />
-        </g>
+          <EndpointGlyph />
+        </g>}
       </g>;
     })}
   </svg>;
 }
 
-function EventLabels({events, settings, geometry, onEdit}: {
-  events: readonly TimelineEvent[];
+const EventLabelText = memo(function EventLabelText({event, settings}: {event: TimelineEvent; settings: TimelineAxisSettings}) {
+  return <>
+    <span className="timeline-event-offset">{calloutLabel(settings, event)}</span>
+    <span className="timeline-event-title">{event.title}</span>
+    <span className="timeline-event-title-rule" aria-hidden="true" />
+    {event.summary && <span className="timeline-event-summary">{event.summary}</span>}
+  </>;
+});
+
+function EventLabels({eventById, settings, geometry, onEdit}: {
+  eventById: ReadonlyMap<string, TimelineEvent>;
   settings: TimelineAxisSettings;
   geometry: ReturnType<typeof getTimelineEventsGeometry>;
   onEdit(event: TimelineEvent): void;
 }) {
-  const eventById = new Map(events.map(event => [event.id, event]));
   return <div className="timeline-event-labels">
     {geometry.events.map(point => {
+      if (!point.labelVisible) return null;
       const event = eventById.get(point.id);
       if (!event) return null;
       return <div key={event.id}
         className={`timeline-event-label timeline-event-label-${point.placement}${event.important ? " timeline-event-label-important" : ""}${point.labelAlign === "right" ? " timeline-event-label-align-right" : ""}`}
-        style={{left: point.labelLeft, top: point.labelTop, width: point.labelWidth}}
+        style={{transform: `translate(${point.labelLeft}px, ${point.labelTop}px)`, width: point.labelWidth}}
         aria-hidden="true" data-canvas-interactive
         onClick={() => onEdit(event)}>
-        <span className="timeline-event-offset">{calloutLabel(settings, event)}</span>
-        <span className="timeline-event-title">{event.title}</span>
-        <span className="timeline-event-title-rule" aria-hidden="true" />
-        {event.summary && <span className="timeline-event-summary">{event.summary}</span>}
+        <EventLabelText event={event} settings={settings} />
       </div>;
     })}
   </div>;
@@ -228,7 +287,7 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     setIsEditing(true);
   }
 
-  function beginEdit(event: TimelineEvent) {
+  const beginEdit = useCallback((event: TimelineEvent) => {
     if (!active || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.saving) return;
     setDraft(draftFromEvent(event));
     setIsNewDraft(false);
@@ -236,7 +295,7 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     setConfirmDelete(false);
     operationRef.current = null;
     setIsEditing(true);
-  }
+  }, [active, snapshot.loaded, snapshot.loading, snapshot.blocked, snapshot.saving]);
 
   function cancelDraft(force = false) {
     if (!force && (submitting || snapshot.saving)) return;
@@ -377,8 +436,10 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     }
   }
 
-  const geometry = getTimelineEventsGeometry({events: snapshot.events, origin: settings.origin, step: settings.step,
-    center: view.center, zoom: view.zoom, width: size.width, height: size.height, axisLabelBounds});
+  const eventById = useMemo(() => new Map(snapshot.events.map(event => [event.id, event])), [snapshot.events]);
+  const geometry = useMemo(() => getTimelineEventsGeometry({events: snapshot.events, origin: settings.origin, step: settings.step,
+    center: view.center, zoom: view.zoom, width: size.width, height: size.height, axisLabelBounds}),
+  [snapshot.events, settings.origin, settings.step, view.center.x, view.center.y, view.zoom, size.width, size.height, axisLabelBounds]);
   const invalidOffset = Boolean(draft?.offset.trim()) && !Number.isFinite(Number(draft?.offset));
   const offset = Number(draft?.offset ?? "");
   const validTitle = Boolean(draft?.title.trim()) && [...(draft?.title.trim() ?? "")].length <= 60;
@@ -387,11 +448,9 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
   const formValid = validTitle && validSummary && validOffset;
   const scale = view.zoom > 0 ? 1 / view.zoom : 1;
   const overlayStyle = {
-    left: view.center.x - size.width / (2 * Math.max(view.zoom, 0.0001)),
-    top: view.center.y - size.height / (2 * Math.max(view.zoom, 0.0001)),
     width: size.width,
     height: size.height,
-    transform: `scale(${scale})`,
+    transform: `translate(${view.center.x - size.width / (2 * Math.max(view.zoom, 0.0001))}px, ${view.center.y - size.height / (2 * Math.max(view.zoom, 0.0001))}px) scale(${scale})`,
   };
   const MenuRegion = contextMenus.Region;
 
@@ -403,9 +462,9 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     <div ref={menuSurface} className="timeline-events-overlay" style={overlayStyle} data-active={active}
       tabIndex={active ? 0 : -1} aria-label="时间线事件画布">
       {snapshot.loaded && geometry.width > 0 && geometry.height > 0 && <>
-        <EventAxisMarkers events={snapshot.events} settings={settings} geometry={geometry} active={active}
+        <EventAxisMarkers eventById={eventById} settings={settings} geometry={geometry} centerX={view.center.x} zoom={view.zoom} active={active}
           onEdit={beginEdit} />
-        <EventLabels events={snapshot.events} settings={settings} geometry={geometry}
+        <EventLabels eventById={eventById} settings={settings} geometry={geometry}
           onEdit={beginEdit} />
       </>}
       {snapshot.loading && <div className="timeline-events-feedback" role="status">正在读取时间线事件…</div>}

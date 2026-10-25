@@ -1,0 +1,519 @@
+import assert from "node:assert/strict";
+import {existsSync} from "node:fs";
+import {mkdtemp, readFile, rm} from "node:fs/promises";
+import {spawn} from "node:child_process";
+import {tmpdir} from "node:os";
+import path from "node:path";
+import test from "node:test";
+import {createServer} from "vite";
+
+function browserPath() {
+  return process.env.LODESTORY_CHROME_PATH ?? process.env.CHROME_EXECUTABLE_PATH
+    ?? process.env.CHROME_PATH ?? "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+}
+
+function bounded(promise, label, timeoutMs = 8000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${timeoutMs}ms.`)), timeoutMs);
+    promise.then(value => { clearTimeout(timer); resolve(value); }, error => { clearTimeout(timer); reject(error); });
+  });
+}
+
+async function waitFor(action, message, timeoutMs = 20000) {
+  const until = Date.now() + timeoutMs;
+  let error;
+  while (Date.now() < until) {
+    try {
+      const value = await action();
+      if (value) return value;
+    } catch (cause) { error = cause; }
+    await new Promise(resolve => setTimeout(resolve, 40));
+  }
+  throw error ?? new Error(message);
+}
+
+function send(socket, pending, method, params = {}, sessionId) {
+  const id = pending.nextId++;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pending.commands.delete(id);
+      reject(new Error(`CDP command '${method}' timed out.`));
+    }, 10000);
+    pending.commands.set(id, {resolve, reject, timer});
+    socket.send(JSON.stringify({id, method, params, ...(sessionId ? {sessionId} : {})}));
+  });
+}
+
+const frameTicks = `new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))`;
+
+test("timeline canvas virtualizes dense events and preserves real drag, zoom, editing, and lifecycle behavior", async t => {
+  const configuredExecutable = process.env.LODESTORY_CHROME_PATH
+    ?? process.env.CHROME_EXECUTABLE_PATH ?? process.env.CHROME_PATH;
+  const executablePath = browserPath();
+  if (!existsSync(executablePath)) {
+    if (configuredExecutable) throw new Error(`Configured Chrome executable does not exist: ${executablePath}`);
+    t.skip(`Chrome is not installed at ${executablePath}; browser-level timeline performance checks were not run.`);
+    return;
+  }
+
+  const profile = await mkdtemp(path.join(tmpdir(), "lodestory-timeline-drag-"));
+  let chrome;
+  let socket;
+  let server;
+  try {
+    chrome = spawn(executablePath, ["--headless=new", "--disable-gpu", "--no-first-run",
+      "--no-default-browser-check", "--remote-debugging-port=0", "--remote-allow-origins=*",
+      `--user-data-dir=${profile}`, "about:blank"], {stdio: "ignore"});
+    let launchError;
+    chrome.on("error", error => { launchError = error; });
+    const activePortFile = path.join(profile, "DevToolsActivePort");
+    const browserWs = await waitFor(async () => {
+      if (launchError) throw launchError;
+      if (chrome.exitCode !== null) throw new Error(`Chrome exited before startup (code ${chrome.exitCode}).`);
+      const lines = (await readFile(activePortFile, "utf8")).trim().split("\n");
+      return lines[0] && lines[1] ? `ws://127.0.0.1:${lines[0]}${lines[1]}` : null;
+    }, "Chrome did not open its local debugging endpoint.");
+    socket = new WebSocket(browserWs);
+    await bounded(new Promise((resolve, reject) => {
+      socket.addEventListener("open", resolve, {once: true});
+      socket.addEventListener("error", reject, {once: true});
+    }), "CDP websocket connection");
+    const pending = {nextId: 1, commands: new Map()};
+    const pageErrors = [];
+    socket.addEventListener("message", event => {
+      const message = JSON.parse(event.data);
+      if (!message.id) {
+        if (message.method === "Runtime.exceptionThrown") pageErrors.push(message.params.exceptionDetails.text);
+        return;
+      }
+      const command = pending.commands.get(message.id);
+      if (!command) return;
+      pending.commands.delete(message.id);
+      clearTimeout(command.timer);
+      if (message.error) command.reject(new Error(message.error.message));
+      else command.resolve(message.result);
+    });
+    server = await createServer({
+      configFile: false, root: process.cwd(), appType: "mpa",
+      server: {host: "127.0.0.1", port: 0, strictPort: true, hmr: false}, logLevel: "error",
+    });
+    await server.listen();
+    const address = server.httpServer.address();
+    assert.ok(address && typeof address !== "string");
+    const target = await send(socket, pending, "Target.createTarget", {url: "about:blank"});
+    const attachment = await send(socket, pending, "Target.attachToTarget", {targetId: target.targetId, flatten: true});
+    const sessionId = attachment.sessionId;
+    const cdp = (method, params = {}) => send(socket, pending, method, params, sessionId);
+    await cdp("Page.enable");
+    await cdp("Runtime.enable");
+    await cdp("Emulation.setDeviceMetricsOverride", {width: 1440, height: 900, deviceScaleFactor: 1, mobile: false});
+    await cdp("Page.navigate", {url: `http://127.0.0.1:${address.port}/tests/fixtures/timeline-drag-performance.html`});
+    const evaluate = async expression => {
+      const result = await cdp("Runtime.evaluate", {expression, returnByValue: true, awaitPromise: true});
+      if (result.exceptionDetails) throw new Error(`${result.exceptionDetails.text}: ${result.exceptionDetails.exception?.description ?? "unknown browser exception"}`);
+      return result.result.value;
+    };
+    const fixture = (method, ...args) => evaluate(`window.__timelineDragFixture.${method}(...${JSON.stringify(args)})`);
+    const mouse = (type, x, y, {button = "none", buttons = 0, modifiers = 0, deltaX, deltaY, clickCount} = {}) => cdp("Input.dispatchMouseEvent", {
+      type, x, y, button, buttons, modifiers,
+      ...(type === "mouseWheel" ? {deltaX: deltaX ?? 0, deltaY: deltaY ?? 0}
+        : {...(deltaX === undefined ? {} : {deltaX}), ...(deltaY === undefined ? {} : {deltaY})}),
+      ...(clickCount === undefined ? {} : {clickCount}),
+    });
+    const press = (x, y, button = "left", clickCount = 0) => mouse("mousePressed", x, y,
+      {button, buttons: button === "middle" ? 4 : 1, clickCount});
+    const move = (x, y, button = "none") => mouse("mouseMoved", x, y,
+      {button, buttons: button === "middle" ? 4 : button === "left" ? 1 : 0});
+    const release = (x, y, button = "left", clickCount = 0) => mouse("mouseReleased", x, y,
+      {button, buttons: 0, clickCount});
+    const clickAt = async (x, y) => {
+      await press(x, y, "left", 1);
+      await release(x, y, "left", 1);
+    };
+    const clickSelector = async selector => {
+      const point = await evaluate(`(() => {
+        const node = document.querySelector(${JSON.stringify(selector)});
+        if (!node) return null;
+        const rect = node.getBoundingClientRect();
+        return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+      })()`);
+      assert.ok(point, `An element matching ${selector} is available for pointer input.`);
+      await clickAt(point.x, point.y);
+    };
+    const clickButtonNamed = async text => {
+      const point = await evaluate(`(() => {
+        const node = [...document.querySelectorAll('button')]
+          .find(item => item.textContent.includes(${JSON.stringify(text)}));
+        if (!node) return null;
+        const rect = node.getBoundingClientRect();
+        return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+      })()`);
+      assert.ok(point, `The '${text}' button is available for pointer input.`);
+      await clickAt(point.x, point.y);
+    };
+    const eventDialogState = () => evaluate(`(() => {
+      const dialogs = [...document.querySelectorAll('.ui-dialog')];
+      const editor = dialogs.find(node => ['编辑事件', '添加时间线事件']
+        .includes(node.querySelector('.ui-dialog-title')?.textContent.trim()));
+      if (!editor) return {found: false, open: false, dialogs: dialogs.map(node => ({
+        title: node.querySelector('.ui-dialog-title')?.textContent.trim() ?? null,
+        inert: node.inert, ending: node.hasAttribute('data-ending-style'),
+        starting: node.hasAttribute('data-starting-style'), opacity: getComputedStyle(node).opacity,
+      }))};
+      const rect = editor.getBoundingClientRect();
+      return {found: true, open: !editor.inert && !editor.hasAttribute('data-ending-style')
+        && !editor.hasAttribute('data-starting-style') && getComputedStyle(editor).opacity === '1'
+        && rect.width > 0 && rect.height > 0,
+        title: editor.querySelector('.ui-dialog-title')?.textContent.trim(), inert: editor.inert,
+        ending: editor.hasAttribute('data-ending-style'), starting: editor.hasAttribute('data-starting-style'),
+        opacity: getComputedStyle(editor).opacity, rect: {x: rect.x, y: rect.y, width: rect.width, height: rect.height},
+        dialogs: dialogs.map(node => ({title: node.querySelector('.ui-dialog-title')?.textContent.trim() ?? null,
+          inert: node.inert, ending: node.hasAttribute('data-ending-style'),
+          starting: node.hasAttribute('data-starting-style'), opacity: getComputedStyle(node).opacity}))};
+    })()`);
+    const dialogVisible = async () => (await eventDialogState()).open;
+    const waitForFrame = () => evaluate(frameTicks);
+    const view = () => fixture("state").then(({center, zoom}) => ({center, zoom}));
+    const endpointPoint = async title => evaluate(`(() => {
+      const node = [...document.querySelectorAll('.timeline-event-endpoint')]
+        .find(item => item.getAttribute('aria-label')?.includes(${JSON.stringify(title)}));
+      if (!node) return null;
+      const rect = node.getBoundingClientRect();
+      return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2,
+        hidden: node.getAttribute('aria-hidden') === 'true'};
+    })()`);
+    const openEventFromEndpoint = async (title, message) => {
+      const point = await endpointPoint(title);
+      assert.ok(point && !point.hidden, `The '${title}' endpoint is visibly available for pointer input.`);
+      await clickAt(point.x, point.y);
+      try { await waitFor(dialogVisible, message, 8000); }
+      catch (cause) {
+        const diagnostic = await evaluate(`(() => {
+          const x = ${point.x}; const y = ${point.y};
+          const hit = document.elementFromPoint(x, y);
+          const describe = node => node && ({tag: node.tagName, className: typeof node.className === 'string'
+            ? node.className : node.className?.baseVal, role: node.getAttribute('role'),
+            ariaLabel: node.getAttribute('aria-label'), text: node.textContent?.trim().slice(0, 80)});
+          const endpoint = [...document.querySelectorAll('.timeline-event-endpoint')]
+            .find(node => node.getAttribute('aria-label')?.includes(${JSON.stringify(title)}));
+          return {clickPoint: {x, y}, hit: describe(hit), active: describe(document.activeElement),
+            overlayActive: document.querySelector('.timeline-events-overlay')?.dataset.active ?? null,
+            canvasActive: document.querySelector('.canvas-surface')?.dataset.canvasActive ?? null,
+            endpoint: endpoint && {ariaLabel: endpoint.getAttribute('aria-label'),
+              ariaDisabled: endpoint.getAttribute('aria-disabled'), tabIndex: endpoint.getAttribute('tabindex')},
+            view: window.__timelineDragFixture.state()};
+        })()`);
+        throw new Error(`${message} ${cause instanceof Error ? cause.message : cause}; click diagnostic: ${JSON.stringify(diagnostic)}; dialog state: ${JSON.stringify(await eventDialogState())}`);
+      }
+    };
+    const waitForDialogClose = () => waitFor(async () => !(await eventDialogState()).found,
+      "The event dialog did not leave the document after closing.");
+
+    await waitFor(() => evaluate(`Boolean(window.__timelineDragFixture
+      && document.querySelector('.timeline-canvas-frame')
+      && document.querySelector('.timeline-events-overlay .timeline-event-labels')
+      && document.querySelector('.timeline-axis-svg')?.getAttribute('width') === '1200')`),
+    "The real timeline canvas did not finish its initial render.");
+    await waitForFrame();
+
+    await t.test("keeps offscreen labels out of the DOM while retaining visible axis anchors", async () => {
+      const result = await evaluate(`(() => {
+        const frame = document.querySelector('.timeline-canvas-frame').getBoundingClientRect();
+        const titleExists = title => [...document.querySelectorAll('.timeline-event-title')]
+          .some(item => item.textContent === title);
+        const axisAnchors = [...document.querySelectorAll('.timeline-event-axis-marker circle')].map(marker => {
+          const rect = marker.getBoundingClientRect();
+          return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+        });
+        return {width: frame.width, height: frame.height,
+          labels: document.querySelectorAll('.timeline-event-label').length,
+          markerGroups: document.querySelectorAll('.timeline-event-markers').length,
+          firstDenseLabel: titleExists('Dense 0000'),
+          horizontalOffscreenLabel: titleExists('Sparse beyond 2048'),
+          verticalOffscreenLabel: titleExists('Dense 0998'),
+          visibleAxisAnchorCount: axisAnchors.filter(point => point.y >= frame.top && point.y <= frame.bottom
+            && point.x >= frame.left && point.x <= frame.right && Math.abs(point.y - (frame.top + frame.height / 2)) < 2).length};
+      })()`);
+      assert.equal(result.width, 1200);
+      assert.equal(result.height, 720);
+      assert.equal(result.firstDenseLabel, true, "a nearby dense event keeps its label");
+      assert.equal(result.horizontalOffscreenLabel, false, "a horizontally offscreen event has no label node");
+      assert.equal(result.verticalOffscreenLabel, false, "a vertically offscreen label has no DOM node");
+      assert.ok(result.visibleAxisAnchorCount > 0, "visible axis anchors remain at the timeline axis when their endpoints are outside");
+      assert.ok(result.labels < 250, `only nearby labels are mounted (${result.labels} of 11,000 events)`);
+      console.log("timeline initial render diagnostics", JSON.stringify({
+        elapsedSinceFixtureMs: await evaluate("performance.now() - window.__timelineDragReadyAt"),
+        labels: result.labels, axisMarkerGroups: result.markerGroups,
+      }));
+    });
+
+    await t.test("paints the axis at screen resolution across 25–400% zoom and keeps events aligned during a 400% drag", async () => {
+      for (const zoom of [0.25, 1, 4]) {
+        await fixture("setView", {x: 0, y: 0}, zoom);
+        await waitForFrame();
+        const axis = await evaluate(`(() => {
+          const svg = document.querySelector('.timeline-axis-svg');
+          const frame = document.querySelector('.timeline-canvas-frame').getBoundingClientRect();
+          const matrix = svg.getScreenCTM();
+          const origin = svg.querySelector('.timeline-axis-tick-origin').getBoundingClientRect();
+          const caption = svg.querySelector('.timeline-axis-origin-caption');
+          return {width: svg.getAttribute('width'), height: svg.getAttribute('height'),
+            viewBox: svg.getAttribute('viewBox'), matrix: {a: matrix.a, b: matrix.b, c: matrix.c, d: matrix.d},
+            originHeight: origin.height, captionFontSize: getComputedStyle(caption).fontSize,
+            normalStrokeWidth: getComputedStyle(svg.querySelector('.timeline-axis-line')).strokeWidth,
+            labels: [...svg.querySelectorAll('.timeline-axis-label')].map(label => {
+              const bounds = label.getBoundingClientRect();
+              const tick = label.parentElement.querySelector('line').getBoundingClientRect();
+              return {value: Number(label.textContent), fontSize: getComputedStyle(label).fontSize,
+                x: bounds.left + bounds.width / 2 - frame.left, y: tick.top - frame.top,
+                tickX: tick.left - frame.left};
+            })};
+        })()`);
+        assert.equal(axis.width, '1200', `${zoom}: SVG keeps full screen width`);
+        assert.equal(axis.height, '720', `${zoom}: SVG keeps full screen height`);
+        assert.equal(axis.viewBox, '0 0 1200 720');
+        assert.ok(Math.abs(axis.matrix.a - 1) < 1e-8 && Math.abs(axis.matrix.d - 1) < 1e-8
+          && Math.abs(axis.matrix.b) < 1e-8 && Math.abs(axis.matrix.c) < 1e-8,
+        `${zoom}: SVG paints at its intrinsic resolution`);
+        assert.equal(axis.originHeight, 16, `${zoom}: origin tick keeps its screen length`);
+        assert.equal(axis.captionFontSize, '11px');
+        assert.equal(axis.normalStrokeWidth, '1px');
+        assert.ok(axis.labels.length > 1);
+        for (const label of axis.labels) {
+          assert.equal(label.fontSize, '14px', `${zoom}: axis text is never painted at a shrunken font size`);
+          const expectedX = 600 + label.value * 160 * zoom;
+          assert.ok(Math.abs(label.x - expectedX) < 0.1 && Math.abs(label.tickX - expectedX) < 0.1,
+            `${zoom}: label ${label.value} and its tick retain the same world-coordinate anchor`);
+          assert.ok(Math.abs(label.y - 360) < 0.1);
+        }
+      }
+
+      const blank = await evaluate(`(() => {
+        for (const [x, y] of [[30, 40], [30, 100], [1170, 680], [30, 680]]) {
+          const hit = document.elementFromPoint(x, y);
+          if (hit?.closest('.canvas-surface')
+            && !hit.closest('input,textarea,select,button,a,[contenteditable],[data-canvas-interactive]')) return {x, y};
+        }
+        return null;
+      })()`);
+      assert.ok(blank, 'a blank point is available for real pointer dragging');
+      await press(blank.x, blank.y, 'middle');
+      await move(blank.x + 40, blank.y + 20, 'middle');
+      await release(blank.x + 40, blank.y + 20, 'middle');
+      await waitForFrame();
+      assert.deepEqual(await view(), {center: {x: -10, y: -5}, zoom: 4});
+      const alignment = await evaluate(`(() => {
+        const tick = document.querySelector('.timeline-axis-tick-origin').getBoundingClientRect();
+        const label = document.querySelector('.timeline-axis-label-origin').getBoundingClientRect();
+        const anchors = [...document.querySelectorAll('.timeline-event-axis-marker circle')].map(marker => {
+          const rect = marker.getBoundingClientRect();
+          return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+        });
+        return {tickX: tick.left, tickY: tick.top, labelX: label.left + label.width / 2,
+          hasAlignedAnchor: anchors.some(point => Math.abs(point.x - 640) < 0.1 && Math.abs(point.y - 380) < 0.1)};
+      })()`);
+      assert.ok(Math.abs(alignment.tickX - 640) < 0.1 && Math.abs(alignment.tickY - 380) < 0.1
+        && Math.abs(alignment.labelX - 640) < 0.1 && alignment.hasAlignedAnchor,
+      'axis strokes, text and event anchor move together in screen pixels at 400%');
+      await fixture('setView', {x: 0, y: 0}, 1);
+      await waitForFrame();
+    });
+
+    await t.test("applies real middle/space drags and wheel input exactly, including the final pointerup position", async () => {
+      await press(100, 300, "middle");
+      await move(137, 317, "middle");
+      await release(158, 326, "middle");
+      await waitForFrame();
+      let current = await view();
+      assert.deepEqual(current.center, {x: -58, y: -26}, "middle drag sums every screen-space movement");
+
+      await cdp("Input.dispatchKeyEvent", {type: "keyDown", key: " ", code: "Space", windowsVirtualKeyCode: 32});
+      await press(100, 300, "left");
+      await move(180, 285, "left");
+      await release(180, 285, "left");
+      await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: " ", code: "Space", windowsVirtualKeyCode: 32});
+      await waitForFrame();
+      current = await view();
+      assert.deepEqual(current.center, {x: -138, y: -11}, "space plus left drag pans by the exact pointer delta");
+
+      await mouse("mouseWheel", 400, 280, {deltaX: 24, deltaY: -36});
+      await waitForFrame();
+      current = await view();
+      assert.deepEqual(current.center, {x: -114, y: -47}, "ordinary wheel pans with the correct sign and distance");
+
+      const anchor = {x: 30, y: 40};
+      const zoomHit = await evaluate(`(() => {
+        const target = document.elementFromPoint(${anchor.x}, ${anchor.y});
+        return {tag: target?.tagName ?? null,
+          className: typeof target?.className === 'string' ? target.className : target?.className?.baseVal ?? null,
+          interactive: Boolean(target?.closest('input,textarea,select,button,a,[contenteditable]:not([contenteditable="false"]),[data-canvas-interactive]'))};
+      })()`);
+      assert.equal(zoomHit.interactive, false,
+        `zoom cursor is over blank canvas rather than an interactive label/control (${JSON.stringify(zoomHit)})`);
+      const beforeZoom = await view();
+      const worldAnchor = {
+        x: beforeZoom.center.x + (anchor.x - 600) / beforeZoom.zoom,
+        y: beforeZoom.center.y + (anchor.y - 360) / beforeZoom.zoom,
+      };
+      await mouse("mouseWheel", anchor.x, anchor.y, {modifiers: 2, deltaY: -100});
+      await waitForFrame();
+      const afterZoom = await view();
+      const anchoredWorldAfter = {
+        x: afterZoom.center.x + (anchor.x - 600) / afterZoom.zoom,
+        y: afterZoom.center.y + (anchor.y - 360) / afterZoom.zoom,
+      };
+      assert.ok(Math.abs(afterZoom.zoom - beforeZoom.zoom * Math.exp(0.2)) < 1e-10,
+        `Ctrl-wheel applies its exponential zoom factor (${JSON.stringify({beforeZoom, afterZoom})})`);
+      assert.ok(Math.abs(anchoredWorldAfter.x - worldAnchor.x) < 1e-8
+        && Math.abs(anchoredWorldAfter.y - worldAnchor.y) < 1e-8, "zoom keeps the world point under the cursor fixed");
+      await clickButtonNamed("回到原点");
+      await waitForFrame();
+      assert.deepEqual(await view(), {center: {x: 0, y: 0}, zoom: 1}, "the Home control returns to the original view");
+    });
+
+    await t.test("reveals an out-of-view endpoint, edits an event after index 2048, and preserves opaque asset IDs", async () => {
+      await fixture("setView", {x: 4320, y: 320}, 1);
+      await waitForFrame();
+      const before = await fixture("state");
+      assert.ok(before.targetIndex > 2048, "the target is beyond the former layout limit");
+      assert.equal(before.eventCount, 11000);
+      assert.deepEqual(before.target.assetIds, ["20000000-0000-4000-8000-000000000099"]);
+      const offscreen = await endpointPoint("Sparse beyond 2048");
+      assert.equal(offscreen, null, "the out-of-view endpoint is not mounted");
+      assert.equal(await evaluate(`![...document.querySelectorAll('.timeline-event-title')]
+        .some(item => item.textContent === 'Sparse beyond 2048')`), true,
+      "the fully offscreen event label is not mounted");
+      const anchor = await evaluate(`(() => {
+        const circles = [...document.querySelectorAll('.timeline-event-axis-marker circle')];
+        const frame = document.querySelector('.timeline-canvas-frame').getBoundingClientRect();
+        const points = circles.map(circle => {
+          const rect = circle.getBoundingClientRect();
+          return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+        });
+        const nearest = points.sort((left, right) => Math.hypot(left.x - (frame.left + 600), left.y - (frame.top + 40))
+          - Math.hypot(right.x - (frame.left + 600), right.y - (frame.top + 40)))[0];
+        return {x: nearest?.x, y: nearest?.y,
+          distance: nearest ? Math.hypot(nearest.x - (frame.left + 600), nearest.y - (frame.top + 40)) : Infinity,
+          inFrame: nearest && nearest.x >= frame.left && nearest.x <= frame.right
+            && nearest.y >= frame.top && nearest.y <= frame.bottom};
+      })()`);
+      assert.equal(anchor?.inFrame, true, "the event's axis anchor remains visible while its endpoint is outside");
+      assert.ok(anchor.distance < 2, "the retained anchor stays at the target event's x position on the axis");
+
+      await press(120, 180, "middle");
+      await move(120, 340, "middle");
+      await move(120, 500, "middle");
+      await release(120, 500, "middle");
+      await waitForFrame();
+      const endpoint = await endpointPoint("Sparse beyond 2048");
+      assert.ok(endpoint, "a vertical pan reveals the previously hidden endpoint");
+      assert.equal(await evaluate(`Boolean([...document.querySelectorAll('.timeline-event-title')]
+        .find(item => item.textContent === 'Sparse beyond 2048'))`), true,
+      "the now-visible sparse event after index 2048 mounts a label");
+      await openEventFromEndpoint("Sparse beyond 2048", "The visible endpoint did not open its event editor.");
+
+      const titleInput = await evaluate(`(() => {
+        const input = document.querySelector('.timeline-event-form input[type="text"]');
+        if (!input) return null;
+        const rect = input.getBoundingClientRect();
+        return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+      })()`);
+      assert.ok(titleInput, "the event title input is available in the editor");
+      await clickAt(titleInput.x, titleInput.y);
+      await cdp("Input.dispatchKeyEvent", {type: "keyDown", key: "End", code: "End", windowsVirtualKeyCode: 35});
+      await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: "End", code: "End", windowsVirtualKeyCode: 35});
+      await cdp("Input.dispatchKeyEvent", {type: "keyDown", key: "Home", code: "Home",
+        windowsVirtualKeyCode: 36, modifiers: 8});
+      await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: "Home", code: "Home",
+        windowsVirtualKeyCode: 36, modifiers: 8});
+      const selection = await evaluate(`(() => {
+        const input = document.querySelector('.timeline-event-form input[type="text"]');
+        return {start: input?.selectionStart, end: input?.selectionEnd, length: input?.value.length};
+      })()`);
+      assert.deepEqual(selection, {start: 0, end: selection.length, length: selection.length},
+        "Home and Shift+End select the title through real keyboard input");
+      await cdp("Input.insertText", {text: "Edited sparse beyond 2048"});
+      assert.equal(await evaluate(`document.querySelector('.timeline-event-form input[type="text"]')?.value`),
+        "Edited sparse beyond 2048", "keyboard input edits the event through the real form");
+      await clickSelector(".timeline-event-form button[type=submit]");
+      await waitFor(() => fixture("saveCount").then(count => count === 1), "The edited event was not saved.");
+      await waitForDialogClose();
+      let saved = await fixture("state");
+      assert.equal(saved.target.title, "Edited sparse beyond 2048");
+      assert.deepEqual(saved.target.assetIds, ["20000000-0000-4000-8000-000000000099"],
+        "editing preserves opaque asset IDs");
+
+      await openEventFromEndpoint("Edited sparse beyond 2048", "The saved event could not be reopened.");
+      const cancelPoint = await evaluate(`(() => {
+        const button = [...document.querySelectorAll('.timeline-event-form button')]
+          .find(item => item.textContent.trim() === '取消');
+        if (!button) return null;
+        const rect = button.getBoundingClientRect();
+        return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+      })()`);
+      assert.ok(cancelPoint, "the event editor exposes its cancel control");
+      await clickAt(cancelPoint.x, cancelPoint.y);
+      await waitForDialogClose();
+      saved = await fixture("state");
+      assert.equal(saved.saves, 1, "canceling the second edit does not save");
+      assert.equal(saved.target.title, "Edited sparse beyond 2048", "cancel keeps the stored event unchanged");
+      assert.deepEqual(saved.target.assetIds, ["20000000-0000-4000-8000-000000000099"]);
+    });
+
+    await t.test("stops pending drags when disabled, when the viewport changes, and on unmount", async () => {
+      await fixture("setView", {x: 0, y: 0}, 1);
+      await fixture("setActive", true);
+      await waitForFrame();
+
+      await press(200, 300, "middle");
+      await move(240, 320, "middle");
+      await fixture("setActive", false);
+      await waitForFrame();
+      const disabledState = await fixture("state");
+      assert.equal(await evaluate(`document.querySelector('.canvas-surface')?.dataset.canvasDragging`), "false");
+      await move(280, 360, "middle");
+      await release(280, 360, "middle");
+      await waitForFrame();
+      assert.deepEqual((await fixture("state")).center, disabledState.center,
+        "no queued drag movement applies after the surface is disabled");
+
+      await fixture("setActive", true);
+      await waitForFrame();
+      await press(200, 300, "middle");
+      await move(230, 310, "middle");
+      const oldIndex = await fixture("replaceViewport");
+      await waitForFrame();
+      const oldState = await fixture("oldViewportState", oldIndex);
+      const newState = await fixture("state");
+      await move(270, 330, "middle");
+      await release(270, 330, "middle");
+      await waitForFrame();
+      assert.deepEqual(await fixture("oldViewportState", oldIndex), oldState,
+        "a replaced viewport receives no stale drag update");
+      assert.deepEqual((await fixture("state")).center, newState.center,
+        "the new viewport does not inherit the previous drag");
+
+      await press(200, 300, "middle");
+      await move(220, 315, "middle");
+      const beforeUnmount = await fixture("state");
+      await fixture("unmount");
+      await waitForFrame();
+      await move(260, 350, "middle");
+      await release(260, 350, "middle");
+      await waitForFrame();
+      assert.deepEqual((await fixture("state")).center, beforeUnmount.center,
+        "unmount releases the surface before old frame work can pan the viewport");
+    });
+
+    await waitForFrame();
+    assert.deepEqual(pageErrors, [], "the browser reports no timeline canvas exceptions");
+  } finally {
+    socket?.close();
+    if (chrome && chrome.exitCode === null) {
+      chrome.kill("SIGTERM");
+      await bounded(new Promise(resolve => chrome.once("exit", resolve)), "Chrome shutdown").catch(() => {});
+    }
+    if (server) await bounded(server.close(), "Vite server shutdown").catch(() => {});
+    await rm(profile, {recursive: true, force: true, maxRetries: 5, retryDelay: 100});
+  }
+});

@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Timeline drag performance browser fixture</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <link rel="stylesheet" href="/src/plugins/timeline/timeline.css" />
+    <style>
+      * { box-sizing: border-box; }
+      html, body, #root { margin: 0; width: 1200px; height: 720px; overflow: hidden; }
+      body { background: var(--ui-surface-workspace); color: var(--ui-text-primary); }
+      #root, .fixture-host { display: flex; width: 1200px; height: 720px; }
+      .timeline-canvas-frame { width: 1200px; height: 720px; flex: none; }
+    </style>
+  </head>
+  <body>
+    <main id="root"></main>
+    <script type="module">
+      import React from "react";
+      import {createRoot} from "react-dom/client";
+      import {CanvasSurface} from "/src/plugins/canvas/CanvasSurface.tsx";
+      import {createCanvasViewport} from "/src/plugins/canvas/createCanvasViewport.ts";
+      import {TimelineCanvas} from "/src/plugins/timeline/TimelineCanvas.tsx";
+
+      document.documentElement.dataset.uiThemeId = "lodestory.builtin.dark";
+      const targetAssetIds = ["20000000-0000-4000-8000-000000000099"];
+      const makeId = value => `00000000-0000-4000-8000-${String(value).padStart(12, "0")}`;
+      const denseEvents = Array.from({length: 1000}, (_, index) => ({
+        id: makeId(index + 1), title: `Dense ${String(index).padStart(4, "0")}`,
+        summary: index % 3 === 0 ? "密集事件摘要" : "", offset: -2 + 4 * index / 999,
+        placement: index % 2 === 0 ? "above" : "below", important: index % 2 === 0, assetIds: [],
+      }));
+      const sparseEvents = Array.from({length: 10000}, (_, index) => ({
+        id: makeId(index + 1001), title: `Sparse ${String(index).padStart(5, "0")}`,
+        summary: "稀疏事件", offset: (index - 5000) * 10,
+        placement: index % 2 === 0 ? "above" : "below", important: index % 3 === 0, assetIds: [],
+      }));
+      const targetEvent = {
+        ...sparseEvents[9999], title: "Sparse beyond 2048", offset: 27,
+        placement: "above", important: true, assetIds: [...targetAssetIds],
+      };
+      sparseEvents[9999] = targetEvent;
+      let events = [...denseEvents, ...sparseEvents];
+      let saves = 0;
+      const eventListeners = new Set();
+      let eventSnapshot = {events, loaded: true, loading: false, saving: false, dirty: false,
+        pendingCreate: false, error: null, blocked: false, saveState: "saved"};
+      const publishEvents = () => {
+        eventSnapshot = {...eventSnapshot, events};
+        for (const listener of [...eventListeners]) listener();
+      };
+      const eventStore = {
+        getSnapshot: () => eventSnapshot,
+        subscribe(listener) { eventListeners.add(listener); return () => eventListeners.delete(listener); },
+        async load() { return true; },
+        async upsert(next) {
+          saves++;
+          events = events.map(event => event.id === next.id ? {...next, assetIds: [...next.assetIds]} : event);
+          publishEvents();
+          return true;
+        },
+        async remove(id) { events = events.filter(event => event.id !== id); publishEvents(); return true; },
+        async retry() { return true; },
+        dispose() {},
+      };
+      const axisSettings = {origin: 0, step: 1, unit: "天"};
+      const axisListeners = new Set();
+      let axisSnapshot = {settings: axisSettings, loaded: true, loading: false, saving: false,
+        dirty: false, pendingCreate: false, error: null, blocked: false, saveState: "saved"};
+      const axisStore = {
+        getSnapshot: () => axisSnapshot,
+        subscribe(listener) { axisListeners.add(listener); return () => axisListeners.delete(listener); },
+        async load() { return true; },
+        async update(settings) {
+          axisSnapshot = {...axisSnapshot, settings: {...settings}};
+          for (const listener of [...axisListeners]) listener();
+          return true;
+        },
+        async retry() { return true; },
+        dispose() {},
+      };
+      const canvas = {Surface: CanvasSurface};
+      const contextMenus = {Region: ({children}) => children};
+      const root = createRoot(document.querySelector("#root"));
+      let viewport = createCanvasViewport();
+      let active = true;
+      let mounted = true;
+      const oldViewports = [];
+      function render() {
+        root.render(mounted ? React.createElement("div", {className: "fixture-host"},
+          React.createElement(TimelineCanvas, {canvas, contextMenus, assetCatalog: null, viewport,
+            active, title: "性能回归", axis: axisStore, events: eventStore})) : null);
+      }
+      render();
+
+      window.__timelineDragFixture = {
+        state() {
+          const view = viewport.getSnapshot();
+          const current = events.find(event => event.id === targetEvent.id);
+          return {center: {...view.center}, zoom: view.zoom, disposed: view.disposed,
+            eventCount: events.length, saves, target: current ? {...current, assetIds: [...current.assetIds]} : null,
+            targetIndex: events.findIndex(event => event.id === targetEvent.id)};
+        },
+        setView(center, zoom = 1) {
+          viewport.resetView();
+          viewport.zoomTo(zoom);
+          viewport.panBy(-center.x * zoom, -center.y * zoom);
+        },
+        setActive(next) { active = next; render(); },
+        replaceViewport() {
+          const oldViewport = viewport;
+          oldViewports.push(oldViewport);
+          viewport = createCanvasViewport();
+          render();
+          return oldViewports.length - 1;
+        },
+        oldViewportState(index) {
+          const view = oldViewports[index]?.getSnapshot();
+          return view ? {center: {...view.center}, zoom: view.zoom, disposed: view.disposed} : null;
+        },
+        unmount() { mounted = false; root.render(null); },
+        eventCount() { return eventSnapshot.events.length; },
+        saveCount() { return saves; },
+        targetId() { return targetEvent.id; },
+      };
+      window.__timelineDragReadyAt = performance.now();
+    </script>
+  </body>
+</html>

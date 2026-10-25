@@ -1,19 +1,85 @@
 import {useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent} from "react";
-import type {CanvasSize, CanvasSurfaceProps} from "@lodestory/sdk/canvas";
+import type {CanvasSize, CanvasSurfaceProps, CanvasViewport} from "@lodestory/sdk/canvas";
 import {Button, Icon, IconButton} from "@lodestory/ui";
 import "./canvas.css";
 
 type Drag = {pointerId: number; x: number; y: number};
+type PanAccumulator = {
+  viewport: CanvasViewport;
+  enqueue(x: number, y: number): void;
+  flush(): void;
+  discard(): void;
+};
 const interactiveSelector = "input,textarea,select,button,a,[contenteditable]:not([contenteditable='false']),[data-canvas-interactive]";
 const isInteractive = (target: EventTarget | null) => target instanceof Element && Boolean(target.closest(interactiveSelector));
 const isTextInput = (target: EventTarget | null) => target instanceof Element
   && Boolean(target.closest("input,textarea,select,[contenteditable]:not([contenteditable='false'])"));
+
+/** Coalesce input deltas without changing the viewport's synchronous public panBy contract. */
+function createPanAccumulator(viewport: CanvasViewport, host: Window): PanAccumulator {
+  const requestFrame = typeof host.requestAnimationFrame === "function" ? host.requestAnimationFrame.bind(host) : null;
+  const cancelFrame = typeof host.cancelAnimationFrame === "function" ? host.cancelAnimationFrame.bind(host) : null;
+  let x = 0;
+  let y = 0;
+  let frame: number | null = null;
+  let revision = 0;
+  let closed = false;
+
+  function cancelScheduledFrame() {
+    if (frame === null) return;
+    const current = frame;
+    frame = null;
+    revision++;
+    cancelFrame?.(current);
+  }
+
+  function applyPending() {
+    const dx = x;
+    const dy = y;
+    x = 0;
+    y = 0;
+    if (dx !== 0 || dy !== 0) viewport.panBy(dx, dy);
+  }
+
+  return {
+    viewport,
+    enqueue(dx, dy) {
+      if (closed) return;
+      if (!requestFrame) {
+        viewport.panBy(dx, dy);
+        return;
+      }
+      x += dx;
+      y += dy;
+      if (frame !== null) return;
+      const currentRevision = ++revision;
+      frame = requestFrame(() => {
+        if (closed || currentRevision !== revision) return;
+        frame = null;
+        applyPending();
+      });
+    },
+    flush() {
+      if (closed) return;
+      cancelScheduledFrame();
+      applyPending();
+    },
+    discard() {
+      if (closed) return;
+      cancelScheduledFrame();
+      x = 0;
+      y = 0;
+      closed = true;
+    },
+  };
+}
 
 /** All DOM listeners and pointer capture belong to this mounted surface, not the viewport model. */
 export function CanvasSurface({viewport, active, label, children, grid = "dots"}: CanvasSurfaceProps) {
   const snapshot = useSyncExternalStore(viewport.subscribe, viewport.getSnapshot, viewport.getSnapshot);
   const surface = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
+  const panAccumulator = useRef<PanAccumulator | null>(null);
   const spaceDown = useRef(false);
   const [hand, setHand] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -21,15 +87,20 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots"}
   const patternId = `canvas-grid-${useId().replace(/:/g, "")}`;
   const enabled = active && !snapshot.disposed;
 
-  function finishDrag(updateUi = true) {
+  function flushPan(targetViewport?: CanvasViewport) {
+    const accumulator = panAccumulator.current;
+    if (accumulator && (!targetViewport || accumulator.viewport === targetViewport)) accumulator.flush();
+  }
+  function finishDrag(updateUi = true, flush = true) {
+    if (flush) flushPan();
     const current = drag.current;
     drag.current = null;
     const element = surface.current;
     if (current && element?.hasPointerCapture(current.pointerId)) element.releasePointerCapture(current.pointerId);
     if (updateUi) setDragging(false);
   }
-  function finishGesture(updateUi = true) {
-    finishDrag(updateUi);
+  function finishGesture(updateUi = true, flush = true) {
+    finishDrag(updateUi, flush);
     spaceDown.current = false;
     if (updateUi) setHand(false);
   }
@@ -54,18 +125,21 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots"}
   useLayoutEffect(() => {
     const element = surface.current;
     if (!element || !enabled) { finishGesture(); return; }
+    const pan = createPanAccumulator(viewport, window);
+    panAccumulator.current = pan;
     function wheel(event: WheelEvent) {
       if (isInteractive(event.target)) return;
       event.preventDefault();
       const rect = element!.getBoundingClientRect();
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
       if (event.ctrlKey || event.metaKey) {
+        pan.flush();
         const current = viewport.getSnapshot();
         viewport.zoomTo(current.zoom * Math.exp(-event.deltaY * unit * 0.002), {
           point: {x: event.clientX - rect.left, y: event.clientY - rect.top},
           size: {width: rect.width, height: rect.height},
         });
-      } else viewport.panBy(-event.deltaX * unit, -event.deltaY * unit);
+      } else pan.enqueue(-event.deltaX * unit, -event.deltaY * unit);
     }
     function resetGesture() { finishGesture(); }
     function visibilityChanged() { if (document.hidden) resetGesture(); }
@@ -80,6 +154,7 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots"}
         spaceDown.current = false;
         setHand(false);
         if (drag.current) finishGesture();
+        else flushPan(viewport);
       }
     }
     element.addEventListener("wheel", wheel, {passive: false});
@@ -93,7 +168,9 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots"}
       window.removeEventListener("keydown", keydown);
       window.removeEventListener("keyup", keyup);
       document.removeEventListener("visibilitychange", visibilityChanged);
-      finishGesture(false);
+      if (panAccumulator.current === pan) panAccumulator.current = null;
+      pan.discard();
+      finishGesture(false, false);
     };
   }, [enabled, viewport]);
 
@@ -119,10 +196,22 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots"}
     const y = event.clientY - current.y;
     current.x = event.clientX;
     current.y = event.clientY;
-    viewport.panBy(x, y);
+    const pan = panAccumulator.current;
+    if (pan?.viewport === viewport) pan.enqueue(x, y);
   }
   function pointerEnd(event: ReactPointerEvent<HTMLDivElement>) {
     if (drag.current?.pointerId === event.pointerId) finishGesture();
+  }
+  function pointerUp(event: ReactPointerEvent<HTMLDivElement>) {
+    const current = drag.current;
+    if (current?.pointerId !== event.pointerId) return;
+    const x = event.clientX - current.x;
+    const y = event.clientY - current.y;
+    current.x = event.clientX;
+    current.y = event.clientY;
+    const pan = panAccumulator.current;
+    if (pan?.viewport === viewport && (x !== 0 || y !== 0)) pan.enqueue(x, y);
+    finishDrag();
   }
 
   const offset = {x: size.width / 2 - snapshot.center.x * snapshot.zoom, y: size.height / 2 - snapshot.center.y * snapshot.zoom};
@@ -137,7 +226,7 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots"}
     data-canvas-active={enabled} data-canvas-hand={hand} data-canvas-dragging={dragging}
     data-canvas-center-x={snapshot.center.x} data-canvas-center-y={snapshot.center.y} data-canvas-zoom={snapshot.zoom}
     onPointerDown={pointerDown} onPointerMove={pointerMove}
-    onPointerUp={event => { if (drag.current?.pointerId === event.pointerId) finishDrag(); }} onPointerCancel={pointerEnd}
+    onPointerUp={pointerUp} onPointerCancel={pointerEnd}
     onLostPointerCapture={pointerEnd}
     onBlur={event => { if (!event.currentTarget.contains(event.relatedTarget)) finishGesture(); }}
     onKeyDown={event => {
@@ -150,8 +239,8 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots"}
       const distance = event.shiftKey ? 240 : 48;
       const moves: Record<string, [number, number]> = {ArrowLeft: [distance, 0], ArrowRight: [-distance, 0], ArrowUp: [0, distance], ArrowDown: [0, -distance]};
       const movement = moves[event.key];
-      if (movement) { event.preventDefault(); viewport.panBy(...movement); }
-      if (event.key === "Home") { event.preventDefault(); viewport.resetView(); }
+      if (movement) { event.preventDefault(); flushPan(viewport); viewport.panBy(...movement); }
+      if (event.key === "Home") { event.preventDefault(); flushPan(viewport); viewport.resetView(); }
     }}>
     {grid === "dots" && <svg className="canvas-grid" aria-hidden="true" width="100%" height="100%">
       <defs><pattern id={patternId} width={pitch} height={pitch} x={gridOffset.x} y={gridOffset.y} patternUnits="userSpaceOnUse">
@@ -163,13 +252,13 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots"}
       {children}
     </div>
     <div className="canvas-controls" role="toolbar" aria-label="画布视图">
-      <IconButton label="缩小画布" disabled={!enabled || snapshot.zoom <= 0.25} onClick={() => viewport.zoomTo(snapshot.zoom / 1.25)}>
+      <IconButton label="缩小画布" disabled={!enabled || snapshot.zoom <= 0.25} onClick={() => { flushPan(viewport); viewport.zoomTo(snapshot.zoom / 1.25); }}>
         <Icon name="minus"/>
       </IconButton>
       <span className="canvas-zoom-value"><Button variant="ghost" title="恢复到 100%" aria-label={`画布缩放 ${percentage}，恢复到 100%`}
-        disabled={!enabled} onClick={() => viewport.resetZoom()}>{percentage}</Button></span>
-      <IconButton label="放大画布" disabled={!enabled || snapshot.zoom >= 4} onClick={() => viewport.zoomTo(snapshot.zoom * 1.25)}><Icon name="plus"/></IconButton>
-      <Button variant="ghost" disabled={!enabled} onClick={() => viewport.resetView()}><Icon name="focus"/>回到原点</Button>
+        disabled={!enabled} onClick={() => { flushPan(viewport); viewport.resetZoom(); }}>{percentage}</Button></span>
+      <IconButton label="放大画布" disabled={!enabled || snapshot.zoom >= 4} onClick={() => { flushPan(viewport); viewport.zoomTo(snapshot.zoom * 1.25); }}><Icon name="plus"/></IconButton>
+      <Button variant="ghost" disabled={!enabled} onClick={() => { flushPan(viewport); viewport.resetView(); }}><Icon name="focus"/>回到原点</Button>
     </div>
   </div>;
 }

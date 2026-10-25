@@ -21,8 +21,17 @@
   text-align: center;
 }
 
+.timeline-axis-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
 .timeline-axis-svg {
   position: absolute;
+  inset: 0;
   overflow: visible;
   pointer-events: none;
   color: var(--ui-text-primary);

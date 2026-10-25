@@ -34,7 +34,10 @@ export type TimelineEventGeometry = Readonly<{
   labelTop: number;
   labelWidth: number;
   labelAlign: "left" | "right";
+  labelVisible: boolean;
+  endpointVisible: boolean;
   turningCaption: TimelineLabelBounds | null;
+  turningCaptionVisible: boolean;
 }>;
 
 export type TimelineEventsGeometry = Readonly<{
@@ -54,13 +57,14 @@ const LABEL_MAX_WIDTH = 320;
 const LABEL_GAP = 24;
 const LABEL_HEIGHT = 112;
 const EDGE_PADDING = 8;
-const MAX_LAID_OUT_EVENTS = 2048;
 export const TIMELINE_TURNING_CAPTION_FONT_SIZE = 12;
 const CAPTION_WIDTH = 56;
 const CAPTION_HEIGHT = 18;
 const CAPTION_TOP = 28;
 const CAPTION_GAP = 6;
+const CAPTION_X_BUCKET = 4;
 
+type CachedEvent = Readonly<{event: TimelineEventPoint; labelWidth: number}>;
 type PreparedEvent = {
   event: TimelineEventPoint;
   x: number;
@@ -69,6 +73,11 @@ type PreparedEvent = {
   labelAlign: "left" | "right";
   lane: number;
 };
+type HorizontalInterval = Readonly<{left: number; right: number}>;
+type VerticalInterval = Readonly<{start: number; end: number}>;
+type CaptionCandidateColumns = Readonly<{pointIndex: number; columns: readonly number[]}>;
+
+const orderedEventCache = new WeakMap<readonly TimelineEventPoint[], readonly CachedEvent[]>();
 
 function clamp(value: number, min: number, max: number): number {
   if (max < min) return min;
@@ -83,6 +92,19 @@ function estimateLabelWidth(event: TimelineEventPoint): number {
   const summaryWidth = Math.min(280, [...event.summary].reduce((width, character) =>
     width + (character.codePointAt(0)! > 255 ? 14 : 7.5), 0) + (event.summary ? 2 : 0));
   return clamp(Math.max(LABEL_MIN_WIDTH, titleWidth, offsetWidth, summaryWidth), LABEL_MIN_WIDTH, LABEL_MAX_WIDTH);
+}
+
+function getOrderedEvents(events: readonly TimelineEventPoint[]): readonly CachedEvent[] {
+  const cached = orderedEventCache.get(events);
+  if (cached) return cached;
+  const ordered = events
+    .filter(event => event && typeof event.id === "string" && Number.isFinite(event.offset))
+    .map(event => Object.freeze({event, labelWidth: estimateLabelWidth(event)}))
+    .sort((left, right) => left.event.offset - right.event.offset
+      || left.event.id.localeCompare(right.event.id));
+  const result = Object.freeze(ordered);
+  orderedEventCache.set(events, result);
+  return result;
 }
 
 function labelPosition(x: number, desiredWidth: number, width: number): {
@@ -105,41 +127,306 @@ function labelPosition(x: number, desiredWidth: number, width: number): {
   return {labelLeft, labelWidth, labelAlign};
 }
 
-function overlaps(start: number, end: number, otherStart: number, otherEnd: number): boolean {
-  return start < otherEnd + LABEL_GAP && end + LABEL_GAP > otherStart;
+function intersectsCanvas(bounds: TimelineLabelBounds, width: number, height: number): boolean {
+  return bounds.left < width && bounds.left + bounds.width > 0
+    && bounds.top < height && bounds.top + bounds.height > 0;
 }
 
-function placeTurningCaption(x: number, axisY: number, width: number, height: number,
-  obstacles: readonly TimelineLabelBounds[]): TimelineLabelBounds {
-  // Prefer the anchor's column. Side positions let labels clear downward stems
-  // without moving the event's actual position on the numeric axis.
-  const sideShift = CAPTION_WIDTH / 2 + 12;
-  const positions = [...new Set([x, x + sideShift, x - sideShift].map(center =>
-    clamp(center - CAPTION_WIDTH / 2, EDGE_PADDING, width - EDGE_PADDING - CAPTION_WIDTH)))];
-  const candidates: TimelineLabelBounds[] = [];
-  for (const left of positions) {
-    const inColumn = obstacles.filter(box => left < box.left + box.width + CAPTION_GAP
-      && left + CAPTION_WIDTH + CAPTION_GAP > box.left).sort((a, b) => a.top - b.top);
-    let top = axisY + CAPTION_TOP;
-    for (const box of inColumn) {
-      if (top < box.top + box.height + CAPTION_GAP && top + CAPTION_HEIGHT + CAPTION_GAP > box.top) {
-        top = box.top + box.height + CAPTION_GAP;
-      }
-    }
-    candidates.push({left, top, width: CAPTION_WIDTH, height: CAPTION_HEIGHT});
-    // Near the bottom edge, use free space above the axis before clipping a caption.
-    let aboveTop = axisY - CAPTION_TOP - CAPTION_HEIGHT;
-    for (const box of [...inColumn].reverse()) {
-      if (aboveTop < box.top + box.height + CAPTION_GAP && aboveTop + CAPTION_HEIGHT + CAPTION_GAP > box.top) {
-        aboveTop = box.top - CAPTION_GAP - CAPTION_HEIGHT;
-      }
-    }
-    candidates.push({left, top: aboveTop, width: CAPTION_WIDTH, height: CAPTION_HEIGHT});
+function lowerBound<T>(items: readonly T[], target: number, getValue: (item: T) => number): number {
+  let low = 0;
+  let high = items.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (getValue(items[middle]) < target) low = middle + 1;
+    else high = middle;
   }
-  const clipped = (box: TimelineLabelBounds) => Number(box.top < EDGE_PADDING || box.top + box.height > height - EDGE_PADDING);
-  const distance = (box: TimelineLabelBounds) => Math.abs(box.top - (axisY + CAPTION_TOP)) + Math.abs(box.left + box.width / 2 - x);
-  candidates.sort((a, b) => clipped(a) - clipped(b) || Number(a.top < axisY) - Number(b.top < axisY) || distance(a) - distance(b));
-  return Object.freeze(candidates[0]);
+  return low;
+}
+
+function upperBound<T>(items: readonly T[], target: number, getValue: (item: T) => number): number {
+  let low = 0;
+  let high = items.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (getValue(items[middle]) <= target) low = middle + 1;
+    else high = middle;
+  }
+  return low;
+}
+
+function uniqueSorted(values: readonly number[]): number[] {
+  return [...new Set(values)].sort((left, right) => left - right);
+}
+
+function insertUnion(intervals: VerticalInterval[] | undefined, start: number, end: number): VerticalInterval[] {
+  const result = intervals ?? [];
+  let low = 0;
+  let high = result.length;
+  while (low < high) {
+    const middle = (low + high) >>> 1;
+    if (result[middle].end < start) low = middle + 1;
+    else high = middle;
+  }
+  let mergedStart = start;
+  let mergedEnd = end;
+  let stop = low;
+  while (stop < result.length && result[stop].start <= mergedEnd) {
+    mergedStart = Math.min(mergedStart, result[stop].start);
+    mergedEnd = Math.max(mergedEnd, result[stop].end);
+    stop++;
+  }
+  result.splice(low, stop - low, {start: mergedStart, end: mergedEnd});
+  return result;
+}
+
+function mergeIntervals(intervals: VerticalInterval[]): VerticalInterval[] {
+  if (intervals.length < 2) return intervals;
+  intervals.sort((left, right) => left.start - right.start || left.end - right.end);
+  let write = 0;
+  for (let read = 1; read < intervals.length; read++) {
+    const current = intervals[read];
+    const previous = intervals[write];
+    if (current.start <= previous.end) {
+      intervals[write] = {start: previous.start, end: Math.max(previous.end, current.end)};
+    } else {
+      intervals[++write] = current;
+    }
+  }
+  intervals.length = write + 1;
+  return intervals;
+}
+
+class HorizontalIntervalIndex {
+  private readonly intervals: HorizontalInterval[];
+  private readonly prefixMaxRight: number[];
+
+  constructor(intervals: readonly HorizontalInterval[]) {
+    this.intervals = [...intervals].sort((left, right) => left.left - right.left);
+    this.prefixMaxRight = [];
+    let maxRight = Number.NEGATIVE_INFINITY;
+    for (const interval of this.intervals) {
+      maxRight = Math.max(maxRight, interval.right);
+      this.prefixMaxRight.push(maxRight);
+    }
+  }
+
+  overlaps(left: number, right: number): boolean {
+    const count = lowerBound(this.intervals, right, interval => interval.left);
+    return count > 0 && this.prefixMaxRight[count - 1] > left;
+  }
+}
+
+type CaptionColumn = {
+  bucket: number;
+  left: number;
+  intervals: VerticalInterval[];
+  belowStart?: number;
+  belowTop?: number;
+  aboveStart?: number;
+  aboveTop?: number;
+};
+
+/**
+ * Stores one y-interval union per 4px caption column bucket. A bucket includes every
+ * obstacle that could touch any caption position in it, so its union is conservative
+ * by at most one bucket width and never permits overlap. This avoids obstacle×candidate
+ * scans when hundreds of anchors sit within a few pixels of each other.
+ */
+class CaptionObstacleIndex {
+  private readonly columns: CaptionColumn[];
+  private readonly columnsByBucket: Map<number, CaptionColumn>;
+  private readonly height: number;
+  private readonly fullyBlockingBelow: HorizontalIntervalIndex;
+  private readonly fullyBlockingAbove: HorizontalIntervalIndex;
+
+  constructor(columnPositions: readonly number[], obstacles: readonly TimelineLabelBounds[], axisY: number, height: number) {
+    this.height = height;
+    const buckets = uniqueSorted(columnPositions.map(left => Math.floor(left / CAPTION_X_BUCKET)));
+    this.columns = buckets.map(bucket => ({bucket, left: bucket * CAPTION_X_BUCKET, intervals: []}));
+    this.columnsByBucket = new Map(this.columns.map(column => [column.bucket, column]));
+    const belowStart = axisY + CAPTION_TOP;
+    const aboveStart = axisY - CAPTION_TOP - CAPTION_HEIGHT;
+    this.fullyBlockingBelow = new HorizontalIntervalIndex(obstacles.filter(obstacle =>
+      obstacle.top - CAPTION_GAP < belowStart + CAPTION_HEIGHT
+      && obstacle.top + obstacle.height + CAPTION_GAP >= height).map(obstacle => ({
+      left: obstacle.left - CAPTION_GAP,
+      right: obstacle.left + obstacle.width + CAPTION_GAP,
+    })));
+    this.fullyBlockingAbove = new HorizontalIntervalIndex(obstacles.filter(obstacle =>
+      obstacle.top - CAPTION_GAP <= 0
+      && obstacle.top + obstacle.height + CAPTION_GAP > aboveStart).map(obstacle => ({
+      left: obstacle.left - CAPTION_GAP,
+      right: obstacle.left + obstacle.width + CAPTION_GAP,
+    })));
+    for (const obstacle of obstacles) this.addBase(obstacle);
+    for (const column of this.columns) column.intervals = mergeIntervals(column.intervals);
+  }
+
+  private forBucketsOverlapping(bounds: TimelineLabelBounds, visit: (column: CaptionColumn) => void): void {
+    const left = bounds.left - CAPTION_GAP;
+    const right = bounds.left + bounds.width + CAPTION_GAP;
+    const first = lowerBound(this.columns, left - CAPTION_WIDTH - CAPTION_X_BUCKET,
+      column => column.left);
+    for (let index = first; index < this.columns.length && this.columns[index].left < right; index++) {
+      const column = this.columns[index];
+      if (column.left + CAPTION_X_BUCKET + CAPTION_WIDTH > left) visit(column);
+    }
+  }
+
+  private addBase(bounds: TimelineLabelBounds): void {
+    const interval = {start: bounds.top - CAPTION_GAP, end: bounds.top + bounds.height + CAPTION_GAP};
+    this.forBucketsOverlapping(bounds, column => column.intervals.push(interval));
+  }
+
+  private add(bounds: TimelineLabelBounds): void {
+    const start = bounds.top - CAPTION_GAP;
+    const end = bounds.top + bounds.height + CAPTION_GAP;
+    this.forBucketsOverlapping(bounds, column => {
+      column.intervals = insertUnion(column.intervals, start, end);
+      if (column.belowTop !== undefined && start < column.belowTop + CAPTION_HEIGHT && end > column.belowTop) {
+        column.belowTop = this.findBelow(column.intervals, column.belowTop);
+      }
+      if (column.aboveTop !== undefined && start < column.aboveTop + CAPTION_HEIGHT && end > column.aboveTop) {
+        column.aboveTop = this.findAbove(column.intervals, column.aboveTop);
+      }
+    });
+  }
+
+  private findBelow(intervals: readonly VerticalInterval[], initialTop: number): number {
+    let top = initialTop;
+    if (top >= this.height) return top;
+    while (true) {
+      const bottom = top + CAPTION_HEIGHT;
+      let index = lowerBound(intervals, top, interval => interval.end);
+      while (index < intervals.length && intervals[index].end <= top) index++;
+      if (index >= intervals.length || intervals[index].start >= bottom) return top;
+      top = intervals[index].end;
+      if (top >= this.height) return top;
+    }
+  }
+
+  private findAbove(intervals: readonly VerticalInterval[], initialTop: number): number {
+    let top = initialTop;
+    if (top + CAPTION_HEIGHT <= 0) return top;
+    while (true) {
+      const bottom = top + CAPTION_HEIGHT;
+      const index = lowerBound(intervals, bottom, interval => interval.start) - 1;
+      if (index < 0 || intervals[index].end <= top) return top;
+      top = intervals[index].start - CAPTION_HEIGHT;
+      if (top + CAPTION_HEIGHT <= 0) return top;
+    }
+  }
+
+  positions(left: number, belowStart: number, aboveStart: number): {below: number; above: number} {
+    const column = this.columnsByBucket.get(Math.floor(left / CAPTION_X_BUCKET));
+    if (!column) return {below: belowStart, above: aboveStart};
+    const blocksBelow = this.fullyBlockingBelow.overlaps(left, left + CAPTION_WIDTH);
+    const blocksAbove = this.fullyBlockingAbove.overlaps(left, left + CAPTION_WIDTH);
+    if (blocksBelow && blocksAbove) return {below: this.height, above: -CAPTION_HEIGHT};
+    if (column.belowStart !== belowStart) {
+      column.belowStart = belowStart;
+      column.belowTop = this.findBelow(column.intervals, belowStart);
+    }
+    if (column.aboveStart !== aboveStart) {
+      column.aboveStart = aboveStart;
+      column.aboveTop = this.findAbove(column.intervals, aboveStart);
+    }
+    return {
+      below: blocksBelow ? this.height : (column.belowTop ?? belowStart),
+      above: blocksAbove ? -CAPTION_HEIGHT : (column.aboveTop ?? aboveStart),
+    };
+  }
+
+  addCaption(bounds: TimelineLabelBounds): void {
+    this.add(bounds);
+  }
+}
+
+function captionColumns(x: number, width: number): number[] {
+  const sideShift = CAPTION_WIDTH / 2 + 12;
+  return [...new Set([x, x + sideShift, x - sideShift].map(center =>
+    clamp(center - CAPTION_WIDTH / 2, EDGE_PADDING, width - EDGE_PADDING - CAPTION_WIDTH)))];
+}
+
+type ActiveLane = {end: number; lane: number};
+
+function pushNumberHeap(heap: number[], value: number): void {
+  let index = heap.length;
+  heap.push(value);
+  while (index > 0) {
+    const parent = (index - 1) >>> 1;
+    if (heap[parent] <= value) break;
+    heap[index] = heap[parent];
+    index = parent;
+  }
+  heap[index] = value;
+}
+
+function popNumberHeap(heap: number[]): number {
+  const first = heap[0];
+  const last = heap.pop()!;
+  if (heap.length === 0) return first;
+  let index = 0;
+  while (true) {
+    const left = index * 2 + 1;
+    if (left >= heap.length) break;
+    const right = left + 1;
+    const child = right < heap.length && heap[right] < heap[left] ? right : left;
+    if (heap[child] >= last) break;
+    heap[index] = heap[child];
+    index = child;
+  }
+  heap[index] = last;
+  return first;
+}
+
+function activeLaneLess(left: ActiveLane, right: ActiveLane): boolean {
+  return left.end < right.end || (left.end === right.end && left.lane < right.lane);
+}
+
+function pushActiveLane(heap: ActiveLane[], value: ActiveLane): void {
+  let index = heap.length;
+  heap.push(value);
+  while (index > 0) {
+    const parent = (index - 1) >>> 1;
+    if (!activeLaneLess(value, heap[parent])) break;
+    heap[index] = heap[parent];
+    index = parent;
+  }
+  heap[index] = value;
+}
+
+function popActiveLane(heap: ActiveLane[]): ActiveLane {
+  const first = heap[0];
+  const last = heap.pop()!;
+  if (heap.length === 0) return first;
+  let index = 0;
+  while (true) {
+    const left = index * 2 + 1;
+    if (left >= heap.length) break;
+    const right = left + 1;
+    const child = right < heap.length && activeLaneLess(heap[right], heap[left]) ? right : left;
+    if (!activeLaneLess(heap[child], last)) break;
+    heap[index] = heap[child];
+    index = child;
+  }
+  heap[index] = last;
+  return first;
+}
+
+function obstacleBounds(point: Pick<PreparedEvent, "x" | "lane"> & {
+  axisY: number;
+  endpointY: number;
+  labelLeft: number;
+  labelTop: number;
+  labelWidth: number;
+}): TimelineLabelBounds[] {
+  return [
+    {left: point.labelLeft, top: point.labelTop, width: point.labelWidth, height: LABEL_HEIGHT},
+    {left: point.x - 18, top: point.endpointY - 18, width: 36, height: 36},
+    {left: point.x - 1, top: Math.min(point.axisY, point.endpointY), width: 2,
+      height: Math.abs(point.endpointY - point.axisY)},
+  ];
 }
 
 /**
@@ -156,34 +443,51 @@ export function getTimelineEventsGeometry(input: TimelineEventsGeometryInput): T
   const step = Number.isFinite(input.step) && input.step > 0 ? input.step : 1;
   if (width === 0 || height === 0) return Object.freeze({width, height, axisY,
     labelBounds: Object.freeze([]), events: Object.freeze([])});
-  const prepared: PreparedEvent[] = [];
-  const orderedEvents = [...input.events]
-    .filter(event => event && typeof event.id === "string" && Number.isFinite(event.offset))
-    .sort((left, right) => left.offset - right.offset || left.id.localeCompare(right.id))
-    .slice(0, MAX_LAID_OUT_EVENTS);
 
-  for (const event of orderedEvents) {
+  const orderedEvents = getOrderedEvents(input.events);
+  const projectedX = (offset: number) => width / 2 + ((offset / step) * BASE_PIXEL_INTERVAL - centerX) * zoom;
+  const start = lowerBound(orderedEvents, -24, item => projectedX(item.event.offset));
+  const end = upperBound(orderedEvents, width + 24, item => projectedX(item.event.offset));
+  const candidates: Omit<PreparedEvent, "lane">[] = [];
+  for (let index = start; index < Math.min(end, orderedEvents.length); index++) {
+    const {event, labelWidth} = orderedEvents[index];
     const worldX = (event.offset / step) * BASE_PIXEL_INTERVAL;
     const x = width / 2 + (worldX - centerX) * zoom;
-    // Keep out-of-view anchors out of label placement entirely. Clamped labels are
-    // useful at the canvas edge, but must not make distant events visible or occupy lanes.
+    // Labels may align at the canvas edge, but distant anchors must not occupy lanes.
     if (!Number.isFinite(x) || x < -24 || x > width + 24) continue;
-    const position = labelPosition(x, estimateLabelWidth(event), width);
-    const labelEnd = position.labelLeft + position.labelWidth;
-    const lanes = prepared.filter(item => item.event.placement === event.placement);
-    const occupied = new Set<number>();
-    for (const other of lanes) {
-      if (overlaps(position.labelLeft, labelEnd, other.labelLeft, other.labelLeft + other.labelWidth)) occupied.add(other.lane);
-    }
-    let lane = 0;
-    while (occupied.has(lane)) lane++;
-    prepared.push({...position, event, x, lane});
+    candidates.push({...labelPosition(x, labelWidth, width), event, x});
   }
+
+  const laneAssignments = Array<number>(candidates.length);
+  const laneStates = {
+    above: {active: [] as ActiveLane[], available: [] as number[], nextLane: 0},
+    below: {active: [] as ActiveLane[], available: [] as number[], nextLane: 0},
+  };
+  const laneOrder = candidates.map((_, index) => index).sort((left, right) =>
+    candidates[left].labelLeft - candidates[right].labelLeft || left - right);
+  for (const index of laneOrder) {
+    const item = candidates[index];
+    const state = laneStates[item.event.placement];
+    while (state.active.length > 0 && state.active[0].end <= item.labelLeft) {
+      pushNumberHeap(state.available, popActiveLane(state.active).lane);
+    }
+    const lane = state.available.length > 0 ? popNumberHeap(state.available) : state.nextLane++;
+    laneAssignments[index] = lane;
+    pushActiveLane(state.active, {end: item.labelLeft + item.labelWidth + LABEL_GAP, lane});
+  }
+  const prepared: PreparedEvent[] = candidates.map((item, index) => ({...item, lane: laneAssignments[index]}));
 
   const laidOut = prepared.map(item => {
     const isAbove = item.event.placement === "above";
     const endpointY = axisY + (isAbove ? -1 : 1) * (INITIAL_RISE + item.lane * LANE_RISE);
     const labelTop = isAbove ? endpointY - 40 : endpointY - 8;
+    const labelBox = {left: item.labelLeft, top: labelTop, width: item.labelWidth, height: LABEL_HEIGHT};
+    const endpointBox = {left: item.x - 18, top: endpointY - 18, width: 36, height: 36};
+    const top = Math.min(axisY, endpointY - 18, labelTop);
+    const bottom = Math.max(axisY, endpointY + 18, labelTop + LABEL_HEIGHT);
+    // Keep axis anchors and leaders that cross the viewport, even when their label and
+    // endpoint have moved beyond it; the renderer can independently omit clipped text/dots.
+    if (bottom < 0 || top > height) return null;
     return Object.freeze({
       id: item.event.id,
       x: item.x,
@@ -196,28 +500,73 @@ export function getTimelineEventsGeometry(input: TimelineEventsGeometryInput): T
       labelTop,
       labelWidth: item.labelWidth,
       labelAlign: item.labelAlign,
+      labelVisible: intersectsCanvas(labelBox, width, height),
+      endpointVisible: intersectsCanvas(endpointBox, width, height),
       turningCaption: null,
+      turningCaptionVisible: false,
     });
-  }).filter(event => {
-    const top = Math.min(axisY, event.endpointY, event.labelTop);
-    const bottom = Math.max(axisY, event.endpointY, event.labelTop + LABEL_HEIGHT);
-    const intersectsCanvas = bottom >= 0 && top <= height;
-    return intersectsCanvas;
-  });
+  }).filter((point): point is NonNullable<typeof point> => point !== null);
 
-  const labelBounds: TimelineLabelBounds[] = [...(input.axisLabelBounds ?? []),
-    ...laidOut.map(point => Object.freeze({left: point.labelLeft, top: point.labelTop, width: point.labelWidth, height: LABEL_HEIGHT}))];
-  const obstacles: TimelineLabelBounds[] = [...labelBounds];
-  for (const point of laidOut) {
-    obstacles.push({left: point.x - 18, top: point.endpointY - 18, width: 36, height: 36},
-      {left: point.x - 1, top: Math.min(axisY, point.endpointY), width: 2, height: Math.abs(point.endpointY - axisY)});
+  const baseObstacles: TimelineLabelBounds[] = [
+    ...(input.axisLabelBounds ?? []),
+    ...laidOut.flatMap(point => obstacleBounds(point)),
+  ];
+  const captionRows: CaptionCandidateColumns[] = [];
+  for (let index = 0; index < laidOut.length; index++) {
+    const point = laidOut[index];
+    if (!point.important || axisY < 0 || axisY > height) continue;
+    const columns = captionColumns(point.x, width);
+    captionRows.push({pointIndex: index, columns});
   }
-  const events = laidOut.map(point => {
-    if (!point.important || axisY < 0 || axisY > height) return point;
-    const turningCaption = placeTurningCaption(point.x, axisY, width, height, obstacles);
-    obstacles.push(turningCaption);
-    labelBounds.push(turningCaption);
-    return Object.freeze({...point, turningCaption});
+  const visibleCaptionObstacles = baseObstacles.filter(bounds =>
+    bounds.top - CAPTION_GAP < height - EDGE_PADDING
+    && bounds.top + bounds.height + CAPTION_GAP > EDGE_PADDING);
+  const captionIndex = captionRows.length > 0
+    ? new CaptionObstacleIndex(captionRows.flatMap(row => row.columns), visibleCaptionObstacles, axisY, height)
+    : null;
+
+  const turningCaptions = new Map<number, TimelineLabelBounds>();
+  const exhaustedCaptionColumns = new Set<string>();
+  for (const row of captionRows) {
+    const columnKey = row.columns.join(",");
+    if (exhaustedCaptionColumns.has(columnKey)) continue;
+    const point = laidOut[row.pointIndex];
+    const candidatesForPoint: TimelineLabelBounds[] = [];
+    for (const left of row.columns) {
+      const position = captionIndex!.positions(left, axisY + CAPTION_TOP,
+        axisY - CAPTION_TOP - CAPTION_HEIGHT);
+      candidatesForPoint.push({left, top: position.below, width: CAPTION_WIDTH, height: CAPTION_HEIGHT});
+      candidatesForPoint.push({left, top: position.above, width: CAPTION_WIDTH, height: CAPTION_HEIGHT});
+    }
+    const clipped = (box: TimelineLabelBounds) => Number(box.top < EDGE_PADDING || box.top + box.height > height - EDGE_PADDING);
+    const distance = (box: TimelineLabelBounds) => Math.abs(box.top - (axisY + CAPTION_TOP))
+      + Math.abs(box.left + box.width / 2 - point.x);
+    candidatesForPoint.sort((left, right) => clipped(left) - clipped(right)
+      || Number(left.top < axisY) - Number(right.top < axisY)
+      || distance(left) - distance(right));
+    const caption = Object.freeze(candidatesForPoint[0]);
+    if (!candidatesForPoint.some(candidate => intersectsCanvas(candidate, width, height))) {
+      // Occupied space only grows during this layout. Once every candidate column has
+      // no viewport intersection, later captions at the same x cannot become visible.
+      exhaustedCaptionColumns.add(columnKey);
+      continue;
+    }
+    turningCaptions.set(row.pointIndex, caption);
+    // Off-screen captions are not rendered and must not push later visible captions
+    // farther away from the viewport. Recompute them after pan/zoom from the new view.
+    if (intersectsCanvas(caption, width, height)) captionIndex!.addCaption(caption);
+  }
+
+  const labelBounds: TimelineLabelBounds[] = (input.axisLabelBounds ?? [])
+    .filter(bounds => intersectsCanvas(bounds, width, height))
+    .concat(laidOut.filter(point => point.labelVisible).map(point => Object.freeze({
+      left: point.labelLeft, top: point.labelTop, width: point.labelWidth, height: LABEL_HEIGHT,
+    })));
+  const events = laidOut.map((point, index) => {
+    const turningCaption = turningCaptions.get(index) ?? null;
+    const turningCaptionVisible = turningCaption ? intersectsCanvas(turningCaption, width, height) : false;
+    if (turningCaption && turningCaptionVisible) labelBounds.push(turningCaption);
+    return Object.freeze({...point, turningCaption, turningCaptionVisible});
   });
   return Object.freeze({width, height, axisY, labelBounds: Object.freeze(labelBounds), events: Object.freeze(events)});
 }

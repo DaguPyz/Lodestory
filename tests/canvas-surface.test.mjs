@@ -95,16 +95,28 @@ function makeViewport() {
       for (const listener of [...listeners]) listener();
       return true;
     },
-    resetZoom() { return true; },
-    resetView() { return true; },
+    resetZoom() { calls.push({kind: "reset-zoom"}); return true; },
+    resetView() { calls.push({kind: "reset-view"}); return true; },
     listenerCount: () => listeners.size,
   };
 }
 
-function loadSurface() {
+function loadSurface({raf = false} = {}) {
   const hooks = [];
   const window = new FakeEventTarget();
   const document = new FakeEventTarget();
+  let nextFrameId = 0;
+  const pendingFrames = new Map();
+  const allFrames = new Map();
+  if (raf) {
+    window.requestAnimationFrame = callback => {
+      const id = ++nextFrameId;
+      pendingFrames.set(id, callback);
+      allFrames.set(id, callback);
+      return id;
+    };
+    window.cancelAnimationFrame = id => pendingFrames.delete(id);
+  }
   document.hidden = false;
   FakeResizeObserver.instances = [];
   let cursor = 0;
@@ -195,15 +207,44 @@ function loadSurface() {
     }
   }
 
-  return {render, commit, unmount, window, document, get output() { return output; }};
+  return {
+    render,
+    commit,
+    unmount,
+    window,
+    document,
+    get output() { return output; },
+    get pendingFrameIds() { return [...pendingFrames.keys()]; },
+    runAnimationFrame() {
+      const frames = [...pendingFrames.entries()];
+      pendingFrames.clear();
+      for (const [, callback] of frames) callback(16);
+      return frames.map(([id]) => id);
+    },
+    runFrameCallback(id) { allFrames.get(id)?.(16); },
+  };
 }
 
 function pointerEvent(surface, {pointerId = 1, button = 0, x = 100, y = 100} = {}) {
   return {currentTarget: surface, target: surface, pointerId, button, clientX: x, clientY: y, preventDefault() { this.defaultPrevented = true; }};
 }
 
-function createMountedSurface({viewport = makeViewport(), active = true} = {}) {
-  const renderer = loadSurface();
+function wheelEvent(surface, {deltaX = 0, deltaY = 0, ctrlKey = false, metaKey = false, x = 230, y = 190} = {}) {
+  return {
+    target: surface,
+    deltaMode: 0,
+    deltaX,
+    deltaY,
+    ctrlKey,
+    metaKey,
+    clientX: x,
+    clientY: y,
+    preventDefault() { this.defaultPrevented = true; },
+  };
+}
+
+function createMountedSurface({viewport = makeViewport(), active = true, raf = false} = {}) {
+  const renderer = loadSurface({raf});
   const surface = new FakeElement({left: 80, top: 40, width: 800, height: 600});
   const output = renderer.render({viewport, active, label: "时间线"});
   output.props.ref.current = surface;
@@ -211,7 +252,7 @@ function createMountedSurface({viewport = makeViewport(), active = true} = {}) {
   return {renderer, surface, viewport, output};
 }
 
-test("ordinary left drag does not pan, while middle drag pans and releases capture", () => {
+test("without requestAnimationFrame, middle drag keeps synchronous pan behavior", () => {
   const {renderer, surface, viewport, output} = createMountedSurface();
   output.props.onPointerDown(pointerEvent(surface, {button: 0, x: 10, y: 20}));
   output.props.onPointerMove(pointerEvent(surface, {x: 80, y: 90}));
@@ -225,6 +266,119 @@ test("ordinary left drag does not pan, while middle drag pans and releases captu
   assert.equal(surface.hasPointerCapture(7), false);
   output.props.onPointerMove(pointerEvent(surface, {pointerId: 7, x: 90, y: 90}));
   assert.equal(viewport.calls.length, 1, "moves after pointerup cannot pan");
+  renderer.unmount();
+});
+
+test("pointer moves coalesce per frame and pointerup flushes the final displacement once", () => {
+  const {renderer, surface, viewport, output} = createMountedSurface({raf: true});
+  output.props.onPointerDown(pointerEvent(surface, {button: 1, pointerId: 8, x: 100, y: 100}));
+  output.props.onPointerMove(pointerEvent(surface, {pointerId: 8, x: 110, y: 105}));
+  output.props.onPointerMove(pointerEvent(surface, {pointerId: 8, x: 125, y: 120}));
+  assert.deepEqual(viewport.calls, [], "pointer input is queued until the frame");
+  assert.equal(renderer.pendingFrameIds.length, 1, "multiple moves schedule one frame");
+  const [firstFrame] = renderer.runAnimationFrame();
+  assert.deepEqual(viewport.calls, [{kind: "pan", x: 25, y: 20}]);
+
+  output.props.onPointerMove(pointerEvent(surface, {pointerId: 8, x: 130, y: 126}));
+  const [lastFrame] = renderer.pendingFrameIds;
+  output.props.onPointerUp(pointerEvent(surface, {pointerId: 8, button: 1, x: 132, y: 129}));
+  assert.deepEqual(viewport.calls, [
+    {kind: "pan", x: 25, y: 20},
+    {kind: "pan", x: 7, y: 9},
+  ], "pointerup applies queued and terminal displacement immediately");
+  assert.deepEqual(renderer.pendingFrameIds, []);
+  renderer.runFrameCallback(lastFrame);
+  renderer.runFrameCallback(firstFrame);
+  assert.equal(viewport.calls.length, 2, "canceled or repeated callbacks cannot duplicate a pan");
+  renderer.unmount();
+});
+
+test("Space keyup, blur, and pointer cancellation flush queued drag movement", () => {
+  const {renderer, surface, viewport, output} = createMountedSurface({raf: true});
+
+  renderer.window.dispatch("keydown", {code: "Space", target: surface, isComposing: false, ctrlKey: false, metaKey: false, altKey: false});
+  output.props.onPointerDown(pointerEvent(surface, {button: 0, pointerId: 32, x: 0, y: 0}));
+  output.props.onPointerMove(pointerEvent(surface, {pointerId: 32, x: 20, y: 12}));
+  renderer.window.dispatch("keyup", {code: "Space"});
+
+  output.props.onPointerDown(pointerEvent(surface, {button: 1, pointerId: 33, x: 0, y: 0}));
+  output.props.onPointerMove(pointerEvent(surface, {pointerId: 33, x: 3, y: 4}));
+  output.props.onBlur({currentTarget: surface, relatedTarget: null});
+
+  output.props.onPointerDown(pointerEvent(surface, {button: 1, pointerId: 34, x: 0, y: 0}));
+  output.props.onPointerMove(pointerEvent(surface, {pointerId: 34, x: 7, y: 9}));
+  output.props.onPointerCancel(pointerEvent(surface, {pointerId: 34}));
+
+  assert.deepEqual(viewport.calls, [
+    {kind: "pan", x: 20, y: 12},
+    {kind: "pan", x: 3, y: 4},
+    {kind: "pan", x: 7, y: 9},
+  ]);
+  assert.deepEqual(renderer.pendingFrameIds, []);
+  renderer.unmount();
+});
+
+test("wheel pans coalesce and flush before zoom, keyboard pan, and reset", () => {
+  const {renderer, surface, viewport, output} = createMountedSurface({raf: true});
+  surface.dispatch("wheel", wheelEvent(surface, {deltaX: 3, deltaY: 4}));
+  surface.dispatch("wheel", wheelEvent(surface, {deltaX: 2, deltaY: 6}));
+  assert.deepEqual(viewport.calls, []);
+  assert.equal(renderer.pendingFrameIds.length, 1);
+
+  surface.dispatch("wheel", wheelEvent(surface, {deltaY: -100, ctrlKey: true}));
+  assert.deepEqual(viewport.calls.map(call => call.kind), ["pan", "zoom"], "zoom follows all earlier wheel pan input");
+  assert.deepEqual(viewport.calls[0], {kind: "pan", x: -5, y: -10});
+  assert.ok(Math.abs(viewport.calls[1].zoom - Math.exp(0.2)) < 1e-9);
+
+  surface.dispatch("wheel", wheelEvent(surface, {deltaX: 1, deltaY: 2}));
+  output.props.onKeyDown({
+    key: "ArrowLeft", code: "ArrowLeft", target: surface, nativeEvent: {isComposing: false},
+    ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, preventDefault() {},
+  });
+  assert.deepEqual(viewport.calls.slice(2), [
+    {kind: "pan", x: -1, y: -2},
+    {kind: "pan", x: 48, y: 0},
+  ], "keyboard pan remains synchronous and follows queued wheel movement");
+
+  surface.dispatch("wheel", wheelEvent(surface, {deltaY: 5}));
+  output.props.onKeyDown({
+    key: "Home", code: "Home", target: surface, nativeEvent: {isComposing: false},
+    ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, preventDefault() {},
+  });
+  assert.deepEqual(viewport.calls.slice(4), [
+    {kind: "pan", x: 0, y: -5},
+    {kind: "reset-view"},
+  ], "reset follows the latest queued pan");
+  renderer.unmount();
+});
+
+test("canvas zoom and reset controls flush pending wheel movement first", () => {
+  const {renderer, surface, viewport, output} = createMountedSurface({raf: true});
+  const controls = output.props.children.at(-1).props.children;
+  const zoomIn = controls[2].props.onClick;
+  const resetZoom = controls[1].props.children.props.onClick;
+  const resetView = controls[3].props.onClick;
+
+  surface.dispatch("wheel", wheelEvent(surface, {deltaX: 1, deltaY: 2}));
+  zoomIn();
+  assert.deepEqual(viewport.calls.slice(0, 2), [
+    {kind: "pan", x: -1, y: -2},
+    {kind: "zoom", zoom: 1.25, anchor: undefined},
+  ]);
+
+  surface.dispatch("wheel", wheelEvent(surface, {deltaY: 3}));
+  resetZoom();
+  assert.deepEqual(viewport.calls.slice(2), [
+    {kind: "pan", x: 0, y: -3},
+    {kind: "reset-zoom"},
+  ]);
+
+  surface.dispatch("wheel", wheelEvent(surface, {deltaY: 4}));
+  resetView();
+  assert.deepEqual(viewport.calls.slice(4), [
+    {kind: "pan", x: 0, y: -4},
+    {kind: "reset-view"},
+  ]);
   renderer.unmount();
 });
 
@@ -268,9 +422,12 @@ test("Ctrl-wheel forwards a surface-local anchor and prevents page scrolling", (
 });
 
 test("active=false detaches native listeners and cancels capture without moving the viewport", () => {
-  const {renderer, surface, viewport, output} = createMountedSurface();
+  const {renderer, surface, viewport, output} = createMountedSurface({raf: true});
   output.props.onPointerDown(pointerEvent(surface, {button: 1, pointerId: 11}));
+  output.props.onPointerMove(pointerEvent(surface, {pointerId: 11, x: 140, y: 160}));
+  const [staleFrame] = renderer.pendingFrameIds;
   assert.equal(surface.hasPointerCapture(11), true);
+  assert.equal(renderer.pendingFrameIds.length, 1);
   assert.equal(surface.listenerCount("wheel"), 1);
   assert.equal(renderer.window.listenerCount("blur"), 1);
   assert.equal(renderer.document.listenerCount("visibilitychange"), 1);
@@ -283,6 +440,8 @@ test("active=false detaches native listeners and cancels capture without moving 
   assert.equal(renderer.window.listenerCount("blur"), 0);
   assert.equal(renderer.window.listenerCount("keydown"), 0);
   assert.equal(renderer.document.listenerCount("visibilitychange"), 0);
+  assert.deepEqual(renderer.pendingFrameIds, [], "stopping cancels a queued frame");
+  renderer.runFrameCallback(staleFrame);
   inactive.props.onPointerMove(pointerEvent(surface, {pointerId: 11, x: 200, y: 200}));
   assert.deepEqual(viewport.calls, []);
   renderer.unmount();
@@ -292,9 +451,11 @@ test("active=false detaches native listeners and cancels capture without moving 
 test("swapping the viewport and blurring end the old drag and unsubscribe old viewports", () => {
   const first = makeViewport();
   const second = makeViewport();
-  const {renderer, surface, output} = createMountedSurface({viewport: first});
+  const {renderer, surface, output} = createMountedSurface({viewport: first, raf: true});
   assert.equal(first.listenerCount(), 1);
   output.props.onPointerDown(pointerEvent(surface, {button: 1, pointerId: 21}));
+  output.props.onPointerMove(pointerEvent(surface, {pointerId: 21, x: 130, y: 140}));
+  const [staleFrame] = renderer.pendingFrameIds;
   assert.equal(surface.hasPointerCapture(21), true);
 
   const swapped = renderer.render({viewport: second, active: true, label: "另一条时间线"});
@@ -304,6 +465,10 @@ test("swapping the viewport and blurring end the old drag and unsubscribe old vi
   assert.equal(first.listenerCount(), 0);
   assert.equal(second.listenerCount(), 1);
   assert.equal(surface.listenerCount("wheel"), 1, "the surface has exactly one listener for the new viewport");
+  assert.deepEqual(renderer.pendingFrameIds, [], "swapping discards the old viewport's queued pan and frame");
+  renderer.runFrameCallback(staleFrame);
+  assert.deepEqual(first.calls, []);
+  assert.deepEqual(second.calls, [], "an old callback cannot pan the new viewport");
   swapped.props.onPointerMove(pointerEvent(surface, {pointerId: 21, x: 200, y: 200}));
   assert.deepEqual(first.calls, []);
   assert.deepEqual(second.calls, []);
@@ -315,6 +480,22 @@ test("swapping the viewport and blurring end the old drag and unsubscribe old vi
   assert.deepEqual(second.calls, []);
   renderer.unmount();
   assert.equal(second.listenerCount(), 0);
+  assert.equal(surface.listenerCount("wheel"), 0);
+  assert.equal(renderer.window.listenerCount("blur"), 0);
+});
+
+test("unmount cancels pending frame callbacks without applying the queued pan", () => {
+  const {renderer, surface, viewport, output} = createMountedSurface({raf: true});
+  output.props.onPointerDown(pointerEvent(surface, {button: 1, pointerId: 41}));
+  output.props.onPointerMove(pointerEvent(surface, {pointerId: 41, x: 140, y: 150}));
+  const [staleFrame] = renderer.pendingFrameIds;
+  assert.equal(renderer.pendingFrameIds.length, 1);
+
+  renderer.unmount();
+  assert.deepEqual(renderer.pendingFrameIds, []);
+  renderer.runFrameCallback(staleFrame);
+  assert.deepEqual(viewport.calls, []);
+  assert.equal(viewport.listenerCount(), 0);
   assert.equal(surface.listenerCount("wheel"), 0);
   assert.equal(renderer.window.listenerCount("blur"), 0);
 });

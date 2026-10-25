@@ -23,23 +23,24 @@ function draftIsDirty(draft: Draft | null, settings: TimelineAxisSettings): bool
     || origin !== settings.origin || step !== settings.step || draft.unit !== settings.unit;
 }
 
-function AxisTicks({ticks, axisY, zoom}: {ticks: readonly TimelineAxisTick[]; axisY: number; zoom: number}) {
-  const inverseZoom = 1 / zoom;
+function AxisTicks({ticks, axisY, worldHalfWidth, zoom}: {ticks: readonly TimelineAxisTick[]; axisY: number; worldHalfWidth: number; zoom: number}) {
   const layout = TIMELINE_AXIS_LABEL_LAYOUT;
   return <g className="timeline-axis-ticks">
-    {ticks.map(tick => <g key={tick.key}>
-      <line className={tick.origin ? "timeline-axis-tick timeline-axis-tick-origin" : "timeline-axis-tick"}
-        x1={tick.x} x2={tick.x} y1={axisY} y2={axisY + (tick.origin ? 16 : tick.major ? 14 : 8) * inverseZoom}
-        vectorEffect="non-scaling-stroke"/>
-      {tick.labelVisible && <>
-        <text className={tick.origin ? "timeline-axis-label timeline-axis-label-origin" : "timeline-axis-label"}
-          x={tick.x} y={axisY + layout.valueTop * inverseZoom} fontSize={layout.valueFontSize * inverseZoom} textAnchor="middle" dominantBaseline="hanging">
-          {formatTimelineAxisValue(tick.value)}
-        </text>
-        {tick.origin && <text className="timeline-axis-origin-caption" x={tick.x} y={axisY + layout.originTop * inverseZoom}
-          fontSize={layout.originFontSize * inverseZoom} textAnchor="middle" dominantBaseline="hanging">故事起点</text>}
-      </>}
-    </g>)}
+    {ticks.map(tick => {
+      const x = (tick.x + worldHalfWidth) * zoom;
+      return <g key={tick.key}>
+        <line className={tick.origin ? "timeline-axis-tick timeline-axis-tick-origin" : "timeline-axis-tick"}
+          x1={x} x2={x} y1={axisY} y2={axisY + (tick.origin ? 16 : tick.major ? 14 : 8)}/>
+        {tick.labelVisible && <>
+          <text className={tick.origin ? "timeline-axis-label timeline-axis-label-origin" : "timeline-axis-label"}
+            x={x} y={axisY + layout.valueTop} fontSize={layout.valueFontSize} textAnchor="middle" dominantBaseline="hanging">
+            {formatTimelineAxisValue(tick.value)}
+          </text>
+          {tick.origin && <text className="timeline-axis-origin-caption" x={x} y={axisY + layout.originTop}
+            fontSize={layout.originFontSize} textAnchor="middle" dominantBaseline="hanging">故事起点</text>}
+        </>}
+      </g>;
+    })}
   </g>;
 }
 
@@ -231,9 +232,15 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, viewport, ac
     settings: snapshot.settings,
   });
   const worldHalfWidth = geometry.worldWidth / 2;
-  const worldHalfHeight = geometry.worldHeight / 2;
-  const axisVisible = geometry.axisY >= -worldHalfHeight && geometry.axisY <= worldHalfHeight;
   const axisScreenY = size.height / 2 + geometry.axisY * view.zoom;
+  const axisVisible = axisScreenY >= 0 && axisScreenY <= size.height;
+  // Keep the SVG's intrinsic size and fonts in screen pixels. This cancels the
+  // surface's world transform before SVG painting, instead of magnifying tiny text.
+  const axisOverlayStyle = {
+    width: size.width,
+    height: size.height,
+    transform: `translate(${view.center.x - worldHalfWidth}px, ${view.center.y - geometry.worldHeight / 2}px) scale(${1 / view.zoom})`,
+  };
   const unitTop = axisVisible ? Math.max(8, Math.min(size.height - 44, axisScreenY - 52)) : 8;
   const draftDirty = draftIsDirty(draft, snapshot.settings);
   const parsedOrigin = Number(draft?.origin ?? "");
@@ -247,19 +254,19 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, viewport, ac
 
   return <div className="timeline-canvas-frame" ref={frame}>
     <Surface viewport={viewport} active={active && !editing && !eventEditing} label={`${title}时间轴`} grid="none">
-      {snapshot.loaded && geometry.width > 0 && geometry.height > 0 && <svg className="timeline-axis-svg" role="img"
-        aria-label={`${title}，单位${snapshot.settings.unit}，故事起点为${formatTimelineAxisValue(snapshot.settings.origin)}`}
-        width={geometry.worldWidth} height={geometry.worldHeight}
-        viewBox={`${-worldHalfWidth} ${-worldHalfHeight} ${geometry.worldWidth} ${geometry.worldHeight}`}
-        style={{left: geometry.centerX, top: geometry.centerY, transform: "translate(-50%, -50%)"}}>
-        <title>{`${title}时间轴：原点 ${formatTimelineAxisValue(snapshot.settings.origin)} ${snapshot.settings.unit}`}</title>
-        {axisVisible && <g className="timeline-axis">
-          <line className="timeline-axis-line" x1={-worldHalfWidth} x2={geometry.arrowBaseX} y1={geometry.axisY} y2={geometry.axisY}
-            vectorEffect="non-scaling-stroke"/>
-          <AxisTicks ticks={geometry.ticks} axisY={geometry.axisY} zoom={view.zoom}/>
-          <path className="timeline-axis-arrow" d={`M ${geometry.arrowBaseX} ${geometry.axisY - 4 / view.zoom} L ${geometry.arrowTipX} ${geometry.axisY} L ${geometry.arrowBaseX} ${geometry.axisY + 4 / view.zoom} Z`}/>
-        </g>}
-      </svg>}
+      {snapshot.loaded && geometry.width > 0 && geometry.height > 0 && <div className="timeline-axis-overlay" style={axisOverlayStyle}>
+        <svg className="timeline-axis-svg" role="img"
+          aria-label={`${title}，单位${snapshot.settings.unit}，故事起点为${formatTimelineAxisValue(snapshot.settings.origin)}`}
+          width={geometry.width} height={geometry.height}
+          viewBox={`0 0 ${geometry.width} ${geometry.height}`}>
+          <title>{`${title}时间轴：原点 ${formatTimelineAxisValue(snapshot.settings.origin)} ${snapshot.settings.unit}`}</title>
+          {axisVisible && <g className="timeline-axis">
+            <line className="timeline-axis-line" x1="0" x2={geometry.width - 12} y1={axisScreenY} y2={axisScreenY}/>
+            <AxisTicks ticks={geometry.ticks} axisY={axisScreenY} worldHalfWidth={worldHalfWidth} zoom={view.zoom}/>
+            <path className="timeline-axis-arrow" d={`M ${geometry.width - 12} ${axisScreenY - 4} L ${geometry.width - 2} ${axisScreenY} L ${geometry.width - 12} ${axisScreenY + 4} Z`}/>
+          </g>}
+        </svg>
+      </div>}
       {snapshot.loaded && <TimelineEvents contextMenus={contextMenus} assetCatalog={assetCatalog} store={events} settings={snapshot.settings} view={view} size={size}
         axisLabelBounds={geometry.labelBounds}
         active={active && snapshot.loaded && !snapshot.loading && !snapshot.blocked && !editing}

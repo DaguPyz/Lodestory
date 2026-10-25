@@ -197,3 +197,121 @@ test("invisible origin ticks do not reserve space for event captions", () => {
     "hidden axis text does not force an unnecessary vertical displacement");
   assertCaptionAvoidsAxisAndStem(point, axis.labelBounds);
 });
+
+test("events beyond 2048 remain laid out and visible in the result", () => {
+  const events = Array.from({length: 2050}, (_, index) => event(`many-${String(index).padStart(4, "0")}`, 0));
+  events.push(event("zzz-last-event", 0));
+  const result = geometry(events);
+  const last = result.events.find(point => point.id === "zzz-last-event");
+  assert.equal(result.events.length, events.length);
+  assert.ok(last, "events after the former layout cap remain present");
+  assert.ok(last.lane > 2048, "the final overlapping label receives a free lane");
+});
+
+test("screen-space visibility flags follow vertical panning without dropping crossing leaders", () => {
+  const important = event("pan-check", 0, {important: true});
+  const aboveViewport = geometry([important], {center: {x: 0, y: 310}});
+  const clipped = aboveViewport.events[0];
+  assert.ok(clipped, "the event stays present while its leader crosses the viewport");
+  assert.equal(clipped.axisY, 50);
+  assert.equal(clipped.labelVisible, false);
+  assert.equal(clipped.endpointVisible, false);
+  assert.equal(clipped.turningCaptionVisible, true);
+
+  const centered = geometry([important]);
+  const visible = centered.events[0];
+  assert.equal(visible.labelVisible, true);
+  assert.equal(visible.endpointVisible, true);
+  assert.equal(visible.turningCaptionVisible, true);
+  assert.ok(centered.labelBounds.every(bounds => rectanglesOverlap(bounds,
+    {left: 0, top: 0, width: centered.width, height: centered.height})));
+});
+
+test("cached event data and viewport geometry update independently", () => {
+  const original = [event("replace-me", 0, {title: "短标题", summary: ""})];
+  const first = geometry(original);
+  const panned = geometry(original, {width: 400, center: {x: 80, y: 0}, zoom: 2});
+  assert.notEqual(panned.events[0].x, first.events[0].x);
+  assert.ok(panned.events[0].labelWidth <= 400 - 16);
+
+  const replacement = [event("replace-me", 5, {title: "一个很长的替换标题".repeat(4), summary: ""})];
+  const replaced = geometry(replacement);
+  assert.equal(replaced.events[0].x, 600 + (5 / 5) * 160);
+  assert.ok(replaced.events[0].labelWidth > first.events[0].labelWidth,
+    "replacement title measurements are not read from the previous array cache");
+});
+
+test("screen-edge candidates include all ties and narrow canvases keep clamped label widths", () => {
+  const edgeOffset = 19.5; // x = width + 24 with the helper's 5px story step.
+  const edge = geometry([event("edge-a", edgeOffset), event("edge-b", edgeOffset)]);
+  assert.deepEqual(Array.from(edge.events, point => point.id), ["edge-a", "edge-b"]);
+
+  const narrow = geometry([event("narrow-label", 0, {title: "很长的标题".repeat(20), summary: ""})], {width: 100});
+  assert.equal(narrow.events[0].labelWidth, 84);
+  assert.ok(narrow.events[0].labelLeft >= 8);
+  assert.ok(narrow.events[0].labelLeft + narrow.events[0].labelWidth <= 92);
+});
+
+test("lane allocation follows actual label intervals when right-edge alignment flips order", () => {
+  const result = geometry([
+    event("earlier-short-label", 15, {title: "短", summary: ""}),
+    event("later-wide-label", 15.9375, {title: "宽标题".repeat(20), summary: ""}),
+  ]);
+  const [shortLabel, wideLabel] = result.events;
+  assert.ok(shortLabel.x < wideLabel.x, "anchors stay in offset order");
+  assert.ok(wideLabel.labelLeft < shortLabel.labelLeft,
+    "the wider right-aligned label starts before the earlier short label");
+  assert.notEqual(shortLabel.lane, wideLabel.lane);
+  assert.equal(shortLabel.labelLeft < wideLabel.labelLeft + wideLabel.labelWidth + 24
+    && shortLabel.labelLeft + shortLabel.labelWidth + 24 > wideLabel.labelLeft, true,
+  "overlapping label intervals are separated by different lanes");
+  assert.equal(rectanglesOverlap({left: shortLabel.labelLeft, top: shortLabel.labelTop,
+    width: shortLabel.labelWidth, height: 112}, {left: wideLabel.labelLeft, top: wideLabel.labelTop,
+    width: wideLabel.labelWidth, height: 112}), false,
+  "the lane difference keeps the text rectangles from touching");
+});
+
+test("dense important events avoid visible labels, endpoints, leaders, and each other", () => {
+  const events = Array.from({length: 36}, (_, index) => event(`dense-${String(index).padStart(3, "0")}`, 0, {
+    important: true,
+    placement: index % 2 === 0 ? "above" : "below",
+  }));
+  const {axis, eventLayout} = layoutAgainstAxis(events);
+  for (let index = 0; index < eventLayout.events.length; index++) {
+    const point = eventLayout.events[index];
+    for (let otherIndex = index + 1; otherIndex < eventLayout.events.length; otherIndex++) {
+      const other = eventLayout.events[otherIndex];
+      if (point.placement !== other.placement) continue;
+      if (point.lane !== other.lane) continue;
+      assert.equal(point.labelLeft < other.labelLeft + other.labelWidth + 24
+        && point.labelLeft + point.labelWidth + 24 > other.labelLeft, false,
+      `labels ${point.id} and ${other.id} stay separated in a shared lane`);
+    }
+  }
+  const captions = eventLayout.events.filter(point => point.turningCaptionVisible && point.turningCaption);
+  assert.ok(captions.length > 1, "visible critical captions are retained in a dense column");
+  for (let index = 0; index < captions.length; index++) {
+    const point = captions[index];
+    for (const bounds of axis.labelBounds) {
+      assert.equal(rectanglesOverlap(point.turningCaption, bounds), false);
+    }
+    for (const other of eventLayout.events) {
+      assert.equal(rectanglesOverlap(point.turningCaption, {
+        left: other.labelLeft, top: other.labelTop, width: other.labelWidth, height: 112,
+      }), false, `caption ${point.id} avoids event label ${other.id}`);
+      assert.equal(rectanglesOverlap(point.turningCaption, {
+        left: other.x - 18, top: other.endpointY - 18, width: 36, height: 36,
+      }), false, `caption ${point.id} avoids endpoint ${other.id}`);
+      assert.equal(rectanglesOverlap(point.turningCaption, {
+        left: other.x - 1, top: Math.min(other.axisY, other.endpointY), width: 2,
+        height: Math.abs(other.endpointY - other.axisY),
+      }), false, `caption ${point.id} avoids leader ${other.id}`);
+    }
+    for (let otherIndex = index + 1; otherIndex < captions.length; otherIndex++) {
+      assert.equal(rectanglesOverlap(point.turningCaption, captions[otherIndex].turningCaption), false,
+        `captions ${point.id} and ${captions[otherIndex].id} remain separate`);
+    }
+  }
+  assert.ok(eventLayout.events.some(point => point.important && point.turningCaption === null),
+    "fully off-screen captions may be omitted after the visible slots fill");
+});

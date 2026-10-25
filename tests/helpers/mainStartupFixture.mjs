@@ -145,6 +145,9 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       return [value, next => { value = typeof next === "function" ? next(value) : next; }];
     },
     useRef(initialValue) { return {current: initialValue}; },
+    useMemo(factory) { return factory(); },
+    useCallback(callback) { return callback; },
+    memo(component) { return component; },
     useId() { return "fixture-id"; },
     createContext(defaultValue) {
       const context = { _currentValue: defaultValue };

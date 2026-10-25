@@ -42,6 +42,22 @@ const shapes = {
   alignCenter: <path d="M4 5h16M7 9h10M4 13h16M7 17h10" />,
   alignRight: <path d="M4 5h16M9 9h11M4 13h16M9 17h11" />,
   alignJustify: <path d="M4 5h16M4 9h16M4 13h16M4 17h16" />,
+  list: (
+    <>
+      <circle cx="5" cy="6" r="1" />
+      <circle cx="5" cy="12" r="1" />
+      <circle cx="5" cy="18" r="1" />
+      <path d="M9 6h11M9 12h11M9 18h11" />
+    </>
+  ),
+  grid: (
+    <>
+      <rect x="4" y="4" width="6" height="6" rx="1" />
+      <rect x="14" y="4" width="6" height="6" rx="1" />
+      <rect x="4" y="14" width="6" height="6" rx="1" />
+      <rect x="14" y="14" width="6" height="6" rx="1" />
+    </>
+  ),
   chevronRight: <path d="m9 5 7 7-7 7" />,
   chevronDown: <path d="m5 9 7 7 7-7" />,
   close: <path d="m6 6 12 12M18 6 6 18" />,
@@ -78,6 +94,7 @@ const shapes = {
       <path d="m16 16 5 5" />
     </>
   ),
+  trash: <path d="M4 7h16M10 11v5M14 11v5M7 7l1 13h8l1-13M9 7V4h6v3" />,
   more: (
     <>
       <circle cx="5" cy="12" r="1" />

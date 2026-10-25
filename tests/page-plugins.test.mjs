@@ -297,12 +297,22 @@ test("page plugins revoke their route contributions and the UI root unmounts onl
   assert.deepEqual(Array.from(ui.getSnapshot().pages, ({ id }) => id), ["editor"]);
   await core.unmount("workbench-toolbar");
   assert.equal(core.isMounted("workbench-toolbar"), false);
+  // Release workbench consumers and body-editor implementations before their providers.
+  await core.unmount("asset-management");
+  await core.unmount("outline-design");
+  await core.unmount("writing-status");
+  await core.unmount("markdown-editor");
+  await core.unmount("rich-text-editor");
+  await core.unmount("document-tabs");
   await core.unmount("body-editor");
   assert.equal(core.isMounted("body-editor"), false);
   await core.unmount("project-management");
   assert.equal(core.isMounted("project-management"), false);
   await core.unmount("documents");
   assert.equal(core.isMounted("documents"), false);
+  await core.unmount("timeline");
+  await core.unmount("canvas");
+  await core.unmount("project-storage");
   await core.unmount("workbench");
   assert.equal(core.isMounted("workbench"), false);
   assert.deepEqual(Array.from(ui.getSnapshot().pages), []);

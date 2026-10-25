@@ -157,7 +157,7 @@ test("outline navigation switches independently while preserving editor contents
   const workbenchKey = f.requireSdk("@lodestory/sdk/workbench").workbenchKey;
   const layout = f.getService(layoutKey);
   const workbench = f.getService(workbenchKey);
-  assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.role), ["main", "main", "tabs", "navigation", "navigation", "navigation", "actions", "status"]);
+  assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.role), ["main", "main", "main", "main", "tabs", "navigation", "navigation", "navigation", "actions", "status"]);
   assert.ok(layout.getSnapshot().contents.some(({id}) => id === "project-management.files"));
   const outline = layout.getSnapshot().contents.find(({id}) => id === "outline-design.navigation");
   assert.ok(outline, "the outline-design plugin contributes through the layout service");
@@ -167,6 +167,11 @@ test("outline navigation switches independently while preserving editor contents
   assert.equal(assetManagement.role, "navigation");
   assert.equal(assetManagement.order, 20);
   assert.ok(assetManagement.icon, "the asset-management navigation contribution provides its own icon");
+  const assetTypes = layout.getSnapshot().contents.find(({id}) => id === "asset-management.types");
+  assert.ok(assetTypes, "asset management registers its type-template editor as main content");
+  assert.equal(assetTypes.title, "模板设置");
+  assert.equal(assetTypes.role, "main");
+  assert.equal(assetTypes.order, 20);
   const navigationIds = Array.from(layout.getSnapshot().contents)
     .filter(({role}) => role === "navigation")
     .map(({id}) => id);
@@ -180,13 +185,14 @@ test("outline navigation switches independently while preserving editor contents
   assert.equal(outline.render({active: false}).props.active, false, "hidden outline menus receive the inactive state");
   assert.ok(layout.getSnapshot().shownIds.includes("project-management.files"), "project files remain the initially selected navigation contribution");
   assert.ok(!layout.getSnapshot().shownIds.includes(outline.id));
+  assert.ok(!layout.getSnapshot().shownIds.includes(assetTypes.id), "type templates are not the default main content");
   const canvas = layout.getSnapshot().contents.find(({id}) => id === "timeline.main");
   assert.ok(canvas, "the timeline plugin contributes its canvas as main content");
   assert.equal(canvas.role, "main");
   assert.equal(canvas.order, 10);
   assert.ok(!layout.getSnapshot().shownIds.includes(canvas.id), "the body editor remains the default main content");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.id).sort(), [
-    "asset-management.navigation", "body-editor.main", "document-tabs.tabs", "outline-design.navigation", "project-management.files", "timeline.main", "workbench-toolbar.main", "writing-status.status",
+    "asset-management.assets", "asset-management.navigation", "asset-management.types", "body-editor.main", "document-tabs.tabs", "outline-design.navigation", "project-management.files", "timeline.main", "workbench-toolbar.main", "writing-status.status",
   ]);
   assert.ok(f.lifecycle.indexOf("activate:default-layout:complete") < f.lifecycle.indexOf("activate:body-editor:begin"));
   assert.ok(f.lifecycle.indexOf("activate:project-management:complete") < f.lifecycle.indexOf("activate:body-editor:begin"));
@@ -217,6 +223,9 @@ test("outline navigation switches independently while preserving editor contents
   assert.ok(!layout.getSnapshot().shownIds.includes(outline.id), "switching to asset management hides the previous navigation panel");
   for (const id of editorContents) assert.ok(layout.getSnapshot().shownIds.includes(id), `${id} stays visible when opening asset management`);
   assert.strictEqual(workbench.getSnapshot().session, session, "switching to asset management retains the same workbench session");
+  assetManagement.render({active: true}).props.onOpenTypes();
+  assert.ok(layout.getSnapshot().shownIds.includes(assetTypes.id), "the navigation action opens the type-template main content");
+  assert.ok(layout.getSnapshot().shownIds.includes(assetManagement.id), "opening type templates keeps the asset navigation selected");
   layout.show(canvas.id);
   assert.ok(layout.getSnapshot().shownIds.includes(canvas.id));
   assert.ok(!layout.getSnapshot().shownIds.includes("body-editor.main"), "main content selection is exclusive");
@@ -235,8 +244,9 @@ test("outline navigation switches independently while preserving editor contents
   assert.strictEqual(workbench.getSnapshot().session, session, "temporary page navigation retains the current project session");
   await f.createdCores.at(-1).unmount("asset-management");
   assert.ok(!layout.getSnapshot().contents.some(({id}) => id === assetManagement.id), "unmounting asset-management revokes its contribution");
+  assert.ok(!layout.getSnapshot().contents.some(({id}) => id === assetTypes.id), "unmounting asset-management revokes its main contribution");
   assert.ok(layout.getSnapshot().contents.some(({id}) => id === "body-editor.main"), "unmounting asset-management leaves the editor registered");
-  assert.strictEqual(workbench.getSnapshot().session, session, "unmounting asset management retains the current workbench session");
+  assert.equal(workbench.getSnapshot().session, null, "revoking the asset participant stops the view and releases project-session resources");
   await f.createdCores.at(-1).unmount("outline-design");
   assert.ok(!layout.getSnapshot().contents.some(({id}) => id === outline.id), "unmounting outline-design revokes its contribution");
   assert.ok(layout.getSnapshot().contents.some(({id}) => id === canvas.id), "unmounting outline-design leaves the timeline-owned canvas registered");
@@ -307,9 +317,9 @@ test("another provider of layoutKey receives the editor contributions and is inj
     activate(context) { context.provide(layoutKey, service); },
   })});
   f.start(); await flushStartup();
-assert.equal(contributions.length, 8);
+  assert.equal(contributions.length, 10);
   assert.deepEqual(contributions.map(({id}) => id).sort(), [
-  "asset-management.navigation", "body-editor.main", "document-tabs.tabs", "outline-design.navigation", "project-management.files", "timeline.main", "workbench-toolbar.main", "writing-status.status",
+    "asset-management.assets", "asset-management.navigation", "asset-management.types", "body-editor.main", "document-tabs.tabs", "outline-design.navigation", "project-management.files", "timeline.main", "workbench-toolbar.main", "writing-status.status",
   ]);
   const ui = f.getService(f.requireSdk("@lodestory/sdk/ui").uiKey);
   await ui.openPage("editor", {project: {id: "test", name: "test", path: "/test"}});
@@ -321,5 +331,5 @@ assert.equal(contributions.length, 8);
   assert.equal(workbenchPage.props.layout, service);
   assert.equal(workbenchPage.props.layout.View, service.View);
   await f.createdCores.at(-1).unmountAll();
-assert.equal(new Set(removed).size, 8);
+  assert.equal(new Set(removed).size, 10);
 });

@@ -150,6 +150,8 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.ok(fixture.moduleImports.some(({ from }) => from === "plugins/asset-management/assetManagementPlugin.tsx"), "the asset-management plugin source should run in the fixture");
   assert.ok(fixture.lifecycle.includes("activate:documents:complete"), "the documents service should activate");
   assert.ok(fixture.logs.indexOf("activate:workbench:complete") < fixture.logs.indexOf("activate:documents:begin"));
+  assert.ok(fixture.logs.indexOf("activate:project-storage:complete") < fixture.logs.indexOf("activate:asset-management:begin"),
+    "asset schemas require the shared project-storage capability before activation");
   assert.ok(fixture.logs.indexOf("activate:documents:complete") < fixture.logs.indexOf("activate:project-management:begin"), "the document service must be available before project management activation");
   assert.ok(fixture.logs.indexOf("activate:project-management:complete") < fixture.logs.indexOf("activate:canvas:begin"), "the canvas service activates after project management");
   assert.ok(fixture.logs.indexOf("activate:canvas:complete") < fixture.logs.indexOf("activate:timeline:begin"), "the canvas service is available before timeline");

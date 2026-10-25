@@ -67,9 +67,9 @@ function TreeNode({
           <button type="button" className="file-tree-entry file-tree-folder-toggle" style={indentation} title={node.name}
             disabled={loading}
             aria-expanded={expanded.has(node.path)} onClick={() => onToggleFolder(node.path)}>
-            <Icon name="chevronRight" size="small" />
+            <Icon name={expanded.has(node.path) ? "chevronDown" : "chevronRight"} size="small" />
             <Icon name="folder" />
-            <span>{node.name}</span>
+            <span className="file-tree-label">{node.name}</span>
           </button>
         </ContextMenuRegion>
         {expanded.has(node.path) && <ul>
@@ -110,7 +110,10 @@ function TreeNode({
         >
           <span className="file-tree-spacer" />
           <Icon name="file" />
-          <span>{node.name}</span>
+          <span className="file-tree-label">{node.name}</span>
+          <span className="file-tree-entry-state" aria-hidden="true">
+            {selected && <Icon name="check" size="small" />}
+          </span>
         </button>
       </ContextMenuRegion>
     </li>

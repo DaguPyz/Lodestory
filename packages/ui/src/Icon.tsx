@@ -58,6 +58,19 @@ const shapes = {
       <rect x="14" y="14" width="6" height="6" rx="1" />
     </>
   ),
+  // Lucide's layers and sliders-horizontal paths (ISC); see THIRD_PARTY_NOTICES.md.
+  layers: (
+    <>
+      <path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z" />
+      <path d="M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12" />
+      <path d="M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17" />
+    </>
+  ),
+  slidersHorizontal: (
+    <>
+      <path d="M10 5H3M12 19H3M14 3v4M16 17v4M21 12h-9M21 19h-5M21 5h-7M8 10v4M8 12H3" />
+    </>
+  ),
   chevronRight: <path d="m9 5 7 7-7 7" />,
   chevronDown: <path d="m5 9 7 7 7-7" />,
   close: <path d="m6 6 12 12M18 6 6 18" />,
@@ -94,7 +107,14 @@ const shapes = {
       <path d="m16 16 5 5" />
     </>
   ),
-  trash: <path d="M4 7h16M10 11v5M14 11v5M7 7l1 13h8l1-13M9 7V4h6v3" />,
+  trash: (
+    <>
+      <path d="M4 7h16" />
+      <path d="M9 7V5.5A1.5 1.5 0 0 1 10.5 4h3A1.5 1.5 0 0 1 15 5.5V7" />
+      <path d="m6.5 7 .75 11.5A1.5 1.5 0 0 0 8.75 20h6.5a1.5 1.5 0 0 0 1.5-1.5L17.5 7" />
+      <path d="M10 11v5M14 11v5" />
+    </>
+  ),
   more: (
     <>
       <circle cx="5" cy="12" r="1" />

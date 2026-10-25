@@ -41,17 +41,16 @@ test("the UI package exposes its components, React peer, declaration build, and 
   assert.match(stylesheet, /--ui-duration-dialog/);
   assert.match(stylesheet, /--ui-duration-normal/);
   assert.match(stylesheet, /--ui-duration-fast/);
-  assert.match(stylesheet, /--ui-motion-offset/);
+  assert.doesNotMatch(stylesheet, /--ui-motion-offset/, "opacity-only floating transitions do not use positional motion tokens");
   assert.match(stylesheet, /\.ui-dialog\[data-ui-dialog-size="narrow"\]/);
   assert.match(stylesheet, /\.ui-dialog\[data-ui-dialog-size="wide"\]/);
   assert.match(stylesheet, /\.ui-dialog\[data-ui-dialog-size="large"\]/);
-  assert.match(stylesheet, /\.ui-select-popup\[data-starting-style\]\[data-side="bottom"\]/);
-  assert.match(stylesheet, /\.ui-select-popup\[data-starting-style\]\[data-side="top"\]/);
-  assert.match(stylesheet, /\.ui-select-popup\[data-starting-style\]\[data-side="right"\]/);
-  assert.match(stylesheet, /\.ui-select-popup\[data-starting-style\]\[data-side="left"\]/);
+  assert.match(stylesheet, /\.ui-select-popup:is\(\[data-starting-style\], \[data-ending-style\]\)\s*\{\s*transition-duration:\s*var\(--ui-duration-normal, 150ms\)/);
   assert.match(stylesheet, /--ui-dialog-actions-gap/);
   assert.match(stylesheet, /--ui-dialog-button-gap/);
   assert.doesNotMatch(stylesheet, /transition\s*:\s*all\b/i);
+  assert.doesNotMatch(stylesheet, /(?:^|\n)\s*translate\s*:/i, "floating controls fade without a movement transition");
+  assert.doesNotMatch(stylesheet, /transition-property\s*:[^;]*\btranslate\b/i);
   assert.doesNotMatch(stylesheet, /(?:^|\n)\s*transition(?:-property)?\s*:[^;]*(?:\bcolor\b|\bbackground\b)/i,
     "theme colors remain synchronous so a switch cannot interpolate an unreadable palette");
   assert.match(stylesheet, /\.icon-button/);
@@ -59,7 +58,8 @@ test("the UI package exposes its components, React peer, declaration build, and 
   assert.match(stylesheet, /\.ui-text-control/);
   assert.match(stylesheet, /border:\s*1px solid var\(--ui-border-default, var\(--ui-border-control\)\)/);
   assert.match(stylesheet, /font-family:\s*var\(--ui-font-interface\)/);
-  assert.match(stylesheet, /caret-color:\s*var\(--ui-caret-foreground\)/);
+  assert.match(stylesheet, /--cmp-text-control-caret:\s*var\(--ui-caret-foreground\)/);
+  assert.match(stylesheet, /caret-color:\s*var\(--cmp-text-control-caret\)/);
   assert.match(stylesheet, /--ui-selection-foreground/);
   assert.match(stylesheet, /\.ui-text-control:is\(\[aria-invalid="true"\], \[aria-invalid="grammar"\], \[aria-invalid="spelling"\]\)/);
   assert.match(stylesheet, /\.ui-select\s*\{/);
@@ -165,8 +165,39 @@ test("UI styles use registered host tokens without embedding a second palette", 
   const consumed = [...stylesheet.matchAll(/var\((--ui-[\w-]+)\)/g)].map(match => match[1]);
   assert.deepEqual([...new Set(consumed)].filter(variable => !known.has(variable)), []);
   assert.doesNotMatch(stylesheet, /#[\da-f]{3,8}\b|(?:rgb|hsl|oklch)\s*\(|data-ui-theme\s*=/i);
+  assert.doesNotMatch(stylesheet, /\.ui-text-control:where\(:hover, :active\)[^{]*\{[^}]*border-color\s*:/s);
+  assert.doesNotMatch(stylesheet, /\.ui-select-trigger:where\(\[data-variant="field"\]\):where\(:hover/);
+  assert.doesNotMatch(stylesheet, /\.search-field:where\(:hover\)[^{]*\{[^}]*border-color\s*:/s);
   // The four roles deliberately differ from their legacy default aliases in custom themes.
   for (const role of ["action.foreground", "state.disabledForeground", "selection.foreground", "caret.foreground"]) {
     assert.ok(consumed.includes(registry.colors.find(color => color.id === role).cssVariable), role);
   }
+  for (const [name, value] of Object.entries({
+    "--ui-radius-control": "0.375rem",
+    "--ui-radius-row": "0.25rem",
+    "--ui-radius-overlay": "0.375rem",
+    "--ui-radius-dialog": "0.5rem",
+    "--ui-duration-fast": "150ms",
+    "--ui-duration-normal": "150ms",
+    "--ui-duration-dialog": "150ms",
+    "--ui-motion-offset": "0px",
+  })) assert.ok(geometry.includes(`${name}: ${value};`), `${name} has the new shared value`);
+});
+
+test("toggle Buttons reserve a check slot, while IconButtons remain centered", async () => {
+  const stylesheet = await readFile(new URL(import.meta.resolve("@lodestory/ui/styles.css")), "utf8");
+
+  assert.match(stylesheet, /\.button:where\(\[aria-pressed\], \[aria-selected\]\)\s*\{[^}]*padding-inline-end:/s,
+    "text buttons reserve marker space for both selected and unselected toggle states");
+  assert.match(stylesheet, /\.button:where\(\[aria-pressed\], \[aria-selected\]\)::after\s*\{[^}]*background:\s*currentColor/s,
+    "the text button marker follows the active state foreground");
+  assert.match(stylesheet, /clip-path:\s*polygon\(/, "the selected marker is a CSS check, not a whole-control frame");
+  assert.match(stylesheet, /\.button:where\(\[aria-pressed="mixed"\]\)::after\s*\{[^}]*height:\s*2px;[^}]*clip-path:\s*none/s,
+    "the mixed marker is a short solid dash");
+  assert.doesNotMatch(stylesheet, /\.icon-button:where\(\[aria-pressed\], \[aria-selected\]\)/,
+    "IconButton does not reserve marker padding or a gap");
+  assert.doesNotMatch(stylesheet, /\.icon-button[^}]*::after|\.icon-button[^}]*\}\s*::after/s,
+    "IconButton does not draw a duplicate selected marker");
+  assert.doesNotMatch(stylesheet, /border:\s*1px solid var\(--ui-accent-indicator\)/,
+    "selected controls do not use an accent border marker");
 });

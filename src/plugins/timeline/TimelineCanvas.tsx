@@ -305,7 +305,7 @@ export function TimelineCanvas({canvas, contextMenus, viewport, active, title, a
         </label>
         {(operationError || snapshot.error) && <p className="timeline-axis-form-error" role="alert">{operationError ?? snapshot.error}</p>}
         <DialogActions>
-          <Button type="button" disabled={snapshot.saving || submitting} onClick={discardDraft}>取消</Button>
+          <Button variant="secondary" type="button" disabled={snapshot.saving || submitting} onClick={discardDraft}>取消</Button>
           <Button type="submit" variant="primary" disabled={snapshot.saving || submitting || !inputValid || (!draftDirty && !snapshot.error)}>
             {snapshot.saving || submitting ? "正在保存…" : snapshot.error && (!draftDirty || snapshot.saveState === "error") ? "重试保存" : "保存设置"}
           </Button>

@@ -1,508 +1,535 @@
-# Lodestory · UI 设计系统规范
+# Lodestory · UI 设计规范
 
-**版本：3.0.0 ｜ 日期：2026-10-22 ｜ 状态：主题、共享变量与现有页面已迁移；跨平台原生客户端验收待完成**
+**版本：4.1.1 ｜ 日期：2026-10-25 ｜ 方向：Notion 风格的安静文档工具 ｜ 状态：主题、共享控件与现有界面已同步；跨平台客户端验收待完成**
 
-适用范围：Lodestory 全部自绘界面，包括应用外壳、所有页面、内置与后续接入的插件界面、`@lodestory/ui`、编辑器工具栏、右键菜单、浮层和弹框。**这是全局统一规范，不是组件展示页或某个插件的局部样式方案。**
+适用于全部自绘界面：应用外壳、插件页面、工作台、`@lodestory/ui`、编辑器周边工具、菜单、浮层与弹框。原生窗口和系统对话框遵循平台行为；作者文稿中的字体、颜色、图片属于内容，不因界面换肤而改写。
 
-视觉基准为本目录的[浅色效果图](浅色.png)与[深色效果图](深色.png)。本规范将两图的共同视觉语言落实为可复用规则；不规定具体页面的内容清单、模块顺序或业务流程。原生系统窗口、系统对话框遵循平台行为；作者文稿中的字体、颜色和图片属于内容，不因界面换肤而改写。
+本版依据用户提供的 Notion 风格描述制定，以亮色为基准，重新设计对应深色。它是 Lodestory 的设计要求，不声称是 Notion 官方规范或其实际产品色值。**新设计要求覆盖旧规范中冲突的视觉与动效约定；现有主题变量契约和插件架构继续有效。** 本目录原有[浅色图](浅色.png)与[深色图](深色.png)属于旧版绿色方向，只保留作历史参考，不再作为本版视觉验收依据。
 
-## 01. 核心设计要求
+## 01. 设计方向与约束
 
-**简约、清新、安静、精细**是全部界面的共同目标。内置浅色与深色采用同一套绿色视觉语言；质感来自表面层次、精确排版、细边界、柔和浮层和一致的交互反馈。
+### VIS-01｜内容优先，界面退后
 
-| 核心要求 | 具体表现 | 验收观察 |
-| --- | --- | --- |
-| 简约 | 减少同时出现的元素与操作；用排版和空间组织内容；辅助操作按需出现 | 用户能快速找到主要内容和主要操作，页面没有重复导航与无意义装饰 |
-| 清新 | 浅色使用近白与灰绿中性色，深色使用炭灰绿；玉绿色集中表达操作与选择 | 内容清晰，强调色有节制，整页没有绿色蒙版或大面积高饱和填充 |
-| 安静 | 导航与辅助工具后退，正文与当前任务优先；用留白和轻微明度差组织区域 | 不以重描边、密集卡片、持续动画争夺注意力 |
-| 精细 | 一致的字体比例、圆角、内边距和图标线条；控件边缘清楚，浮层高低有序 | 同类组件在不同页面仍有相同外观、状态与操作方式 |
+白色承载正文，米白承载导航与辅助区，暖深灰承载文字。层级主要来自排版、留白和很小的表面明度差；蓝色用于必要主操作与链接。焦点使用低饱和灰蓝，选中统一中性灰底；文字项附对勾，纯图标保持居中。不要把整页染成蓝色，也不要沿用旧版绿色外壳。
 
-页面即使使用了正确色值和尺寸，若仍显得局促、碎片化或像密集表格，也未达到上述要求。视觉判断必须结合实际页面截图。
+工作台是连续的文档空间：停靠面板共享边界，内容分组优先使用标题和间距，真实独立对象才使用卡片。标题与内容易于扫描，常用操作位置稳定；辅助操作按需显现，不能挤动正文。
 
-### VIS-01｜内容与层级
+### VIS-02｜必须遵守
 
-- 每个页面有明确的视觉重心。主要内容优先，操作与辅助信息逐级减弱。
-- 欢迎页、项目浏览等入口界面应舒展、易读，有清晰的开始创作入口。
-- 写作工作台保持正文优先，工具区域按需展开。
-- 标题、清晰分组与适当留白共同建立层级；展示页的大标题不应复制到每个工具面板。
-- 长时间使用的界面保持平静；动效服务于操作反馈。
+- 亮色使用 `#FFFFFF` 内容区、`#F7F6F3` 米白辅助区与 `#37352F` 主要文字。
+- 普通悬停仅作低幅度背景变化：亮色 `#EFEDEA`，按下 `#E3E1DB`；选中统一使用中性灰底；文字选项、菜单和列表附同态前景色对勾，混合态显示短横。纯图标控件保持主图标居中，不额外叠加对勾；不绘制彩色整圈或选中下划线。
+- 常规命令按钮采用透明底色；少量明确主操作和危险确认保留现有 `primary`、`danger` 语义，使用本规范的克制实色配对。
+- 使用系统字体、简洁单色线性图标、小圆角和稳定命中区。
+- 普通状态颜色与浮层透明度过渡为 150ms；时间线事件文字悬停按 VIS-03 另用 500ms 联动放大；输入、焦点、选值与关键状态即时生效。
+- 只有真实支持拖动／排序的条目显示拖拽手柄，悬停与键盘进入条目时显现，不改变排版；同时提供等效键盘或菜单操作。
 
-### VIS-02｜空间与表面
+### VIS-03｜禁止事项与冲突裁决
 
-- 应用采用连续的工作空间。停靠面板共享边界，用轻微表面明度差区分导航、工具和内容，分组优先用空间与标题区分。
-- 同类项目采用统一列表或网格。只有真实独立、可操作的内容对象才使用对象容器。
-- 分隔线用于必要的结构关系，避免给每个区域、每个条目都套一层描边。
-- 装饰不承担必要信息；页面不使用持续动画、霓虹、装饰性发光边缘或大面积渐变。清晰的焦点环属于操作反馈。
-- 品牌标志与真实内容素材可以形成辨识度，但不能挤占主要内容和操作空间。
+禁止渐变背景或文字、重阴影、玻璃态、装饰光晕、密集嵌套卡片、大面积鲜艳填色、单侧粗色条装饰、按钮上浮、`translate` 动画，以及悬停时改变边框或阴影。`scale` 仅允许下述时间线事件文字例外。禁止 `transition: all`、弹跳／弹簧缓动和持续装饰动画。
 
-### VIS-03｜参考图的使用
+时间线事件文字悬停以 500ms 同时放大：主标题从 1 倍至 1.2 倍，日期／时间偏移和摘要从 1 倍至 1.05 倍；主标题下的短横线同步以 `scaleX` 从 1 倍伸至 1.2 倍，线宽保持 1px。文字与短横线共用贝塞尔曲线 `cubic-bezier(.2, 0, 0, 1)`，同时开始；移出以相同时长平滑恢复。背景透明、文字颜色不变。按左右对齐固定文字组和短横线对应边缘；节点、布局占位与点击区域保持稳定，其他线条不变。仅在支持悬停且事件画布活跃时启用；系统或用户减少动效时取消缩放。此例外同时适用于亮暗与自定义主题，不扩展至其他控件或端点。
 
-两张效果图共同约束全局的表面层次、色彩气质、字体层级、控件边缘和浮层观感。图中的组件目录、左右两列、分类侧栏、顶部链接和页脚是展示编排，不要求业务页面复制。
+圆角上限为 8px，圆形头像、开关轨道、真实数据节点及平台窗口轮廓按其用途例外；普通按钮、标签和卡片不能做成胶囊。静态居中定位可以使用 transform，用户直接拖动时的位置更新可以即时跟手；两者都不构成允许位移过渡的理由。
 
-图片不能证明逻辑 CSS 尺寸或精确色值。本文的数值是据此明确制定的设计基线，不是截图像素测量结果。浅深图之间偶然的图标差异、位置差异、光照斑驳或局部纹理不属于主题差异；实现使用相同结构、图标和尺寸。图中未绘制模态遮罩仅为展示需要，真实模态仍遵守焦点与遮罩规则。
+参考稿中的 `active:scale-95`、`hover:shadow-md`、输入框 `transition-all` 以及装饰性拖拽手柄不采用。其通用大标题、Hero 和卡片网格只是网页示例，不要求工作台照搬。`border-gray-200` 只适合作装饰边线，不能替代识别空输入框所需的边界。低对比度亮蓝、亮红、黄色只作为调色起点，不能直接作小字或白字按钮背景。
 
-## 02. 统一规则与页面差异
+## 02. 主题契约与插件接入
 
-### GOV-01｜规范效力
+### GOV-01｜唯一来源
 
-用户确认的设计方向、系统原生行为与可访问性要求共同构成基础约束；公共组件、页面实现与效果图应与本规范一致。本版替代旧版蓝色内置主题、旧浮层几何和局部控件外观约定；历史文档中的视觉描述不能成为继续使用旧样式的依据。
+| 内容 | 编辑与消费方式 |
+| --- | --- |
+| 颜色角色、CSS 映射、配对与缺省规则 | [颜色登记表](../src/plugins/theme/color-registry.json)是唯一机器编辑源；契约说明见[主题标准 v1](../文档/主题标准-v1.md) |
+| 本版亮暗设计目标 | 本文第 03 节；色值不得复制成页面私有配色 |
+| 当前运行配色 | [浅色主题](../src/plugins/builtin-themes/light.theme.json)与[深色主题](../src/plugins/builtin-themes/dark.theme.json)；已采用本版完整配色 |
+| 字体、尺寸、密度、圆角与时长 | [共享 tokens](../src/styles/tokens.css)；本文标明新目标及现有差异 |
+| 公共组件与交互实现 | [@lodestory/ui](../packages/ui/README.md)，统一消费 `--ui-*` |
+| 动效细则与生命周期 | [统一动效规范](动效规范.md)，与本版同步重订 |
 
-本规范中的默认值是对应语义角色和密度预设的基线。页面可选择已定义的预设，按内容和空间组织布局。不得机械地把同一个字号、行高和边距套用到所有页面。
+后续变更编辑上述对应源，再运行现有生成脚本；不能手改生成的 `theme-colors.css`、SDK 颜色类型、Schema 或颜色角色登记文档。
 
-### GOV-02｜页面可以决定的内容
+### GOV-02｜归属、协作与生命周期
 
-页面可以决定信息内容、模块顺序、显示条件、布局比例、对齐方式，以及使用哪种已定义的密度和组件变体。
+| 问题 | 本版约束 |
+| --- | --- |
+| 归属 | 主题插件管理配色与选择，内置主题插件贡献预设；UI 包拥有共享控件外观；布局及业务插件各自拥有呈现结构与业务状态 |
+| 协作 | 沿用 `@lodestory/sdk/theme` 的 `themeKey`、`ThemeDefinition`、`ThemeService` 和登记过的颜色角色；不新增业务或组件专属颜色接口 |
+| 接入 | 配色贡献者声明 `requires: [themeKey]`，经 `context.get(themeKey).registerTheme(...)` 登记；页面、根包装、布局内容和编辑器仍走其现有公开登记接口 |
+| 生命周期 | 主题与偏好属于应用实例；贡献者保留撤销函数，监听与登记在退出或失败时清理；先停止 UI 使用服务，再释放服务；换肤不能重建编辑器、丢失输入或绕过保存失败保护 |
+| 验收 | 相同组件只消费标准角色，替换主题无需改消费者；浮层、选区、焦点同步更新，项目会话与作者内容保留 |
 
-配色、字体体系、控件角色、圆角、状态与动效必须使用共享定义。页面不得自定另一套按钮、输入、选择器或弹框外观，也不得因“编辑器”“设置页”等身份覆盖这些组件的内部状态。布局需要新预设时，应先补充本规范与共享变量，再用于页面；普通布局组合不需要额外的审批流程。
+`src/plugin-core/` 不识别主题、页面或编辑器业务，入口只装配。`@lodestory/ui` 是共享组件包，不变成业务运行时插件；插件不能导入其他插件的私有主题 store、编辑器实例或内部 Context。
 
-### GOV-03｜唯一事实来源
+### GOV-03｜主题选择与切换
 
-本文件是全局视觉设计的现行规范；效果图用于对照观感，本文明确的角色、数值和可访问性要求用于实施与验收。现有代码中的旧值不能反过来限制新版设计方向，但文档更新也不代表代码已经同步。
+保留当前 `lodestory.builtin.light`／`lodestory.builtin.dark` 身份；以亮色作为调色基准不等于更改默认选择。当前[配置](../src/plugins/theme/theme-config.json)默认选择内置深色，本次同步不改用户偏好。
 
-颜色采用[主题标准 v1](../文档/主题标准-v1.md)的单层通用角色，按视觉用途与交互状态命名；组件和页面引用这些角色，不另建专属颜色表。字体、密度、圆角、尺寸及布局继续由本规范管理。
+主题按 ID 平级选择，`light`／`dark` 只是明暗属性；“跟随系统”分别选择两套已登记主题。根的 `data-ui-theme-id` 表达实际主题，`data-ui-theme` 与 `color-scheme` 表达明暗属性。组件不能按 ID 或明暗属性写死配色分支。
 
-颜色名称、配对规则与缺省解析的唯一机器编辑源为[颜色登记表](../src/plugins/theme/color-registry.json)，内置主题完整执行配色保存在主题 JSON；布局与组件几何保存在共享 tokens，阴影配方几何由颜色登记表的 `shadowRecipes` 管理。本文的关键色值表是本版迁移目标，不能复制为页面内第二套 CSS 配色。设计值变更须同步规范、对应共享源及验收；生成文件由脚本更新。主题标准 v1 中旧内置配色的描述属于待同步内容，其契约、语义角色和配对规则继续有效。
+切换时所有颜色在同一更新批次替换，不跨主题插值；已展开的 Select、Menu、Tooltip、Dialog 和 Portal 同步更新。当前值、输入、选区、展开状态与焦点保留。密度只影响几何，不覆盖主题。
 
-### GOV-04｜单位与缩放
+## 03. 亮色与对应深色
 
-本文 px 指 100% UI 缩放下的逻辑 CSS 像素。可缩放尺寸优先使用 rem，基准为 1rem = 16px；精细边线使用 px。应用缩放与文稿字号分别控制，禁止通过整体 transform 缩放模拟界面缩放。
+### COL-01｜配色原则与完整映射
 
-## 03. 配色与材质
+本节是两套内置预设的**现行配色基线**，每个登记角色都明确给出亮暗值。自定义主题仍可使用其他色系，消费者必须按语义取色。左列是主题 JSON 的 `colors` key，中列是已有 CSS 变量；名字不一定一一同形，例如 `surface.content` 对应 `--ui-surface-workspace`，`border.strong` 对应 `--ui-border-control`。
 
-颜色用途、状态搭配和对比度规则以[主题标准 v1](../文档/主题标准-v1.md)及[颜色角色登记表](../文档/主题标准-v1/颜色角色登记表.md)为准。本节规定内置主题的新视觉目标；色相不改变角色含义。
+全部颜色使用 sRGB `#RRGGBB`；仅遮罩和阴影使用登记允许的 `#RRGGBBAA`。相同色值不代表角色可以互换；焦点、选中、危险操作和成功状态继续拥有各自语义。
 
-### COL-01｜内置主题与通用角色
+#### 中性表面（6）
 
-内置浅色采用暖白、轻灰绿承载面和深墨绿色文字；内置深色采用炭灰绿、柔和浅色文字和更亮的浮层。两者均以玉绿色表达主操作和选择。深色不使用整页纯黑、蓝紫底或霓虹绿，浅色不使用全页绿色染色。
-
-保留当前默认选择内置深色的策略；两张效果图本身不改变默认主题或用户偏好。执行配色入口为[深色主题](../src/plugins/builtin-themes/dark.theme.json)和[浅色主题](../src/plugins/builtin-themes/light.theme.json)，当前迁移状态见 TOK-02。
-
-这两套配色属于内置主题的设计，自定义主题可以采用其他色系。各 UI 实现按实际视觉用途取用同一套标准角色，不按页面或插件身份另建颜色，也不把历史 CSS 变量名当成组件专属规则。
-
-#### 内置主题关键色值目标
-
-以下均为 sRGB 色值；为本版规范制定值，不宣称逐像素取自图片。状态前景必须使用同态配对，不能从本表任取一个“看起来合适”的颜色。
-
-| 通用角色 | 浅色目标 | 深色目标 | 用途 |
+| 角色 | CSS 变量 | 浅色 | 深色 |
 | --- | --- | --- | --- |
-| `surface.root` | `#F3F6F3` | `#111813` | 应用最底层承载面 |
-| `surface.content` | `#F9FAF8` | `#151C19` | 主要内容承载面 |
-| `surface.secondary` | `#EFF3EF` | `#18221C` | 辅助内容承载面 |
-| `surface.tonal` | `#E9EFEB` | `#1C2922` | 需要轻微区分的内部区域 |
-| `surface.control` | `#FFFFFF` | `#202B25` | 输入与中性控件 |
-| `surface.floating` | `#FFFFFF` | `#26342C` | 菜单、弹框等浮层 |
-| `text.primary` | `#23392F` | `#E6EEE7` | 主要文字与普通图标 |
-| `text.secondary` | `#526258` | `#A6B7AB` | 说明、辅助导航 |
-| `text.muted`、`text.placeholder` | `#606D63` | `#96A89D` | 次要信息、输入占位 |
-| `text.reading` | `#23392F` | `#DFE8E1` | 无作者自定义格式的阅读文字 |
-| `border.divider` | `#DEE6DF` | `#2A382F` | 结构分隔，不独自承担识别 |
-| `border.decoration` | `#CFD9D1` | `#3D4D42` | 装饰性轮廓 |
-| `border.default` | `#7C8B81` | `#6B8072` | 中性承载面上的常态必要边界；按各中性表面校验 3:1 对比度 |
-| `border.strong` | `#78867D` | `#82968A` | 识别控件所必需的边界；已按按下态背景校验 3:1 对比度 |
-| `action.background` | `#2D7560` | `#2F7C61` | 主操作常态 |
-| `action.hoverBackground` | `#256651` | `#318067` | 主操作悬停 |
-| `action.pressedBackground` | `#205744` | `#205B48` | 主操作按下 |
-| `action.foreground`、`text.onAction` | `#FFFFFF` | `#FFFFFF` | 主操作三态前景 |
-| `accent.foreground`、`link.foreground` | `#256651` | `#8BD2B3` | 强调文字与链接 |
-| `accent.indicator`、`focus.ring` | `#2D7560` | `#83CBA9` | 选择标记、正常邻接面的焦点环 |
-| `caret.foreground` | `#23392F` | `#E6EEE7` | 普通输入光标 |
-| `selection.background` | `#CBE3D6` | `#315A46` | 文字选区底色 |
-| `selection.foreground` | `#173E2D` | `#F0F7F2` | 文字选区前景 |
+| `surface.root` | `--ui-surface-root` | `#F7F6F3` | `#191918` |
+| `surface.content` | `--ui-surface-workspace` | `#FFFFFF` | `#20201E` |
+| `surface.secondary` | `--ui-surface-panel` | `#F7F6F3` | `#1C1C1A` |
+| `surface.tonal` | `--ui-surface-chrome` | `#F1F0ED` | `#252523` |
+| `surface.control` | `--ui-surface-control` | `#FFFFFF` | `#252523` |
+| `surface.floating` | `--ui-surface-overlay` | `#FFFFFF` | `#2C2C29` |
 
-表面角色按实际用途选择，不按插件名称绑定。浅色浮层主要依靠轻阴影和边界分离；深色浮层同时依靠稍亮的表面分离，不能单纯加重黑色阴影。辅助区保持较低视觉权重，但文字和必要控件边界仍满足对比度要求。
+#### 文字（7）
 
-### COL-02｜操作与状态颜色
+| 角色 | CSS 变量 | 浅色 | 深色 |
+| --- | --- | --- | --- |
+| `text.primary` | `--ui-text-primary` | `#37352F` | `#F1F0EB` |
+| `text.secondary` | `--ui-text-secondary` | `#5D5A53` | `#C6C4BC` |
+| `text.muted` | `--ui-text-muted` | `#6B6860` | `#AAA8A0` |
+| `text.placeholder` | `--ui-text-placeholder` | `#6B6860` | `#AAA8A0` |
+| `text.disabled` | `--ui-text-disabled` | `#77746D` | `#89877F` |
+| `text.reading` | `--ui-text-document` | `#37352F` | `#E7E5DE` |
+| `text.onAction` | `--ui-text-on-action` | `#FFFFFF` | `#FFFFFF` |
 
-一个操作上下文最多有一个实色主操作，其余操作使用中性或轻量外观。主操作与危险操作分别使用 `action.*`、`danger.*` 的完整背景前景组合，不能交叉借色。
+#### 边界（4）
 
-状态提示使用 `status.*`，同时提供文字或图标。分类使用中性样式或 `category.*` 的同槽组合，不借用成功、失败等状态含义。悬停、按下、选中、禁用和键盘焦点遵循登记表的组合及叠加规则，文字选区必须同时指定前景和背景。
+| 角色 | CSS 变量 | 浅色 | 深色 |
+| --- | --- | --- | --- |
+| `border.divider` | `--ui-border-divider` | `#E7E5DF` | `#373734` |
+| `border.decoration` | `--ui-border-decoration` | `#D7D4CC` | `#4A4A45` |
+| `border.default` | `--ui-border-default` | `#807C74` | `#929087` |
+| `border.strong` | `--ui-border-control` | `#625F58` | `#B4B2AA` |
 
-绿色主操作不代表成功；错误、警告、成功、危险操作、类别及作者内容仍保留各自语义。链接悬停／按下／已访问、反色面、放置反馈等继续使用登记的完整角色组合，内置主题迁移时须一并复核，不能遗留旧蓝色作为界面强调色；有信息、类别或内容语义的蓝色可以保留。
+#### 强调、焦点、光标与选区（6）
 
-| 通用交互角色对（背景 / 前景） | 浅色目标 | 深色目标 |
-| --- | --- | --- |
-| `state.hoverBackground / hoverForeground` | `#EAF0EC / #23392F` | `#293B30 / #E6EEE7` |
-| `state.pressedBackground / pressedForeground` | `#DCE7E0 / #23392F` | `#324B3C / #F0F7F2` |
-| `state.selectedBackground / selectedForeground` | `#E7F1EA / #1E5942` | `#203F30 / #D8F2E4` |
-| `state.selectedHoverBackground / selectedHoverForeground` | `#D8EADF / #1E5942` | `#2B503D / #E3F6EC` |
-| `state.selectedPressedBackground / selectedPressedForeground` | `#C8DFD1 / #173E2D` | `#335E48 / #F0FAF4` |
-| `state.inactiveSelectedBackground / inactiveSelectedForeground` | `#E8ECE9 / #526258` | `#2B3730 / #B5C4BA` |
-| `state.disabledBackground / disabledForeground` | `#E7EBE8 / #87948B` | `#303C35 / #83958A` |
-| `state.disabledSelectedBackground / disabledSelectedForeground` | `#DFE8E2 / #6D8173` | `#2C4033 / #91AE9B` |
-| `state.disabledBorder` | `#CCD6CE` | `#46564B` |
+| 角色 | CSS 变量 | 浅色 | 深色 |
+| --- | --- | --- | --- |
+| `accent.foreground` | `--ui-accent-foreground` | `#176985` | `#8CCFE2` |
+| `accent.indicator` | `--ui-accent-indicator` | `#145F79` | `#86CDE2` |
+| `focus.ring` | `--ui-focus-ring` | `#5A6C7B` | `#95A5B2` |
+| `caret.foreground` | `--ui-caret-foreground` | `#37352F` | `#F1F0EB` |
+| `selection.background` | `--ui-text-selection-bg` | `#D8EAF0` | `#234454` |
+| `selection.foreground` | `--ui-selection-foreground` | `#174B5B` | `#EAF7FA` |
 
-表头中的简写在前景项同样带 `state.` 前缀。`text.disabled` 与 `state.disabledForeground` 目标一致。禁用态不通过降低整个组件的 opacity 实现，以免背景混色、文字与选中标记同时丢失。
+#### 通用交互状态（17）
 
-### COL-03｜主题选择与明暗属性
+| 角色 | CSS 变量 | 浅色 | 深色 |
+| --- | --- | --- | --- |
+| `state.hoverBackground` | `--ui-surface-hover` | `#EFEDEA` | `#2F2F2C` |
+| `state.hoverForeground` | `--ui-state-hover-foreground` | `#37352F` | `#F1F0EB` |
+| `state.pressedBackground` | `--ui-surface-pressed` | `#E3E1DB` | `#3A3A35` |
+| `state.pressedForeground` | `--ui-state-pressed-foreground` | `#37352F` | `#F1F0EB` |
+| `state.selectedBackground` | `--ui-surface-selected` | `#E3E1DB` | `#3A3A35` |
+| `state.selectedForeground` | `--ui-state-selected-foreground` | `#37352F` | `#F1F0EB` |
+| `state.selectedHoverBackground` | `--ui-surface-selected-hover` | `#D9D7D0` | `#42423C` |
+| `state.selectedHoverForeground` | `--ui-state-selected-hover-foreground` | `#37352F` | `#F5F3ED` |
+| `state.selectedPressedBackground` | `--ui-state-selected-pressed-background` | `#CFCDC5` | `#4A4A43` |
+| `state.selectedPressedForeground` | `--ui-state-selected-pressed-foreground` | `#2D2B26` | `#FFFFFF` |
+| `state.inactiveSelectedBackground` | `--ui-surface-selected-inactive` | `#ECEAE4` | `#30302D` |
+| `state.inactiveSelectedForeground` | `--ui-state-inactive-selected-foreground` | `#5D5A53` | `#C6C4BC` |
+| `state.disabledBackground` | `--ui-state-disabled-background` | `#EAE8E2` | `#30302D` |
+| `state.disabledForeground` | `--ui-state-disabled-foreground` | `#77746D` | `#98968E` |
+| `state.disabledSelectedBackground` | `--ui-state-disabled-selected-background` | `#E1DFD8` | `#343430` |
+| `state.disabledSelectedForeground` | `--ui-state-disabled-selected-foreground` | `#706D65` | `#A3A198` |
+| `state.disabledBorder` | `--ui-state-disabled-border` | `#C8C5BD` | `#595953` |
 
-所有主题按 ID 平级选择，深色和浅色仅为属性。“跟随系统”是一种选择策略，分别指定系统为浅色和深色时使用的主题，不构成第三套配色。设置与回退行为见[主题管理设计](../文档/需求设计/主题管理.md)。
+#### 主操作与危险操作（8）
 
-根节点的 `data-ui-theme-id` 标识实际主题，`data-ui-theme` 与 `color-scheme` 表达明暗属性。切换保持布局、密度、字体、控件尺度和状态语义，密度容器不覆盖主题。
+| 角色 | CSS 变量 | 浅色 | 深色 |
+| --- | --- | --- | --- |
+| `action.background` | `--ui-action-bg` | `#176985` | `#176985` |
+| `action.hoverBackground` | `--ui-action-bg-hover` | `#155B74` | `#1B7896` |
+| `action.pressedBackground` | `--ui-action-bg-pressed` | `#104C62` | `#125C74` |
+| `action.foreground` | `--ui-action-foreground` | `#FFFFFF` | `#FFFFFF` |
+| `danger.background` | `--ui-danger-bg` | `#B42332` | `#A93440` |
+| `danger.hoverBackground` | `--ui-danger-bg-hover` | `#9E2632` | `#B93D49` |
+| `danger.pressedBackground` | `--ui-danger-bg-pressed` | `#831D2A` | `#8D2C38` |
+| `danger.foreground` | `--ui-danger-foreground` | `#FFFFFF` | `#FFFFFF` |
 
-组件不得按主题 ID、`dark/light` 属性或页面类名写死绿／白／黑色分支。主题切换时，当前打开的 Select、Menu、Tooltip、Dialog 和通过 Portal 渲染的内容必须同步更新；输入、选区、当前值、展开状态和焦点保持。不得通过卸载重建页面或编辑器完成换肤。
+#### 状态提示（16）
 
-### MAT-01｜边界与阴影
+| 角色 | CSS 变量 | 浅色 | 深色 |
+| --- | --- | --- | --- |
+| `status.success` | `--ui-status-success` | `#0F6B5E` | `#87CDB3` |
+| `status.warning` | `--ui-status-warning` | `#755900` | `#E5C66F` |
+| `status.danger` | `--ui-status-danger` | `#AD303B` | `#F09198` |
+| `status.info` | `--ui-status-info` | `#176985` | `#8CCFE2` |
+| `status.successBackground` | `--ui-status-success-background` | `#EAF4EE` | `#1D3029` |
+| `status.successForeground` | `--ui-status-success-foreground` | `#0F6B5E` | `#87CDB3` |
+| `status.successBorder` | `--ui-status-success-border` | `#0F6B5E` | `#87CDB3` |
+| `status.warningBackground` | `--ui-status-warning-background` | `#FFF4D6` | `#332D1B` |
+| `status.warningForeground` | `--ui-status-warning-foreground` | `#755900` | `#E5C66F` |
+| `status.warningBorder` | `--ui-status-warning-border` | `#755900` | `#E5C66F` |
+| `status.dangerBackground` | `--ui-status-danger-background` | `#FBECEE` | `#392426` |
+| `status.dangerForeground` | `--ui-status-danger-foreground` | `#AD303B` | `#F09198` |
+| `status.dangerBorder` | `--ui-status-danger-border` | `#AD303B` | `#F09198` |
+| `status.infoBackground` | `--ui-status-info-background` | `#EAF2F6` | `#1E2D37` |
+| `status.infoForeground` | `--ui-status-info-foreground` | `#176985` | `#8CCFE2` |
+| `status.infoBorder` | `--ui-status-info-border` | `#176985` | `#8CCFE2` |
 
-默认边线为 1px，相邻面板共享一条分隔线。必要控件边界保持可识别；已有明确图标、文字和布局识别的对象不额外增加亮色框线。
+#### 遮罩与阴影（5）
 
-TextField、Textarea、SearchField 与 `field` Select 的未聚焦常态使用 `border.default`，可编辑控件悬停、按下或展开时使用 `border.strong`；只读保持常态边界，聚焦仍清晰可见。两者是不同视觉用途，不能将强边界整体调暗，也不能以装饰边界代替必要边界。旧主题缺少 `border.default` 时引用该主题最终的 `border.strong`；内置主题显式提供较弱的常态值。选中、焦点、校验与禁用继续使用各自状态角色，不随常态边界弱化。
+| 角色 | CSS 变量 | 浅色 | 深色 |
+| --- | --- | --- | --- |
+| `overlay.scrim` | `--ui-overlay-scrim` | `#24231F40` | `#00000070` |
+| `shadow.softAmbient` | `--ui-shadow-soft-ambient-color` | `#2927200D` | `#00000030` |
+| `shadow.softKey` | `--ui-shadow-soft-key-color` | `#29272008` | `#0000001A` |
+| `shadow.deepAmbient` | `--ui-shadow-deep-ambient-color` | `#29272018` | `#00000050` |
+| `shadow.deepKey` | `--ui-shadow-deep-key-color` | `#29272010` | `#00000028` |
 
-停靠面板和列表不使用外投影。控件的轻微触感优先由边界、填充与状态明度建立，不为每个按钮加浮层阴影。浮层使用[阴影配方](../文档/主题标准-v1/颜色角色登记表.md#6-阴影配方)：几何全局固定，颜色来自主题的 `shadow.*`，遮罩来自 `overlay.scrim`。
+#### 搜索高亮（5）
 
-| 层级 | 用途 | 统一几何 / 表现 |
-| --- | --- | --- |
-| 基面 | 外壳、停靠区、列表、阅读区 | 表面明度差，必要时一条 1px 共享边界，无外投影 |
-| 控件 | Button、输入、Select 触发器 | 1px 边界或明确实色轮廓，圆角 8px，不使用菜单级阴影 |
-| 轻浮层 | Select 菜单、Menu、Popover、Tooltip | `soft`：`0 8px 24px 0` + `0 2px 6px 0` |
-| 对话层 | Dialog、模态 Sheet | `deep`：`0 20px 64px 0` + `0 2px 8px 0` |
+| 角色 | CSS 变量 | 浅色 | 深色 |
+| --- | --- | --- | --- |
+| `highlight.background` | `--ui-highlight-background` | `#FFF0B3` | `#3B301B` |
+| `highlight.foreground` | `--ui-highlight-foreground` | `#523900` | `#F6E4B2` |
+| `highlight.activeBackground` | `--ui-highlight-active-background` | `#FFE08A` | `#594316` |
+| `highlight.activeForeground` | `--ui-highlight-active-foreground` | `#422B00` | `#FFF2CB` |
+| `highlight.activeBorder` | `--ui-highlight-active-border` | `#805400` | `#E2C472` |
 
-内置浅色阴影目标：`softAmbient #172A2014`、`softKey #172A200A`、`deepAmbient #172A201F`、`deepKey #172A2014`；深色分别为 `#0000003D`、`#00000029`、`#00000066`、`#00000033`，以上四项均带 `shadow.` 前缀。模态 `overlay.scrim` 浅色为 `#172A203D`，深色为 `#0000007A`。浮层描边只是边缘识别，不与大面积重阴影叠加成厚框。
+#### 拖放反馈（7）
 
-效果图中主按钮的细微顶边亮度可作为后续共享材质增强：只能由 UI 包统一提供，并先定义可复用的材质参数、主题取色和对比度校验；未登记前使用上述纯色基线。v1 主题不接受渐变、组件专属高光色或阴影几何字段，页面不得自行添加白色高光、渐变或按钮投影来模仿图片。
+| 角色 | CSS 变量 | 浅色 | 深色 |
+| --- | --- | --- | --- |
+| `drop.allowedBackground` | `--ui-drop-allowed-background` | `#EAF4EE` | `#1D3029` |
+| `drop.allowedForeground` | `--ui-drop-allowed-foreground` | `#0F6B5E` | `#87CDB3` |
+| `drop.allowedBorder` | `--ui-drop-allowed-border` | `#0F6B5E` | `#87CDB3` |
+| `drop.forbiddenBackground` | `--ui-drop-forbidden-background` | `#FBECEE` | `#392426` |
+| `drop.forbiddenForeground` | `--ui-drop-forbidden-foreground` | `#AD303B` | `#F09198` |
+| `drop.forbiddenBorder` | `--ui-drop-forbidden-border` | `#AD303B` | `#F09198` |
+| `drop.insertionIndicator` | `--ui-drop-insertion-indicator` | `#145F79` | `#86CDE2` |
 
-默认内容区不使用模糊、噪点、暗角与摄影式光照。系统窗口圆角、阴影与原生材质由平台管理。
+#### 链接（6）
 
-## 04. 排版与视觉尺度
+| 角色 | CSS 变量 | 浅色 | 深色 |
+| --- | --- | --- | --- |
+| `link.foreground` | `--ui-link-foreground` | `#176985` | `#8CCFE2` |
+| `link.hoverForeground` | `--ui-link-hover-foreground` | `#145B75` | `#B4E0EC` |
+| `link.pressedForeground` | `--ui-link-pressed-foreground` | `#104C62` | `#D1EDF4` |
+| `link.visitedForeground` | `--ui-link-visited-foreground` | `#69527A` | `#C5A9D0` |
+| `link.visitedHoverForeground` | `--ui-link-visited-hover-foreground` | `#554265` | `#DAC5E0` |
+| `link.visitedPressedForeground` | `--ui-link-visited-pressed-foreground` | `#453751` | `#E9DCEC` |
 
-### TYPE-01｜字体角色
+#### 反色面（4）
 
-界面使用系统无衬线字体，文稿使用适合中文阅读的衬线字体，路径等信息按需要使用等宽字体。界面字体在同一平台保持一致，不要求安装在线字体。
+| 角色 | CSS 变量 | 浅色 | 深色 |
+| --- | --- | --- | --- |
+| `surface.inverse` | `--ui-surface-inverse` | `#37352F` | `#E7E5DE` |
+| `text.inverse` | `--ui-text-inverse` | `#F7F6F3` | `#252523` |
+| `border.inverse` | `--ui-border-inverse` | `#A6A39A` | `#7E7C75` |
+| `focus.inverseRing` | `--ui-focus-inverse-ring` | `#95A5B2` | `#5A6C7B` |
 
-~~~css
+#### 分类槽位（18）
+
+| 角色 | CSS 变量 | 浅色 | 深色 |
+| --- | --- | --- | --- |
+| `category.1.background` | `--ui-category-1-background` | `#E8F0F8` | `#243A50` |
+| `category.1.foreground` | `--ui-category-1-foreground` | `#294B6B` | `#A8C8E5` |
+| `category.1.border` | `--ui-category-1-border` | `#294B6B` | `#BCD4E8` |
+| `category.2.background` | `--ui-category-2-background` | `#F1EAF3` | `#4B3853` |
+| `category.2.foreground` | `--ui-category-2-foreground` | `#61416D` | `#D5AEE1` |
+| `category.2.border` | `--ui-category-2-border` | `#61416D` | `#D7BCE0` |
+| `category.3.background` | `--ui-category-3-background` | `#E8F1EC` | `#28483D` |
+| `category.3.foreground` | `--ui-category-3-foreground` | `#31594C` | `#8FCBB1` |
+| `category.3.border` | `--ui-category-3-border` | `#31594C` | `#A8D2BE` |
+| `category.4.background` | `--ui-category-4-background` | `#F4ECE2` | `#563B2B` |
+| `category.4.foreground` | `--ui-category-4-foreground` | `#74492B` | `#D9AF86` |
+| `category.4.border` | `--ui-category-4-border` | `#74492B` | `#DFC5A7` |
+| `category.5.background` | `--ui-category-5-background` | `#F4E9EC` | `#54343D` |
+| `category.5.foreground` | `--ui-category-5-foreground` | `#713E4A` | `#D89BAA` |
+| `category.5.border` | `--ui-category-5-border` | `#713E4A` | `#DDB5BE` |
+| `category.6.background` | `--ui-category-6-background` | `#F0EFDE` | `#47471F` |
+| `category.6.foreground` | `--ui-category-6-foreground` | `#5B591F` | `#C9C88C` |
+| `category.6.border` | `--ui-category-6-border` | `#5B591F` | `#D5D3A9` |
+
+### COL-02｜深色如何从亮色重新建立
+
+深色不是 RGB 逐通道取反，也不通过滤镜把白色页面反转。保留亮色的角色关系：内容与辅助区只作细微区分，控件和浮层略亮，悬停与按下逐步加亮；暖灰文字与底面保持一致色温，蓝色强调变亮并控制饱和感。
+
+调色按以下顺序完成：
+
+1. 固定亮色的白、米白、暖深灰与两级中性交互底色；把深色基础表面重建为暖炭灰，避免沿用旧灰绿色。
+2. 在深色基面上提高文字、图标与强调色的亮度，选择中性选中底色；状态色、分类色和搜索高亮分别配置柔和底色与清楚的前景。
+3. 对照登记表的每一组前景／背景关系计算对比度。文字至少 4.5:1，必要边界、光标和焦点至少 3:1；禁用配对按登记豁免，装饰分隔线和阴影不冒充必要边界。阈值依据 [WCAG 文字对比度](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)与[非文字对比度](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html)。
+4. 以最不利的允许背景修正颜色，直至亮暗两套均通过；最后再核对层次和实际渲染。计算通过只证明这些配对，不等于应用已完成可访问性验收。
+
+计算使用与项目校验器相同的相对亮度公式：将每个 sRGB 通道归一化至 0–1；当通道值 `c ≤ 0.04045`，线性值为 `c / 12.92`，否则为 `((c + 0.055) / 1.055)^2.4`。相对亮度 `Y = 0.2126R + 0.7152G + 0.0722B`；对比度为 `(较亮 Y + 0.05) / (较暗 Y + 0.05)`，以未四舍五入的结果判断阈值。
+
+本版配色按当前登记表的 109 个角色、356 组关系校验：346 组有数值阈值，另外 10 组是登记明确的禁用豁免。亮暗两套各通过全部 346 组有效关系；下表为按阈值分类的实际最小值，显示值保留三位小数，判定使用原始精度。
+
+| 计算范围 | 亮色最低对比度 | 深色最低对比度 | 阈值 |
+| --- | --- | --- | --- |
+| 文字类配对（160 组／主题） | 4.882:1 | 4.747:1 | ≥4.5:1 |
+| 必要边界／指示类配对（186 组／主题） | 3.412:1 | 3.314:1 | ≥3:1 |
+
+本节色值已同步至内置主题和生成配色，透明阴影与遮罩不属于上述不透明配对计算。深色取值是按视觉角色重建、由对比度计算约束得到的一套设计方案，不是把每个亮色色值代入同一个取反公式。
+
+焦点角色在全部允许邻接面上的最低对比度：亮色 `focus.ring` 3.412:1、`focus.inverseRing` 4.848:1；深色分别为3.531:1、4.310:1。降低的是饱和度，不能通过透明化或取消键盘焦点来降低存在感。
+
+主题系统只会按 `type` 补齐缺省值及角色引用，**不会自动把亮色计算成深色，也不会继承另一主题**。内置主题分别显式填写完整的 109 个角色，避免未覆盖项随缺省值变更而偏离预设；自定义主题仍允许按契约只填写部分角色。
+
+### COL-03｜配对、边界与强调
+
+- 同一状态的背景和前景成套取用；主操作三态使用 `action.*`，危险操作使用 `danger.*`，不能借用普通悬停背景。
+- 普通选中统一用中性灰底。文字选项、菜单与列表用对勾，混合态用短横；纯图标控件保留主图标居中，不额外加勾；不再用彩色整圈、侧边粗线、Tab下划线或发光表达选中。对勾使用对应的 selected／selectedHover／selectedPressed／inactiveSelected／disabledSelected 前景，不能借用焦点色或强调色。复选框和单选控件本身的勾选标记不重复绘制。
+- `border.divider` 用于结构分隔，`border.decoration` 用于已有其他识别线索的轮廓；`border.default` 承担空输入等必要边界。`border.strong` 保留其契约用途，但不因悬停自动切换。
+- `accent.foreground` 与 `accent.indicator` 继续表达其已登记的业务强调用途，普通控件选中不再引用 `accent.indicator`。普通中性面焦点用 `focus.ring`，反色面用 `focus.inverseRing`，两者为低饱和灰蓝且保持必要对比。焦点保留2px清晰实线，不用透明光晕代替，也不与选中对勾混用。
+- `status.*` 与文字／图标共同表达状态；`category.1–6` 只表达分类，不隐含成功或失败；`highlight.*` 用于搜索高亮，当前命中需额外标记；`drop.*` 只用于真实放置反馈。
+- 链接、已访问链接、反色面、文字选区均使用各自配对。不要以 `text.primary` 覆盖彩色状态块的专用前景，不通过组件整体 opacity 制造禁用态。
+
+### MAT-01｜平面、边线与浮层
+
+基面、停靠区、普通行与卡片默认无外投影。边线为 1px，相邻区域共享一条分隔线。输入常态、悬停和按下保持同一边框；焦点或校验可以显式改变边界，但不能改变尺寸或产生过渡闪动。
+
+浮层按既有配方取色，不新增主题字段：`soft` 对应 `--ui-shadow-popover`，几何为 `0 8px 24px 0` 与 `0 2px 6px 0`；`deep` 对应 `--ui-shadow-dialog`，几何为 `0 20px 64px 0` 与 `0 2px 8px 0`。配方名称只表示层级；第 03 节限制其透明度，不能因此使用重投影。悬停不改变阴影，深色依靠更亮的浮层表面和细轮廓分离。
+
+默认界面不使用模糊、噪点、暗角、渐变、高光描边或摄影式光照。平台原生阴影由系统管理。
+
+## 04. 排版
+
+### TYPE-01｜系统字体与作者内容
+
+界面使用系统无衬线字体，不引入在线展示字体；路径与快捷键使用等宽字体。沿用现有变量：
+
+```css
 --ui-font-interface: -apple-system, BlinkMacSystemFont, "Segoe UI",
   "PingFang SC", "Microsoft YaHei UI", "Noto Sans CJK SC", sans-serif;
 --ui-font-document: "Noto Serif CJK SC", "Source Han Serif SC",
   "Songti SC", SimSun, serif;
 --ui-font-mono: ui-monospace, SFMono-Regular, Consolas,
   "Liberation Mono", monospace;
-~~~
+```
 
-### TYPE-02｜字号、行高与字重
+文稿衬线字体是阅读默认值；作者格式与阅读偏好优先，不为模仿参考风格强制重写文稿。界面不主动选用 Inter／Roboto／Geist；平台字体回退由系统决定。
 
-| 文本角色 | 字号 / 行高 px | 字重 | 用途 |
+### TYPE-02｜层级
+
+| 角色 | 字号 / 行高 | 字重 | 用途 |
 | --- | --- | --- | --- |
-| Display | 40 / 48 | 600 | 欢迎页等入口界面的主要标题 |
-| PageTitle | 32 / 40 | 600 | 内容页面主标题 |
-| Title | 20 / 28 | 600 | 内容分组与常规弹框标题 |
-| Strong | 16 / 24 | 600 | 面板标题、条目名称、关键信息 |
-| Body | 16 / 24 | 400 | 页面说明与内容文字 |
-| Label | 14 / 20 | 500 | 常规控件与工具区域标签 |
-| Caption | 13 / 20 | 400 | 常规元信息与辅助说明 |
-| Mono | 13 / 20 | 400 | 路径、快捷键与标识符 |
-| Document | 18 / 32 | 400 | 作者正文默认值 |
+| Display | 40 / 48px，窄空间 32 / 40px | 600 | 欢迎页主要标题 |
+| PageTitle | 32 / 40px，窄空间 24 / 32px | 600 | 内容页主标题 |
+| Title | 20 / 28px | 600 | 分组与弹框标题 |
+| Strong | 16 / 24px | 600 | 面板标题、关键名称 |
+| Body | 16 / 24px | 400 | 界面正文 |
+| Label | 14 / 20px | 500 | 控件与工具标签 |
+| Caption | 13 / 20px | 400 | 元信息与辅助说明 |
+| Mono | 13 / 20px | 400 | 路径、快捷键、标识符 |
+| Document | 18 / 32px | 400 | 作者正文默认值 |
 
-Spacious 预设中的控件标签使用 16 / 24，元信息使用 14 / 20。Compact 预设保持 14 / 20 的控件标签，次要元信息允许使用 12 / 18；不得继续缩小正常文字。
+Spacious 的 Label 为 16 / 24px，Caption 为 14 / 20px；Compact 的 Label 仍为 14 / 20px，Caption 可为 12 / 18px。正常文本不再缩小。字重采用 400／500／600；中文不额外拉字距，不用全大写字距标签反复装饰分组。
 
-空间不足时，Display 可以切换至已定义的 32 / 40 变体，PageTitle 可以切换至 24 / 32。仍不足时应换行或调整布局。主要标题不自动退化为普通控件字号。
+### TYPE-03｜长内容与行宽
 
-字重采用 400 / 500 / 600。标题不使用超黑字重制造视觉冲击，正文与说明不全部加粗。中文不额外拉字距、伪加粗或水平压缩。英文辅助名称与中文标签按基线对齐，使用较弱文字角色；业务界面无需像展示图一样附上英文组件名。通过字号、字重、明度和空间共同建立层级。
+同排文字按基线对齐，图标按视觉中心对齐。名称与路径可省略，但可经提示、详情或复制获得完整值；路径优先保留末端名称。错误原因、正文与重要说明允许换行，不为整齐强行截断。
 
-### TYPE-03｜对齐、路径与长内容
+连续阅读默认最大行宽 720px，偏好范围 480–960px，随空间收缩。英文连续文本以约 65–75 个字符为行宽参考；该数值不机械等同于 65–75 个汉字。段落间距只属于显示层，不能自动写入空行。
 
-同排文本按基线对齐，图标按控件光学中心对齐。同类条目共享名称、路径、时间与操作列的布局关系。
+## 05. 留白、密度与几何
 
-名称空间不足时可省略，但必须能通过悬停、焦点提示、详情或复制取得完整值。路径采用中间省略，优先保留末端名称。正文、错误原因与重要操作说明允许换行，不因追求整齐而截断。
+### GEO-01｜共同尺度
 
-文稿默认最大行宽 720px，阅读偏好可调整至 480–960px；空间不足时流动收缩。段落视觉间距属于显示层，不能自动写入额外空行。
+本文 px 均为 100% UI 缩放下的逻辑 CSS 像素。字号与可缩放尺寸优先使用 rem，基准 1rem = 16px；边线用 px。禁止用整体 transform 模拟 UI 缩放。
 
-## 05. 留白与密度
+间距继续使用 `--ui-space-0` 至 `--ui-space-13`：0、2、4、8、12、16、20、24、32、40、48、64、80、96px。父布局管理区域间距，组件管理内部间距。2px 只作精细校正，不能用紧缩留白弥补布局错误。
 
-### GEO-01｜间距体系
-
-基础间距序列：0、2、4、8、12、16、20、24、32、40、48、64、80、96px，依次映射为 --ui-space-0 至 --ui-space-13。2px 仅用于精细校正。
-
-间距按关系和页面预设选择。页面不应为了严格套用最小间距而压缩视觉空间。
-
-| 空间关系 | Comfortable 默认 | Spacious | Compact |
+| 空间关系 | Comfortable | Spacious | Compact |
 | --- | --- | --- | --- |
-| 图标与文字 | 8px | 12px | 8px |
-| 字段标签与输入区 | 8px | 12px | 8px |
-| 同组内容块 | 16px | 24px | 12px |
+| 图标与文字／标签与输入 | 8px | 12px | 8px |
+| 同组内容 | 16px | 24px | 12px |
 | 面板内边距 | 24px | 32px | 16px |
-| 独立内容分组 | 40px | 64px | 24px |
-| 主要内容区内边距 | 48px | 64px | 32px |
-| 阅读容器内边距 | 48px | 48px | 32px |
+| 独立分组间距 | 40px | 64px | 24px |
+| 主要内容区内距 | 48px | 64px | 32px |
 
-宽度不足时，主要内容区边距依次收敛至 32px、24px、16px，按可用空间选择。阅读区域最小保留 24px；极窄或高倍缩放条件下可降至 16px。
+窄窗口时主要内容边距依次减至 32／24／16px；阅读区通常不低于 24px，极窄或高倍缩放可到 16px。留白用于解释关系，不为填满屏幕增加卡片。
 
-父布局负责区域间距，组件负责内部间距。留白应支撑阅读与层级，避免仅为填满窗口堆入内容。
+### GEO-02｜密度与小圆角
 
-### GEO-02｜密度预设
+默认 Comfortable，欢迎页等入口使用 Spacious；Compact 用于紧凑工具区或用户选择。参考稿的按钮内距映射到现有预设，不把整个桌面应用压成网页演示中的小按钮。
 
-**应用默认采用 Comfortable。欢迎页、项目浏览等入口界面默认采用 Spacious。Compact 用于用户选择的紧凑模式或已明确登记的信息密集工具区域。**
-
-全局常规控件基线明确为 40px，入口页宽松预设为 48px；这是逻辑尺寸决策，不从效果图的导出分辨率反推。不能将展示图较大的视觉尺寸直接扩大到所有工具栏，也不能在同组控件中混用高度。
-
-| 组件指标 | Comfortable 默认 | Spacious | Compact |
+| 指标 | Comfortable | Spacious | Compact |
 | --- | --- | --- | --- |
-| 单行列表最小行高 | 40px | 48px | 32px |
-| 双行列表最小行高 | 72px | 88px | 56px |
-| 标准按钮与输入最小高度 | 40px | 48px | 32px |
-| 小型按钮 / IconButton | 32px | 40px | 28px |
-| 菜单最小行高 | 40px | 48px | 32px |
-| 工具条 / 标签条最小高度 | 48px | 56px | 40px |
-| 面板头部最小高度 | 48px | 56px | 40px |
+| 标准按钮／输入／单行条目最小高度 | 40px | 48px | 32px |
+| 双行条目最小高度 | 72px | 88px | 56px |
+| 独立小按钮／IconButton | 32px | 40px | 28px |
+| 菜单最小行高 | 36px | 40px | 32px |
+| 工具条／面板头最小高度 | 48px | 56px | 40px |
+| 控件水平内距 | 16px | 24px | 12px |
+| 功能图标 | 20px | 24px | 16px |
 
-同一上下文使用一致预设，不能让每个控件单独决定密度。不同页面通过已定义的预设形成尺度差异，共享相同视觉语言。小型按钮一行用于独立或紧凑工具操作；与输入框、Select 配套并列的 IconButton 随同组标准控件高度，不采用小型尺寸。
+高度为最小值，允许长文与缩放增高。表单控件并列时，IconButton 与同组输入等高；上下文只选一种密度，不逐控件拼接。Portal 继承触发上下文密度，主题从同一应用根继承。
 
-表中高度为最小值，长内容与字体缩放允许控件增高。不能通过固定高度裁切文字。
+| 几何变量 | 本版目标 | 约束 |
+| --- | --- | --- |
+| `--ui-radius-control` | 0.375rem（6px） | 按钮、输入、Select |
+| `--ui-radius-row` | 0.25rem（4px） | 列表、树、菜单行的反馈底色 |
+| `--ui-radius-overlay` | 0.375rem（6px） | 菜单、Popover、Tooltip |
+| `--ui-radius-dialog` | 0.5rem（8px） | Dialog、独立对象卡片；贴边 Sheet 接缝侧直角 |
+| `--ui-focus-width` | 2px | 清晰实线，不以透明光晕代替 |
+| `--ui-focus-offset` | 1px | 无边框控件的外侧焦点间隔 |
+| `--ui-indicator-width` | 2px | 保留既有几何变量供必要数据标记使用，不绘制普通控件的选中框或Tab下划线 |
 
-### GEO-03｜图标与操作命中区
+所有主题与密度共用这些圆角。停靠区、阅读底板和连续分区保持直角共享边界。
 
-默认功能图标为 20px，Compact 使用 16px，Spacious 或主要条目使用 24px。图标与操作命中区分别定义，常规图标按钮推荐至少 32×32px，最小不得低于 24×24px。
+### GEO-03｜图标命中区
 
-与输入框、Select 同排的独立 IconButton 使用同组控件高度；输入内部的清除、展开图标可保持 16px，但命中区不得与输入文字重叠。图标、标签与内边距的组合不能导致常用值在默认宽度下被省略。
+图标尺寸与命中区分开定义。常规图标操作推荐至少 32×32px，独立操作不得小于 24×24px。输入内部图标可以为 16px，但命中区不遮文字或相邻按钮。
 
-分隔条使用 1px 可见边线和至少 8px 的拖拽命中带，并提供键盘或菜单调整方式。不可见命中区不能遮挡文字或相邻操作。
+分隔条为 1px 可见边线，拖拽命中带至少 8px，并提供等效菜单或键盘调节方式。手柄预留在固定槽位中，仅变化透明度；触摸场景不能依赖 hover 发现入口。
 
-## 06. 布局与桌面外壳
+## 06. 布局与原生窗口
 
-### LAY-01｜布局职责
+应用外壳由布局职责组织，业务页面通过公开贡献接入，不自行再套全局导航与外框。导航用米白／深色辅助面，正文用主要内容面；条目默认平铺，选择与工具反馈局部出现。
 
-应用外壳负责平台窗口适配和全局区域，工作区负责主要内容，停靠面板负责辅助信息，分屏容器负责尺寸与折叠，工具条负责当前上下文操作，内容分组负责逻辑组织。
-
-页面组合这些结构，不自行创建新的全局导航与外框。内容分组默认没有背景、圆角或阴影；需要独立承载对象时再使用对象容器。导航与工具区使用较弱文字和轻微表面差，当前任务与内容优先；同一应用内不混用重色侧栏、厚卡片和无层次的全平面等不同视觉体系。
-
-### LAY-02｜外壳参考尺度
-
-| 参数 | 默认 / 允许范围 |
+| 外壳参数 | 参考尺寸 |
 | --- | --- |
-| 自绘顶区 | 48px；原生安全区另计 |
-| 底部状态区 | 32px；入口页不强制显示状态栏 |
-| 工具轨 | 48px |
+| 自绘顶区／工具轨 | 48px，原生安全区另计 |
+| 状态区 | 32px，入口页不强制显示 |
 | 导航停靠区 | 默认 256px，允许 224–384px |
-| 检查器停靠区 | 默认 320px，允许 280–448px |
-| 主工作区目标最小宽度 | 560px；单工作区退化后保底 320px |
-| 可见分隔线 / 拖拽带 | 1px / 8px |
+| 检查器 | 默认 320px，允许 280–448px |
+| 主工作区 | 目标最小 560px，单区退化保底 320px |
+| 分隔线／命中带 | 1px / 8px |
 
-以上为外壳预设。页面可以按用途显示或隐藏区域，主要内容应占据视觉中心，避免为了保留空面板而挤压内容。
+根据实际内容宽度把次要操作收入菜单、折叠检查器和导航，最后退化为单工作区。区域独立滚动，弹框长内容内部滚动；不因打开面板逐帧挤压正文，不为显隐更换编辑器实例。
 
-### LAY-03｜响应与滚动
-
-根据实际内容宽度调整布局：辅助操作进入溢出菜单、次要停靠区折叠、导航折叠，最后转为单工作区。优先维持文字可读性和主要操作空间。
-
-区域独立滚动，应用外壳不承担整页业务滚动。窗口临时缩小时保留原有布局偏好，空间恢复后可还原。UI 缩放到 200% 后仍需保留核心内容与操作。
-
-### DESK-01｜原生窗口行为
-
-窗口控制、拖动、缩放、最大化、安全区与失焦外观由平台适配层管理。macOS 和 Windows 使用各自原生窗口行为，业务页面不模拟系统窗口按钮。
-
-桌面设计基准为 1440×900 客户区，常规最小测试条件为 960×640。不同窗口与浮层共享主题，原生安全区不计入页面内容留白。
+桌面基准 1440×900，常规最小测试 960×640；UI 缩放 200% 后核心操作仍可达。窗口控制、拖动、缩放、最大化和安全区由平台适配负责，业务页面不模拟系统窗口按钮。临时窄窗不覆盖用户布局偏好。
 
 ## 07. 公共组件
 
-### CMP-01｜几何与角色
+### CMP-01｜按钮与对象
 
-| 组件 | 共同规则 |
+| 组件／变体 | 呈现与状态 |
 | --- | --- |
-| Button | 使用密度预设；内横距 Comfortable 16px、Spacious 24px、Compact 12px；圆角 8px |
-| IconButton | 使用密度对应的正方形命中区，图标居中，无文字按钮的左右内距；与表单控件并列时采用同组控件高度；圆角 8px |
-| SearchField / TextField / Select / Textarea | 使用对应密度的控件高度、文字与留白；表单 Select 默认 `field` 形式，圆角 8px、具备必要边界；Select 的 `title` 与 `toolbar` 形式见 CMP-03 |
-| List / Tree / Table | 共享列对齐与密度；图文距、行内留白使用预设；整行与行内操作命中区分离 |
-| Tab / SegmentedControl | 标签条使用密度预设；选中指示 2px；名称与关闭操作有充分空间 |
-| Tag / Badge | 默认中性，12–14px 文字；只有真实状态或用户内容才使用额外颜色 |
-| Select 菜单 / Menu / Popover / Tooltip | 圆角 10px；菜单使用对应密度，内边距 4px；独立菜单常规宽度 224–384px，锚定浮层按内容和可用空间调整 |
-| Dialog / 模态 Sheet | 常规 Dialog 宽 560px，窄 / 宽 / 大预设 480 / 640 / 800px；内距采用全局密度预设（常规 24px）；圆角 12px；贴窗口边的 Sheet 接缝侧不做圆角 |
-| ObjectContainer | 圆角 8px，无外投影；仅承载真实独立对象 |
-| Checkbox / Radio / Switch | 清晰可识别，外部命中区至少 24px；包含选中、禁用与焦点状态 |
+| `Button ghost`／IconButton | 普通命令首选透明底；hover／pressed 使用完整 `state.*` 配对，无边框或阴影变化 |
+| `Button secondary` | 表单取消、需要明确轮廓的次要动作；中性控件面与稳定必要边界，不跟随 hover 加深边框 |
+| `Button primary` | 一个操作上下文至多一个明确主操作；三态 `action.*` 加同态前景，低饱和实色，不发光、不投影 |
+| `Button danger` | 明确破坏性提交使用 `danger.*`；普通危险菜单项可用危险文字，保留对象及影响说明 |
+| List／Tree／Table | 平铺、列对齐、统一密度；整行与行内操作命中区分离，当前项灰底加对勾，预留固定标记位置 |
+| Tab／SegmentedControl | 当前项灰底加对勾，不绘制彩色下划线；标记槽预留，名称与关闭位置稳定 |
+| Tag／Badge | 小圆角中性标签；真实分类用 `category.*`，真实状态用 `status.*`，不混用语义 |
+| 对象卡片 | 仅用于独立对象，`surface.control` 或所属内容面、1px 装饰轮廓、8px 圆角、无投影；不嵌套卡片分割普通表单 |
 
-表单中的选择器使用 Select 的 `field` 形式，沿用统一控件表面、边界和状态。布局标题栏中的导航内容切换使用 `title` 形式：采用 Strong 字号与 600 字重，常态透明且不绘制控件边界，宽度随标题文字和下箭头收缩。编辑工具栏中的选择器使用 `toolbar` 形式，置于 `compact` 密度上下文中；具体排列由所属工具界面决定。文字触发器与图标触发器都由共享 Select 绘制，图标触发器 Compact 为 32 × 32px，与动作按钮同高。所有形式均使用 Select 的共享悬停、按下、展开、焦点及禁用状态和同一菜单交互；消费者只从外层约束宽度与对齐，不覆盖触发器内部 CSS。图标控件保留当前值的辅助技术文本，调用方提供 `aria-label`，并可通过 `title` 显示当前值。第三方默认样式必须被隔离，不能覆盖共享控件的尺寸、状态或主题。
+默认操作不为模仿网页模板强制加实色 CTA。文本Button在具有aria-pressed或aria-selected语义时预留固定标记槽，未选中隐藏对勾但保留占位；混合态显示短横。IconButton、编辑器纯图标工具和窄栏图标导航只使用中性选中底色与对应前景，主图标始终居中，不附加对勾、短横或多余占位。加载和选中变化不改变尺寸、文字起点、主图标位置或命中区。
 
-停靠面板、连续分区和阅读底板保持直角共享边界；列表选中与悬停背景使用 8px 圆角。圆形头像与开关轨道可使用圆形；系统窗口外轮廓由系统管理。
+动作命令的悬停或按下不等于已选中，不能短暂显示对勾；仅持久选值或明确当前项绘制选中标记。第三方组件的 `active` 类须按其实际含义适配，不能一律当作选中状态。
 
-### CMP-02｜共享实现
+### CMP-02｜输入、选择与焦点
 
-公共组件统一定义语义角色、尺寸、预设、状态、键盘模型、溢出策略与主题映射。页面只选择已定义的角色和预设，不以覆盖内部样式的方式重新配色。已有 Button、IconButton、Icon、TextField、Textarea、SearchField、Select、Dialog 必须从 `@lodestory/ui` 复用；本节列出的其他组件是统一设计要求，不表示 UI 包已经导出对应实现。应用表单的文本、数字输入及多行说明统一采用共享 TextField / Textarea；作者正文与第三方编辑器仍由所属格式插件管理。
+TextField、Textarea、SearchField 与 Select 的 `field` 形式共享文字、控件高度、6px 圆角、`surface.control` 和 `border.default`。常态、hover、按下与展开维持同一边框颜色；hover 只允许克制的背景反馈。只读保持可读、可聚焦复制，禁用采用完整禁用配对并阻止动作。
 
-Button 使用 primary / secondary / ghost / danger 四种角色。主操作保持明确，轻量操作使用中性或透明表面。加载、错误与悬停不改变控件宽度和文字起点。
+有边框输入聚焦时，在原边界内侧呈现与边框合并的 2px `focus.ring` 线，不留外侧间距、不改尺寸。SearchField 只在复合外框画一次；无效且聚焦时用 `status.dangerBorder` 的 2px 边界，保留错误文字或图标。按钮及无边框触发器使用独立外环，按实际外侧表面选择 `focus.ring` 或 `focus.inverseRing`；`focusSurface` 表达邻接面，不能按主题明暗猜测。
 
-### CMP-03｜输入与选择
+Select 的 `title` 形式服务布局标题切换，Strong 字号、600 字重、透明无边框；`toolbar` 服务紧凑编辑工具区，图标触发器 32×32px，与同组动作等高。所有形式共用下箭头、完整交互状态和键盘模型；消费者只管外部宽度和对齐，不覆盖内部 CSS。
 
-- SearchField、TextField 和 `field` 形式的 Select 共享高度、圆角、文字比例和内边距；表单字段标签在上、内容在内。工具栏或独立搜索入口可省略可见外置标签，但必须保留可访问名称，不能仅靠 placeholder 表达名称。复合搜索框的图标、输入与清除按钮作为一个整体绘制状态。`title` 形式仅供布局标题栏切换导航内容，使用 Strong（16 / 24px、600）文字，最小高度与同密度 IconButton 一致（Comfortable 为 32px）；不绘制常态边界或填充，触发器按标题和箭头内容宽度呈现。`toolbar` 形式用于编辑工具栏，常态透明并遵循 `compact` 密度；图标触发器尺寸为 32 × 32px，与同组动作按钮等高。排列方式由工具界面决定，不从该变体推导所有工具栏均须单行或两行。
-- Select 触发器显示当前值与统一下箭头；展开后的菜单使用 `surface.floating` 与 `soft` 阴影。宽度不小于触发器，超出窗口时按可用空间收缩，长列表内部滚动；长选项可换行，不撑出视口。
-- `field`、`title` 与 `toolbar` 共用下箭头、菜单、选中对勾、悬停／按下／展开状态和禁用语义。`toolbar` 可指定 `triggerIcon` 与 `iconOnly`，将选值保留为辅助技术可读文本；调用方必须提供 `aria-label`，并可用 `title` 给出当前选值提示。编辑器以文字触发器显示字体、标题和字号，以图标触发器显示文字颜色和背景色；对齐使用四个并列图标按钮并显示当前选中状态，作者颜色样本在图标下缘呈现细色条，不改变主题色。`field` 形式的文本框、SearchField 与 Select 聚焦时，在原边界内侧绘制 2px 焦点线，与原边框合为一条，不留外侧间距且不改变控件尺寸；邻接该字段自身中性填充，使用 `focus.ring`，不受外侧表面语义影响。SearchField 的焦点线由其外层边界承载。无效且聚焦时保留 `status.dangerBorder`，由同一条加粗边界同时显示无效和焦点状态；禁用控件不显示焦点。`title` 和 `toolbar` Select 没有常态边界或填充，继续使用独立外侧焦点环，按照 `focusSurface` 描述的邻接表面选择焦点角色；Button 和无边框控件也保留独立外环。选中项使用同态前景／背景并保留对勾；hover 与 selected 可以叠加。禁用项仍可识别且不可提交，只读允许查看但不改变值；空列表提供明确说明。
-- 方向键浏览、输入字符定位、Enter／Space 确认与 Escape 收起遵循共享组件的键盘模型。弹框中的 Select 先响应 Escape 收起自身，再由后续 Escape 关闭弹框；收起后焦点回到合理位置。
-- 显示值、选项、校验和业务动作由所属插件维护。选择器自身只负责呈现与交互；布局通过 `title` 选择已登记的内容，表单使用 `field`，富文本工具栏使用 `toolbar` 并在自身范围采用 `compact` 密度。富文本组合明确采用固定两行与左右工具区：左区上排为字体／标题／字号，下排为加粗／斜体／下划线／删除线、文字色／背景色、链接／清除格式；右区上排为有序／无序列表和引用，下排为左对齐／居中／右对齐／两端对齐四个并列图标按钮。两区之间有竖向分隔和留白。文字色与背景色使用 32 × 32px 图标下拉，作者色样显示于图标下缘；对齐按钮显示当前选中状态。窄窗口仍保留两行，工具栏整体允许横向滚动，不压缩控件或折出第三行；所有操作保持键盘可达。不通过覆写共享 Select 内部 CSS 调整尺寸或状态。富文本的原选区和格式应用仍由编辑器插件管理。颜色样本属于作者内容，不能把它用作控件主题色。
+标签与字段关联，不能只用 placeholder 表达名称；图标触发器提供可访问名称及当前值。下拉菜单用 `surface.floating`、6px 圆角与 `soft` 阴影，内距 4px；不小于触发器宽度，受视口约束，长项可换行、长列表内部滚动。方向键、字符定位、Enter／Space 与 Escape 沿用共享组件模型，输入法合成期间不抢占候选操作。
 
-### CMP-04｜弹框与层次
+### CMP-03｜编辑器与业务状态
 
-- 标题采用 Title，说明采用 Body 或 Caption 的既定语义角色；字段标签与输入间距使用预设。同类弹框一致选择说明角色，不能各自发明字号。
-- 标题、说明、表单与操作区形成清楚分组；常规操作区与内容间距 24px，按钮间距 8px，默认右对齐。危险操作保留对象和影响说明。
-- 操作区可用 `surface.secondary` 轻微分离，但必须由共享 Dialog 变体统一提供，不允许各插件私设底色、负边距或圆角。未提供该变体时沿用浮层本体表面。
-- 常规 Dialog 宽度由内容与预设决定，最大宽度不超过视口减两侧安全距，最大高度受可用视口约束；长内容内部滚动，操作可到达。不能复制效果图中的弹框截图大小作为固定尺寸。
-- 真实模态使用统一 scrim、焦点约束和焦点恢复；busy 期间关闭规则由业务状态明确传入。失败保留输入，不能因关闭、换肤或重建控件丢失用户内容。
+已有 Button、IconButton、Icon、TextField、Textarea、SearchField、Select、Dialog 从 `@lodestory/ui` 复用。本文其他组件规则不表示 UI 包已经导出这些组件。缺少公共变体时统一补充，不在插件内部重写控件皮肤。
 
-## 08. 交互状态与动效
+正文、选区、格式应用和第三方编辑器实例由格式插件拥有。富文本工具栏继续按所属插件组织已定义的两行组合；窄窗整体横向滚动，不压缩命中区或任意增加一行。字体、标题、字号使用文字 Select，文字色与背景色用图标 Select，对齐用四个并列状态按钮。作者颜色样本属于内容，不改成主题蓝色，也不用作控件底色。
 
-### STATE-01｜状态表现
+### CMP-04｜浮层与弹框
 
-| 状态 | 表现 |
+菜单、Popover 和 Tooltip 圆角 6px；常规独立菜单宽 224–384px，锚定浮层按内容与可用空间调整。菜单距锚点 4px，Tooltip 距锚点 8px、意图延迟 500ms；普通浮层距视口至少 8px，Dialog 至少 16px。
+
+Dialog 宽度沿用常规 560px、窄 480px、宽 640px、大 800px，受视口宽高限制。8px 圆角，标题用 Title，说明用 Body 或 Caption；内距沿用密度，操作区距内容 24px、按钮间距 8px，默认右对齐并允许换行。操作区默认延续浮层表面，不由业务插件私设底色、负边距与接缝。
+
+真实模态保留遮罩、焦点限制、关闭与焦点恢复。是否允许关闭由业务状态决定，失败保留输入；退出动画不能成为保存、导航、停用或资源释放的业务条件。各浮层只淡入淡出，不移动、不缩放，不逐项延迟出现。
+
+## 08. 状态与交互反馈
+
+### STATE-01｜组合顺序
+
+通用状态优先级继续为：禁用选中 → 禁用 → 选中按下 → 选中悬停 → 失焦选中 → 选中 → 按下 → 悬停 → 默认。每次使用同态前景／背景，焦点与校验独立保留；禁用抑制 hover／pressed。主操作和危险操作在未选中时使用自身三态配对。
+
+| 状态 | 要求 |
 | --- | --- |
-| Default | 中性表面、清晰内容与稳定结构 |
-| Hover | 轻量表面或边界反馈，布局不移动 |
-| Pressed | 更明确的中性或主操作按下反馈 |
-| Selected | 使用主题登记的选中背景与前景配对，以 `accent.indicator` 的对勾、边界或既定选中指示保留含义；普通菜单项不添加底线或阴影，Tab 使用其规定的指示线 |
-| Focus-visible | 有边框的输入控件在原边界内侧绘制 2px 焦点线，与边框合并且不改变尺寸；按钮和无边框控件使用独立 2px 外环，与控件填充保持 1px 间隔。使用实际邻接面对应的统一焦点角色，不使用模糊发光代替 |
-| Disabled | 明确不可用，阻止动作且没有悬停反馈 |
-| Read-only | 文字保持清晰；文本允许聚焦与复制，Select 允许展开查看但不改变值 |
-| Invalid / Warning | 局部反馈与明确说明 |
-| Loading | 原位置稳定占位与真实处理状态 |
-| Inactive selection | 窗口失焦后仍保留选中标识 |
+| Hover | 仅背景与必要的配对前景反馈；不变边框、不变阴影、不移动 |
+| Pressed | 比 hover 更明确的背景反馈，立即生效；不缩放 |
+| Selected | 中性灰底；文字选项／菜单／列表附同态前景对勾，混合态短横；纯图标控件保持居中且不叠加标记；hover／pressed采用对应组合，无彩色整圈或下划线 |
+| Focus-visible | 低饱和灰蓝焦点立即可见，保持2px清晰边界；与中性选中对勾独立，不渐显、不发光、不被其他状态盖住 |
+| Disabled | 阻止动作，使用规定配对；不得用整组件 opacity 代替 |
+| Read-only | 能查看和复制，不改变值，不伪装成禁用 |
+| Invalid／Warning | 文字或图标加局部校验边界，不抖动、不清空输入 |
+| Loading／Saved／Error | 依据真实业务状态原位更新，失败保留到处理或状态解除 |
+| Inactive selection | 失焦后仍保留选择关系，不等同于 Disabled |
 
-选中、悬停、错误与焦点可以叠加，焦点不能被其他状态覆盖。中文输入合成期间不抢占 Enter / Esc，不打断选区和候选输入。
+空状态、无搜索结果、无权限与失败使用不同说明：简短原因与可执行下一步，不以大型插画占满工作区。拖拽手柄只表达实际功能，不把所有卡片都伪装成可排序对象。
 
-组合优先级统一为：禁用且选中 → 禁用 → 选中且按下 → 选中且悬停 → 失焦选中 → 选中 → 按下 → 悬停 → 默认。每次替换完整前景／背景；禁用使用 `state.disabledBorder` 并抑制 hover／pressed。焦点和校验状态须同时可辨：有边框的输入使用同一条错误色加粗边界，其他控件保留独立焦点提示；禁用但允许聚焦说明的菜单条目仍保留焦点环。主操作、危险操作分别使用自身三态配对，不借用普通悬停色。
+### MOT-01｜统一动效
 
-有边框的输入控件聚焦时保留边框位置和控件尺寸，在原边界内侧绘制与边框合并的 2px 焦点线，不再另加外侧焦点环。该焦点线与字段自身的中性填充相邻，统一使用 `focus.ring`。SearchField 由其外层边界呈现焦点，内部输入框不重复绘制。`aria-invalid` 且聚焦时保留 `status.dangerBorder`，由 2px 边界加粗表示焦点，并通过错误文字或图标继续表达无效状态。禁用控件不显示焦点。没有常态边界的 `title` Select、按钮及其他无边框控件继续使用独立 2px 外环，与控件填充保持 1px 间隔；其外环根据实际邻接表面使用焦点角色，并由 `focusSurface` 提供表面语义。每个焦点角色必须与其全部允许邻接面达到至少 3:1，主题迁移时成组校验。高对比模式使用系统焦点色；强制色模式下，无效输入可使用虚线边界保留错误差异。所有可聚焦控件仍须有清楚可辨的键盘焦点提示。
+普通允许的背景／配对前景及透明度过渡为 150ms；时间线事件文字悬停缩放为 500ms，显式声明属性；日期／时间偏移和摘要以 1.05 倍、主标题以 1.2 倍同步放大。输入、选区、焦点、按下、选值、禁用、结构重排与换主题即时；无位移过渡，事件文字例外以外不缩放，无呼吸圆环或其他装饰循环。系统原生光标与滚动遵循平台行为。
 
-可滚动菜单中的选项允许将同样的 2px 焦点环内缩绘制，避免被滚动容器裁切；环与该项实际背景仍须可辨。这个例外由共享菜单／Select 实现统一处理，不由页面决定。
+同主题颜色过渡须验证中间颜色对比，不能保证时直接替换；当前自定义主题不强制插值。主题切换始终跳过颜色过渡。系统或用户要求减少动效时，所有插值时长为 0ms，时间线事件文字维持原尺寸，静态状态提示保留，Tooltip 的 500ms 意图延迟不变。
 
-### MOT-01｜动效
-
-交互反馈 100ms，菜单与面板变化 160ms，低频对话层变化 220ms；输入与拖动即时响应。进入曲线使用 cubic-bezier(.2,0,0,1)，退出可使用 cubic-bezier(.4,0,1,1)。
-
-仅对必要的颜色、透明度与轻微位移做过渡；浮层位移不超过 4px。不对文字输入、保存或正文重排做装饰动画。
-
-换主题时全部角色同步替换，不分别延迟背景和文字，也不播放跨主题颜色渐变。阴影、选择标记、焦点环、文字选区、滚动条与 Portal 内容同样跟随主题。
-
-尊重系统与用户的减少动效偏好，关闭非必要动画后仍保留静态状态提示。
-
-场景参数、打断与退出规则、减少动效策略及插件职责的细化提案见[统一动效规范](动效规范.md)；其实施状态以该文档为准。
-
-### STATE-02｜提示与反馈
-
-Tooltip 默认延迟 500ms，距锚点 8px；菜单距锚点 4px。一般浮层距窗口边缘至少 8px，Dialog 至少 16px；空间不足时翻转方向、收窄或滚动，不能越界。图标操作有可访问名称、提示与键盘访问。
-
-非阻塞反馈就地呈现；重要失败保留到用户处理。无数据、搜索无结果、无权限与加载失败使用各自说明，以简短标题、原因和下一步操作呈现，不用大型插画占满工作空间。
+共享变量名称不变：`--ui-duration-fast`、`--ui-duration-normal`、`--ui-duration-dialog` 均为目标 150ms，`--ui-motion-offset` 为目标 0px。时间线事件文字的 500ms 时长由时间线插件私有变量定义，仅服务于此文字缩放，不新增主题颜色字段或服务。取消、快速反转、0ms 清理、Portal 偏好与保存保护详见[动效规范](动效规范.md)。
 
 ## 09. 图标与内容素材
 
-功能图标使用同一套单色线性风格，圆端点、圆连接，视觉描边保持 1.5px。SVG 改变显示尺寸时应校正描边，避免小图标过细或大图标过粗。
+功能图标统一单色线性风格，圆端点与连接，视觉描边约 1.5px；图标随尺寸校正描边，颜色继承所属配对前景。不混用 Emoji、实心插画和线性工具图标。头像、品牌素材、原生图标与真实内容按用途例外。
 
-品牌标志、系统原生图标与作者内容素材可以例外。功能工具条不混用 Emoji、线性图标和实心插画。
-
-内容图片保持真实色彩，缺失时保留布局占位；不能为了统一主题强制压暗或去饱和。图片或头像的比例、裁切和查看原图方式由共享组件定义。
+内容图片保留真实色彩，不为了深色主题强制压暗、去饱和或反色；缺失时保留合理占位。图标操作有可访问名称，辅助提示不能成为唯一识别方式。
 
 ## 10. 可访问性与验收
 
-### A11Y-01｜可读与可操作
+### A11Y-01｜最低要求
 
-正常文字目标对比度至少 4.5:1；识别控件所必需的边界、图标与状态指示至少 3:1。装饰分隔线可更弱，但不能承担唯一的识别功能。
+正常文字、说明、占位提示与选区文字至少 4.5:1；必要控件边界、状态指示与焦点至少 3:1。装饰线可以更弱，但不能承担唯一识别功能。禁用项按登记豁免；禁用原因的普通文字与可聚焦项的焦点仍满足对应要求。
 
-禁用控件使用规定的禁用配对，允许低于上述对比度，但必须仍可辨认；解释禁用原因的说明文字和可聚焦禁用项的焦点提示仍满足相应要求。
+状态不能只用颜色传达。核心操作键盘可达，焦点不被裁切或遮挡；强制颜色模式使用系统色并保留必要边界。模态管理焦点，关闭后回到合理位置；拖拽有等效操作，失败不清除用户输入。
 
-状态同时使用文字、形状或结构标识。核心操作可通过键盘完成，焦点可见且不被遮挡。高对比度模式使用系统色，保留控件边界与焦点。
+### QA-01｜落地验收
 
-模态开启时管理焦点，关闭后回到合理位置；拖拽提供等效操作。失败不能清除作者输入，具有破坏性的操作须明确对象与影响范围。
+1. 页面呈现白色内容、米白辅助区或对应暖炭灰层次；焦点为低饱和灰蓝，选中为中性灰底；文字项附同态前景对勾，纯图标居中且无附加勾，无彩色选中整圈／Tab下划线、渐变、重阴影、胶囊按钮、悬停边框／阴影跳变或位移动画；缩放只允许 VIS-03 的时间线事件文字悬停例外。
+2. 对照完整角色表检查两套目标配色，再按登记表全部有效配对计算；分类槽保持可区分。检查值来自标准角色，不在页面硬编码色值或按主题 ID 分支。
+3. 检查 1440×900／1280×800／960×640，100%／125%／150%／200% UI 缩放；文本、主操作和弹框不被裁切，长名称、路径、中英混排与错误信息可读。
+4. 覆盖浅深内置主题及两套相同 `type` 的自定义主题；检查默认、悬停、按下、选中、组合态、只读、禁用、禁用选中、失焦选中、错误和独立焦点，几何不跳动。
+5. Select／菜单／Dialog 展开、表单有输入、编辑器有选区时切主题；浮层同步换色，值、焦点、选区、实例与未保存内容保留。
+6. 检查键盘、触摸无 hover、强制颜色和减少动效；普通与 0ms 下反复开合、取消、父级卸载、停用与保存失败均正确清理。
+7. 同密度、同角色组件跨页面对照；格式插件的第三方样式不覆盖公共控件。macOS 与 Windows Tauri 客户区分别验收。
 
-### QA-01｜视觉验收
+### QA-02｜验证边界
 
-页面需要同时通过以下检查：
+静态配色计算、主题标准校验与构建通过，都不能代替实际页面渲染与客户端验收。本版已同步配色、圆角、边框与动效代码，并检查代表性浏览器界面；这不等于 macOS／Windows Tauri 实机、全部缩放级别与全应用可访问性认证已经完成。
 
-1. 对照两张效果图，符合简约、清新、安静、精细的方向；导航后退、内容优先，表面层次和留白清楚，无斑驳纹理或装饰性光晕。
-2. 配色、文字角色、密度、圆角与状态使用本规范的共享定义。
-3. 在 1440×900、1280×800、960×640，以及 100%、125%、150%、200% 缩放下，文字与主要操作不被裁切。
-4. 同时检查内置浅色、内置深色和两套相同 `type` 的自定义主题；覆盖默认、悬停、按下、选中、选中悬停、选中按下、禁用、禁用选中、只读、错误、加载、失焦选中及独立焦点，布局不跳动。
-5. 长名称、深层路径、中英混排、空状态与错误说明仍可读。
-6. 键盘、高对比度、减少动效和原生窗口安全区可用。
-7. 在 Select、菜单和 Dialog 已展开、表单有输入、编辑器有选区时切换主题，检查浮层、边界、前景、背景、阴影与焦点同步，值与选区不丢失。
-8. 对同一组件做跨页面对照：相同密度与角色的尺寸、圆角、内距和状态一致；第三方编辑器样式未覆盖公共组件，没有局部硬编码颜色。
+## 11. 与当前实现对齐
 
-macOS 与 Windows 分别核对。平台字体光栅化允许不同，但视觉角色、空间和状态规则保持一致。
+### TOK-01｜现有变量直接复用
 
-### QA-02｜验收边界
+颜色按第 03 节映射，字体按第 04 节，密度、空间与几何按第 05 节。不要为 Notion 风格另建 `--notion-*`、页面私有浅深色表或一套 Tailwind 固定色。`ThemeDefinition.colors` 只接受登记颜色，不携带字体、尺寸、圆角、时长或阴影几何。
 
-当前仅实现 UI 时，验收针对页面布局、视觉与适用的呈现状态，不要求接入尚未设计的业务功能。
+现有排版变量 `--ui-font-size-*`／`--ui-line-height-*`、空间 `--ui-space-*`、控件与菜单高度、外壳宽高和 Dialog 宽度预设继续使用；Mono 复用 Caption 的字号与行高，不引用不存在的 `--ui-font-size-mono`。页面只选布局和密度，不覆盖公共组件内部样式。
 
-构建通过不能替代实际渲染检查。无法获取截图、运行页面或执行某项检查时，必须明确标注未验证，不能宣称完整验收通过。
+### TOK-02｜2026-10-25 实施状态与验收边界
 
-出现偏差时优先修正页面或共享实现；若新需求需要改变共享规则，应同步更新本规范。不能通过缩小文字、压缩操作命中区或随意增加装饰解决布局问题。
-
-## 11. Token 与实现对齐
-
-### TOK-01｜新版默认映射
-
-以下为本版要求的共享映射，包含已有及待补充变量，不表示均已实现。Comfortable 为默认值；Spacious 和 Compact 在共享预设中统一覆盖，页面不重复写尺寸。标题的空间不足变体使用独立的 `-small` 字号与行高变量，不由密度自动触发。
-
-| Token | Comfortable 默认值 | Spacious / Compact |
+| 范围 | 已同步内容 | 验收边界 |
 | --- | --- | --- |
-| --ui-font-size-display | 2.5rem | 空间不足时使用 2rem 变体 |
-| --ui-line-height-display | 3rem | 空间不足时使用 2.5rem 变体 |
-| --ui-font-size-page-title | 2rem | 空间不足时使用 1.5rem 变体 |
-| --ui-line-height-page-title | 2.5rem | 空间不足时使用 2rem 变体 |
-| --ui-font-size-title | 1.25rem | 同一语义角色保持一致 |
-| --ui-line-height-title | 1.75rem | 同一语义角色保持一致 |
-| --ui-font-size-strong / --ui-line-height-strong | 1rem / 1.5rem | 同一语义角色保持一致 |
-| --ui-font-size-body | 1rem | 同一语义角色保持一致 |
-| --ui-line-height-body | 1.5rem | 同一语义角色保持一致 |
-| --ui-font-size-label | 0.875rem | 1rem / 0.875rem |
-| --ui-line-height-label | 1.25rem | 1.5rem / 1.25rem |
-| --ui-font-size-caption | 0.8125rem | 0.875rem / 0.75rem |
-| --ui-line-height-caption | 1.25rem | 1.25rem / 1.125rem |
-| --ui-font-size-mono / --ui-line-height-mono | 0.8125rem / 1.25rem | 同一语义角色保持一致 |
-| --ui-font-size-document / --ui-line-height-document | 1.125rem / 2rem | 作者正文默认值，阅读偏好另管 |
-| --ui-titlebar-height | 3rem | 原生区域由平台适配 |
-| --ui-statusbar-height | 2rem | 入口页可不显示 |
-| --ui-activitybar-width | 3rem | 使用相同外壳预设 |
-| --ui-navigation-width | 16rem | 使用布局允许范围 |
-| --ui-inspector-width | 20rem | 使用布局允许范围 |
-| --ui-control-height | 2.5rem | 3rem / 2rem |
-| --ui-control-padding-inline | 1rem | 1.5rem / 0.75rem |
-| --ui-icon-button-size | 2rem | 2.5rem / 1.75rem；与表单控件并列时使用 --ui-control-height |
-| --ui-row-height | 2.5rem | 3rem / 2rem |
-| --ui-double-row-height | 4.5rem | 5.5rem / 3.5rem |
-| --ui-toolbar-height | 3rem | 3.5rem / 2.5rem |
-| --ui-panel-padding | 1.5rem | 2rem / 1rem |
-| --ui-section-gap | 2.5rem | 4rem / 1.5rem |
-| --ui-radius-control | 0.5rem | 三种预设共用 |
-| --ui-radius-overlay | 0.625rem | 三种预设共用 |
-| --ui-radius-dialog | 0.75rem | 三种预设共用 |
-| --ui-dialog-width | 35rem | 密度不改变宽度预设 |
-| --ui-dialog-width-narrow / --ui-dialog-width-wide / --ui-dialog-width-large | 30rem / 40rem / 50rem | 三种预设共用，受视口约束 |
-| --ui-dialog-padding | var(--ui-panel-padding) | 随密度采用 2rem / 1rem |
-| --ui-dialog-actions-gap / --ui-dialog-button-gap | 1.5rem / 0.5rem | 三种预设共用 |
-| --ui-focus-width | 2px | 三种预设共用 |
-| --ui-focus-offset | 1px | 三种预设共用 |
-| --ui-icon-size | 1.25rem | 1.5rem / 1rem |
-| --ui-ease-enter | cubic-bezier(.2,0,0,1) | 三种预设共用 |
-| --ui-ease-exit | cubic-bezier(.4,0,1,1) | 三种预设共用 |
+| 内置主题与登记缺省 | 两套内置主题完整覆盖 109 个角色，字面量缺省同步新配色；保留角色引用以支持自定义主题联动 | 两套主题共 692 个必要对比配对通过；不将静态计算视为全应用认证 |
+| 排版与密度 | 保留系统字体、20/28px Title、40/48/32px 控件；菜单选项使用36/40/32px菜单变量 | 不改变作者文稿字体、字号、格式或内容 |
+| 圆角 | 控件／行／浮层／Dialog 统一为 6／4／6／8px，独立对象卡片8px | 平台窗口和真实数据节点按用途例外 |
+| 状态与边界 | 输入边界稳定；亮暗主题和反色面均使用低饱和灰蓝焦点；普通选中统一灰底与同态前景对勾，保留错误、禁用、只读及selectedPressed组合 | 文字项对勾预留空间；图标按钮、窄栏图标导航与纯图标编辑工具不附加勾，保持居中；键盘焦点独立，仍需原生客户端确认 |
+| 动效 | 允许的浮层和停靠内容仅150ms透明度变化，offset 0；时间线端点与树方向即时呈现；事件文字悬停时主标题500ms放大至1.2倍、日期／时间偏移和摘要同步至1.05倍，标题短横线同步以scaleX伸至1.2倍且保持1px线宽；移出平滑恢复且无背景高亮 | 颜色继续同步替换；减少动效0ms且复位事件文字与标题短横线，不动画化正文几何或保存流程 |
+| 格式插件界面 | 富文本工具沿用共享控件；Markdown的Crepe工具条、Slash菜单、链接与表格工具接入统一字体、圆角、阴影和状态配对，取消默认缩放与200ms过渡 | 仅适配编辑器界面，作者正文、文稿格式与真实块拖拽保留 |
+| 公共能力与状态保留 | 复用原主题、UI、布局、文档与项目存储公开契约；换肤与显隐保留编辑器实例 | 不宣称在线安装、市场或任意运行时插件热装卸已经实现 |
+| 验证 | 构建、主题标准核验、共享控件与插件定向测试，以及亮暗、自定义主题、浮层、减少动效和编辑实例的浏览器检查 | 全量回归的15项既有失败已在修订前HEAD复现，不宣称全量测试通过；macOS／Windows Tauri实机与完整性能轨迹待验收 |
 
-主题与用户偏好从应用根传播。默认 data-ui-theme="dark"、data-ui-density="comfortable"；欢迎页等入口容器采用已定义的 data-ui-density="spacious"，紧凑上下文使用 data-ui-density="compact"。
+### TOK-03｜实施顺序
 
-密度容器只覆盖密度相关变量，不改变主题配色、状态语义或字体体系。组件消费标准映射的 --ui-* 变量，也可使用内部 --cmp-* 别名；主题文件只接受通用角色，不额外暴露组件专属颜色。
+先把完整目标写入两套内置主题，并协调登记表缺省值，运行 `pnpm generate:theme`；登记表发生变化时再运行 `pnpm generate:theme-docs`，随后执行 `pnpm check:theme-standard`。颜色名、CSS 变量名与配对关系不因本版换风格而改名。
 
-Portal 浮层必须取得触发上下文的密度，主题则来自同一应用主题根；不能展开后退回另一种字体、尺寸或配色。所有主题共用几何与状态模型；`ThemeDefinition` 的 `colors` 不承载字体、尺寸、密度、圆角或阴影几何。
+再统一修改共享 tokens、UI 包、布局与现有界面的边框和动效实现，业务状态仍由原插件拥有。缺少变体时补最小共享接口，不向内核或入口添加业务连接。完成 QA-01 后才将对应项标记为已迁移。
 
-### TOK-02｜当前项目状态
+## 12. 依据
 
-截至本版修订，以下是源码现状，**不得将它们理解为 3.0 视觉迁移已经完成**：
-
-| 范围 | 当前事实 | 与本版的差距 |
-| --- | --- | --- |
-| 内置主题 JSON | 仍以蓝色为 action／accent，主要表面为微冷中性色 | 待迁移至本版浅色／深色目标，复核缺省解析、全部状态与对比度 |
-| [共享 tokens](../src/styles/tokens.css) | 已有三种密度、40px 常规控件、8px 控件圆角；分组标题 24/32、浮层圆角 12px、弹框圆角 16px、焦点宽 1px | 待同步本版 Title 20/28、浮层 10px、弹框 12px、焦点 2px 与 1px 间隔等基线 |
-| [UI 包](../packages/ui/README.md) | 已导出 Button、IconButton、Icon、TextField、Textarea、SearchField、Select、Dialog 及弹框辅助组件；表单文本输入共用状态和常态边界规则 | 仍需跨平台客户端验收，不因已封装而视为通过全局验收 |
-| 消费方 | 文档目录、主题映射、布局切换与富文本选择器已复用 Select；三处业务弹框已复用 Dialog | 各页面、右键菜单及编辑器周边界面仍须做全局一致性复核 |
-| 主题服务 | 已有主题登记、按 ID 选择和跟随系统策略 | 本规范不宣称外部主题安装、市场或任意插件热装卸已经实现 |
-
-业务能力的当前状态以各插件源码、公开 SDK 和对应说明为准，不在视觉规范中维护另一份功能清单。[主题管理设计](../文档/需求设计/主题管理.md)继续记录主题服务的实现边界。
-
-### TOK-03｜统一落地与变更规则
-
-1. 先同步内置主题 JSON、必要的登记表默认值与阴影颜色，检查解析后的完整配色；生成的 CSS、SDK 颜色定义和作者文档通过现有脚本更新，不能手工另写页面配色。
-2. 在共享 tokens 和 `@lodestory/ui` 中统一调整几何、文字、状态与浮层层次；缺少公共变体时先补公共定义，不在消费方补丁式覆盖。
-3. 所有插件页面、上下文菜单、工具栏和正文宿主的界面控件采用同一语义与共享定义；选项、校验、文件操作和格式处理仍由各业务插件拥有。
-4. 页面及布局仍通过公开 SDK 登记；主题登记仍由主题插件管理。UI 包不变成运行时业务插件，插件内核不识别具体主题或组件，不向入口加入业务连接逻辑。
-5. 完成 QA-01 的跨主题、跨状态与跨页面验收后，才更新“已迁移”状态。单个演示页、构建通过或颜色检查通过均不能代替全局视觉验收。
-
-本次修订确立标准，不自动修改运行代码。后续新增或重构界面必须按本版执行；现有差异集中迁移，不能把过渡状态长期登记为页面例外。[窗口配置](../src-tauri/tauri.conf.json)与平台安全区需结合实际客户区验收。
-
-## 12. 可访问性参考
-
-本文的视觉尺度、密度与产品风格由 Lodestory 定义，不宣称是外部机构的设计参数。可访问性检查可参考：
-
-- [WCAG 2.2：文字对比度](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)。
-- [WCAG 2.2：非文字对比度](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html)。
-- [WCAG 2.2：操作目标尺寸](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)。
-- [WCAG 2.2：焦点可见](https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html)。
-- [WCAG 2.2：焦点不被遮挡](https://www.w3.org/WAI/WCAG22/Understanding/focus-not-obscured.html)。
+- 用户提供的 `STYLEKIT_STYLE_REFERENCE`：Notion 风格描述，以及“冲突部分以新的设计要求为准”的确认。
+- [主题标准 v1](../文档/主题标准-v1.md)、[颜色登记表](../src/plugins/theme/color-registry.json)与[公开 SDK](../packages/sdk/README.md)：现有契约与能力边界。
+- [WCAG 2.2 文字对比度](https://www.w3.org/WAI/WCAG22/Understanding/contrast-minimum.html)、[非文字对比度](https://www.w3.org/WAI/WCAG22/Understanding/non-text-contrast.html)：对比度阈值与适用边界。
+- [WCAG 2.2 操作目标尺寸](https://www.w3.org/WAI/WCAG22/Understanding/target-size-minimum.html)、[焦点可见](https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html)：键盘与命中区参考。本文 24px 独立命中区是产品基线，不把所有行内文字链接都按按钮几何处理。

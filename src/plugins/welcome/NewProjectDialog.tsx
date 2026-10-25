@@ -47,7 +47,7 @@ export function NewProjectDialog({ open = true, busy, error, onClose, onCloseCom
           <label htmlFor="project-parent-path">保存位置</label>
           <div className="project-directory-field">
             <TextField id="project-parent-path" value={parentPath} readOnly placeholder="选择父目录" title={parentPath} />
-            <Button onClick={() => void chooseParent()} disabled={busy}><Icon name="folder" />选择目录</Button>
+            <Button variant="ghost" onClick={() => void chooseParent()} disabled={busy}><Icon name="folder" />选择目录</Button>
           </div>
           <p className="project-form-hint">将在此目录下创建与小说同名的文件夹。</p>
         </div>

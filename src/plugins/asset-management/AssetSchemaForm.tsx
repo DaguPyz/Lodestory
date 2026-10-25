@@ -245,7 +245,7 @@ export function AssetSchemaForm({draft, types, busy, error, inputRef, onChange, 
                 </IconButton>
               </div>)}
             </div>
-            <Button type="button" disabled={fieldsDisabled || draft.options.length >= 100}
+            <Button variant="ghost" type="button" disabled={fieldsDisabled || draft.options.length >= 100}
               onClick={() => updateOptionList([...draft.options, makeOption()])}>
               <Icon name="plus" size="small" /> 添加选项
             </Button>
@@ -260,8 +260,11 @@ export function AssetSchemaForm({draft, types, busy, error, inputRef, onChange, 
               onValueChange={value => {onChange({...draft, defaultOptions: value === "" ? [] : [value]}); setValidationError(null);}} />
               : <div className="asset-default-options">
                 {draft.options.map((option, index) => <label className="asset-default-check" key={option.id}>
-                  <input type="checkbox" checked={draft.defaultOptions.includes(option.id)} disabled={fieldsDisabled}
-                    onChange={event => {setDefaultOption(option.id, event.currentTarget.checked); setValidationError(null);}} />
+                  <span className="asset-checkbox-control">
+                    <input className="asset-checkbox-input" type="checkbox" checked={draft.defaultOptions.includes(option.id)} disabled={fieldsDisabled}
+                      onChange={event => {setDefaultOption(option.id, event.currentTarget.checked); setValidationError(null);}} />
+                    <Icon name="check" size="small" />
+                  </span>
                   <span>{option.title.trim() || `选项 ${index + 1}`}</span>
                 </label>)}
               </div>}
@@ -298,7 +301,7 @@ export function AssetSchemaForm({draft, types, busy, error, inputRef, onChange, 
     {displayedError && <p className="asset-form-error" role="alert">{displayedError}</p>}
 
     <DialogActions>
-      <Button type="button" disabled={busy} onClick={onCancel}>{hasPendingSave ? "关闭" : "取消"}</Button>
+      <Button variant="secondary" type="button" disabled={busy} onClick={onCancel}>{hasPendingSave ? "关闭" : "取消"}</Button>
       <Button type="submit" variant="primary" disabled={busy}>{submitLabel}</Button>
     </DialogActions>
   </form>;

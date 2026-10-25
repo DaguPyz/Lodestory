@@ -71,7 +71,7 @@ function TimelineList({contextMenus, model, active, onOpenTimeline}: {
       {hasProblem && <div className="outline-design-list-status" role="alert">
         <p>{snapshot.error ?? "有时间线文件无法读取，已保留原文件。"}</p>
         {snapshot.issues.map((issue, index) => <p key={`${issue.name}:${index}`}>{issue.name}：{issue.message}</p>)}
-        <Button onClick={async () => {
+        <Button variant="ghost" onClick={async () => {
           if (await model.retry() && !model.getSnapshot().createDraft) setCreating(false);
         }} disabled={snapshot.retryDisabled}>{snapshot.retryLabel}</Button>
       </div>}
@@ -87,26 +87,27 @@ function TimelineList({contextMenus, model, active, onOpenTimeline}: {
             onClick={() => selectTimeline(timeline.id)}>
             <span className="outline-design-entry-heading">
               <strong>{timeline.title}</strong>
-              {snapshot.selectedId === timeline.id && <Icon name="check" size="small"/>}
-            </span>
-            <span className="outline-design-entry-summary" title={timeline.summary}>
-              {timeline.summary || "还没有梗概，故事从这里开始。"}
+              <span className="outline-design-entry-count">{timeline.eventCount} 个事件</span>
             </span>
             <span className="outline-design-entry-meta">
-              <span>{timeline.period || "时间待定"}</span>
-              <span>{timeline.eventCount} 个事件</span>
+              <span className="outline-design-entry-summary" title={timeline.summary}>
+                {timeline.summary || "还没有梗概，故事从这里开始。"}
+              </span>
+              <span className="outline-design-entry-period" title={timeline.period || "时间待定"}>
+                {timeline.period || "时间待定"}
+              </span>
             </span>
           </button>
           </MenuRegion>
           {timeline.saveState === "error" && <div className="outline-design-entry-save-error">
             <span>{timeline.saveError || "保存失败"}</span>
-            <Button onClick={() => void model.save(timeline.id)} disabled={snapshot.busy}>重试保存</Button>
+            <Button variant="ghost" onClick={() => void model.save(timeline.id)} disabled={snapshot.busy}>重试保存</Button>
           </div>}
         </li>)}
       </ul>
       {canShowEmpty && <div className="outline-design-list-empty">
         <p>还没有时间线。</p>
-        <Button onClick={createTimeline} disabled={!active || snapshot.busy}>新建时间线</Button>
+        <Button variant="primary" onClick={createTimeline} disabled={!active || snapshot.busy}>新建时间线</Button>
       </div>}
     </div>
     </MenuRegion>
@@ -132,12 +133,12 @@ function TimelineList({contextMenus, model, active, onOpenTimeline}: {
         </label>
         {snapshot.error && <div className="outline-design-list-status" role="alert">
           <p>{snapshot.error}</p>
-          <Button onClick={async () => {
+          <Button variant="ghost" onClick={async () => {
             if (await model.retry()) setCreating(false);
           }} disabled={snapshot.retryDisabled}>{snapshot.retryLabel}</Button>
         </div>}
         <DialogActions>
-          <Button type="button" onClick={() => { model.cancelCreate(); setCreating(false); }} disabled={snapshot.creating}>取消</Button>
+          <Button variant="secondary" type="button" onClick={() => { model.cancelCreate(); setCreating(false); }} disabled={snapshot.creating}>取消</Button>
           <Button type="submit" variant="primary" disabled={!draft || !titleLength || titleLength > 60 || summaryLength > 200 || snapshot.busy}>
             {snapshot.creating ? "正在创建…" : "创建时间线"}
           </Button>

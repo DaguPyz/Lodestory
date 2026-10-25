@@ -8,8 +8,8 @@
       "cssVariable": "--ui-surface-root",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#111813",
-        "light": "#F3F6F3"
+        "dark": "#191918",
+        "light": "#F7F6F3"
       }
     },
     {
@@ -18,8 +18,8 @@
       "cssVariable": "--ui-surface-workspace",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#151C19",
-        "light": "#F9FAF8"
+        "dark": "#20201E",
+        "light": "#FFFFFF"
       }
     },
     {
@@ -28,8 +28,8 @@
       "cssVariable": "--ui-surface-panel",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#18221C",
-        "light": "#EFF3EF"
+        "dark": "#1C1C1A",
+        "light": "#F7F6F3"
       }
     },
     {
@@ -38,8 +38,8 @@
       "cssVariable": "--ui-surface-chrome",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#1C2922",
-        "light": "#E9EFEB"
+        "dark": "#252523",
+        "light": "#F1F0ED"
       }
     },
     {
@@ -48,7 +48,7 @@
       "cssVariable": "--ui-surface-control",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#202B25",
+        "dark": "#252523",
         "light": "#FFFFFF"
       }
     },
@@ -58,7 +58,7 @@
       "cssVariable": "--ui-surface-overlay",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#26342C",
+        "dark": "#2C2C29",
         "light": "#FFFFFF"
       }
     },
@@ -68,8 +68,8 @@
       "cssVariable": "--ui-text-primary",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#E6EEE7",
-        "light": "#23392F"
+        "dark": "#F1F0EB",
+        "light": "#37352F"
       }
     },
     {
@@ -78,8 +78,8 @@
       "cssVariable": "--ui-text-secondary",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#A6B7AB",
-        "light": "#526258"
+        "dark": "#C6C4BC",
+        "light": "#5D5A53"
       }
     },
     {
@@ -88,8 +88,8 @@
       "cssVariable": "--ui-text-muted",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#96A89D",
-        "light": "#606D63"
+        "dark": "#AAA8A0",
+        "light": "#6B6860"
       }
     },
     {
@@ -98,8 +98,8 @@
       "cssVariable": "--ui-text-placeholder",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#96A89D",
-        "light": "#606D63"
+        "dark": "#AAA8A0",
+        "light": "#6B6860"
       }
     },
     {
@@ -108,8 +108,8 @@
       "cssVariable": "--ui-text-disabled",
       "alphaAllowed": false,
       "defaults": {
-        "light": "#87948B",
-        "dark": "#83958A"
+        "light": "#77746D",
+        "dark": "#89877F"
       }
     },
     {
@@ -118,8 +118,8 @@
       "cssVariable": "--ui-text-document",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#DFE8E1",
-        "light": "#23392F"
+        "dark": "#E7E5DE",
+        "light": "#37352F"
       }
     },
     {
@@ -138,8 +138,8 @@
       "cssVariable": "--ui-border-divider",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#2A382F",
-        "light": "#DEE6DF"
+        "dark": "#373734",
+        "light": "#E7E5DF"
       }
     },
     {
@@ -148,8 +148,8 @@
       "cssVariable": "--ui-border-decoration",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#3D4D42",
-        "light": "#CFD9D1"
+        "dark": "#4A4A45",
+        "light": "#D7D4CC"
       }
     },
     {
@@ -172,8 +172,8 @@
       "cssVariable": "--ui-border-control",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#82968A",
-        "light": "#78867D"
+        "dark": "#B4B2AA",
+        "light": "#625F58"
       }
     },
     {
@@ -182,18 +182,18 @@
       "cssVariable": "--ui-accent-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#8BD2B3",
-        "light": "#256651"
+        "dark": "#8CCFE2",
+        "light": "#176985"
       }
     },
     {
       "id": "accent.indicator",
-      "description": "活动与选中指示",
+      "description": "必要的强调指示；普通控件选中标记使用对应状态前景",
       "cssVariable": "--ui-accent-indicator",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#83CBA9",
-        "light": "#2D7560"
+        "dark": "#86CDE2",
+        "light": "#145F79"
       }
     },
     {
@@ -202,8 +202,8 @@
       "cssVariable": "--ui-focus-ring",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#83CBA9",
-        "light": "#2D7560"
+        "light": "#5A6C7B",
+        "dark": "#95A5B2"
       }
     },
     {
@@ -212,8 +212,8 @@
       "cssVariable": "--ui-caret-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#E6EEE7",
-        "light": "#23392F"
+        "dark": "#F1F0EB",
+        "light": "#37352F"
       }
     },
     {
@@ -222,8 +222,8 @@
       "cssVariable": "--ui-text-selection-bg",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#315A46",
-        "light": "#CBE3D6"
+        "dark": "#234454",
+        "light": "#D8EAF0"
       }
     },
     {
@@ -232,8 +232,8 @@
       "cssVariable": "--ui-selection-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#F0F7F2",
-        "light": "#173E2D"
+        "dark": "#EAF7FA",
+        "light": "#174B5B"
       }
     },
     {
@@ -242,8 +242,8 @@
       "cssVariable": "--ui-surface-hover",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#293B30",
-        "light": "#EAF0EC"
+        "dark": "#2F2F2C",
+        "light": "#EFEDEA"
       }
     },
     {
@@ -266,8 +266,8 @@
       "cssVariable": "--ui-surface-pressed",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#324B3C",
-        "light": "#DCE7E0"
+        "dark": "#3A3A35",
+        "light": "#E3E1DB"
       }
     },
     {
@@ -276,8 +276,8 @@
       "cssVariable": "--ui-state-pressed-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "light": "#23392F",
-        "dark": "#F0F7F2"
+        "light": "#37352F",
+        "dark": "#F1F0EB"
       }
     },
     {
@@ -286,8 +286,8 @@
       "cssVariable": "--ui-surface-selected",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#203F30",
-        "light": "#E7F1EA"
+        "dark": "#3A3A35",
+        "light": "#E3E1DB"
       }
     },
     {
@@ -296,8 +296,8 @@
       "cssVariable": "--ui-state-selected-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#D8F2E4",
-        "light": "#1E5942"
+        "dark": "#F1F0EB",
+        "light": "#37352F"
       }
     },
     {
@@ -306,8 +306,8 @@
       "cssVariable": "--ui-surface-selected-hover",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#2B503D",
-        "light": "#D8EADF"
+        "dark": "#42423C",
+        "light": "#D9D7D0"
       }
     },
     {
@@ -316,8 +316,8 @@
       "cssVariable": "--ui-state-selected-hover-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "light": "#1E5942",
-        "dark": "#E3F6EC"
+        "light": "#37352F",
+        "dark": "#F5F3ED"
       }
     },
     {
@@ -326,8 +326,8 @@
       "cssVariable": "--ui-state-selected-pressed-background",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#335E48",
-        "light": "#C8DFD1"
+        "dark": "#4A4A43",
+        "light": "#CFCDC5"
       }
     },
     {
@@ -336,8 +336,8 @@
       "cssVariable": "--ui-state-selected-pressed-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#F0FAF4",
-        "light": "#173E2D"
+        "dark": "#FFFFFF",
+        "light": "#2D2B26"
       }
     },
     {
@@ -346,8 +346,8 @@
       "cssVariable": "--ui-surface-selected-inactive",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#2B3730",
-        "light": "#E8ECE9"
+        "dark": "#30302D",
+        "light": "#ECEAE4"
       }
     },
     {
@@ -356,8 +356,8 @@
       "cssVariable": "--ui-state-inactive-selected-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#B5C4BA",
-        "light": "#526258"
+        "dark": "#C6C4BC",
+        "light": "#5D5A53"
       }
     },
     {
@@ -366,8 +366,8 @@
       "cssVariable": "--ui-state-disabled-background",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#303C35",
-        "light": "#E7EBE8"
+        "dark": "#30302D",
+        "light": "#EAE8E2"
       }
     },
     {
@@ -376,8 +376,8 @@
       "cssVariable": "--ui-state-disabled-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#83958A",
-        "light": "#87948B"
+        "dark": "#98968E",
+        "light": "#77746D"
       }
     },
     {
@@ -386,8 +386,8 @@
       "cssVariable": "--ui-state-disabled-selected-background",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#2C4033",
-        "light": "#DFE8E2"
+        "dark": "#343430",
+        "light": "#E1DFD8"
       }
     },
     {
@@ -396,8 +396,8 @@
       "cssVariable": "--ui-state-disabled-selected-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#91AE9B",
-        "light": "#6D8173"
+        "dark": "#A3A198",
+        "light": "#706D65"
       }
     },
     {
@@ -406,8 +406,8 @@
       "cssVariable": "--ui-state-disabled-border",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#46564B",
-        "light": "#CCD6CE"
+        "dark": "#595953",
+        "light": "#C8C5BD"
       }
     },
     {
@@ -416,8 +416,8 @@
       "cssVariable": "--ui-action-bg",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#2F7C61",
-        "light": "#2D7560"
+        "dark": "#176985",
+        "light": "#176985"
       }
     },
     {
@@ -426,8 +426,8 @@
       "cssVariable": "--ui-action-bg-hover",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#318067",
-        "light": "#256651"
+        "dark": "#1B7896",
+        "light": "#155B74"
       }
     },
     {
@@ -436,8 +436,8 @@
       "cssVariable": "--ui-action-bg-pressed",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#205B48",
-        "light": "#205744"
+        "dark": "#125C74",
+        "light": "#104C62"
       }
     },
     {
@@ -460,8 +460,8 @@
       "cssVariable": "--ui-danger-bg",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#A73542",
-        "light": "#A73542"
+        "dark": "#A93440",
+        "light": "#B42332"
       }
     },
     {
@@ -470,8 +470,8 @@
       "cssVariable": "--ui-danger-bg-hover",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#B63C49",
-        "light": "#B63C49"
+        "dark": "#B93D49",
+        "light": "#9E2632"
       }
     },
     {
@@ -480,8 +480,8 @@
       "cssVariable": "--ui-danger-bg-pressed",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#8C2C38",
-        "light": "#8C2C38"
+        "dark": "#8D2C38",
+        "light": "#831D2A"
       }
     },
     {
@@ -504,8 +504,8 @@
       "cssVariable": "--ui-status-success",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#85C69A",
-        "light": "#23693D"
+        "dark": "#87CDB3",
+        "light": "#0F6B5E"
       }
     },
     {
@@ -514,8 +514,8 @@
       "cssVariable": "--ui-status-warning",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#E3BC78",
-        "light": "#8A5A08"
+        "dark": "#E5C66F",
+        "light": "#755900"
       }
     },
     {
@@ -524,8 +524,8 @@
       "cssVariable": "--ui-status-danger",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#EE9393",
-        "light": "#B12F40"
+        "dark": "#F09198",
+        "light": "#AD303B"
       }
     },
     {
@@ -534,8 +534,8 @@
       "cssVariable": "--ui-status-info",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#76B6F2",
-        "light": "#245F9B"
+        "dark": "#8CCFE2",
+        "light": "#176985"
       }
     },
     {
@@ -544,8 +544,8 @@
       "cssVariable": "--ui-overlay-scrim",
       "alphaAllowed": true,
       "defaults": {
-        "dark": "#0000007A",
-        "light": "#172A203D"
+        "dark": "#00000070",
+        "light": "#24231F40"
       }
     },
     {
@@ -554,8 +554,8 @@
       "cssVariable": "--ui-shadow-soft-ambient-color",
       "alphaAllowed": true,
       "defaults": {
-        "dark": "#0000003D",
-        "light": "#172A2014"
+        "dark": "#00000030",
+        "light": "#2927200D"
       }
     },
     {
@@ -564,8 +564,8 @@
       "cssVariable": "--ui-shadow-soft-key-color",
       "alphaAllowed": true,
       "defaults": {
-        "dark": "#00000029",
-        "light": "#172A200A"
+        "dark": "#0000001A",
+        "light": "#29272008"
       }
     },
     {
@@ -574,8 +574,8 @@
       "cssVariable": "--ui-shadow-deep-ambient-color",
       "alphaAllowed": true,
       "defaults": {
-        "dark": "#00000066",
-        "light": "#172A201F"
+        "dark": "#00000050",
+        "light": "#29272018"
       }
     },
     {
@@ -584,8 +584,8 @@
       "cssVariable": "--ui-shadow-deep-key-color",
       "alphaAllowed": true,
       "defaults": {
-        "dark": "#00000033",
-        "light": "#172A2014"
+        "dark": "#00000028",
+        "light": "#29272010"
       }
     },
     {
@@ -594,8 +594,8 @@
       "cssVariable": "--ui-status-success-background",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#182F25",
-        "light": "#EAF5ED"
+        "dark": "#1D3029",
+        "light": "#EAF4EE"
       }
     },
     {
@@ -632,7 +632,7 @@
       "cssVariable": "--ui-status-warning-background",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#352B19",
+        "dark": "#332D1B",
         "light": "#FFF4D6"
       }
     },
@@ -670,8 +670,8 @@
       "cssVariable": "--ui-status-danger-background",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#361F25",
-        "light": "#FDECEF"
+        "dark": "#392426",
+        "light": "#FBECEE"
       }
     },
     {
@@ -708,8 +708,8 @@
       "cssVariable": "--ui-status-info-background",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#1B2D40",
-        "light": "#EAF2FC"
+        "dark": "#1E2D37",
+        "light": "#EAF2F6"
       }
     },
     {
@@ -776,7 +776,7 @@
       "cssVariable": "--ui-highlight-active-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#FFF4D6",
+        "dark": "#FFF2CB",
         "light": "#422B00"
       }
     },
@@ -786,8 +786,8 @@
       "cssVariable": "--ui-highlight-active-border",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#E3BC78",
-        "light": "#8A5A08"
+        "dark": "#E2C472",
+        "light": "#805400"
       }
     },
     {
@@ -908,8 +908,8 @@
       "cssVariable": "--ui-link-hover-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#A4DFC0",
-        "light": "#205744"
+        "dark": "#B4E0EC",
+        "light": "#145B75"
       }
     },
     {
@@ -918,8 +918,8 @@
       "cssVariable": "--ui-link-pressed-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#C5EBD4",
-        "light": "#173E2D"
+        "dark": "#D1EDF4",
+        "light": "#104C62"
       }
     },
     {
@@ -928,8 +928,8 @@
       "cssVariable": "--ui-link-visited-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#B0C9B7",
-        "light": "#526258"
+        "dark": "#C5A9D0",
+        "light": "#69527A"
       }
     },
     {
@@ -938,8 +938,8 @@
       "cssVariable": "--ui-link-visited-hover-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#C7DDCD",
-        "light": "#40584B"
+        "dark": "#DAC5E0",
+        "light": "#554265"
       }
     },
     {
@@ -948,8 +948,8 @@
       "cssVariable": "--ui-link-visited-pressed-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#DCEBE0",
-        "light": "#32483C"
+        "dark": "#E9DCEC",
+        "light": "#453751"
       }
     },
     {
@@ -958,8 +958,8 @@
       "cssVariable": "--ui-surface-inverse",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#E6EEE7",
-        "light": "#23392F"
+        "dark": "#E7E5DE",
+        "light": "#37352F"
       }
     },
     {
@@ -968,8 +968,8 @@
       "cssVariable": "--ui-text-inverse",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#182D22",
-        "light": "#F3F6F3"
+        "dark": "#252523",
+        "light": "#F7F6F3"
       }
     },
     {
@@ -978,8 +978,8 @@
       "cssVariable": "--ui-border-inverse",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#72867A",
-        "light": "#7B8980"
+        "dark": "#7E7C75",
+        "light": "#A6A39A"
       }
     },
     {
@@ -988,8 +988,8 @@
       "cssVariable": "--ui-focus-inverse-ring",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#395247",
-        "light": "#A6B7AB"
+        "light": "#95A5B2",
+        "dark": "#5A6C7B"
       }
     },
     {
@@ -998,8 +998,8 @@
       "cssVariable": "--ui-category-1-background",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#1D3048",
-        "light": "#E7F0FD"
+        "dark": "#243A50",
+        "light": "#E8F0F8"
       }
     },
     {
@@ -1008,8 +1008,8 @@
       "cssVariable": "--ui-category-1-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#A8CCFF",
-        "light": "#244F87"
+        "dark": "#A8C8E5",
+        "light": "#294B6B"
       }
     },
     {
@@ -1032,8 +1032,8 @@
       "cssVariable": "--ui-category-2-background",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#362540",
-        "light": "#F6EBFA"
+        "dark": "#4B3853",
+        "light": "#F1EAF3"
       }
     },
     {
@@ -1042,8 +1042,8 @@
       "cssVariable": "--ui-category-2-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#E3B7F1",
-        "light": "#763B86"
+        "dark": "#D5AEE1",
+        "light": "#61416D"
       }
     },
     {
@@ -1066,8 +1066,8 @@
       "cssVariable": "--ui-category-3-background",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#17352F",
-        "light": "#E5F5EF"
+        "dark": "#28483D",
+        "light": "#E8F1EC"
       }
     },
     {
@@ -1076,8 +1076,8 @@
       "cssVariable": "--ui-category-3-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#8FD7C8",
-        "light": "#176657"
+        "dark": "#8FCBB1",
+        "light": "#31594C"
       }
     },
     {
@@ -1100,8 +1100,8 @@
       "cssVariable": "--ui-category-4-background",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#3A2B21",
-        "light": "#FCEEE0"
+        "dark": "#563B2B",
+        "light": "#F4ECE2"
       }
     },
     {
@@ -1110,8 +1110,8 @@
       "cssVariable": "--ui-category-4-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#F2BC91",
-        "light": "#844512"
+        "dark": "#D9AF86",
+        "light": "#74492B"
       }
     },
     {
@@ -1134,8 +1134,8 @@
       "cssVariable": "--ui-category-5-background",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#392533",
-        "light": "#FBEAF1"
+        "dark": "#54343D",
+        "light": "#F4E9EC"
       }
     },
     {
@@ -1144,8 +1144,8 @@
       "cssVariable": "--ui-category-5-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#EDACCA",
-        "light": "#8D355D"
+        "dark": "#D89BAA",
+        "light": "#713E4A"
       }
     },
     {
@@ -1168,8 +1168,8 @@
       "cssVariable": "--ui-category-6-background",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#30321E",
-        "light": "#F1F3DC"
+        "dark": "#47471F",
+        "light": "#F0EFDE"
       }
     },
     {
@@ -1178,8 +1178,8 @@
       "cssVariable": "--ui-category-6-foreground",
       "alphaAllowed": false,
       "defaults": {
-        "dark": "#C9CD88",
-        "light": "#5C611B"
+        "dark": "#C9C88C",
+        "light": "#5B591F"
       }
     },
     {
@@ -3846,28 +3846,28 @@
       "border": "border.strong"
     },
     "selected": {
-      "description": "持续选中的可操作对象。",
+      "description": "持续选中的可操作对象；使用中性灰底和同态前景指示。",
       "foreground": "state.selectedForeground",
       "background": "state.selectedBackground",
-      "indicator": "accent.indicator"
+      "indicator": "state.selectedForeground"
     },
     "selectedHover": {
-      "description": "选中对象的悬停反馈，保留选中指示。",
+      "description": "选中对象的悬停反馈；使用对应的状态前景指示。",
       "foreground": "state.selectedHoverForeground",
       "background": "state.selectedHoverBackground",
-      "indicator": "accent.indicator"
+      "indicator": "state.selectedHoverForeground"
     },
     "selectedPressed": {
-      "description": "选中对象的按下反馈，保留选中指示。",
+      "description": "选中对象的按下反馈；使用对应的状态前景指示。",
       "foreground": "state.selectedPressedForeground",
       "background": "state.selectedPressedBackground",
-      "indicator": "accent.indicator"
+      "indicator": "state.selectedPressedForeground"
     },
     "inactiveSelected": {
-      "description": "没有悬停或按下反馈且选择上下文失焦的保留选中。",
+      "description": "没有悬停或按下反馈且选择上下文失焦的保留选中；指示沿用该状态前景。",
       "foreground": "state.inactiveSelectedForeground",
       "background": "state.inactiveSelectedBackground",
-      "indicator": "accent.indicator"
+      "indicator": "state.inactiveSelectedForeground"
     },
     "disabled": {
       "description": "禁用对象；不产生悬停或按下反馈。",
@@ -3876,11 +3876,11 @@
       "border": "state.disabledBorder"
     },
     "disabledSelected": {
-      "description": "禁用且选中；保留选中信息，抑制操作反馈。",
+      "description": "禁用且选中；保留同态前景指示，抑制操作反馈。",
       "foreground": "state.disabledSelectedForeground",
       "background": "state.disabledSelectedBackground",
       "border": "state.disabledBorder",
-      "indicator": "accent.indicator"
+      "indicator": "state.disabledSelectedForeground"
     },
     "actionRest": {
       "description": "实色主操作默认态。",

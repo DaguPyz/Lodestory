@@ -157,7 +157,8 @@ function checkUsageRules(data, entries) {
         assert(pair, `搭配未登记对比关系：${id}/${foreground}/${background}`);
         const exempt = ["text.disabled", "state.disabledForeground", "state.disabledSelectedForeground", "state.disabledBorder"].includes(foreground);
         const required = exempt ? null : key === "foreground" && id !== "caret" ? 4.5 : 3;
-        assert.equal(pair.minRatio, required, `搭配对比目标错误：${id}/${foreground}/${background}`);
+        if (required === null) assert.equal(pair.minRatio, null, `搭配对比目标错误：${id}/${foreground}/${background}`);
+        else assert(pair.minRatio >= required, `搭配对比目标错误：${id}/${foreground}/${background}`);
       }
     }
   }
@@ -361,7 +362,9 @@ for (const theme of builtin.themes) {
   for (const entry of registry.colors) if (variables.has(entry.cssVariable)) checkColor(palette[entry.id], variables.get(entry.cssVariable));
   for (const recipe of registry.shadowRecipes) {
     const legacy = variables.get(recipe.cssVariable);
-    const layers = [...legacy.matchAll(/(-?[\d.]+)(?:px)?\s+(-?[\d.]+)px\s+([\d.]+)px(?:\s+(-?[\d.]+)px)?\s+(rgba\([^)]+\))/g)];
+    const color = "(#[\\da-f]{6}(?:[\\da-f]{2})?|rgba\\([^)]+\\))";
+    const layer = new RegExp(`(-?[\\d.]+)(?:px)?\\s+(-?[\\d.]+)px\\s+([\\d.]+)px(?:\\s+(-?[\\d.]+)px)?\\s+${color}`, "gi");
+    const layers = [...legacy.matchAll(layer)];
     assert.equal(layers.length, recipe.layers.length);
     recipe.layers.forEach((layer, index) => {
       assert.deepEqual([layer.x, layer.y, layer.blur, layer.spread], layers[index].slice(1, 5).map((value) => Number(value ?? 0)));
@@ -374,15 +377,15 @@ for (const theme of builtin.themes) {
 const partial = resolveColors(ink.themes[0]);
 assert.equal(partial["surface.content"], "#171A23");
 assert.equal(partial["text.reading"], "#ECE2CE");
-assert.equal(partial["state.selectedHoverForeground"], "#E3F6EC");
-assert.equal(partial["state.selectedPressedForeground"], "#F0FAF4");
+assert.equal(partial["state.selectedHoverForeground"], "#F5F3ED");
+assert.equal(partial["state.selectedPressedForeground"], "#FFFFFF");
 const inherited = resolveColors({ type: "dark", colors: { "text.onAction": "#FDFDFD", "state.selectedForeground": "#FEFEFE" } });
 assert.equal(inherited["action.foreground"], "#FDFDFD");
 assert.equal(inherited["danger.foreground"], "#FDFDFD");
-assert.equal(inherited["state.inactiveSelectedForeground"], "#B5C4BA");
+assert.equal(inherited["state.inactiveSelectedForeground"], "#C6C4BC");
 assert.equal(resolveColors({type: "dark", colors: {"border.strong": "#AABBCC"}})["border.default"], "#AABBCC", "缺少常态边界时继承同一主题的强边界");
 assert.deepEqual(paintRoles("neutralRest", {surface: "surface.control"}), {foreground: "text.primary", background: "surface.control", border: "border.default"});
-assert.equal(resolveColors({ type: "light", colors: {} })["text.primary"], "#23392F");
+assert.equal(resolveColors({ type: "light", colors: {} })["text.primary"], "#37352F");
 const extendedInherited = resolveColors({ type: "dark", colors: { "status.success": "#AABBCC", "status.successBackground": "#101820", "category.1.foreground": "#DDEEFF" } });
 assert.equal(extendedInherited["status.successForeground"], "#AABBCC");
 assert.equal(extendedInherited["drop.allowedForeground"], "#AABBCC", "allowed drop feedback inherits the success foreground");
@@ -421,7 +424,7 @@ for (const intent of registry.stateRules.intents) for (let mask = 0; mask < 2 **
   const state = Object.fromEntries(flags.map((flag, index) => [flag, Boolean(mask & (1 << index))]));
   const result = resolvePaint(intent, context, state);
   if (state.disabled) assert.equal(result.id, state.selected ? "disabledSelected" : "disabled");
-  if (state.selected) assert.equal(result.roles.indicator, "accent.indicator", "选中状态不能丢失指示");
+  if (state.selected) assert.equal(result.roles.indicator, `state.${result.id[0].toLowerCase()}${result.id.slice(1)}Foreground`, "选中指示应沿用同一状态的前景");
   assert.equal(result.focus !== null, state.focusVisible, "焦点不应被背景前景状态吞掉");
   if (result.focus) assert.equal(result.focus.indicator, "focus.ring");
   stateCases++;
@@ -451,7 +454,7 @@ for (const surface of registry.contexts.validationSurface.allowedRoles) {
 const selectedFocused = resolvePaint("neutral", context, { selected: true, hovered: true, focusVisible: true });
 const errorBoundary = paintRoles("validationDanger", { validationSurface: selectedFocused.roles.background });
 const dropHint = resolveUsage("drop", { surface: "surface.content" }, { dragging: true, allowed: true });
-assert.equal(selectedFocused.roles.indicator, "accent.indicator");
+assert.equal(selectedFocused.roles.indicator, "state.selectedHoverForeground");
 assert.equal(selectedFocused.focus.indicator, "focus.ring");
 assert.equal(errorBoundary.border, "status.dangerBorder");
 assert.equal(dropHint.roles.background, "drop.allowedBackground");

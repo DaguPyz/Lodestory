@@ -548,20 +548,33 @@ function findReactElement(node, predicate) {
   return findReactElement(node.props?.children, predicate);
 }
 
-test("object list view mode stays within its project session across scope and detail changes", () => {
+test("object view and search stay local while filtering both list modes", () => {
   const f = uiPluginFixture();
   // This fixture drives hook state directly; effects only manage focus and cleanup.
   f.React.useLayoutEffect = () => {};
   const {AssetRecordsEditor} = f.loadSource("plugins/asset-management/AssetRecordsView.tsx");
   const typeOne = {id: "view-type-one", name: "人物", description: "", order: 0, status: "active"};
   const typeTwo = {id: "view-type-two", name: "物品", description: "", order: 1, status: "active"};
-  const person = {id: "view-person", name: "林舟", description: "旅人", typeId: typeOne.id, values: {}};
+  const nameField = {id: "view-name", owner: {kind: "type", id: typeOne.id}, title: "名称",
+    valueType: "text", config: {}, order: 0, status: "active"};
+  const abilityField = {id: "view-ability", owner: {kind: "type", id: typeOne.id}, title: "能力",
+    valueType: "text", config: {}, order: 1, status: "active"};
+  const unfilledField = {...abilityField, id: "view-unfilled", title: "未填写的模板字段", order: 2};
+  const archivedField = {...abilityField, id: "view-archived", title: "已归档字段", order: 3, status: "archived"};
+  const person = {id: "view-person", name: "林舟", description: "旅人", typeId: typeOne.id, color: "#d8e5f2",
+    values: {[nameField.id]: "林舟", [abilityField.id]: "御风", [archivedField.id]: "旧记录"}};
+  const customField = {...abilityField, id: "view-custom", title: "未填写的专属字段",
+    owner: {kind: "asset", id: person.id}, order: 0};
+  const archivedCustomField = {...customField, id: "view-custom-archived", order: 1, status: "archived"};
+  const alchemist = {id: "view-alchemist", name: "青檀", description: "炼药师", typeId: typeOne.id,
+    values: {[nameField.id]: "青檀", [abilityField.id]: "青莲地心火"}};
   const item = {id: "view-item", name: "青霜剑", description: "古剑", typeId: typeTwo.id, values: {}};
   const writes = [];
 
   function createResource(selectedTypeId) {
     const snapshot = {
-      types: [typeOne, typeTwo], assets: [person, item], fields: [],
+      types: [typeOne, typeTwo], assets: [person, alchemist, item],
+      fields: [nameField, abilityField, unfilledField, archivedField, customField, archivedCustomField],
       selectedTypeId, selectedAssetId: null, loaded: true, loading: false, saving: false,
       dirty: false, blocked: false, error: null, saveState: "saved",
     };
@@ -601,6 +614,19 @@ test("object list view mode stays within its project session across scope and de
       (element.type?.name === "Button" && element.props["aria-label"] === label)
       || (element.type?.name === "IconButton" && element.props.label === label));
   }
+  function objectButton(tree, name) {
+    return findReactElement(tree, element => element.type?.name === "Button" && element.props.title === name);
+  }
+  function searchField(tree) {
+    return findReactElement(tree, element => element.type?.name === "SearchField" && element.props.label === "搜索对象");
+  }
+  function card(tree, name) {
+    return findReactElement(tree, element => element.type === "li"
+      && element.props.className === "asset-object-card" && objectButton(element, name));
+  }
+  function badgeLabel(card, scope) {
+    return findReactElement(card, element => element.props["data-field-scope"] === scope)?.props["aria-label"];
+  }
   const store = resources.get(currentSession.id).store;
 
   let tree = render();
@@ -611,6 +637,57 @@ test("object list view mode stays within its project session across scope and de
   tree = render();
   assert.equal(modeButton(tree, "卡片视图")?.props["aria-pressed"], true);
   assert.ok(findReactElement(tree, element => element.type === "ul" && element.props.className === "asset-object-cards"));
+  assert.equal(card(tree, person.name).props.style["--asset-card-background"], person.color,
+    "the saved object color is rendered as the exact card background");
+  assert.equal(card(tree, person.name).props["data-colored"], true);
+  assert.equal(card(tree, alchemist.name).props.style, undefined,
+    "objects without a color keep the theme's default card surface");
+  assert.equal(badgeLabel(card(tree, person.name), "template"), "模板字段 3 个",
+    "template counts include unfilled active definitions and exclude archived fields even with retained values");
+  assert.equal(badgeLabel(card(tree, person.name), "custom"), "专属字段 1 个",
+    "custom counts use only the object's active definitions, including unfilled fields");
+  assert.equal(badgeLabel(card(tree, alchemist.name), "custom"), "专属字段 0 个",
+    "zero counts remain visible and do not include another object's fields");
+  assert.ok(findReactElement(card(tree, person.name), element => element.type === "p" && element.props.children === person.description));
+  assert.equal(findReactElement(tree, element => element.type === "dl"), undefined,
+    "cards show field counts instead of expanding field values");
+  assert.equal(searchField(tree)?.props.value, "");
+
+  searchField(tree).props.onChange({currentTarget: {value: "青莲"}});
+  tree = render();
+  assert.equal(searchField(tree)?.props.value, "青莲");
+  assert.equal(objectButton(tree, person.name), undefined, "search hides objects that do not match");
+  assert.ok(objectButton(tree, alchemist.name), "search includes displayed field values");
+  assert.equal(findReactElement(tree, element => element.type === "p" && element.props["aria-live"] === "polite")?.props.children,
+    "1 / 2 个对象", "search reports matching and total object counts without repeating the badges");
+
+  modeButton(tree, "列表视图").props.onClick();
+  tree = render();
+  assert.equal(searchField(tree)?.props.value, "青莲", "changing view preserves the local search query");
+  assert.ok(findReactElement(tree, element => element.type === "table" && element.props.className === "asset-object-table"));
+  assert.equal(objectButton(tree, person.name), undefined);
+  assert.ok(objectButton(tree, alchemist.name), "list and card views share the same filtered objects");
+  assert.ok(findReactElement(tree, element => element.type === "th" && element.props.children === nameField.title),
+    "list view retains all active template field columns, including a field named 名称");
+  assert.ok(findReactElement(tree, element => element.type === "span"
+    && element.props.className === "asset-object-cell-value" && element.props.children === alchemist.name),
+    "list view retains field values even when they repeat the object title");
+
+  searchField(tree).props.onChange({currentTarget: {value: ""}});
+  modeButton(render(), "卡片视图").props.onClick();
+  tree = render();
+  assert.ok(objectButton(tree, person.name));
+  assert.ok(objectButton(tree, alchemist.name));
+  objectButton(tree, person.name).props.onClick();
+  tree = render();
+  assert.ok(findReactElement(tree, element => element.type === "dt" && element.props.children === nameField.title));
+  assert.ok(findReactElement(tree, element => element.type === "dd"
+    && findReactElement(element, child => child.type === "span" && child.props.children === person.name)),
+    "opening the card still exposes all field values in detail");
+  assert.ok(findReactElement(tree, element => element.type?.name === "Button"
+    && element.props["aria-label"] === `修改“${customField.title}”的属性标题`),
+    "the counted unfilled custom field is available in detail");
+  store.selectAsset(null);
 
   store.selectType(typeTwo.id);
   store.selectAsset(null);
@@ -618,6 +695,8 @@ test("object list view mode stays within its project session across scope and de
   assert.equal(modeButton(tree, "卡片视图")?.props["aria-pressed"], true, "changing template scope preserves the view mode");
   assert.ok(findReactElement(tree, element => element.type?.name === "Button" && element.props.title === item.name),
     "the card list renders objects from the newly selected template");
+  assert.equal(badgeLabel(card(tree, item.name), "template"), "模板字段 0 个");
+  assert.equal(badgeLabel(card(tree, item.name), "custom"), "专属字段 0 个");
 
   store.selectAsset(item.id);
   tree = render();

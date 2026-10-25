@@ -63,8 +63,11 @@ export function DocumentTabs({documents, activeDocument, onSelect, onClose, onCl
                 onClick={() => onSelect(document.id)}
               >
                 <Icon name="file"/>
-                <span>{document.fileName}</span>
+                <span className="document-tab-label">{document.fileName}</span>
                 {document.saveState !== "saved" && <span className="document-tab-unsaved" aria-label="有未保存修改">●</span>}
+                <span className="document-tab-state" aria-hidden="true">
+                  {document.id === activeDocument && <Icon name="check" size="small" />}
+                </span>
               </button>
               <IconButton label={`关闭 ${document.fileName}`} disabled={disabled} onClick={() => onClose(document.id)}>
                 <Icon name="close" size="small"/>

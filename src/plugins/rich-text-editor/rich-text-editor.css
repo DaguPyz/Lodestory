@@ -139,19 +139,19 @@
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow .rich-text-toolbar-actions button.ql-active {
-  color: var(--ui-state-inactive-selected-foreground);
-  background: var(--ui-surface-selected-inactive);
+  color: var(--ui-state-selected-foreground);
+  background: var(--ui-surface-selected);
   box-shadow: none;
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow .rich-text-toolbar-actions button.ql-active:hover:not(:disabled) {
-  color: var(--ui-state-hover-foreground);
-  background: var(--ui-surface-hover);
+  color: var(--ui-state-selected-hover-foreground);
+  background: var(--ui-surface-selected-hover);
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow .rich-text-toolbar-actions button.ql-active:active:not(:disabled) {
-  color: var(--ui-state-pressed-foreground);
-  background: var(--ui-surface-pressed);
+  color: var(--ui-state-selected-pressed-foreground);
+  background: var(--ui-state-selected-pressed-background);
 }
 
 .rich-text-editor-mount .ql-toolbar.ql-snow .rich-text-toolbar-actions button:focus-visible {
@@ -277,15 +277,9 @@
   min-height: var(--ui-control-height);
   color: var(--ui-text-primary);
   background: var(--ui-surface-control);
-  border: 1px solid var(--ui-border-control);
+  border: 1px solid var(--ui-border-default);
   border-radius: var(--ui-radius-control);
   font: inherit;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .rich-text-editor-mount .ql-toolbar.ql-snow .rich-text-toolbar-actions button {
-    transition: none;
-  }
 }
 
 @media (forced-colors: active) {

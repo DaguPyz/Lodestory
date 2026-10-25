@@ -16,7 +16,19 @@ test('page motion preserves editing state, coordinates menus and supports reduce
   }
   const browser = await playwright.chromium.launch({headless: true,
     ...(process.env.LODESTORY_CHROME_PATH ? {executablePath: process.env.LODESTORY_CHROME_PATH} : {})});
-  const server = await createServer({cacheDir: 'node_modules/.vite-page-motion-test', server: {host: '127.0.0.1', port: 0, strictPort: false, hmr: false}, logLevel: 'error'});
+  const server = await createServer({
+    cacheDir: 'node_modules/.vite-page-motion-test',
+    resolve: {dedupe: ['react', 'react-dom']},
+    // Prebundle this fixture's React graph before lazy editors load. A later
+    // optimizer generation must not mix with the renderer already on the page.
+    optimizeDeps: {
+      entries: ['tests/fixtures/project-index.html'],
+      include: ['react', 'react-dom/client', 'quill', '@base-ui/react/scroll-area',
+        '@base-ui/react/dialog', '@base-ui/react/menu', '@base-ui/react/select', '@base-ui/react/context-menu'],
+    },
+    server: {host: '127.0.0.1', port: 0, strictPort: false, hmr: false},
+    logLevel: 'error',
+  });
   await server.listen();
   t.after(async () => { await browser.close(); await server.close(); });
   const page = await browser.newPage({viewport: {width: 1440, height: 900}, reducedMotion: 'no-preference'});
@@ -35,9 +47,84 @@ test('page motion preserves editing state, coordinates menus and supports reduce
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true,
       'the page must fit the viewport');
   }
+  async function assertSelectedPress(locator, name) {
+    await locator.hover();
+    await page.mouse.down();
+    try {
+      const paint = await locator.evaluate(element => {
+        const style = getComputedStyle(element);
+        const probe = document.createElement('span');
+        probe.style.color = 'var(--ui-state-selected-pressed-foreground)';
+        probe.style.backgroundColor = 'var(--ui-state-selected-pressed-background)';
+        element.append(probe);
+        const expected = getComputedStyle(probe);
+        const result = {foreground: style.color, background: style.backgroundColor,
+          expectedForeground: expected.color, expectedBackground: expected.backgroundColor};
+        probe.remove();
+        return result;
+      });
+      assert.equal(paint.foreground, paint.expectedForeground, `${name}: selected press foreground`);
+      assert.equal(paint.background, paint.expectedBackground, `${name}: selected press background`);
+    } finally { await page.mouse.up(); }
+  }
+  async function assertForcedSelection(locator, name) {
+    await page.emulateMedia({forcedColors: 'active'});
+    await locator.hover();
+    await page.mouse.down();
+    try {
+      const paint = await locator.evaluate(element => {
+        const probe = document.createElement('span');
+        probe.style.color = 'HighlightText';
+        probe.style.backgroundColor = 'Highlight';
+        element.append(probe);
+        const actual = getComputedStyle(element), expected = getComputedStyle(probe);
+        const result = {color: actual.color, background: actual.backgroundColor,
+          expectedColor: expected.color, expectedBackground: expected.backgroundColor};
+        probe.remove();
+        return result;
+      });
+      assert.equal(paint.color, paint.expectedColor, `${name}: forced selection text survives pressing`);
+      assert.equal(paint.background, paint.expectedBackground, `${name}: forced selection surface survives pressing`);
+    } finally {
+      await page.mouse.up();
+      await page.emulateMedia({forcedColors: 'none'});
+    }
+  }
   await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/tests/fixtures/project-index.html`);
   await page.getByRole('button', {name: '开始新创作', exact: true}).waitFor();
+  await assertSelectedPress(page.locator('.navigation-item[aria-current="page"]:not(:disabled)'), 'welcome navigation');
+  await assertForcedSelection(page.locator('.navigation-item[aria-current="page"]:not(:disabled)'), 'welcome navigation');
   await capture('welcome-dark');
+  await page.getByRole('button', {name: '设置', exact: true}).click();
+  await capture('settings-dark');
+  await page.locator('input[value="lodestory.builtin.light"]').check();
+  await page.getByRole('button', {name: '返回', exact: true}).click();
+  await capture('welcome-light');
+  await page.setViewportSize({width: 720, height: 640});
+  await noHorizontalOverflow();
+  const currentNavigation = page.locator('.navigation-item[aria-current="page"]:not(:disabled)');
+  await page.keyboard.press('Tab');
+  await currentNavigation.focus();
+  const compactSelection = await currentNavigation.evaluate(element => ({
+    marker: getComputedStyle(element.querySelector('.navigation-item-state')).display,
+    markerWidth: element.querySelector('.navigation-item-state').getBoundingClientRect().width,
+    selectionBorder: getComputedStyle(element, '::after').borderTopWidth,
+    focusWidth: getComputedStyle(element).outlineWidth,
+    focusOffset: getComputedStyle(element).outlineOffset,
+    markerColor: getComputedStyle(element.querySelector('.navigation-item-state')).color,
+    foreground: getComputedStyle(element).color,
+  }));
+  assert.equal(compactSelection.marker, 'none', 'icon-only compact navigation does not squeeze in a check');
+  assert.equal(compactSelection.markerWidth, 0, 'icon-only navigation reserves no check slot');
+  assert.equal(compactSelection.selectionBorder, '0px', 'selection has no colored frame');
+  assert.equal(compactSelection.focusWidth, '2px', 'keyboard focus remains visible');
+  assert.equal(compactSelection.focusOffset, '1px');
+  assert.equal(compactSelection.markerColor, compactSelection.foreground, 'selection check inherits its state foreground');
+  await capture('welcome-light-narrow');
+  await page.setViewportSize({width: 1440, height: 900});
+  await page.getByRole('button', {name: '设置', exact: true}).click();
+  await page.locator('input[value="lodestory.builtin.dark"]').check();
+  await page.getByRole('button', {name: '返回', exact: true}).click();
 
   await page.getByRole('button', {name: '测试故事的更多操作', exact: true}).click();
   const menu = page.locator('.project-menu');
@@ -64,8 +151,39 @@ test('page motion preserves editing state, coordinates menus and supports reduce
   await page.getByRole('button', {name: '故事大纲.txt', exact: true}).click();
   const editor = page.locator('.ql-editor');
   await editor.waitFor();
+  await assertSelectedPress(page.locator('.file-tree-entry[aria-current="page"]'), 'current project file');
+  await assertSelectedPress(page.locator('.document-tab-select[aria-current="page"]'), 'current document tab');
+  await assertForcedSelection(page.locator('.file-tree-entry[aria-current="page"]'), 'current project file');
+  await assertForcedSelection(page.locator('.document-tab-select[aria-current="page"]'), 'current document tab');
+  const longFolder = await page.locator('.file-tree-folder-toggle .file-tree-label').first().evaluate(element => {
+    const previous = element.textContent;
+    element.textContent = '很长的中文目录名称'.repeat(20);
+    const style = getComputedStyle(element);
+    const result = {whiteSpace: style.whiteSpace, overflow: style.overflow, textOverflow: style.textOverflow,
+      clipped: element.scrollWidth > element.clientWidth,
+      fits: element.getBoundingClientRect().width <= element.closest('button').getBoundingClientRect().width};
+    element.textContent = previous;
+    return result;
+  });
+  assert.deepEqual(longFolder, {whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', clipped: true, fits: true},
+    'long folder names remain a clipped single line after adding file selection checks');
   await editor.fill('故事的大纲。视觉更新验收');
   const editorHandle = await editor.elementHandle();
+  await page.evaluate(() => {
+    window.__toolbarTransitionEvents = [];
+    document.addEventListener('transitionrun', event => {
+      if (event.target instanceof HTMLElement && event.target.matches('.toolbar-menu-popup')) {
+        window.__toolbarTransitionEvents.push(event.propertyName);
+      }
+    });
+  });
+  await page.getByRole('button', {name: '布局内容', exact: true}).click();
+  await page.waitForFunction(() => window.__toolbarTransitionEvents.includes('opacity'), null, {timeout: 1000});
+  assert.equal(await page.locator('.toolbar-menu-popup').evaluate(element => getComputedStyle(element).transitionProperty), 'opacity',
+    'toolbar menus fade in without moving their final position');
+  await capture('toolbar-menu-dark');
+  await page.keyboard.press('Escape');
+  await page.locator('.toolbar-menu-popup').waitFor({state: 'detached'});
   await page.getByRole('button', {name: '设置', exact: true}).click();
   await page.locator('input[value="lodestory.builtin.light"]').check();
   await page.getByRole('combobox', {name: '动效偏好'}).click();
@@ -104,6 +222,7 @@ test('page motion preserves editing state, coordinates menus and supports reduce
     'system reduced motion also wins when the application follows the system');
   await page.getByRole('button', {name: '返回', exact: true}).click();
   await page.getByRole('button', {name: '布局内容', exact: true}).click();
+  await page.waitForFunction(() => document.querySelector('.toolbar-menu-popup')?.contains(document.activeElement));
   await page.keyboard.press('Escape');
   await page.locator('.toolbar-menu-popup').waitFor({state: 'detached'});
 
@@ -116,11 +235,11 @@ test('page motion preserves editing state, coordinates menus and supports reduce
   const filesToggle = page.getByRole('navigation', {name: '工作空间工具'}).getByRole('button', {name: '工程文件', exact: true});
   await filesToggle.click();
   await page.waitForFunction(() => document.querySelector('.layout-navigation')?.dataset.open === 'true');
-  assert.equal(await navigation.evaluate(e => getComputedStyle(e).transitionDuration), '0.16s, 0.16s');
+  assert.equal(await navigation.evaluate(e => getComputedStyle(e).transitionDuration), '0.15s');
   await navigation.evaluate(e => Promise.allSettled(e.getAnimations().map(animation => animation.finished)));
   await navigation.getByRole('button', {name: '收起工程文件', exact: true}).click();
   const closingPanel = await navigation.evaluate(e => ({inert: e.inert, phase: e.dataset.panelPhase, duration: getComputedStyle(e).transitionDuration}));
-  assert.deepEqual(closingPanel, {inert: true, phase: 'exiting', duration: '0.1s, 0.1s'},
+  assert.deepEqual(closingPanel, {inert: true, phase: 'exiting', duration: '0.15s'},
     'floating panels stop interaction immediately while retaining the exit presentation');
   await filesToggle.click();
   await page.waitForFunction(() => document.querySelector('.layout-navigation')?.dataset.open === 'true');
@@ -131,6 +250,10 @@ test('page motion preserves editing state, coordinates menus and supports reduce
 
   await page.locator('.document-tab-select').click({button: 'right'});
   await page.locator('.context-menu-popup').waitFor();
+  await page.waitForFunction(() => {
+    const popup = document.querySelector('.context-menu-popup:not([data-ending-style])');
+    return popup && getComputedStyle(popup).transitionProperty === 'opacity';
+  });
   assert.equal(await page.locator('.context-menu-popup').evaluate(e => getComputedStyle(e).transitionProperty), 'opacity');
   await page.locator('.document-tabs').click({button: 'right', position: {x: 500, y: 12}});
   assert.equal(await page.locator('.context-menu-popup:visible').count(), 1, 'switching right-click regions leaves one visible menu');

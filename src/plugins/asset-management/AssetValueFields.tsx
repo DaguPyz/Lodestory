@@ -1,5 +1,5 @@
 import {useLayoutEffect, useRef, useState} from "react";
-import {Select, Textarea, TextField, type SelectOption} from "@lodestory/ui";
+import {Icon, Select, Textarea, TextField, type SelectOption} from "@lodestory/ui";
 import type {AssetFieldDefinition, AssetPropertyValue, AssetRecord} from "./assetSchemaStore";
 
 export type AssetValueFieldsProps = {
@@ -146,14 +146,17 @@ export function AssetValueFields({fields, assets, values, disabled, onChange}: A
           <legend>{field.title}<span className="asset-optional"> · {typeLabel}</span></legend>
           <div className="asset-default-options">
             {options.map(option => <label className="asset-default-check" key={option.id}>
-              <input type="checkbox" checked={selected.includes(option.id)} disabled={disabled}
-                aria-label={`${field.title}：${option.title}`}
-                onChange={event => {
-                  const next = event.currentTarget.checked
-                    ? [...selected, option.id]
-                    : selected.filter(id => id !== option.id);
-                  onChange(field.id, next);
-                }} />
+              <span className="asset-checkbox-control">
+                <input className="asset-checkbox-input" type="checkbox" checked={selected.includes(option.id)} disabled={disabled}
+                  aria-label={`${field.title}：${option.title}`}
+                  onChange={event => {
+                    const next = event.currentTarget.checked
+                      ? [...selected, option.id]
+                      : selected.filter(id => id !== option.id);
+                    onChange(field.id, next);
+                  }} />
+                <Icon name="check" size="small" />
+              </span>
               <span>{option.title}</span>
             </label>)}
           </div>

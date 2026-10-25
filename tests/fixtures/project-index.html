@@ -27,6 +27,9 @@
             // Sample objects exist only in this development fixture's in-memory files.
             const refinedPreview = scenario === "asset-template-workspace-refined";
             const longPreview = scenario === "asset-template-workspace-long";
+            const masonryPreview = scenario === "asset-template-workspace-masonry";
+            const edgeCardsPreview = masonryPreview && query.get("edgeCards") === "1";
+            const richArtsPreview = refinedPreview || masonryPreview;
             const peopleId = "10000000-0000-4000-8000-000000000001";
             const artsId = "10000000-0000-4000-8000-000000000002";
             const ageId = "20000000-0000-4000-8000-000000000001";
@@ -38,6 +41,49 @@
             const artsAbilityId = "20000000-0000-4000-8000-000000000007";
             const oldAssetId = "40000000-0000-4000-8000-000000000005";
             const field = (id, ownerId, title, valueType, order, config = {}, extra = {}) => ({id, owner: {kind: "type", id: ownerId}, title, valueType, config, order, status: "active", ...extra});
+            const masonryAssetId = index => `40000000-0000-4000-8000-${String(index + 101).padStart(12, "0")}`;
+            const masonryFieldId = index => `20000000-0000-4000-8000-${String(index + 101).padStart(12, "0")}`;
+            const masonryRecords = [
+              ["焚诀", "可以进化的功法。", 2, "天阶", "焚诀的附加记录"],
+              ["归元诀", "将散乱的气息缓缓收归丹田，以平稳循环代替短时间的爆发。适合在长途行走或连续作战后修习，关键在于节奏，而非速度。", 4, "地阶", "记录修习节奏与吐纳变化"],
+              ["幻影步", "步法轻灵，转折之间留下残影。适用于狭窄地形中的快速移动。", 1, "玄阶", "记录身法要领"],
+              ["寒潮引", "借四周的寒意形成持续的牵引，使对手的行动逐渐迟缓。施展时需要维持稳定的距离，环境越寒冷，控制范围越大。", 3, "天阶", "记录环境与控制范围"],
+              ["照影诀", "借助光线与步伐的变化扰乱对方判断，在进退之间隐藏真实的行动方向。需要熟悉地形，并保持观察周围环境的习惯。", 2, "地阶", "记录地形与观察方式"],
+              ["大荒囚天指", "将力量凝于指尖，集中于一点释放。蓄力越久，越需要稳定的控制。适合把握短暂出现的突破时机。", 0, "天阶", ""],
+              ["帝印诀", "以印诀凝聚力量，变化灵活。", 3, "天阶", "记录印诀变化"],
+              ["听风诀", "从细微的风声中辨别周围的动静。初学时只能判断大致方向，熟练后可以分辨脚步与衣袖的摩擦。雨夜与闹市会干扰判断，需要借助持续练习排除无关声音。", 2, "玄阶", "记录听辨练习"],
+              ["星河引", "以连贯的呼吸维持力量的流转。重在循序积累，避免骤然中断。", 1, "地阶", "记录修习阶段"],
+              ["观山诀", "以沉稳的呼吸调整重心，观察对手的动作与节奏。守势稳定，适合长时间对峙时寻找突破的机会。", 1, "黄阶", "记录观察要点"],
+              ["玄冰龙翔", "寒气汇聚成形，沿既定方向延伸。兼顾远距离压制与近身防守。", 1, "地阶", "记录招式变化"],
+              ["藏锋诀", "平时收敛外显的气息，将力量保留在最小的动作之中。出手讲究时机，不追求连续施展。一旦判断失误便容易失去先机，因此常与观察和防守配合使用。", 4, "天阶", "记录施展时机与防守配合"],
+              ["长夜行", "借夜色掩护，保持安静而稳定的移动。", 0, "玄阶", ""],
+              ["回澜掌", "顺势接住来力，再将其引向侧方。讲究动作衔接与重心的细微调整。力量不足时，也能凭借节奏化解冲击。", 2, "黄阶", "记录动作与重心调整"],
+              ["流云步", "步伐连贯，借势改变方向，在连续转折中保持平衡。适合穿越复杂地形，也可以与其他招式配合使用。", 3, "地阶", "记录路线与配合方式"],
+            ];
+            const edgeDescriptionPrefix = "这段模拟文案用于检查长描述在容器内的换行行为，并故意插入一段无空格英文标识：";
+            const edgeDescriptionToken = "UnbrokenEnglishSegmentForCardWrapping".repeat(3);
+            const edgeDescription = `${edgeDescriptionPrefix}${edgeDescriptionToken}。`.padEnd(200, "测试");
+            const displayMasonryRecords = masonryRecords.map((record, index) => {
+              if (!edgeCardsPreview) return record;
+              if (index === 0) return ["对象标题边界验证样例".repeat(6), edgeDescription, ...record.slice(2)];
+              if (index === 1) return [record[0], "", 12, ...record.slice(3)];
+              if (index === 2) return [record[0], "第一行描述用于检查换行保留与容器宽度。\n第二行描述继续检验自然换行和卡片高度。", ...record.slice(2)];
+              return record;
+            });
+            const masonryFields = displayMasonryRecords.flatMap(([, , count], index) =>
+              Array.from({length: count}, (_, fieldIndex) => ({
+                ...field(masonryFieldId(index * 32 + fieldIndex), artsId, `附加记录 ${fieldIndex + 1}`, "text", fieldIndex),
+                owner: {kind: "asset", id: masonryAssetId(index)},
+              })));
+            const masonryAssets = displayMasonryRecords.map(([name, description, count, grade, detail], index) => ({
+              id: masonryAssetId(index), name, description, typeId: artsId,
+              values: {
+                [artsNameId]: name, [gradeId]: grade, [artsAbilityId]: `${name}的模拟说明`,
+                ...Object.fromEntries(Array.from({length: count}, (_, fieldIndex) => [
+                  masonryFieldId(index * 32 + fieldIndex), `${detail} ${fieldIndex + 1}`.trim(),
+                ])),
+              },
+            }));
             for (const directory of [".lodestory", ".lodestory/assets"]) state.directories.add(directory);
             files.set(".lodestory/assets/schema.json", encode(JSON.stringify({
               format: "lodestory.asset-schema", schemaVersion: 2,
@@ -45,10 +91,11 @@
               fields: [field(ageId, peopleId, "年龄", "number", 0, {}, {defaultValue: 18}),
                 field(identityId, peopleId, "身份", "text", 1, {}, {defaultValue: "门派弟子"}),
                 field(factionId, peopleId, "所属门派", "text", 2),
-                ...(refinedPreview ? [field(artsNameId, artsId, "名称", "text", 0),
+                ...(richArtsPreview ? [field(artsNameId, artsId, "名称", "text", 0),
                   field(gradeId, artsId, "品阶", "text", 1, {}, {defaultValue: "黄阶"}),
                   field(artsAbilityId, artsId, "能力", "text", 2)]
                   : [field(gradeId, artsId, "品阶", "text", 0, {}, {defaultValue: "黄阶"})]),
+                ...(masonryPreview ? masonryFields : []),
                 {...field(customId, peopleId, "备注", "text", 0), owner: {kind: "asset", id: oldAssetId}}],
               assets: [
                 {id: "40000000-0000-4000-8000-000000000001", name: longPreview ? "林舟与来自北境边城的同行者共同记载的修行经历与未完的归乡之路" : "林舟",
@@ -56,10 +103,18 @@
                   values: {[ageId]: 18, [identityId]: longPreview ? "曾任北境守城军副统领，现为隐居山中的游历者" : "门派弟子", [factionId]: "青云门"}},
                 {id: "40000000-0000-4000-8000-000000000002", name: "沈青萝", description: "守着一间旧书铺", typeId: peopleId, values: {[ageId]: 21, [identityId]: "书铺掌柜", [factionId]: "无"}},
                 {id: "40000000-0000-4000-8000-000000000003", name: "顾长风", description: "林舟的师父", typeId: peopleId, values: {[ageId]: 46, [identityId]: "长老", [factionId]: "青云门"}},
-                refinedPreview
-                  ? {id: "40000000-0000-4000-8000-000000000004", name: "焚诀", description: "", typeId: artsId,
-                    values: {[artsNameId]: "焚诀", [gradeId]: "天阶", [artsAbilityId]: "焚烧一切"}}
-                  : {id: "40000000-0000-4000-8000-000000000004", name: "御风诀", description: "借山风而行", typeId: artsId, values: {[gradeId]: "玄阶"}},
+                ...(masonryPreview ? masonryAssets : refinedPreview ? [
+                  {id: "40000000-0000-4000-8000-000000000004", name: "焚诀", description: "可以进化的功法", typeId: artsId,
+                    values: {[artsNameId]: "焚诀", [gradeId]: "天阶", [artsAbilityId]: "焚烧一切"}},
+                  {id: "40000000-0000-4000-8000-000000000006", name: "大荒囚天指", description: "一根手指头", typeId: artsId,
+                    values: {[artsNameId]: "大荒囚天指", [gradeId]: "天阶", [artsAbilityId]: "一根手指头戳死你"}},
+                  {id: "40000000-0000-4000-8000-000000000007", name: "玄冰龙翔", description: "海波东绝技", typeId: artsId,
+                    values: {[artsNameId]: "玄冰龙翔", [gradeId]: "地阶", [artsAbilityId]: "一条冰龙"}},
+                  {id: "40000000-0000-4000-8000-000000000008", name: "帝印诀", description: "古族功法", typeId: artsId,
+                    values: {[artsNameId]: "帝印诀", [gradeId]: "天阶", [artsAbilityId]: "一巴掌拍死你"}},
+                ] : [
+                  {id: "40000000-0000-4000-8000-000000000004", name: "御风诀", description: "借山风而行", typeId: artsId, values: {[gradeId]: "玄阶"}},
+                ]),
                 {id: oldAssetId, name: "旧设定", description: "整理前留下的对象", typeId: null, values: {[customId]: "旧资料保留"}},
               ],
             })));
@@ -298,6 +353,42 @@
         await createAppRuntime(plugins);
       } else {
         await import("/src/main.tsx");
+        if (query.get("autoCards") === "1" && scenario === "asset-template-workspace-masonry") {
+          let openedProject = false;
+          let selectedAssetNavigation = false;
+          let selectedArtsType = false;
+          let switchedToCards = false;
+          const openMasonryCards = () => {
+            const cards = document.querySelectorAll(".asset-object-card");
+            if (cards.length === 15) { clearInterval(retryCards); return; }
+            if (!openedProject) {
+              const project = document.querySelector('button[aria-label="打开项目 测试故事"]');
+              if (project) { openedProject = true; project.click(); }
+              return;
+            }
+            const navigation = document.querySelector('.layout-activitybar button[aria-label="资产管理"]');
+            if (navigation && !selectedAssetNavigation) {
+              selectedAssetNavigation = true;
+              if (navigation.getAttribute("aria-pressed") === "false") navigation.click();
+              return;
+            }
+            const template = [...document.querySelectorAll(".asset-type-list .asset-type-entry")]
+              .find(entry => entry.textContent?.includes("功法"));
+            if (template && !selectedArtsType) {
+              selectedArtsType = true;
+              template.click();
+              return;
+            }
+            const cardMode = document.querySelector('button[aria-label="卡片视图"]');
+            if (cardMode && !switchedToCards) {
+              switchedToCards = true;
+              cardMode.click();
+            }
+          };
+          const retryCards = setInterval(openMasonryCards, 50);
+          setTimeout(() => clearInterval(retryCards), 15000);
+          openMasonryCards();
+        }
         if (query.get("autoAssets") === "1") {
           let openedProject = false;
           const openObjects = () => {

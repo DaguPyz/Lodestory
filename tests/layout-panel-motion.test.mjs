@@ -39,16 +39,18 @@ test("docked close and inactive-layout close skip presentation exit", () => {
   assert.deepEqual([inactiveClosed.id, inactiveClosed.phase], [null, "hidden"]);
 });
 
-test("panel motion uses shared durations and preserves an 8px resize hit area", async () => {
+test("panel motion only fades opacity and preserves an 8px resize hit area", async () => {
   const {readFile} = await import("node:fs/promises");
   const css = await readFile(new URL("../src/plugins/default-layout/layout.css", import.meta.url), "utf8");
   const component = await readFile(new URL("../src/plugins/default-layout/DefaultLayout.tsx", import.meta.url), "utf8");
+  assert.match(css, /\.layout-panel\[data-overlay="true"\]\s*\{[^}]*transition-property:\s*opacity/s);
   assert.match(css, /transition-duration:\s*var\(--ui-duration-normal\)/);
-  assert.match(css, /transition-duration:\s*var\(--ui-duration-fast\)/);
-  assert.match(css, /var\(--ui-motion-offset\)/);
+  assert.doesNotMatch(css, /transition-property:[^;}]*(?:transform|translate|scale)/);
+  assert.doesNotMatch(css, /(?:translateX|scale\s*\()/);
   assert.match(css, /data-ui-motion="reduce"\]\s*\.layout-panel\[data-overlay="true"\]\s*\{\s*transition-property:\s*none/s);
   assert.match(css, /data-motion-enabled="false"\]\s*\{\s*transition-property:\s*none/s);
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)[\s\S]*?transition-property:\s*none/);
+  assert.match(css, /@keyframes layout-dock-content-enter\s*\{\s*from\s*\{\s*opacity:\s*0;\s*\}\s*to\s*\{\s*opacity:\s*1;\s*\}\s*\}/);
   assert.match(css, /data-ui-motion="reduce"\][\s\S]*?animation-name:\s*none/);
   assert.match(component, /addEventListener\("animationcancel"/);
   assert.match(css, /\.layout-navigation-resizer\s*\{[^}]*width:\s*8px/s);

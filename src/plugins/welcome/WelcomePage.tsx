@@ -186,7 +186,7 @@ export function WelcomePage({ active, onOpenProject }: WelcomePageProps) {
               <Button variant="primary" disabled={disabled} onClick={() => { setError(null); setCreateDialogOpen(true); }}>
                 <Icon name="plus" />开始新创作
               </Button>
-              <Button disabled={disabled} onClick={() => void openDirectory()}><Icon name="folder" />打开已有作品</Button>
+              <Button variant="secondary" disabled={disabled} onClick={() => void openDirectory()}><Icon name="folder" />打开已有作品</Button>
             </div>
           </header>
 

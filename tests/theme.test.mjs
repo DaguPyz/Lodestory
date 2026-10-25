@@ -71,14 +71,14 @@ test("themes with the same type are peers and switch their entire palettes by ID
   assert.equal(snapshot.theme.id, definition.id);
   assert.equal(snapshot.theme.type, "dark");
   assert.equal(snapshot.theme.colors["surface.content"], "#171A23", "registered data is copied");
-  assert.equal(snapshot.theme.colors["state.selectedHoverForeground"], "#E3F6EC", "missing roles use the standard role default");
+  assert.equal(snapshot.theme.colors["state.selectedHoverForeground"], "#F5F3ED", "missing roles use the standard role default");
   assert.equal(f.root.style["--ui-surface-workspace"], "#171A23");
   assert.equal(f.root.dataset.uiThemeId, definition.id);
   assert.equal(Object.keys(snapshot.theme.colors).length, 109);
   assert.equal(Object.isFrozen(snapshot.theme.colors), true);
   assert.equal(notifications, 1);
   f.api.setThemePreference(fixed("dark"));
-  assert.equal(f.root.style["--ui-surface-workspace"], "#151C19");
+  assert.equal(f.root.style["--ui-surface-workspace"], "#20201E");
   assert.notEqual(f.api.getThemeSnapshot().theme.colors["state.selectedHoverForeground"], "#AABBCC");
   unsubscribe();
   remove();
@@ -95,7 +95,7 @@ test("missing colors come from standard defaults, never another theme's palette"
   manager.start();
   manager.registerTheme(custom());
   manager.setPreference({ mode: "fixed", themeId: custom().id });
-  assert.equal(manager.getSnapshot().theme.colors["surface.content"], "#151C19");
+  assert.equal(manager.getSnapshot().theme.colors["surface.content"], "#20201E");
 });
 
 test("normal borders preserve old theme overrides and allow an independent explicit color", () => {

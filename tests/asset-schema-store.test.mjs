@@ -316,6 +316,7 @@ test("assets receive template defaults only at creation and support asset-owned 
 
   assert.equal(await store.createAsset({id: assetId, name: "青云诀", description: "主角功法", typeId}), true);
   assert.equal(store.getSnapshot().selectedAssetId, assetId);
+  assert.equal(Object.hasOwn(store.getSnapshot().assets[0], "color"), false, "assets without a custom color inherit the theme surface");
   assert.deepEqual(plain(store.getSnapshot().assets[0].values), {[defaultTextId]: "黄阶", [defaultNumberId]: 0});
   assert.equal(await store.createAsset({
     id: secondAssetId, name: "烈火诀", description: "显式清空默认", typeId,
@@ -380,6 +381,119 @@ test("version 1 schema reads unchanged and upgrades lazily on its first mutation
   await controller.dispose();
 });
 
+test("version 2 assets without a custom color load without rewriting the file", async () => {
+  const original = JSON.stringify(storedSchema([], [], {assets: [
+    {id: "40000000-0000-4000-8000-000000000041", name: "旧资产", description: "兼容旧版本", typeId: null, values: {}},
+    {id: "40000000-0000-4000-8000-000000000046", name: "旧颜色资产", description: "大小写兼容", typeId: null, color: "#A1b2C3", values: {}},
+  ]}));
+  const f = byteStorageFixture();
+  seedFile(f, path, original);
+  const originalBytes = [...f.disk.get(f.key("/book", path))];
+  const controller = f.files();
+  const store = storeFor(controller.service);
+
+  assert.equal(await store.load(), true);
+  assert.equal(Object.hasOwn(store.getSnapshot().assets[0], "color"), false);
+  assert.equal(store.getSnapshot().assets[1].color, "#a1b2c3", "persisted colors normalize case in memory");
+  assert.deepEqual(f.disk.get(f.key("/book", path)), originalBytes);
+  assert.equal(f.calls.some(call => call.command === "save_project_file" || call.command === "create_project_file"), false,
+    "loading a legacy v2 asset does not trigger a schema rewrite");
+  assert.equal(await store.updateAsset("40000000-0000-4000-8000-000000000041", {description: "显式修改后保存"}), true);
+  assert.equal(diskSchema(f).assets[1].color, "#a1b2c3", "the next explicit save writes the canonical lowercase color");
+
+  store.dispose();
+  await controller.dispose();
+});
+
+test("asset colors normalize, persist, survive updates, and clear only when explicitly null", async () => {
+  const assetId = "40000000-0000-4000-8000-000000000042";
+  const f = byteStorageFixture();
+  const controller = f.files();
+  const store = storeFor(controller.service);
+  await store.load();
+
+  assert.equal(await store.createAsset({id: assetId, name: "带颜色的资产", description: "颜色由用户选择", typeId: null, color: "#Ab12Cd"}), true);
+  const created = store.getSnapshot().assets[0];
+  assert.equal(created.color, "#ab12cd");
+  assert.equal(Object.isFrozen(created), true);
+  assert.equal(diskSchema(f).assets[0].color, "#ab12cd");
+
+  assert.equal(await store.updateAsset(assetId, {description: "只改说明"}), true);
+  assert.equal(store.getSnapshot().assets[0].color, "#ab12cd", "omitting color preserves the selected color");
+  assert.equal(diskSchema(f).assets[0].color, "#ab12cd");
+
+  assert.equal(await store.updateAsset(assetId, {color: "#D0E1F2"}), true);
+  assert.equal(store.getSnapshot().assets[0].color, "#d0e1f2");
+  assert.equal(diskSchema(f).assets[0].color, "#d0e1f2");
+
+  const reloaded = storeFor(controller.service);
+  assert.equal(await reloaded.load(), true);
+  assert.equal(reloaded.getSnapshot().assets[0].color, "#d0e1f2", "reopening restores the normalized color");
+
+  assert.equal(await store.updateAsset(assetId, {color: null}), true);
+  assert.equal(Object.hasOwn(store.getSnapshot().assets[0], "color"), false, "null clears the optional property");
+  assert.equal(Object.hasOwn(diskSchema(f).assets[0], "color"), false, "cleared color is omitted from the saved schema");
+  assert.equal(await reloaded.load(), true);
+  assert.equal(Object.hasOwn(reloaded.getSnapshot().assets[0], "color"), false, "shared refresh observes the cleared color");
+
+  store.dispose();
+  reloaded.dispose();
+  await controller.dispose();
+});
+
+test("invalid asset colors are rejected before changing the schema", async () => {
+  const assetId = "40000000-0000-4000-8000-000000000043";
+  const f = byteStorageFixture();
+  const controller = f.files();
+  const store = storeFor(controller.service);
+  await store.load();
+  assert.equal(await store.createAsset({id: assetId, name: "原资产", description: "", typeId: null}), true);
+  const before = diskSchema(f);
+
+  assert.equal(await store.createAsset({id: "40000000-0000-4000-8000-000000000044", name: "错误颜色", description: "", typeId: null, color: "#12FG00"}), false);
+  assert.match(store.getSnapshot().error, /#RRGGBB/);
+  assert.equal(await store.updateAsset(assetId, {color: "red"}), false);
+  assert.match(store.getSnapshot().error, /#RRGGBB/);
+  assert.deepEqual(diskSchema(f), before, "invalid colors never reach ProjectFiles.write");
+  assert.equal(store.getSnapshot().assets.length, 1, "rejected creation does not add an asset");
+
+  store.dispose();
+  await controller.dispose();
+});
+
+test("a failed color save keeps the canonical color in the dirty draft until retry", async () => {
+  let failSave = false;
+  const assetId = "40000000-0000-4000-8000-000000000045";
+  const f = byteStorageFixture({onInvoke(command) {
+    if (failSave && command === "save_project_file") throw new Error("颜色暂不可写");
+  }});
+  const controller = f.files();
+  const store = storeFor(controller.service);
+  await store.load();
+  assert.equal(await store.createAsset({id: assetId, name: "待着色资产", description: "", typeId: null}), true);
+  const previousBytes = [...f.disk.get(f.key("/book", path))];
+
+  failSave = true;
+  assert.equal(await store.updateAsset(assetId, {color: "#AABBCC"}), false);
+  assert.equal(store.getSnapshot().assets[0].color, "#aabbcc");
+  assert.equal(store.getSnapshot().dirty, true);
+  const buffered = controller.service.getSnapshot().files.find(file => file.path === path);
+  assert.equal(JSON.parse(new TextDecoder().decode(new Uint8Array(buffered.bytes))).assets[0].color, "#aabbcc");
+  assert.deepEqual(f.disk.get(f.key("/book", path)), previousBytes, "failed save preserves the previous disk bytes");
+
+  failSave = false;
+  assert.equal(await store.retry(), true);
+  assert.equal(store.getSnapshot().dirty, false);
+  assert.equal(diskSchema(f).assets[0].color, "#aabbcc");
+  const reloaded = storeFor(controller.service);
+  assert.equal(await reloaded.load(), true);
+  assert.equal(reloaded.getSnapshot().assets[0].color, "#aabbcc");
+
+  store.dispose();
+  reloaded.dispose();
+  await controller.dispose();
+});
+
 test("reference properties require a stored asset of the configured target type", async () => {
   const referenceFieldId = "20000000-0000-4000-8000-000000000021";
   const targetAssetId = "40000000-0000-4000-8000-000000000011";
@@ -410,7 +524,7 @@ test("reference properties require a stored asset of the configured target type"
 test("failed asset creation retains its record and retry saves it once", async () => {
   let failCreate = true;
   const assetId = "40000000-0000-4000-8000-000000000021";
-  const input = {id: assetId, name: "暂存资产", description: "创建失败后保留", typeId: null, values: {}};
+  const input = {id: assetId, name: "暂存资产", description: "创建失败后保留", typeId: null, color: "#C0FFEE", values: {}};
   const f = byteStorageFixture({onInvoke(command) {
     if (failCreate && command === "create_project_file") throw new Error("资产文件暂不可写");
   }});
@@ -420,11 +534,15 @@ test("failed asset creation retains its record and retry saves it once", async (
 
   assert.equal(await store.createAsset(input), false);
   assert.equal(store.getSnapshot().dirty, true);
-  assert.deepEqual(plain(store.getSnapshot().assets), [{id: assetId, name: "暂存资产", description: "创建失败后保留", typeId: null, values: {}}]);
+  assert.deepEqual(plain(store.getSnapshot().assets), [{id: assetId, name: "暂存资产", description: "创建失败后保留", typeId: null, color: "#c0ffee", values: {}}]);
   failCreate = false;
   assert.equal(await store.createAsset(input), true, "same-ID retry flushes the retained asset rather than adding another");
-  assert.deepEqual(diskSchema(f).assets.map(asset => asset.id), [assetId]);
+  assert.deepEqual(diskSchema(f).assets, [{id: assetId, name: "暂存资产", description: "创建失败后保留", typeId: null, color: "#c0ffee", values: {}}]);
+  const reloaded = storeFor(controller.service);
+  assert.equal(await reloaded.load(), true);
+  assert.equal(reloaded.getSnapshot().assets[0].color, "#c0ffee", "idempotent create retry keeps the color through reload");
   store.dispose();
+  reloaded.dispose();
   await controller.dispose();
 });
 
@@ -634,6 +752,7 @@ test("failed type deletion stays deleted through retry and reload", async () => 
   let failSave = false;
   const deletedTypeId = secondTypeId;
   const ownedFieldId = "20000000-0000-4000-8000-000000000071";
+  const retainedAssetId = "40000000-0000-4000-8000-000000000071";
   const f = byteStorageFixture({onInvoke(command) {
     if (failSave && command === "save_project_file") throw new Error("类型删除暂不可写");
   }});
@@ -642,6 +761,7 @@ test("failed type deletion stays deleted through retry and reload", async () => 
   await store.load();
   await store.createType({id: typeId, name: "保留类型", description: "剩余选择"});
   await store.createType({id: deletedTypeId, name: "待删类型", description: "删除失败时保留草稿"});
+  await store.createAsset({id: retainedAssetId, name: "保留资产", description: "颜色应随类型变更保留", typeId, color: "#345678"});
   await store.createField({id: ownedFieldId, owner: {kind: "type", id: deletedTypeId}, title: "专属模板", valueType: "text", config: {}});
   store.selectType(deletedTypeId);
 
@@ -650,16 +770,19 @@ test("failed type deletion stays deleted through retry and reload", async () => 
   assert.equal(store.getSnapshot().dirty, true);
   assert.equal(store.getSnapshot().types.some(item => item.id === deletedTypeId), false);
   assert.equal(store.getSnapshot().fields.some(field => field.id === ownedFieldId), false);
+  assert.equal(store.getSnapshot().assets[0].color, "#345678", "removing another type preserves asset color");
   assert.equal(store.getSnapshot().selectedTypeId, typeId);
   failSave = false;
   assert.equal(await store.retry(), true);
   assert.equal(diskSchema(f).types.some(item => item.id === deletedTypeId), false);
   assert.equal(diskSchema(f).fields.some(field => field.id === ownedFieldId), false);
+  assert.equal(diskSchema(f).assets[0].color, "#345678");
 
   const reloaded = storeFor(controller.service);
   assert.equal(await reloaded.load(), true);
   assert.equal(reloaded.getSnapshot().types.some(item => item.id === deletedTypeId), false);
   assert.equal(reloaded.getSnapshot().fields.some(field => field.id === ownedFieldId), false);
+  assert.equal(reloaded.getSnapshot().assets[0].color, "#345678", "retry and reload retain the unrelated asset color");
   assert.equal(reloaded.getSnapshot().selectedTypeId, typeId);
   store.dispose();
   reloaded.dispose();
@@ -719,6 +842,9 @@ test("invalid UTF-8, malformed JSON, unsupported schema, and invalid references 
     ["invalid UTF-8", [0xc3, 0x28]],
     ["malformed JSON", "{"],
     ["unsupported version", JSON.stringify(storedSchema([], [], {schemaVersion: 3}))],
+    ["invalid persisted asset color", JSON.stringify(storedSchema([], [], {assets: [
+      {id: "40000000-0000-4000-8000-000000000047", name: "坏颜色", description: "", typeId: null, color: "#12GG00", values: {}},
+    ]}))],
     ["unknown owner reference", JSON.stringify(storedSchema([type()], [textField(fieldId, {owner: {kind: "type", id: secondTypeId}})]))],
     ["reused option ID", JSON.stringify(storedSchema([type()], [
       textField(fieldId, {valueType: "singleSelect", config: {options: [{id: fieldId, title: "黄阶"}]}}),

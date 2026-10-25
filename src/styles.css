@@ -76,10 +76,13 @@ p {
 .app-startup-error > button {
   padding: var(--ui-space-4) var(--ui-space-6);
   color: var(--ui-text-primary);
-  background: var(--ui-surface-panel);
-  border: 1px solid var(--ui-border-divider);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: var(--ui-radius-row);
 }
+
+.app-startup-error > button:hover:not(:disabled) { color: var(--ui-state-hover-foreground); background: var(--ui-surface-hover); }
+.app-startup-error > button:active:not(:disabled) { color: var(--ui-state-pressed-foreground); background: var(--ui-surface-pressed); }
 
 .welcome-workspace {
   display: flex;
@@ -178,7 +181,13 @@ p {
 
 .project-row:hover:has(.project-entry:not(:disabled)),
 .project-row:focus-within:has(.project-entry:not(:disabled)) {
+  color: var(--ui-state-hover-foreground);
   background: var(--ui-surface-hover);
+}
+
+.project-row:has(.project-entry:active:not(:disabled)) {
+  color: var(--ui-state-pressed-foreground);
+  background: var(--ui-surface-pressed);
 }
 
 .project-entry {
@@ -273,6 +282,11 @@ p {
   line-height: var(--ui-line-height-caption);
 }
 
+.project-row:is(:hover, :focus-within):has(.project-entry:not(:disabled))
+  :is(.project-entry, .project-entry > .icon, .project-path, .project-time, .project-unavailable) {
+  color: inherit;
+}
+
 .project-list-message {
   padding: var(--ui-space-8) var(--ui-row-padding-inline);
   color: var(--ui-text-secondary);
@@ -320,13 +334,11 @@ p {
   border-radius: var(--ui-radius-overlay);
   box-shadow: var(--ui-shadow-popover);
   outline: none;
-  transition: opacity var(--ui-duration-normal) var(--ui-ease-enter),
-    transform var(--ui-duration-normal) var(--ui-ease-enter);
+  transition: opacity var(--ui-duration-normal) var(--ui-ease-enter);
 }
 
 .project-menu[data-starting-style],
-.project-menu[data-ending-style] { opacity: 0; transform: translateY(calc(-1 * var(--ui-motion-offset))); }
-.project-menu[data-side="top"]:is([data-starting-style], [data-ending-style]) { transform: translateY(var(--ui-motion-offset)); }
+.project-menu[data-ending-style] { opacity: 0; }
 .project-menu[data-ending-style] { pointer-events: none; transition-duration: var(--ui-duration-fast); transition-timing-function: var(--ui-ease-exit); }
 .project-menu[data-immediate-close][data-ending-style] { display: none; transition: none; }
 
@@ -534,22 +546,23 @@ p {
   cursor: pointer;
 }
 
-.theme-option:hover {
+.theme-option:hover:not(:has(input:disabled)) {
   color: var(--ui-state-hover-foreground);
   background: var(--ui-surface-hover);
-  border-color: var(--ui-border-control);
 }
 
 .theme-option:has(input:checked) {
   color: var(--ui-state-selected-foreground);
   background: var(--ui-surface-selected);
-  border-color: var(--ui-accent-indicator);
 }
 
-.theme-option:has(input:checked):hover {
+.theme-option:has(input:checked):hover:not(:has(input:disabled)) {
   color: var(--ui-state-selected-hover-foreground);
   background: var(--ui-surface-selected-hover);
 }
+
+.theme-option:has(input:disabled) { color: var(--ui-state-disabled-foreground); background: var(--ui-state-disabled-background); border-color: var(--ui-state-disabled-border); cursor: not-allowed; }
+.theme-option:has(input:checked:disabled) { color: var(--ui-state-disabled-selected-foreground); background: var(--ui-state-disabled-selected-background); }
 
 .theme-option:has(input:focus-visible) {
   outline: var(--ui-focus-width) solid var(--ui-focus-ring);
@@ -597,16 +610,20 @@ p {
   justify-content: center;
   width: var(--ui-icon-medium);
   height: var(--ui-icon-medium);
-  color: var(--ui-text-on-action);
+  color: var(--ui-text-muted);
   background: var(--ui-surface-control);
   border: 1px solid var(--ui-border-control);
   border-radius: 50%;
 }
 
 .theme-option:has(input:checked) .theme-radio {
-  background: var(--ui-action-bg);
-  border-color: var(--ui-action-bg);
+  color: var(--ui-state-selected-foreground);
+  background: var(--ui-state-selected-background);
+  border-color: var(--ui-border-default);
 }
+
+.theme-option:has(input:checked:disabled) .theme-radio { color: var(--ui-state-disabled-selected-foreground); background: var(--ui-state-disabled-selected-background); border-color: var(--ui-state-disabled-border); }
+.theme-option:has(input:disabled) .theme-radio { border-color: var(--ui-state-disabled-border); }
 
 .theme-option-description {
   color: var(--ui-text-secondary);

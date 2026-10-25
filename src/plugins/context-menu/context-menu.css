@@ -47,7 +47,7 @@
   gap: var(--ui-icon-text-gap);
   min-height: var(--ui-menu-row-height);
   padding: var(--ui-space-2) var(--ui-space-4);
-  border-radius: var(--ui-radius-control);
+  border-radius: var(--ui-radius-row);
   font-size: var(--ui-font-size-label);
   line-height: var(--ui-line-height-label);
   cursor: pointer;

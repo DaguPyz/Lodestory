@@ -108,8 +108,12 @@ async function readButtonStyle(locator) {
       background: style.backgroundColor,
       border: style.borderTopColor,
       indicatorContent: indicator.content,
-      indicator: indicator.borderTopColor,
-      indicatorStyle: indicator.borderTopStyle,
+      indicator: indicator.backgroundColor,
+      indicatorOpacity: indicator.opacity,
+      indicatorShape: indicator.clipPath,
+      indicatorWidth: indicator.width,
+      indicatorHeight: indicator.height,
+      indicatorBorder: indicator.borderTopWidth,
     };
   });
 }
@@ -120,17 +124,22 @@ async function assertButtonPaint(locator, variant, flags, colors, message) {
   assert.equal(actual.foreground, expected.foreground, `${message}: foreground (${expected.paintName})`);
   assert.equal(actual.background, expected.background, `${message}: background (${expected.paintName})`);
 
-  if (expected.indicator) {
+  if (expected.indicator && variant !== 'icon') {
     assert.notEqual(actual.indicatorContent, 'none', `${message}: selected indicator exists`);
-    assert.equal(actual.indicator, expected.indicator, `${message}: selected indicator color`);
+    assert.equal(actual.indicatorOpacity, '1', `${message}: selection marker is visible`);
+    assert.equal(actual.indicator, expected.indicator, `${message}: selected indicator follows the state foreground`);
+    assert.equal(actual.indicatorBorder, '0px', `${message}: selection is not a colored border`);
+    if (!flags.mixed) assert.match(actual.indicatorShape, /^polygon\(/, `${message}: selection uses a check`);
   } else {
-    assert.equal(actual.indicatorContent, 'none', `${message}: no selected indicator`);
+    assert.ok(actual.indicatorContent === 'none' || actual.indicatorOpacity === '0', `${message}: unselected marker is hidden`);
   }
   if (expected.disabledBorder) {
     assert.equal(actual.border, expected.disabledBorder, `${message}: disabled border`);
   }
-  if (flags.mixed) {
-    assert.equal(actual.indicatorStyle, 'dashed', `${message}: mixed state uses a dashed indicator`);
+  if (flags.mixed && variant !== 'icon') {
+    assert.equal(actual.indicatorShape, 'none', `${message}: mixed state uses a plain dash`);
+    assert.equal(actual.indicatorWidth, '8px');
+    assert.equal(actual.indicatorHeight, '2px');
   }
 }
 
@@ -252,6 +261,47 @@ async function assertIconButtonStates(page, colors) {
   await selected.evaluate(element => element.setAttribute('aria-pressed', 'true'));
 }
 
+async function assertSelectionGeometry(page) {
+  const iconButton = page.getByRole('button', {name: '选中图标按钮', exact: true});
+  for (const [density, size] of [['compact', 28], ['comfortable', 32], ['spacious', 40]]) {
+    const metrics = await iconButton.evaluate((element, density) => {
+      const fixture = element.closest('[data-testid="fixture-app"]');
+      const previous = fixture.getAttribute('data-ui-density');
+      fixture.setAttribute('data-ui-density', density);
+      const button = element.getBoundingClientRect();
+      const icon = element.querySelector('.icon').getBoundingClientRect();
+      const result = {width: button.width, height: button.height,
+        dx: icon.x + icon.width / 2 - button.x - button.width / 2,
+        dy: icon.y + icon.height / 2 - button.y - button.height / 2,
+        marker: getComputedStyle(element, '::after').content};
+      if (previous === null) fixture.removeAttribute('data-ui-density');
+      else fixture.setAttribute('data-ui-density', previous);
+      return result;
+    }, density);
+    assert.equal(metrics.width, size, `${density}: IconButton keeps its specified size`);
+    assert.equal(metrics.height, size);
+    assert(Math.abs(metrics.dx) < .5 && Math.abs(metrics.dy) < .5,
+      `${density}: the selected icon stays centered`);
+    assert.equal(metrics.marker, 'none', 'icon-only selection adds no check or dash');
+  }
+
+  const toggle = page.getByTestId('button-secondary-selected');
+  const geometry = [];
+  for (const state of ['false', 'true', 'mixed']) {
+    geometry.push(await toggle.evaluate((element, state) => {
+      element.setAttribute('aria-pressed', state);
+      const box = element.getBoundingClientRect();
+      const text = [...element.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+      const range = document.createRange();
+      range.selectNodeContents(text);
+      return {width: box.width, height: box.height, textStart: range.getBoundingClientRect().x - box.x};
+    }, state));
+  }
+  await toggle.evaluate(element => element.setAttribute('aria-pressed', 'true'));
+  assert.deepEqual(geometry[1], geometry[0], 'selecting a text option does not move its label or resize it');
+  assert.deepEqual(geometry[2], geometry[0], 'mixed selection keeps the same label position and size');
+}
+
 async function assertSearchFieldStates(page, colors) {
   const editable = page.getByTestId('search-editable');
   const invalid = page.getByTestId('search-invalid');
@@ -278,9 +328,10 @@ async function assertSearchFieldStates(page, colors) {
   assert.equal(selectedTextStyle.selectionForeground, colors[selectionPaint.foreground], 'text selection uses registry foreground');
   assert.equal(selectedTextStyle.selectionBackground, colors[selectionPaint.background], 'text selection uses registry background');
 
+  await editable.evaluate(element => element.blur());
   await editable.hover();
   await assertSearchPaint(editable, 'hover', colors, 'editable SearchField hover');
-  assert.equal((await readSearchStyle(editable)).border, colors['border.strong'], 'SearchField hover restores the strong border');
+  assert.equal((await readSearchStyle(editable)).border, colors['border.default'], 'SearchField hover keeps the resting boundary stable');
   await page.mouse.down();
   await assertSearchPaint(editable, 'pressed', colors, 'editable SearchField pressed');
   await page.mouse.up();
@@ -325,7 +376,8 @@ async function assertNativeFieldStates(page, colors) {
   const styleOf = locator => locator.evaluate(element => {
     const style = getComputedStyle(element);
     return {border: style.borderTopColor, background: style.backgroundColor, foreground: style.color,
-      outline: style.outlineColor, width: style.outlineWidth, offset: style.outlineOffset};
+      outline: style.outlineColor, width: style.outlineWidth, offset: style.outlineOffset,
+      placeholder: getComputedStyle(element, '::placeholder').color, caret: style.caretColor};
   });
   for (const id of ['text-field', 'textarea']) {
     const field = page.getByTestId(`${id}-editable`);
@@ -333,7 +385,19 @@ async function assertNativeFieldStates(page, colors) {
     await page.mouse.move(0, 0);
     assert.equal((await styleOf(field)).border, colors['border.default'], `${id}: quiet rest`);
     await field.hover();
-    assert.equal((await styleOf(field)).border, colors['border.strong'], `${id}: hover identifies interaction`);
+    const hovered = await styleOf(field);
+    assert.equal(hovered.border, colors['border.default'], `${id}: hover keeps the resting boundary stable`);
+    for (const property of ['foreground', 'placeholder', 'caret']) {
+      assert.equal(hovered[property], colors['state.hoverForeground'], `${id}: hover pairs ${property} with its surface`);
+    }
+    assert.equal(hovered.background, colors['state.hoverBackground']);
+    await page.mouse.down();
+    const pressed = await styleOf(field);
+    for (const property of ['foreground', 'placeholder', 'caret']) {
+      assert.equal(pressed[property], colors['state.pressedForeground'], `${id}: pressed pairs ${property} with its surface`);
+    }
+    assert.equal(pressed.background, colors['state.pressedBackground']);
+    await page.mouse.up();
     await field.focus();
     const focused = await styleOf(field);
     assert.equal(focused.border, colors['focus.ring'], `${id}: visible focus`);
@@ -360,7 +424,8 @@ async function assertNativeFieldStates(page, colors) {
   await page.mouse.move(0, 0);
   assert.equal((await styleOf(select)).border, colors['border.default'], 'field Select shares the quiet rest border');
   await select.hover();
-  assert.equal((await styleOf(select)).border, colors['border.strong'], 'field Select hover keeps a strong boundary');
+  assert.equal((await styleOf(select)).border, colors['border.default'], 'field Select hover keeps the resting boundary stable');
+  await page.keyboard.press('Tab');
   await select.focus();
   assert.equal((await styleOf(select)).border, colors['focus.ring'], 'field Select focus stays clear');
   await select.evaluate(element => element.blur());
@@ -467,6 +532,7 @@ test('UI components follow registry state paints across themes in a real browser
 
     assert.notEqual(cobaltSelectedBackground, emberSelectedBackground,
       'same-type custom themes replace selected colors by theme ID');
+    await assertSelectionGeometry(page);
     assert.equal(await page.getByTestId('theme-debug').getAttribute('data-theme-type'), 'dark',
       'both same-type custom themes remain dark themes');
 
@@ -515,10 +581,11 @@ test('UI components follow registry state paints across themes in a real browser
     await selectedForHighContrast.focus();
     const highContrastStyle = await selectedForHighContrast.evaluate(element => ({
       border: getComputedStyle(element).borderTopColor,
-      indicator: getComputedStyle(element, '::after').borderTopColor,
+      foreground: getComputedStyle(element).color,
+      indicator: getComputedStyle(element, '::after').backgroundColor,
     }));
     assert.equal(highContrastStyle.border, forcedColors.buttonText, 'forced-colors preserves a visible control border');
-    assert.equal(highContrastStyle.indicator, forcedColors.highlight, 'forced-colors preserves selected indicator');
+    assert.equal(highContrastStyle.indicator, highContrastStyle.foreground, 'forced-colors preserves the check in its foreground');
 
     await page.emulateMedia({forcedColors: 'none', reducedMotion: 'reduce'});
     const reducedMotion = await page.evaluate(() => ({
@@ -539,6 +606,7 @@ test('UI components follow registry state paints across themes in a real browser
     await sizePicker.selectOption('regular');
     await page.getByTestId('standalone-open').click();
     await page.waitForSelector('.ui-dialog');
+    await page.waitForFunction(() => document.activeElement?.dataset?.testid === 'standalone-name');
     const dialogMotion = await page.evaluate(() => {
       const popup = document.querySelector('.ui-dialog');
       const backdrop = document.querySelector('.ui-dialog-backdrop');
@@ -549,12 +617,16 @@ test('UI components follow registry state paints across themes in a real browser
         size: popup.getAttribute('data-ui-dialog-size'),
         density: popup.getAttribute('data-ui-density'),
         padding: getComputedStyle(popup).paddingLeft,
+        transition: getComputedStyle(popup).transitionProperty,
+        radius: getComputedStyle(popup).borderTopLeftRadius,
         width: Math.round(popup.getBoundingClientRect().width),
         focus: document.activeElement?.dataset?.testid ?? null,
       };
     });
-    assert.equal(dialogMotion.popupDuration, '0.22s', 'dialog content uses the 220ms shared entry duration');
-    assert.equal(dialogMotion.backdropDuration, '0.16s', 'backdrop uses the 160ms shared entry duration');
+    assert.equal(dialogMotion.transition, 'opacity', 'Dialog motion only changes opacity');
+    assert.equal(dialogMotion.radius, '8px', 'Dialog uses the new small corner');
+    assert.equal(dialogMotion.popupDuration, '0.15s', 'dialog content uses the 150ms shared entry duration');
+    assert.equal(dialogMotion.backdropDuration, '0.15s', 'backdrop uses the 150ms shared entry duration');
     assert.equal(dialogMotion.size, 'regular', 'Dialog defaults to the semantic regular preset');
     assert.equal(dialogMotion.density, 'comfortable', 'a Dialog without a density trigger context uses the comfortable default');
     assert.equal(dialogMotion.padding, '24px', 'comfortable density uses the shared 24px dialog padding');
@@ -584,9 +656,9 @@ test('UI components follow registry state paints across themes in a real browser
       popupEnding: true,
       popupInert: true,
       backdropEnding: true,
-      popupDuration: '0.16s',
-      backdropDuration: '0.1s',
-    }, 'Dialog and backdrop begin their independently timed exits together');
+      popupDuration: '0.15s',
+      backdropDuration: '0.15s',
+    }, 'Dialog and backdrop begin their 150ms opacity exits together');
     await page.waitForFunction(() => !document.querySelector('.ui-dialog'), null, {timeout: 1000});
     assert.equal(await page.evaluate(() => document.activeElement?.dataset?.testid ?? null), 'standalone-open',
       'Base UI returns focus to the explicit final target by the time the Dialog exit completes');
@@ -646,10 +718,10 @@ test('UI components follow registry state paints across themes in a real browser
         duration: animation.effect?.getTiming().duration,
       }));
     });
-    assert.ok(initialOpenTransitions.some(animation => animation.property === 'opacity' && animation.duration === 220),
+    assert.ok(initialOpenTransitions.some(animation => animation.property === 'opacity' && animation.duration === 150),
       'a conditionally mounted open Dialog animates on its first frame');
-    assert.ok(initialOpenTransitions.some(animation => animation.property === 'translate' && animation.duration === 220),
-      'the initial Dialog entrance uses the offset transition without replacing centering');
+    assert.ok(initialOpenTransitions.every(animation => animation.property === 'opacity'),
+      'the initial Dialog entrance never moves or scales its content');
     await page.keyboard.press('Escape');
     await page.waitForFunction(() => !document.querySelector('.ui-dialog'), null, {timeout: 1000});
 
@@ -661,11 +733,15 @@ test('UI components follow registry state paints across themes in a real browser
     const selectEntry = await page.locator('.ui-select-popup').evaluate(element => ({
       side: element.getAttribute('data-side'),
       duration: getComputedStyle(element).transitionDuration,
+      transition: getComputedStyle(element).transitionProperty,
+      radius: getComputedStyle(element).borderTopLeftRadius,
       anchor: element.getBoundingClientRect().y,
       triggerBottom: document.querySelector('.ui-select-trigger[aria-label="普通选择"]')?.getBoundingClientRect().bottom,
     }));
+    assert.equal(selectEntry.transition, 'opacity', 'Select motion only changes opacity');
+    assert.equal(selectEntry.radius, '6px', 'Select uses the new small corner');
     assert.equal(selectEntry.side, 'bottom', 'Select uses the actual collision-resolved side');
-    assert.equal(selectEntry.duration, '0.16s', 'Select enters with the shared 160ms duration');
+    assert.equal(selectEntry.duration, '0.15s', 'Select enters with the shared 150ms duration');
     assert.ok(selectEntry.triggerBottom != null && selectEntry.anchor >= selectEntry.triggerBottom + 3,
       'bottom placement stays anchored at the configured trigger gap');
     await page.keyboard.press('Escape');
@@ -673,7 +749,7 @@ test('UI components follow registry state paints across themes in a real browser
       ending: element.hasAttribute('data-ending-style'),
       duration: getComputedStyle(element).transitionDuration,
     }));
-    assert.deepEqual(selectExit, {ending: true, duration: '0.1s'}, 'Select begins its 100ms exit without an application timer');
+    assert.deepEqual(selectExit, {ending: true, duration: '0.15s'}, 'Select begins its 150ms exit without an application timer');
     await page.waitForFunction(() => {
       const popup = document.querySelector('.ui-select-popup');
       return !popup || (popup.closest('.ui-select-positioner')?.hidden && !popup.hasAttribute('data-ending-style'));

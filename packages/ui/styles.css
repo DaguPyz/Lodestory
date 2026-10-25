@@ -29,6 +29,8 @@
   --cmp-button-height: var(--ui-control-height);
   --cmp-button-padding: var(--ui-control-padding-inline);
   --cmp-button-radius: var(--ui-radius-control);
+  --cmp-selection-marker-size: 0.5rem;
+  --cmp-selection-marker-gap: var(--ui-space-1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -115,18 +117,33 @@
   border-color: transparent;
 }
 
-/* An independent border marker survives disabled borders and keyboard focus. */
-:is(.button, .icon-button):where([aria-pressed="true"], [aria-pressed="mixed"], [aria-selected="true"])::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border: 1px solid var(--ui-accent-indicator);
-  border-radius: inherit;
-  pointer-events: none;
+/* Reserve a stable marker slot for the whole lifetime of a semantic toggle. */
+.button:where([aria-pressed], [aria-selected]) {
+  padding-inline-end: calc(var(--cmp-button-padding) + var(--cmp-selection-marker-size) + var(--cmp-selection-marker-gap));
 }
 
-:is(.button, .icon-button):where([aria-pressed="mixed"])::after {
-  border-style: dashed;
+.button:where([aria-pressed], [aria-selected])::after {
+  content: "";
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-end: var(--cmp-button-padding);
+  width: var(--cmp-selection-marker-size);
+  height: var(--cmp-selection-marker-size);
+  background: currentColor;
+  clip-path: polygon(40% 60%, 18% 38%, 4% 52%, 41% 90%, 98% 19%, 83% 7%);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.button:where([aria-pressed="true"], [aria-pressed="mixed"], [aria-selected="true"])::after {
+  opacity: 1;
+}
+
+.button:where([aria-pressed="mixed"])::after {
+  width: var(--cmp-selection-marker-size);
+  height: 2px;
+  clip-path: none;
 }
 
 :is(.button, .icon-button):where([aria-pressed="true"], [aria-pressed="mixed"], [aria-selected="true"]):where([data-selection-active="false"]) {
@@ -174,6 +191,7 @@
 .ui-text-control {
   --cmp-text-control-focus: var(--ui-focus-ring);
   --cmp-text-control-placeholder: var(--ui-text-placeholder);
+  --cmp-text-control-caret: var(--ui-caret-foreground);
   display: block;
   box-sizing: border-box;
   width: 100%;
@@ -187,13 +205,23 @@
   font-family: var(--ui-font-interface);
   font-size: var(--ui-font-size-label);
   line-height: var(--ui-line-height-label);
-  caret-color: var(--ui-caret-foreground);
+  caret-color: var(--cmp-text-control-caret);
 }
 
 .ui-text-control::placeholder { color: var(--cmp-text-control-placeholder); opacity: 1; }
 
 .ui-text-control:where(:hover, :active):not(:disabled, :read-only) {
-  border-color: var(--ui-border-control);
+  --cmp-text-control-placeholder: var(--ui-state-hover-foreground);
+  --cmp-text-control-caret: var(--ui-state-hover-foreground);
+  color: var(--ui-state-hover-foreground);
+  background: var(--ui-surface-hover);
+}
+
+.ui-text-control:where(:active):not(:disabled, :read-only) {
+  --cmp-text-control-placeholder: var(--ui-state-pressed-foreground);
+  --cmp-text-control-caret: var(--ui-state-pressed-foreground);
+  color: var(--ui-state-pressed-foreground);
+  background: var(--ui-surface-pressed);
 }
 
 .ui-text-control:is([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"]):not(:disabled) {
@@ -209,6 +237,7 @@
 
 .ui-text-control:disabled {
   --cmp-text-control-placeholder: var(--ui-state-disabled-foreground);
+  --cmp-text-control-caret: var(--ui-state-disabled-foreground);
   color: var(--ui-state-disabled-foreground);
   background: var(--ui-state-disabled-background);
   border-color: var(--ui-state-disabled-border);
@@ -248,7 +277,6 @@
   --cmp-field-caret: var(--ui-state-hover-foreground);
   color: var(--ui-state-hover-foreground);
   background: var(--ui-surface-hover);
-  border-color: var(--ui-border-control);
 }
 
 .search-field:where(:active):not(:has(input:read-only, input:disabled)) {
@@ -257,7 +285,6 @@
   --cmp-field-caret: var(--ui-state-pressed-foreground);
   color: var(--ui-state-pressed-foreground);
   background: var(--ui-surface-pressed);
-  border-color: var(--ui-border-control);
 }
 
 .search-field input {
@@ -439,7 +466,6 @@
 .ui-select-trigger:where([data-ui-placeholder]) { color: var(--ui-text-placeholder); }
 .ui-select-trigger:where(:hover) { color: var(--ui-state-hover-foreground); background: var(--ui-surface-hover); }
 .ui-select-trigger:where(:active, [data-pressed], [data-popup-open]) { color: var(--ui-state-pressed-foreground); background: var(--ui-surface-pressed); }
-.ui-select-trigger:where([data-variant="field"]):where(:hover, :active, [data-pressed], [data-popup-open]):not(:disabled, [data-disabled], [data-readonly]) { border-color: var(--ui-border-control); }
 .ui-select-trigger:where([data-readonly]) { color: var(--ui-text-primary); background: var(--cmp-select-background); }
 .ui-select-trigger:where([data-readonly][data-ui-placeholder]) { color: var(--ui-text-placeholder); }
 .ui-select-trigger:is([aria-invalid="true"], [aria-invalid="grammar"], [aria-invalid="spelling"]):not(:disabled, [data-disabled]) {
@@ -481,55 +507,26 @@
   line-height: var(--ui-line-height-label);
   outline: none;
   opacity: 1;
-  translate: 0 0;
-  transition-property: opacity, translate;
-  transition-duration: var(--ui-duration-normal, 160ms);
+  transition-property: opacity;
+  transition-duration: var(--ui-duration-normal, 150ms);
   transition-timing-function: var(--ui-ease-enter);
 }
 
 .ui-select-popup[data-starting-style],
 .ui-select-popup[data-ending-style] {
   opacity: 0;
-  transition-duration: var(--ui-duration-fast, 100ms);
   transition-timing-function: var(--ui-ease-exit);
 }
 
-.ui-select-popup[data-starting-style][data-side="bottom"],
-.ui-select-popup[data-ending-style][data-side="bottom"] {
-  translate: 0 calc(-1 * var(--ui-motion-offset, 4px));
+.ui-select-popup:is([data-starting-style], [data-ending-style]) {
+  transition-duration: var(--ui-duration-normal, 150ms);
 }
 
-.ui-select-popup[data-starting-style][data-side="top"],
-.ui-select-popup[data-ending-style][data-side="top"] {
-  translate: 0 var(--ui-motion-offset, 4px);
-}
-
-.ui-select-popup[data-starting-style][data-side="right"],
-.ui-select-popup[data-ending-style][data-side="right"] {
-  translate: calc(-1 * var(--ui-motion-offset, 4px)) 0;
-}
-
-.ui-select-popup[data-starting-style][data-side="left"],
-.ui-select-popup[data-ending-style][data-side="left"] {
-  translate: var(--ui-motion-offset, 4px) 0;
-}
-
-.ui-select-popup[data-starting-style][data-side="inline-end"]:dir(ltr),
-.ui-select-popup[data-ending-style][data-side="inline-end"]:dir(ltr),
-.ui-select-popup[data-starting-style][data-side="inline-start"]:dir(rtl),
-.ui-select-popup[data-ending-style][data-side="inline-start"]:dir(rtl) {
-  translate: calc(-1 * var(--ui-motion-offset, 4px)) 0;
-}
-
-.ui-select-popup[data-starting-style][data-side="inline-start"]:dir(ltr),
-.ui-select-popup[data-ending-style][data-side="inline-start"]:dir(ltr),
-.ui-select-popup[data-starting-style][data-side="inline-end"]:dir(rtl),
-.ui-select-popup[data-ending-style][data-side="inline-end"]:dir(rtl) {
-  translate: var(--ui-motion-offset, 4px) 0;
+.ui-select-popup[data-ending-style] {
+  transition-duration: var(--ui-duration-fast, 150ms);
 }
 
 .ui-select-popup[data-starting-style] {
-  transition-duration: var(--ui-duration-normal, 160ms);
   transition-timing-function: var(--ui-ease-enter);
 }
 .ui-select-list {
@@ -545,9 +542,9 @@
   display: flex;
   align-items: center;
   gap: var(--ui-icon-text-gap);
-  min-height: var(--ui-control-height);
+  min-height: var(--ui-menu-row-height);
   padding: var(--ui-space-3) var(--ui-space-4);
-  border-radius: var(--ui-radius-control);
+  border-radius: var(--ui-radius-row);
   color: var(--ui-text-primary);
   background: var(--ui-surface-overlay);
   cursor: pointer;
@@ -588,7 +585,7 @@
   background: var(--ui-overlay-scrim);
   opacity: 1;
   transition-property: opacity;
-  transition-duration: var(--ui-duration-normal, 160ms);
+  transition-duration: var(--ui-duration-normal, 150ms);
   transition-timing-function: var(--ui-ease-enter);
 }
 
@@ -598,12 +595,12 @@
   transition-timing-function: var(--ui-ease-exit);
 }
 
-.ui-dialog-backdrop[data-ending-style] {
-  transition-duration: var(--ui-duration-fast, 100ms);
-}
-
 .ui-dialog-backdrop[data-starting-style] {
   transition-timing-function: var(--ui-ease-enter);
+}
+
+.ui-dialog-backdrop[data-ending-style] {
+  transition-duration: var(--ui-duration-fast, 150ms);
 }
 
 @starting-style {
@@ -629,10 +626,9 @@
   font-size: var(--ui-font-size-body);
   line-height: var(--ui-line-height-body);
   transform: translate(-50%, -50%);
-  translate: 0 0;
   opacity: 1;
-  transition-property: opacity, translate;
-  transition-duration: var(--ui-duration-dialog, 220ms);
+  transition-property: opacity;
+  transition-duration: var(--ui-duration-dialog, 150ms);
   transition-timing-function: var(--ui-ease-enter);
 }
 
@@ -643,24 +639,16 @@
 .ui-dialog[data-starting-style],
 .ui-dialog[data-ending-style] {
   opacity: 0;
-  translate: 0 var(--ui-motion-offset, 4px);
   transition-timing-function: var(--ui-ease-exit);
 }
 
 .ui-dialog[data-starting-style] {
-  transition-duration: var(--ui-duration-dialog, 220ms);
+  transition-duration: var(--ui-duration-dialog, 150ms);
   transition-timing-function: var(--ui-ease-enter);
 }
 
-.ui-dialog[data-ending-style] {
-  transition-duration: var(--ui-duration-normal, 160ms);
-}
-
 @starting-style {
-  .ui-dialog {
-    opacity: 0;
-    translate: 0 var(--ui-motion-offset, 4px);
-  }
+  .ui-dialog { opacity: 0; }
 }
 
 .ui-dialog:focus-visible {
@@ -710,6 +698,16 @@
 }
 
 @media (forced-colors: active) {
+  :is(.button, .icon-button):where([aria-pressed="true"], [aria-pressed="mixed"], [aria-selected="true"]):not(:disabled, [aria-disabled="true"]) {
+    color: HighlightText;
+    background: Highlight;
+  }
+
+  .button:where([aria-pressed], [aria-selected])::after {
+    forced-color-adjust: none;
+    background: currentColor;
+  }
+
   .ui-text-control {
     color: CanvasText;
     background: Canvas;
@@ -770,10 +768,6 @@
 
   :is(.button, .icon-button, .search-field) {
     border-color: ButtonText;
-  }
-
-  :is(.button, .icon-button):where([aria-pressed="true"], [aria-pressed="mixed"], [aria-selected="true"])::after {
-    border-color: Highlight;
   }
 
   :is(.button, .icon-button):where(:disabled, [aria-disabled="true"]),

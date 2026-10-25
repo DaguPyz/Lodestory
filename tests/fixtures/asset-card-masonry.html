@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Asset card masonry browser fixture</title>
+    <link rel="stylesheet" href="/src/styles/tokens.css" />
+    <link rel="stylesheet" href="/src/styles/theme-colors.css" />
+    <link rel="stylesheet" href="/packages/ui/styles.css" />
+    <link rel="stylesheet" href="/src/plugins/asset-management/asset-management.css" />
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; font-family: var(--ui-font-interface); }
+      body { padding: 24px; background: var(--ui-surface-workspace); color: var(--ui-text-primary); }
+      .asset-record-editor { width: 1280px; container-name: card-masonry-test; }
+      .asset-object-card-counts { min-height: 28px; }
+    </style>
+  </head>
+  <body>
+    <main class="asset-type-editor asset-record-editor">
+      <ul class="asset-object-cards" aria-label="卡片回归样例"></ul>
+    </main>
+    <script type="module">
+      import {observeAssetCardMasonry} from "/src/plugins/asset-management/assetCardMasonry.ts";
+
+      const list = document.querySelector(".asset-object-cards");
+      const cardMarkup = ({id, height, description = "说明文字"}) =>
+        `<li class="asset-object-card" data-card-id="${id}" style="height:${height}px">
+          <header><h2><button class="button button--ghost">${id}</button></h2>
+            <div class="asset-object-card-counts"><span class="asset-object-field-count">⌘ 3</span><span class="asset-object-field-count">☷ 2</span></div>
+          </header><p class="asset-object-card-summary">${description}</p>
+        </li>`;
+      list.innerHTML = [
+        {id: "one", height: 140},
+        {id: "two", height: 140},
+        {id: "three", height: 140},
+        {id: "four", height: 140},
+      ].map(cardMarkup).join("");
+
+      const cleanup = observeAssetCardMasonry(list);
+      window.__assetCardMasonryFixture = {
+        cleanup,
+        setCards(cards) { list.innerHTML = cards.map(cardMarkup).join(""); },
+        addCard(card) { list.insertAdjacentHTML("beforeend", cardMarkup(card)); },
+        removeCard(id) { list.querySelector(`[data-card-id="${id}"]`)?.remove(); },
+        updateCardHeight(id, height) { const card = list.querySelector(`[data-card-id="${id}"]`); if (card) card.style.height = `${height}px`; },
+        setWidth(width) { document.querySelector(".asset-record-editor").style.width = `${width}px`; },
+        snapshot() {
+          return [...list.children].map(element => {
+            const rect = element.getBoundingClientRect();
+            return {id: element.dataset.cardId, x: rect.x, y: rect.y, width: rect.width, height: rect.height,
+              position: getComputedStyle(element).position};
+          });
+        },
+      };
+    </script>
+  </body>
+</html>

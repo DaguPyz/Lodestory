@@ -132,7 +132,7 @@
         },
         "accent.indicator": {
           "type": "string",
-          "description": "活动与选中指示",
+          "description": "必要的强调指示；普通控件选中标记使用对应状态前景",
           "pattern": "^#[0-9A-Fa-f]{6}(?:[fF]{2})?$"
         },
         "focus.ring": {

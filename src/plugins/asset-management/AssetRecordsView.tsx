@@ -1,10 +1,13 @@
 import {useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
-import {Button, Dialog, DialogActions, Icon, IconButton, Textarea, TextField} from "@lodestory/ui";
+import {Button, Dialog, DialogActions, Icon, IconButton, SearchField, Textarea, TextField} from "@lodestory/ui";
 import type {ContextMenuService, MenuEntry} from "@lodestory/sdk/context-menu";
 import type {AssetSessionResources} from "./assetManagementPlugin";
 import {useAssetProject, type AssetViewProps} from "./AssetManagementView";
 import {AssetSchemaForm, type AssetSchemaDraft} from "./AssetSchemaForm";
 import {AssetValueFields} from "./AssetValueFields";
+import {observeAssetCardMasonry} from "./assetCardMasonry";
+import {AssetColorPicker} from "./AssetColorPicker";
+import {assetCardColorStyle, isAssetColor} from "./assetCardColor";
 import type {AssetFieldDefinition, AssetPropertyValue, AssetRecord} from "./assetSchemaStore";
 
 type AssetDraft = {
@@ -12,6 +15,7 @@ type AssetDraft = {
   id: string;
   name: string;
   description: string;
+  color: string | null;
   typeId: string | null;
   values: Record<string, AssetPropertyValue>;
 };
@@ -64,7 +68,9 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "cards">("list");
+  const [searchQuery, setSearchQuery] = useState("");
   const editor = useRef<HTMLDivElement>(null);
+  const cardList = useRef<HTMLUListElement>(null);
   const nameInput = useRef<HTMLInputElement>(null);
   const fieldInput = useRef<HTMLInputElement>(null);
   const deleteCancel = useRef<HTMLButtonElement>(null);
@@ -79,12 +85,36 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
   const customFields = orderedFields(snapshot.fields, "asset", owner?.id ?? null);
   const fields = [...detailTemplateFields, ...customFields];
   const scopeFields = selectedType ? orderedFields(snapshot.fields, "type", selectedType.id) : [];
+  const templateFieldCounts = new Map<string, number>();
+  const customFieldCounts = new Map<string, number>();
+  for (const field of snapshot.fields) {
+    if (field.status !== "active") continue;
+    const counts = field.owner.kind === "type" ? templateFieldCounts : customFieldCounts;
+    counts.set(field.owner.id, (counts.get(field.owner.id) ?? 0) + 1);
+  }
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase();
+  const visibleAssets = normalizedSearchQuery === "" ? scopeAssets : scopeAssets.filter(asset =>
+    [asset.name, asset.description, ...scopeFields.map(field => displayedValue(field, asset, snapshot.assets))]
+      .some(value => value.toLowerCase().includes(normalizedSearchQuery)));
+  const searchActive = normalizedSearchQuery !== "";
+  const objectListEmptyTitle = searchActive
+    ? `没有找到与“${searchQuery.trim()}”匹配的对象。`
+    : `还没有“${selectedType?.name}”对象。`;
+  const objectListEmptyHint = searchActive
+    ? "可搜索对象名称、简介或字段值，请尝试其他关键词。"
+    : "在此处点击右键新建对象，字段和默认值会从模板带出。";
   const deleting = deleteTarget !== null;
   const deletionApplied = deleteTarget?.kind === "asset"
     ? !snapshot.assets.some(asset => asset.id === deleteTarget.id)
     : deleteTarget?.kind === "field" && !snapshot.fields.some(field => field.id === deleteTarget.id);
   const deletionPendingSave = deletionApplied && snapshot.dirty;
+  const cardsVisible = snapshot.loaded && !snapshot.blocked && !draft && !selected
+    && viewMode === "cards" && visibleAssets.length > 0;
 
+  useLayoutEffect(() => {
+    if (!cardsVisible || !cardList.current) return;
+    return observeAssetCardMasonry(cardList.current);
+  }, [cardsVisible]);
   useLayoutEffect(() => () => {
     epoch.current++;
     resource.editing.delete(token.current);
@@ -138,11 +168,11 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
     for (const field of scopeFields) {
       if (field.defaultValue !== undefined) values[field.id] = clonePropertyValue(field.defaultValue);
     }
-    begin({kind: "create", id: crypto.randomUUID(), name: "", description: "", typeId: selectedType.id, values});
+    begin({kind: "create", id: crypto.randomUUID(), name: "", description: "", color: null, typeId: selectedType.id, values});
   }
   function editAsset(assetId: string | null) {
     const asset = assetFromMenu(assetId);
-    if (asset) begin({...asset, kind: "edit", values: {...asset.values}});
+    if (asset) begin({...asset, color: asset.color ?? null, kind: "edit", values: {...asset.values}});
   }
   function showAsset(id: string) {
     if (disabled || !scopeAssets.some(asset => asset.id === id) || !canInteract() || resource.editing.size > 0) return;
@@ -208,8 +238,9 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
     const name = draft.name.trim();
     if ([...name].length < 1 || [...name].length > 60) { setError("对象名称需要填写 1–60 个字符。"); nameInput.current?.focus(); return; }
     if ([...draft.description].length > 200) { setError("对象简介不能超过 200 个字符。"); return; }
+    if (draft.color !== null && !isAssetColor(draft.color)) { setError("颜色值需要使用 #RRGGBB 格式，例如 #D8E5F2。"); return; }
     const values = Object.fromEntries(fields.filter(field => Object.prototype.hasOwnProperty.call(draft.values, field.id)).map(field => [field.id, draft.values[field.id]]));
-    const input = {name, description: draft.description, values};
+    const input = {name, description: draft.description, color: draft.color, values};
     void run(async () => {
       if (store.getSnapshot().dirty && !await store.retry()) return false;
       return draft.kind === "create"
@@ -247,7 +278,7 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
   function fieldSection(title: string, definitions: readonly AssetFieldDefinition[], custom = false) {
     return <section className="asset-properties-section" aria-label={title}>
       <div className="asset-fields-heading"><h2>{title}</h2>
-        {custom && selected && !draft && <Button disabled={disabled || fieldDraft !== null || deleting}
+        {custom && selected && !draft && <Button variant="ghost" disabled={disabled || fieldDraft !== null || deleting}
           onClick={() => openField()}><Icon name="plus" size="small"/>添加专属属性</Button>}
       </div>
       {definitions.length > 0 ? draft
@@ -296,20 +327,25 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
     <header className={isObjectList ? "asset-editor-header asset-records-header" : "asset-editor-header"}>
       <div className={isObjectList ? "asset-records-heading" : undefined}>
         <h1>{draft ? draft.kind === "create" ? "新建对象" : "编辑对象" : selected ? selected.name : selectedType?.name ?? (scopeAssets.length > 0 ? "未分类对象" : "对象管理")}</h1>
-        {!draft && <p>{selected
+        {!draft && <p aria-live={isObjectList ? "polite" : undefined}>{selected
           ? `${displayTypeName}${selected.description ? ` · ${selected.description}` : ""}`
-          : selectedType ? `${scopeAssets.length} 个对象 · ${scopeFields.length} 个字段`
+          : selectedType ? `${searchActive ? `${visibleAssets.length} / ` : ""}${scopeAssets.length} 个对象${viewMode === "list" ? ` · ${scopeFields.length} 个字段` : ""}`
             : scopeAssets.length > 0 ? "保留的旧对象可继续查看和编辑；新对象需要从模板创建。" : "先定义资产模板，再基于模板创建具体对象。"}</p>}
       </div>
-      {isObjectList && <div className="asset-view-switch" role="group" aria-label="查看模式">
-        <IconButton label="列表视图" aria-pressed={viewMode === "list"} disabled={viewSwitchDisabled}
-          onClick={() => switchViewMode("list")}><Icon name="list"/></IconButton>
-        <IconButton label="卡片视图" aria-pressed={viewMode === "cards"} disabled={viewSwitchDisabled}
-          onClick={() => switchViewMode("cards")}><Icon name="grid"/></IconButton>
+      {isObjectList && <div className="asset-records-tools">
+        <SearchField label="搜索对象" placeholder="搜索名称、简介或字段值" value={searchQuery}
+          aria-controls="asset-object-results" disabled={!active || !snapshot.loaded || snapshot.loading || snapshot.blocked}
+          onChange={event => setSearchQuery(event.currentTarget.value)}/>
+        <div className="asset-view-switch" role="group" aria-label="查看模式">
+          <IconButton label="列表视图" aria-pressed={viewMode === "list"} disabled={viewSwitchDisabled}
+            onClick={() => switchViewMode("list")}><Icon name="list"/></IconButton>
+          <IconButton label="卡片视图" aria-pressed={viewMode === "cards"} disabled={viewSwitchDisabled}
+            onClick={() => switchViewMode("cards")}><Icon name="grid"/></IconButton>
+        </div>
       </div>}
     </header>
     {(error || snapshot.error) && !fieldDraft && !deleting && <div className="asset-feedback" role="alert">
-      <span>{error ?? snapshot.error}</span>{!draft && <Button disabled={!active || busy} onClick={() => void run(store.retry)}>重试</Button>}
+      <span>{error ?? snapshot.error}</span>{!draft && <Button variant="ghost" disabled={!active || busy} onClick={() => void run(store.retry)}>重试</Button>}
     </div>}
     {snapshot.loading && <p className="asset-editor-message" role="status">正在读取对象资料…</p>}
     {snapshot.loaded && !snapshot.blocked && (draft ? <form className="asset-record-form" onSubmit={submit} noValidate aria-busy={busy || undefined}>
@@ -323,13 +359,15 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
           <Textarea value={draft.description} disabled={disabled} aria-label="对象简介"
             onChange={event => {setDraft({...draft, description: event.currentTarget.value}); setError(null);}}/>
           <span className="asset-form-help">{[...draft.description].length}/200</span></label>
+        <AssetColorPicker value={draft.color} disabled={disabled}
+          onChange={color => {setDraft({...draft, color}); setError(null);}}/>
       </div>
       {fieldSection("模板字段", detailTemplateFields)}
       {customFields.length > 0 && fieldSection("专属属性", customFields, true)}
       {draft.kind === "create" && <p className="asset-form-help">创建对象后，可以继续添加只属于这个对象的专属属性。</p>}
       <div className="asset-record-form-actions">
         <span className="asset-form-help" role="status">{busy ? "正在保存…" : snapshot.dirty ? "保存失败，输入已保留，请重试。" : "填写完成后保存。"}</span>
-        <Button type="button" disabled={busy} onClick={cancel}>{snapshot.dirty ? "关闭编辑" : "取消"}</Button>
+        <Button variant="secondary" type="button" disabled={busy} onClick={cancel}>{snapshot.dirty ? "关闭编辑" : "取消"}</Button>
         <Button variant="primary" type="submit" disabled={!active || busy}>{snapshot.dirty ? "重试保存" : draft.kind === "create" ? "创建对象" : "保存对象"}</Button>
       </div>
     </form> : selected ? <>
@@ -338,43 +376,46 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
       <p className="asset-form-help" role="status">{snapshot.saving ? "正在保存…" : snapshot.dirty ? "尚未保存" : "已保存"}</p>
     </> : <>
       {scopeAssets.length > 0 || selectedType ? viewMode === "cards"
-        ? scopeAssets.length > 0 ? <ul className="asset-object-cards" aria-label={`${selectedType?.name ?? "未分类"}对象卡片`}>
-          {scopeAssets.map(asset => <li className="asset-object-card" key={asset.id}>
+        ? visibleAssets.length > 0 ? <>
+          <div className="asset-object-card-legend" aria-label="字段数量图例">
+            <span><Icon name="layers" size="small"/>模板字段</span>
+            <span><Icon name="slidersHorizontal" size="small"/>专属字段</span>
+          </div>
+          <ul id="asset-object-results" className="asset-object-cards" ref={cardList} aria-label={`${selectedType?.name ?? "未分类"}对象卡片`}>
+          {visibleAssets.map(asset => {
+            const templateCount = asset.typeId === null ? 0 : templateFieldCounts.get(asset.typeId) ?? 0;
+            const customCount = customFieldCounts.get(asset.id) ?? 0;
+            return <li className="asset-object-card" key={asset.id} data-colored={isAssetColor(asset.color) || undefined}
+              style={assetCardColorStyle(asset.color)}>
             <header><h2><Button variant="ghost" disabled={disabled} title={asset.name}
-              onClick={() => showAsset(asset.id)}><strong className="asset-object-name-label">{asset.name}</strong></Button></h2>
-              {asset.description.trim() !== "" && <p className="asset-object-card-summary" title={asset.description}>{asset.description}</p>}
+              aria-label={`查看对象“${asset.name}”`} onClick={() => showAsset(asset.id)}>
+              {asset.name}
+            </Button></h2>
+              <div className="asset-object-card-counts">
+                <span className="asset-object-field-count" data-field-scope="template" role="img"
+                  aria-label={`模板字段 ${templateCount} 个`} title={`模板字段：${templateCount} 个`}>
+                  <Icon name="layers" size="small"/><span aria-hidden="true">{templateCount}</span>
+                </span>
+                <span className="asset-object-field-count" data-field-scope="custom" role="img"
+                  aria-label={`专属字段 ${customCount} 个`} title={`专属字段：${customCount} 个`}>
+                  <Icon name="slidersHorizontal" size="small"/><span aria-hidden="true">{customCount}</span>
+                </span>
+              </div>
             </header>
-            <dl className="asset-object-card-fields">
-              {scopeFields.map(field => {
-                const value = displayedValue(field, asset, snapshot.assets);
-                const rawValue = asset.values[field.id];
-                const isEmpty = rawValue === null || rawValue === undefined || rawValue === "" ||
-                  (Array.isArray(rawValue) && rawValue.length === 0);
-                return <div key={field.id}>
-                  <dt>{field.title}</dt>
-                  <dd data-value-type={field.valueType} data-empty={isEmpty || undefined} title={value}>{value}</dd>
-                </div>;
-              })}
-            </dl>
-            <footer className="asset-object-card-actions">
-              <Button variant="ghost" disabled={!active || busy || snapshot.dirty || resource.editing.size > 0}
-                aria-label={`查看对象“${asset.name}”`} onClick={() => showAsset(asset.id)}>查看<Icon name="chevronRight" size="small"/></Button>
-              <IconButton label={`删除对象“${asset.name}”`} disabled={disabled || resource.editing.size > 0}
-                onClick={() => confirmAssetRemoval(asset)}><Icon name="trash"/></IconButton>
-            </footer>
-          </li>)}
-        </ul> : <div className="asset-object-empty">
-          <p>还没有“{selectedType?.name}”对象。</p>
-          <span>在此处点击右键新建对象，字段和默认值会从模板带出。</span>
+            {asset.description.trim() !== "" && <p className="asset-object-card-summary">{asset.description}</p>}
+          </li>;})}
+        </ul></> : <div id="asset-object-results" className="asset-object-empty">
+          <p>{objectListEmptyTitle}</p>
+          <span>{objectListEmptyHint}</span>
         </div>
-        : <div className="asset-object-table-scroll asset-object-table-frame" data-ui-density="compact" tabIndex={0} role="region" aria-label="对象数据表，可横向滚动">
+        : <div id="asset-object-results" className="asset-object-table-scroll asset-object-table-frame" data-ui-density="compact" tabIndex={0} role="region" aria-label="对象数据表，可横向滚动">
         <table className="asset-object-table" aria-label={`${selectedType?.name ?? "未分类"}对象列表`}>
           <thead><tr>
             <th scope="col">对象名称</th>
             {scopeFields.map(field => <th scope="col" key={field.id} data-value-type={field.valueType}>{field.title}</th>)}
             <th scope="col" aria-label="对象操作"/>
           </tr></thead>
-          <tbody>{scopeAssets.map(asset => <tr key={asset.id}>
+          <tbody>{visibleAssets.map(asset => <tr key={asset.id}>
             <th scope="row"><div className="asset-object-name"><Button variant="ghost" disabled={disabled}
               title={asset.name} aria-label={`查看对象“${asset.name}”`} onClick={() => showAsset(asset.id)}>
               <strong className="asset-object-name-label">{asset.name}</strong>
@@ -390,8 +431,8 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
               <IconButton label={`删除对象“${asset.name}”`} disabled={disabled || resource.editing.size > 0}
                 onClick={() => confirmAssetRemoval(asset)}><Icon name="trash"/></IconButton>
             </td>
-          </tr>)}{scopeAssets.length === 0 && <tr><td colSpan={scopeFields.length + 2}>
-          <div className="asset-object-empty"><p>还没有“{selectedType?.name}”对象。</p><span>在此处点击右键新建对象，字段和默认值会从模板带出。</span></div>
+          </tr>)}{visibleAssets.length === 0 && <tr><td colSpan={scopeFields.length + 2}>
+          <div className="asset-object-empty"><p>{objectListEmptyTitle}</p><span>{objectListEmptyHint}</span></div>
           </td></tr>}</tbody>
         </table>
       </div> : <div className="asset-editor-empty">
@@ -418,7 +459,7 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
       {(error || snapshot.error) && <p className="asset-form-error asset-delete-feedback" role="alert">{error ?? snapshot.error}</p>}
       {deletionPendingSave && <p className="asset-form-help asset-delete-feedback" role="status">删除变更尚未保存，请重试保存。</p>}
       <DialogActions>
-        <Button ref={deleteCancel} disabled={busy} onClick={cancel}>{deletionPendingSave ? "关闭" : "取消"}</Button>
+        <Button variant="secondary" ref={deleteCancel} disabled={busy} onClick={cancel}>{deletionPendingSave ? "关闭" : "取消"}</Button>
         <Button variant="danger" disabled={!active || busy} onClick={removeConfirmed}>
           {busy ? "正在删除…" : deletionPendingSave ? "重试保存" : "确认删除"}
         </Button>

@@ -27,6 +27,7 @@ export type AssetRecord = Readonly<{
   name: string;
   description: string;
   typeId: string | null;
+  color?: string;
   values: Readonly<Record<string, AssetPropertyValue>>;
 }>;
 
@@ -54,6 +55,7 @@ export type CreateAssetInput = Readonly<{
   name: string;
   description: string;
   typeId: string | null;
+  color?: string | null;
   values?: Readonly<Record<string, AssetPropertyValue>>;
 }>;
 
@@ -85,7 +87,7 @@ export type AssetSchemaStore = Readonly<{
   createType(input: CreateAssetTypeInput): Promise<boolean>;
   removeType(id: string): Promise<boolean>;
   createAsset(input: CreateAssetInput): Promise<boolean>;
-  updateAsset(id: string, patch: Readonly<{name?: string; description?: string; values?: Readonly<Record<string, AssetPropertyValue>>}>): Promise<boolean>;
+  updateAsset(id: string, patch: Readonly<{name?: string; description?: string; color?: string | null; values?: Readonly<Record<string, AssetPropertyValue>>}>): Promise<boolean>;
   removeAsset(id: string): Promise<boolean>;
   updateType(id: string, patch: Readonly<{name?: string; description?: string}>): Promise<boolean>;
   moveType(id: string, direction: -1 | 1): Promise<boolean>;
@@ -108,6 +110,7 @@ const MAX_TYPE_DESCRIPTION = 200;
 const MAX_FIELD_TITLE = 60;
 const MAX_ASSET_NAME = 60;
 const MAX_ASSET_DESCRIPTION = 200;
+const ASSET_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 const MIN_OPTIONS = 1;
 const MAX_OPTIONS = 100;
 const TYPE_FIELDS = ["description", "id", "name", "order", "status"];
@@ -168,9 +171,14 @@ function clonePropertyValue(value: AssetPropertyValue): AssetPropertyValue {
   return Array.isArray(value) ? Object.freeze([...value]) : value;
 }
 
+function normalizeAssetColor(value: unknown): string | null {
+  return typeof value === "string" && ASSET_COLOR_PATTERN.test(value) ? value.toLowerCase() : null;
+}
+
 function freezeAsset(asset: AssetRecord): AssetRecord {
   const values = Object.freeze(Object.fromEntries(Object.entries(asset.values).map(([id, value]) => [id, clonePropertyValue(value)])));
-  return Object.freeze({id: asset.id, name: asset.name, description: asset.description, typeId: asset.typeId, values});
+  return Object.freeze({id: asset.id, name: asset.name, description: asset.description, typeId: asset.typeId,
+    ...(asset.color !== undefined ? {color: asset.color} : {}), values});
 }
 
 function freezeSchema(types: readonly AssetTypeTemplate[], fields: readonly AssetFieldDefinition[], assets: readonly AssetRecord[] = []): SchemaData {
@@ -234,10 +242,10 @@ function normalizeSchema(value: unknown): {schema: SchemaData | null; error: str
     types.push(Object.freeze({id: candidate.id, name, description: candidate.description, order: candidate.order, status: candidate.status}));
   }
 
-  const rawAssets: {id: string; name: string; description: string; typeId: string | null; values: Record<string, unknown>}[] = [];
+  const rawAssets: {id: string; name: string; description: string; typeId: string | null; color?: string; values: Record<string, unknown>}[] = [];
   const assetIds = new Set<string>();
   for (const candidate of version === SCHEMA_VERSION ? value.assets as unknown[] : []) {
-    if (!isRecord(candidate) || !keysMatch(candidate, ASSET_FIELDS)) {
+    if (!isRecord(candidate) || !keysMatch(candidate, ASSET_FIELDS, ["color"])) {
       return {schema: null, error: "资产记录字段不完整或包含未知字段，已保留原始文件。"};
     }
     if (!isUuid(candidate.id) || globalIds.has(candidate.id) || assetIds.has(candidate.id)) {
@@ -252,11 +260,18 @@ function normalizeSchema(value: unknown): {schema: SchemaData | null; error: str
     if (candidate.typeId !== null && (!isUuid(candidate.typeId) || !typeIds.has(candidate.typeId))) {
       return {schema: null, error: "资产所属类型不存在或格式无效，已保留原始文件。"};
     }
+    let color: string | undefined;
+    if (hasOwn(candidate, "color")) {
+      const normalizedColor = normalizeAssetColor(candidate.color);
+      if (!normalizedColor) return {schema: null, error: "资产颜色必须是 #RRGGBB 格式，已保留原始文件。"};
+      color = normalizedColor;
+    }
     if (!isRecord(candidate.values)) return {schema: null, error: "资产属性值必须是对象，已保留原始文件。"};
     const id = candidate.id;
     assetIds.add(id);
     globalIds.add(id);
-    rawAssets.push({id, name: candidate.name.trim(), description: candidate.description, typeId: candidate.typeId as string | null, values: candidate.values});
+    rawAssets.push({id, name: candidate.name.trim(), description: candidate.description, typeId: candidate.typeId as string | null,
+      ...(color !== undefined ? {color} : {}), values: candidate.values});
   }
 
   const fields: AssetFieldDefinition[] = [];
@@ -418,7 +433,8 @@ function normalizeSchema(value: unknown): {schema: SchemaData | null; error: str
         return {schema: null, error: "资产属性值与字段类型或选项不兼容，已保留原始文件。"};
       }
     }
-    normalizedAssets.push(Object.freeze({id: asset.id, name: asset.name, description: asset.description, typeId: asset.typeId, values: Object.freeze(values)}));
+    normalizedAssets.push(Object.freeze({id: asset.id, name: asset.name, description: asset.description, typeId: asset.typeId,
+      ...(asset.color !== undefined ? {color: asset.color} : {}), values: Object.freeze(values)}));
   }
 
   return {schema: freezeSchema(types, fields, normalizedAssets), error: null};
@@ -926,7 +942,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
 
   function createAsset(input: CreateAssetInput): Promise<boolean> {
     if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
-    if (!isRecord(input) || !keysMatch(input, ["description", "id", "name", "typeId"], ["values"])) {
+    if (!isRecord(input) || !keysMatch(input, ["description", "id", "name", "typeId"], ["color", "values"])) {
       localError = "资产输入字段不完整或包含未知字段。";
       publish();
       return Promise.resolve(false);
@@ -939,6 +955,16 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       localError = "资产需要有效 UUID、名称、文本说明和已存在的类型或空类型。";
       publish();
       return Promise.resolve(false);
+    }
+    let color: string | undefined;
+    if (input.color !== undefined && input.color !== null) {
+      const normalizedColor = normalizeAssetColor(input.color);
+      if (!normalizedColor) {
+        localError = "资产颜色必须是 #RRGGBB 格式。";
+        publish();
+        return Promise.resolve(false);
+      }
+      color = normalizedColor;
     }
     if (hasOwn(input, "values") && !isRecord(input.values)) {
       localError = "资产属性值必须是对象。";
@@ -957,7 +983,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     if (input.values) {
       for (const [fieldId, value] of Object.entries(input.values)) values[fieldId] = value;
     }
-    const asset = freezeAsset({id: input.id, name, description, typeId, values});
+    const asset = freezeAsset({id: input.id, name, description, typeId, ...(color !== undefined ? {color} : {}), values});
     const existing = schema.assets.find(candidate => candidate.id === input.id);
     if (existing) {
       if (JSON.stringify(existing) === JSON.stringify(asset)) return settleNoop();
@@ -973,9 +999,9 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     return mutate(freezeSchema(schema.types, schema.fields, [...schema.assets, asset]), selectedTypeId, asset.id);
   }
 
-  function updateAsset(id: string, patch: Readonly<{name?: string; description?: string; values?: Readonly<Record<string, AssetPropertyValue>>}>): Promise<boolean> {
+  function updateAsset(id: string, patch: Readonly<{name?: string; description?: string; color?: string | null; values?: Readonly<Record<string, AssetPropertyValue>>}>): Promise<boolean> {
     if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
-    if (!isRecord(patch) || Object.keys(patch).some(key => !["description", "name", "values"].includes(key))) {
+    if (!isRecord(patch) || Object.keys(patch).some(key => !["color", "description", "name", "values"].includes(key))) {
       localError = "资产修改内容包含未知字段。";
       publish();
       return Promise.resolve(false);
@@ -990,6 +1016,18 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       publish();
       return Promise.resolve(false);
     }
+    let color = current.color;
+    if (patch.color === null) {
+      color = undefined;
+    } else if (patch.color !== undefined) {
+      const normalizedColor = normalizeAssetColor(patch.color);
+      if (!normalizedColor) {
+        localError = "资产颜色必须是 #RRGGBB 格式。";
+        publish();
+        return Promise.resolve(false);
+      }
+      color = normalizedColor;
+    }
     if (patch.values !== undefined && !isRecord(patch.values)) {
       localError = "资产属性值必须是对象。";
       publish();
@@ -999,7 +1037,8 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     if (patch.values) {
       for (const [fieldId, value] of Object.entries(patch.values)) values[fieldId] = value;
     }
-    const next = freezeAsset({id: current.id, name, description, typeId: current.typeId, values});
+    const next = freezeAsset({id: current.id, name, description, typeId: current.typeId,
+      ...(color !== undefined ? {color} : {}), values});
     if (JSON.stringify(current) === JSON.stringify(next)) return settleNoop();
     const assets = [...schema.assets];
     assets[index] = next;

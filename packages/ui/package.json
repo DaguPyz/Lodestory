@@ -4,7 +4,7 @@
   "description": "Lodestory shared React components",
   "license": "UNLICENSED",
   "type": "module",
-  "files": ["dist", "styles.css", "README.md"],
+  "files": ["dist", "styles.css", "README.md", "THIRD_PARTY_NOTICES.md"],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

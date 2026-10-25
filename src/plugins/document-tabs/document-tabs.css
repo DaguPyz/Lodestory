@@ -70,16 +70,6 @@
   background: var(--ui-surface-selected);
 }
 
-.document-tab[data-active="true"]::after {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: var(--ui-indicator-width);
-  background: var(--ui-accent-indicator);
-  content: "";
-}
-
 .document-tab-select {
   display: flex;
   flex: 1;
@@ -97,10 +87,22 @@
   text-align: left;
 }
 
-.document-tab-select > span {
+.document-tab-label {
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.document-tab-state {
+  display: inline-flex;
+  flex: 0 0 var(--ui-icon-small);
+  align-items: center;
+  justify-content: center;
+  width: var(--ui-icon-small);
+  height: var(--ui-icon-small);
+  color: inherit;
 }
 
 .document-tab-select:hover {
@@ -118,7 +120,15 @@
 }
 
 .document-tab-select:active { color: var(--ui-state-pressed-foreground); background: var(--ui-surface-pressed); }
+.document-tab-select[aria-current="page"]:active:not(:disabled) {
+  color: var(--ui-state-selected-pressed-foreground);
+  background: var(--ui-state-selected-pressed-background);
+}
 .document-tab-select:disabled { color: var(--ui-state-disabled-foreground); background: var(--ui-state-disabled-background); }
+.document-tab-select[aria-current="page"]:disabled {
+  color: var(--ui-state-disabled-selected-foreground);
+  background: var(--ui-state-disabled-selected-background);
+}
 
 .document-tab-select:focus-visible {
   outline-offset: calc(-1 * var(--ui-focus-width));
@@ -127,5 +137,11 @@
 @media (forced-colors: active) {
   .document-tabs-scrollbar-thumb,
   .document-tabs-scrollbar-thumb:is(:hover, :active) { background-color: ButtonText; }
-  .document-tab[data-active="true"]::after { background: Highlight; }
+  .document-tab[data-active="true"] { background: Highlight; }
+  .document-tab-select[aria-current="page"]:not(:disabled),
+  .document-tab-select[aria-current="page"]:is(:hover, :active):not(:disabled) { color: HighlightText; background: Highlight; }
+  .document-tab-select[aria-current="page"]:focus-visible { outline-color: HighlightText; }
+  .document-tab-select[aria-current="page"] .document-tab-state { color: inherit; }
+  .document-tab[data-active="true"] .icon-button:not(:disabled) { color: HighlightText; background: Highlight; }
+  .document-tab[data-active="true"] .icon-button:focus-visible { outline-color: HighlightText; }
 }

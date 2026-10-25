@@ -58,7 +58,7 @@
   gap: var(--ui-icon-text-gap);
   width: 100%;
   min-height: var(--ui-row-height);
-  padding: var(--ui-space-4) var(--ui-space-5);
+  padding: var(--ui-space-4) calc(var(--ui-space-5) + var(--ui-icon-small) + var(--ui-space-2)) var(--ui-space-4) var(--ui-space-5);
   color: var(--ui-text-secondary);
   background: transparent;
   border: 0;
@@ -82,16 +82,7 @@
 .navigation-item[aria-current="page"] {
   color: var(--ui-state-selected-foreground);
   background: var(--ui-surface-selected);
-}
-
-.navigation-item[aria-current="page"]::before {
-  position: absolute;
-  inset-block: var(--ui-space-4);
-  left: 0;
-  width: var(--ui-indicator-width);
-  background: var(--ui-accent-indicator);
-  border-radius: var(--ui-space-1);
-  content: "";
+  font-weight: 600;
 }
 
 .navigation-item[aria-current="page"]:hover {
@@ -100,9 +91,17 @@
 }
 
 .navigation-item[aria-current="page"]:active {
-  color: var(--ui-state-pressed-foreground);
-  background: var(--ui-surface-pressed);
+  color: var(--ui-state-selected-pressed-foreground);
+  background: var(--ui-state-selected-pressed-background);
 }
+
+.navigation-item:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: var(--ui-focus-offset);
+}
+
+.navigation-item:disabled { color: var(--ui-state-disabled-foreground); background: var(--ui-state-disabled-background); cursor: not-allowed; }
+.navigation-item[aria-current="page"]:disabled { color: var(--ui-state-disabled-selected-foreground); background: var(--ui-state-disabled-selected-background); }
 
 .navigation-secondary {
   margin-top: auto;
@@ -111,6 +110,18 @@
 .navigation-icon {
   display: inline-flex;
   flex-shrink: 0;
+}
+
+.navigation-item-state {
+  position: absolute;
+  inset-inline-end: var(--ui-space-3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--ui-icon-small);
+  height: var(--ui-icon-small);
+  color: inherit;
+  pointer-events: none;
 }
 
 .navigation-error {
@@ -145,6 +156,8 @@
     padding-inline: 0;
   }
 
+  .navigation-item-state { display: none; }
+
   .navigation-item-text .navigation-label {
     overflow-wrap: anywhere;
     font-size: var(--ui-font-size-caption);
@@ -160,17 +173,14 @@
 [data-ui-motion="reduce"] .navigation-item { transition: none; }
 
 @media (forced-colors: active) {
-  .navigation-item[aria-current="page"] {
+  .navigation-item[aria-current="page"]:not(:disabled),
+  .navigation-item[aria-current="page"]:is(:hover, :active):not(:disabled) {
     color: HighlightText;
     background: Highlight;
   }
 
   .navigation-item[aria-current="page"] .icon {
-    color: HighlightText;
-  }
-
-  .navigation-item[aria-current="page"]::before {
-    background: HighlightText;
+    color: inherit;
   }
 
 }

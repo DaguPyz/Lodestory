@@ -70,11 +70,22 @@
   outline-offset: calc(-1 * var(--ui-focus-width));
 }
 
-.file-tree-entry > span:last-child {
+.file-tree-label {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.file-tree-entry-state {
+  display: inline-flex;
+  flex: 0 0 var(--ui-icon-small);
+  align-items: center;
+  justify-content: center;
+  width: var(--ui-icon-small);
+  height: var(--ui-icon-small);
+  color: inherit;
 }
 
 .file-tree-entry:hover:not(:disabled) {
@@ -87,22 +98,13 @@
 .file-tree-entry[aria-current="page"] {
   color: var(--ui-state-selected-foreground);
   background: var(--ui-surface-selected);
+  font-weight: 600;
 }
 
 .file-tree-entry[aria-current="page"]:hover:not(:disabled) { color: var(--ui-state-selected-hover-foreground); background: var(--ui-surface-selected-hover); }
-.file-tree-entry[aria-current="page"]:active:not(:disabled) { color: var(--ui-state-pressed-foreground); background: var(--ui-surface-pressed); }
-.file-tree-entry[aria-current="page"]::after { content: ""; position: absolute; inset-block: var(--ui-space-3); left: 0; width: var(--ui-indicator-width); background: var(--ui-accent-indicator); pointer-events: none; }
+.file-tree-entry[aria-current="page"]:active:not(:disabled) { color: var(--ui-state-selected-pressed-foreground); background: var(--ui-state-selected-pressed-background); }
 .file-tree-entry:disabled { color: var(--ui-state-disabled-foreground); background: var(--ui-state-disabled-background); }
 .file-tree-entry[aria-current="page"]:disabled { color: var(--ui-state-disabled-selected-foreground); background: var(--ui-state-disabled-selected-background); }
-.file-tree-entry[aria-current="page"]:disabled::after { background: var(--ui-state-disabled-border); }
-
-.file-tree-folder-toggle > .icon:first-child { transition: transform var(--ui-duration-fast) var(--ui-ease-enter); }
-.file-tree-folder-toggle[aria-expanded="true"] > .icon:first-child { transform: rotate(90deg); }
-
-:root[data-ui-motion="reduce"] .file-tree-folder-toggle > .icon:first-child { transition-property: none; }
-@media (prefers-reduced-motion: reduce) {
-  .file-tree-folder-toggle > .icon:first-child { transition-property: none; }
-}
 
 .file-tree-spacer {
   flex-shrink: 0;
@@ -127,5 +129,8 @@
 }
 
 @media (forced-colors: active) {
-  .file-tree-entry[aria-current="page"] { color: HighlightText; background: Highlight; }
+  .file-tree-entry[aria-current="page"]:not(:disabled),
+  .file-tree-entry[aria-current="page"]:is(:hover, :active):not(:disabled) { color: HighlightText; background: Highlight; }
+  .file-tree-entry[aria-current="page"]:focus-visible { outline-color: HighlightText; }
+  .file-tree-entry[aria-current="page"] .file-tree-entry-state { color: inherit; }
 }

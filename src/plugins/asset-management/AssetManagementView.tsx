@@ -77,6 +77,9 @@ function TypeNavigation({resource, contextMenus, active, onOpenTypes, onOpenAsse
             aria-pressed={snapshot.selectedTypeId === type.id} disabled={!active} onClick={() => openTemplate(type.id)}>
             <strong className="asset-type-name" title={type.name}>{type.name}</strong>
             <span className="asset-type-count" aria-hidden="true">{objectCount}</span>
+            <span className="asset-type-state" aria-hidden="true">
+              {snapshot.selectedTypeId === type.id && <Icon name="check" size="small" />}
+            </span>
           </button>
           </MenuRegion>
         </li>;
@@ -86,6 +89,9 @@ function TypeNavigation({resource, contextMenus, active, onOpenTypes, onOpenAsse
         aria-pressed={snapshot.selectedTypeId === null} onClick={() => openTemplate(null)}>
         <strong className="asset-type-name" title="未分类对象">未分类对象</strong>
         <span className="asset-type-count" aria-hidden="true">{unclassifiedCount}</span>
+        <span className="asset-type-state" aria-hidden="true">
+          {snapshot.selectedTypeId === null && <Icon name="check" size="small" />}
+        </span>
       </button></li>}
     </ul>
   </div>
@@ -249,7 +255,7 @@ function TypeEditor({resource, contextMenus, active, canInteract, onOpenAssets}:
         <p>{selected ? "配置这个模板下所有对象共用的字段、字段类型和默认值。" : "先定义资产模板，再基于模板创建具体对象。"}</p></div>
     </header>
     {(error || snapshot.error) && !editing && <div className="asset-feedback" role="alert"><span>{error ?? snapshot.error}</span>
-      {(snapshot.dirty || snapshot.blocked || !snapshot.loaded) && <Button disabled={!active || pending || snapshot.saving}
+      {(snapshot.dirty || snapshot.blocked || !snapshot.loaded) && <Button variant="ghost" disabled={!active || pending || snapshot.saving}
         onClick={() => void run(store.retry)}>重试</Button>}</div>}
     {snapshot.loading && <p className="asset-editor-message" role="status">正在读取资产模板…</p>}
     {snapshot.loaded && !snapshot.blocked && <>
@@ -284,7 +290,7 @@ function TypeEditor({resource, contextMenus, active, canInteract, onOpenAssets}:
       {deletionError && <p className="asset-form-error asset-delete-feedback" role="alert">{deletionError}</p>}
       {deletionPendingSave && <p className="asset-form-help asset-delete-feedback" role="status">删除变更尚未保存，请重试保存。</p>}
       <DialogActions>
-        <Button ref={deleteCancel} disabled={pending || snapshot.saving} onClick={close}>{deletionPendingSave ? "关闭" : "取消"}</Button>
+        <Button variant="secondary" ref={deleteCancel} disabled={pending || snapshot.saving} onClick={close}>{deletionPendingSave ? "关闭" : "取消"}</Button>
         <Button variant="danger" disabled={!active || pending || snapshot.saving} onClick={removeConfirmed}>
           {pending || snapshot.saving ? "正在删除…" : deletionPendingSave ? "重试保存" : "确认删除"}
         </Button>

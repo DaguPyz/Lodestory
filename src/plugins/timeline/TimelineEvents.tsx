@@ -425,8 +425,8 @@ export function TimelineEvents({contextMenus, store, settings, view, size, axisL
         {(operationError || snapshot.error) && <p className="timeline-event-form-error" role="alert">{operationError ?? snapshot.error}</p>}
         <DialogActions>
           {operationRef.current?.kind === "remove" && (operationError || snapshot.error)
-            && <Button type="button" disabled={submitting || snapshot.saving} onClick={() => void retryLastOperation()}>重试删除</Button>}
-          <Button type="button" disabled={submitting || snapshot.saving} onClick={() => setConfirmDelete(false)}>保留事件</Button>
+            && <Button variant="ghost" type="button" disabled={submitting || snapshot.saving} onClick={() => void retryLastOperation()}>重试删除</Button>}
+          <Button variant="secondary" type="button" disabled={submitting || snapshot.saving} onClick={() => setConfirmDelete(false)}>保留事件</Button>
           <Button type="button" variant="danger" disabled={submitting || snapshot.saving} onClick={() => void removeEvent()}>
             {submitting ? "正在删除…" : "确认删除"}
           </Button>

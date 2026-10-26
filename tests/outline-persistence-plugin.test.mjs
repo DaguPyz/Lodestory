@@ -376,6 +376,64 @@ test("timeline event counts and ranges load from project storage and return afte
   await f.createdCores.at(-1).unmountAll();
 });
 
+test("timeline summaries reuse unchanged entries and only scan the changed timeline", async () => {
+  const {f} = persistenceFixture();
+  f.start(); await flushStartup();
+  const {workbench, layout, timelines, storage, model} = services(f);
+  assert.equal(await workbench.openProject(project), true);
+  const list = model();
+  const sessionId = workbench.getSnapshot().session.id;
+  const resources = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main").render({active: true}).props.sessions.get(sessionId);
+  const ids = [];
+  for (const title of ["第一条", "第二条"]) {
+    list.beginCreate(); list.updateCreateDraft({title});
+    assert.equal(await list.create(), true);
+    ids.push(list.getSnapshot().selectedId);
+  }
+  const [firstId, secondId] = ids;
+  await Promise.all(ids.flatMap(id => [resources.axes.get(id).load(), resources.events.get(id).load()]));
+  const event = (id, offset) => ({id, title: "事件", summary: "", offset, placement: "above", important: false, assetIds: []});
+  const first = event("00000000-0000-4000-8000-000000000211", 10);
+  const second = event("00000000-0000-4000-8000-000000000212", 200);
+  assert.equal(await resources.events.get(firstId).upsert(first), true);
+  assert.equal(await resources.events.get(secondId).upsert(second), true);
+
+  const geometry = f.loadModule("plugins/timeline/timelineAxisGeometry.ts");
+  const convert = geometry.timelineValueAtOffset;
+  const converted = [];
+  geometry.timelineValueAtOffset = (offset, settings) => { converted.push(offset); return convert(offset, settings); };
+  const before = list.getSnapshot();
+  let notifications = 0;
+  const unsubscribe = list.subscribe(() => notifications++);
+  try {
+    assert.ok(await storage.getFiles(sessionId).create("无关正文.md", Array.from(new TextEncoder().encode("正文"))));
+    assert.strictEqual(list.getSnapshot(), before, "unrelated bytes preserve the public list snapshot");
+    assert.equal(notifications, 0);
+    assert.equal(timelines.open(sessionId, firstId), true);
+    assert.strictEqual(list.getSnapshot().entries, before.entries, "selection does not rebuild entries");
+    assert.deepEqual(converted, [], "selection and unrelated notifications do not scan any events");
+
+    const added = event("00000000-0000-4000-8000-000000000213", 20);
+    assert.equal(await resources.events.get(firstId).upsert(added), true);
+    const changed = list.getSnapshot();
+    assert.equal(changed.entries.find(entry => entry.id === firstId).eventCount, 2);
+    assert.equal(changed.entries.find(entry => entry.id === firstId).period, "10–20 天");
+    assert.strictEqual(changed.entries.find(entry => entry.id === secondId), before.entries.find(entry => entry.id === secondId));
+    assert.deepEqual(converted, [10, 20], "one content update scans only that timeline once, including its save transitions");
+
+    converted.length = 0;
+    assert.equal(await resources.axes.get(firstId).update({origin: 100, step: 5, unit: "年"}), true);
+    assert.equal(list.getSnapshot().entries.find(entry => entry.id === firstId).period, "110–120 年");
+    assert.deepEqual(converted, [10, 20], "axis changes rescan only the affected timeline");
+    assert.strictEqual(list.getSnapshot().entries.find(entry => entry.id === secondId), before.entries.find(entry => entry.id === secondId));
+  } finally {
+    geometry.timelineValueAtOffset = convert;
+    unsubscribe();
+    await f.createdCores.at(-1).unmountAll();
+  }
+  assert.equal(resources.summaries.size, 0, "session disposal releases summary caches");
+});
+
 test("a failed event write blocks project leave and retains its event draft", async () => {
   const {f} = persistenceFixture({failEventCreate: true});
   f.start(); await flushStartup();

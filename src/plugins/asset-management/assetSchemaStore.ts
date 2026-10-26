@@ -500,7 +500,18 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
   let generation = 0;
   let loadOperation: Promise<boolean> | null = null;
   let mutationOperation: Promise<boolean> | null = null;
+  let parsedBytes: ProjectFileBytes | null = null;
+  let parsedResult: ReturnType<typeof parseSchema> | null = null;
+  let schemaBytes: ProjectFileBytes | null = null;
   let snapshot = buildSnapshot(files.getSnapshot());
+
+  function parseFile(bytes: ProjectFileBytes): ReturnType<typeof parseSchema> {
+    if (parsedBytes !== bytes || parsedResult === null) {
+      parsedBytes = bytes;
+      parsedResult = parseSchema(bytes);
+    }
+    return parsedResult;
+  }
 
   function fileFrom(sourceFiles = files.getSnapshot().files): ProjectFile | undefined {
     return sourceFiles.find(file => file.path === PATH);
@@ -531,7 +542,13 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
 
   function publish() {
     if (!alive) return;
-    snapshot = buildSnapshot();
+    const next = buildSnapshot();
+    if (snapshot.types === next.types && snapshot.assets === next.assets && snapshot.fields === next.fields
+      && snapshot.selectedTypeId === next.selectedTypeId && snapshot.selectedAssetId === next.selectedAssetId
+      && snapshot.typeCreationRequest === next.typeCreationRequest && snapshot.loaded === next.loaded
+      && snapshot.loading === next.loading && snapshot.saving === next.saving && snapshot.dirty === next.dirty
+      && snapshot.blocked === next.blocked && snapshot.error === next.error && snapshot.saveState === next.saveState) return;
+    snapshot = next;
     for (const listener of [...listeners]) listener();
   }
 
@@ -562,17 +579,20 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
   }
 
   function acceptFile(file: ProjectFile, requestGeneration?: number): boolean {
-    const parsed = parseSchema(file.bytes);
     if (!alive || requestGeneration !== undefined && requestGeneration !== generation) return false;
+    const parsed = parseFile(file.bytes);
     if (!parsed.schema) {
       loaded = false;
       localBlocked = true;
       localError = parsed.error;
       return false;
     }
-    if (!sameSchema(schema, parsed.schema)) schema = parsed.schema;
-    reconcileTypeSelection();
-    reconcileAssetSelection();
+    if (schemaBytes !== file.bytes) {
+      if (!sameSchema(schema, parsed.schema)) schema = parsed.schema;
+      schemaBytes = file.bytes;
+      reconcileTypeSelection();
+      reconcileAssetSelection();
+    }
     knownFile = true;
     localDraft = false;
     if (!file.dirty && file.saveState === "saved") clearPendingIds();
@@ -590,11 +610,14 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       // Shared ProjectFiles bytes are canonical once accepted; don't replace a local draft
       // that has not yet been accepted by the byte store.
       if (!localDraft) {
-        const parsed = parseSchema(sharedFile.bytes);
+        const parsed = parseFile(sharedFile.bytes);
         if (parsed.schema) {
-          if (!sameSchema(schema, parsed.schema)) schema = parsed.schema;
-          reconcileTypeSelection();
-          reconcileAssetSelection();
+          if (schemaBytes !== sharedFile.bytes) {
+            if (!sameSchema(schema, parsed.schema)) schema = parsed.schema;
+            schemaBytes = sharedFile.bytes;
+            reconcileTypeSelection();
+            reconcileAssetSelection();
+          }
           loaded = true;
           if (!sharedFile.dirty && sharedFile.saveState === "saved") clearPendingIds();
           localBlocked = false;
@@ -607,6 +630,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       }
     } else if (knownFile && !localDraft) {
       knownFile = false;
+      schemaBytes = null;
     }
     publish();
   });
@@ -1326,6 +1350,9 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       generation++;
       unsubscribe();
       listeners.clear();
+      parsedBytes = null;
+      parsedResult = null;
+      schemaBytes = null;
       loading = false;
       mutating = false;
       snapshot = Object.freeze({...snapshot, loading: false, saving: false, blocked: true});

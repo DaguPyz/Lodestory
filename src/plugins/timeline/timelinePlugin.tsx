@@ -9,13 +9,22 @@ import {projectStorageKey, type ProjectFiles} from "@lodestory/sdk/project-stora
 import {timelineKey, type TimelineListEntry, type TimelineListModel, type TimelineListSnapshot, type TimelineService} from "@lodestory/sdk/timeline";
 import {createTimelineListFiles} from "./timelineListFiles";
 import {createTimelineListModel} from "./timelineListModel";
-import {createTimelineAxisStore, type TimelineAxisStore} from "./timelineAxisStore";
-import {createTimelineEventStore, type TimelineEventStore} from "./timelineEventStore";
+import {createTimelineAxisStore, type TimelineAxisSettings, type TimelineAxisStore} from "./timelineAxisStore";
+import {createTimelineEventStore, type TimelineEvent, type TimelineEventStore} from "./timelineEventStore";
 import {timelineValueAtOffset} from "./timelineAxisGeometry";
 import {TimelineCanvas} from "./TimelineCanvas";
 import "./timeline.css";
 
 const MAIN_CONTENT_ID = "timeline.main";
+
+type TimelineEntrySummary = {
+  events: readonly TimelineEvent[] | undefined;
+  eventsLoaded: boolean;
+  settings: TimelineAxisSettings | undefined;
+  axisLoaded: boolean;
+  entry: TimelineListEntry;
+  result: TimelineListEntry;
+};
 
 type TimelineModel = ReturnType<typeof createTimelineListModel>;
 type TimelineSessionResources = {
@@ -24,6 +33,7 @@ type TimelineSessionResources = {
   viewports: Map<string, CanvasViewport>;
   axes: Map<string, TimelineAxisStore>;
   events: Map<string, TimelineEventStore>;
+  summaries: Map<string, TimelineEntrySummary>;
   axisUnsubscribes: Map<string, () => void>;
   eventUnsubscribes: Map<string, () => void>;
   editing: Set<string>;
@@ -64,8 +74,13 @@ export function createTimelinePlugin(): Plugin {
 
       function publishSession(resource: TimelineSessionResources) {
         const base = resource.model.getSnapshot();
-        const entries = base.entries.map(entry => enrichEntry(entry, resource.events.get(entry.id), resource.axes.get(entry.id)));
-        resource.snapshot = Object.freeze({...base, entries: Object.freeze(entries)});
+        const nextEntries = base.entries.map(entry => enrichEntry(entry, resource.events.get(entry.id), resource.axes.get(entry.id), resource.summaries));
+        const previous = resource.snapshot;
+        const entries = nextEntries.length === previous.entries.length && nextEntries.every((entry, index) => entry === previous.entries[index])
+          ? previous.entries : Object.freeze(nextEntries);
+        const next = Object.freeze({...base, entries});
+        if (sameListSnapshot(previous, next)) return;
+        resource.snapshot = next;
         for (const listener of [...resource.listeners]) listener();
       }
 
@@ -92,6 +107,9 @@ export function createTimelinePlugin(): Plugin {
       function syncResources(files: ProjectFiles, resource: TimelineSessionResources) {
         const snapshot = resource.model.getSnapshot();
         const present = new Set(snapshot.entries.map(entry => entry.id));
+        for (const timelineId of resource.summaries.keys()) {
+          if (!present.has(timelineId)) resource.summaries.delete(timelineId);
+        }
         for (const [timelineId, viewport] of resource.viewports) {
           if (present.has(timelineId)) continue;
           resource.viewports.delete(timelineId);
@@ -145,6 +163,7 @@ export function createTimelinePlugin(): Plugin {
             viewports: new Map(),
             axes: new Map(),
             events: new Map(),
+            summaries: new Map(),
             axisUnsubscribes: new Map(),
             eventUnsubscribes: new Map(),
             editing: new Set(),
@@ -197,6 +216,7 @@ export function createTimelinePlugin(): Plugin {
             for (const axis of resource.axes.values()) axis.dispose();
             for (const unsubscribe of resource.eventUnsubscribes.values()) unsubscribe();
             for (const events of resource.events.values()) events.dispose();
+            resource.summaries.clear();
             model.dispose();
             if (sessions.get(session.id) === resource) sessions.delete(session.id);
             throw error;
@@ -243,6 +263,7 @@ export function createTimelinePlugin(): Plugin {
                         try {
                           for (const events of resource.events.values()) events.dispose();
                           resource.events.clear();
+                          resource.summaries.clear();
                         } finally {
                           try { model.dispose(); }
                           finally {
@@ -339,26 +360,45 @@ const EMPTY_SNAPSHOT = Object.freeze({entries: Object.freeze([]), selectedId: nu
   loaded: false, loading: false, creating: false, busy: true, retryDisabled: true, error: null, retryLabel: "重试读取"});
 function emptySnapshot() { return EMPTY_SNAPSHOT; }
 
-function enrichEntry(entry: TimelineListEntry, eventStore?: TimelineEventStore, axisStore?: TimelineAxisStore): TimelineListEntry {
+function sameListSnapshot(left: TimelineListSnapshot, right: TimelineListSnapshot): boolean {
+  return left.entries === right.entries && left.selectedId === right.selectedId && left.createDraft === right.createDraft
+    && left.issues === right.issues && left.loaded === right.loaded && left.loading === right.loading
+    && left.creating === right.creating && left.busy === right.busy && left.retryDisabled === right.retryDisabled
+    && left.error === right.error && left.retryLabel === right.retryLabel;
+}
+
+function enrichEntry(entry: TimelineListEntry, eventStore: TimelineEventStore | undefined, axisStore: TimelineAxisStore | undefined,
+  cache: Map<string, TimelineEntrySummary>): TimelineListEntry {
   const eventSnapshot = eventStore?.getSnapshot();
   const axisSnapshot = axisStore?.getSnapshot();
-  const events = eventSnapshot?.events ?? [];
-  let period = "";
-  if (eventSnapshot?.loaded && axisSnapshot?.loaded && events.length > 0) {
+  const events = eventSnapshot?.events;
+  const eventsLoaded = Boolean(eventSnapshot?.loaded);
+  const settings = axisSnapshot?.settings;
+  const axisLoaded = Boolean(axisSnapshot?.loaded);
+  const previous = cache.get(entry.id);
+  const sameInputs = previous && previous.events === events && previous.eventsLoaded === eventsLoaded
+    && previous.settings === settings && previous.axisLoaded === axisLoaded;
+  if (sameInputs && previous.entry === entry) return previous.result;
+  let period = sameInputs ? previous.result.period : "";
+  if (!sameInputs && eventsLoaded && axisLoaded && settings && events && events.length > 0) {
     let minimum = Number.POSITIVE_INFINITY;
     let maximum = Number.NEGATIVE_INFINITY;
     for (const event of events) {
-      const value = timelineValueAtOffset(event.offset, axisSnapshot.settings);
+      const value = timelineValueAtOffset(event.offset, settings);
       minimum = Math.min(minimum, value);
       maximum = Math.max(maximum, value);
     }
     const start = formatPeriodValue(minimum);
     const end = formatPeriodValue(maximum);
     period = minimum === maximum
-      ? `${start} ${axisSnapshot.settings.unit}`
-      : `${start}–${end} ${axisSnapshot.settings.unit}`;
+      ? `${start} ${settings.unit}`
+      : `${start}–${end} ${settings.unit}`;
   }
-  return Object.freeze({...entry, eventCount: events.length, period});
+  const eventCount = events?.length ?? 0;
+  const result = previous && previous.entry === entry && previous.result.eventCount === eventCount && previous.result.period === period
+    ? previous.result : Object.freeze({...entry, eventCount, period});
+  cache.set(entry.id, {events, eventsLoaded, settings, axisLoaded, entry, result});
+  return result;
 }
 
 function formatPeriodValue(value: number): string {

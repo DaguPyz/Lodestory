@@ -7,13 +7,25 @@ import {byteStorageFixture} from "./helpers/byteStorageFixture.mjs";
 import {deferred} from "./helpers/mainStartupFixture.mjs";
 
 const source = await readFile(new URL("../src/plugins/timeline/timelineEventStore.ts", import.meta.url), "utf8");
-const compiled = ts.transpileModule(source, {
+const sameEventsSignature = "function sameEvents(left: readonly TimelineEvent[], right: readonly TimelineEvent[]): boolean {";
+const instrumentedSource = source.replace(sameEventsSignature,
+  `${sameEventsSignature}\n  globalThis.__timelineStoreTestStats.sameEventsCalls++;`);
+assert.notEqual(instrumentedSource, source, "the event comparator instrumentation marker is present");
+const compiled = ts.transpileModule(instrumentedSource, {
   compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS},
 }).outputText;
 const storeExports = {};
+let onDecode = null;
+const storeStats = {sameEventsCalls: 0};
+class InstrumentedTextDecoder extends TextDecoder {
+  decode(...args) {
+    onDecode?.();
+    return super.decode(...args);
+  }
+}
 vm.runInNewContext(compiled, {
-  exports: storeExports, TextDecoder, TextEncoder, Uint8Array, Object, Array, Number, String,
-  Set, Map, Promise, Error, RegExp, JSON, Math,
+  exports: storeExports, TextDecoder: InstrumentedTextDecoder, TextEncoder, Uint8Array, Object, Array, Number, String,
+  Set, Map, Promise, Error, RegExp, JSON, Math, __timelineStoreTestStats: storeStats,
 });
 const {createTimelineEventStore} = storeExports;
 
@@ -53,6 +65,42 @@ function legacyStoredEvents(events) {
 
 function diskEvents(f) {
   return JSON.parse(new TextDecoder().decode(new Uint8Array(f.disk.get(f.key("/book", path)))));
+}
+
+function statusAwareFiles(service, targetPath) {
+  let statusOverride = null;
+  const listeners = new Set();
+  return {
+    service: {
+      getSnapshot() {
+        const snapshot = service.getSnapshot();
+        if (!statusOverride) return snapshot;
+        const files = snapshot.files.map(file => file.path === targetPath
+          ? Object.freeze({...file, dirty: statusOverride !== "saved", saveState: statusOverride,
+            saveError: statusOverride === "error" ? "disk unavailable" : null})
+          : file);
+        return {...snapshot, files};
+      },
+      subscribe(listener) {
+        listeners.add(listener);
+        const unsubscribe = service.subscribe(() => { for (const current of [...listeners]) current(); });
+        return () => { listeners.delete(listener); unsubscribe(); };
+      },
+      read: (...args) => service.read(...args),
+      create: (...args) => service.create(...args),
+      write: (...args) => service.write(...args),
+      save: (...args) => service.save(...args),
+      saveAll: (...args) => service.saveAll(...args),
+      delete: (...args) => service.delete(...args),
+      list: (...args) => service.list(...args),
+      createDirectory: (...args) => service.createDirectory(...args),
+      clearError: (...args) => service.clearError(...args),
+    },
+    setSaveState(state) {
+      statusOverride = state;
+      for (const listener of [...listeners]) listener();
+    },
+  };
 }
 
 test("missing event file loads an empty list without creating a file; CRUD persists and restores", async () => {
@@ -239,6 +287,68 @@ test("retry rereads a clean malformed file after it is repaired", async () => {
   assert.deepEqual(plain(store.getSnapshot().events), [event({offset: 0.0000001})]);
   store.dispose();
   await controller.dispose();
+});
+
+test("a stored event byte version is parsed once across notifications and read completion", async () => {
+  const f = byteStorageFixture();
+  const otherPath = ".lodestory/unrelated.json";
+  seedFile(f, path, JSON.stringify(storedEvents([event()])));
+  seedFile(f, otherPath, "unrelated");
+  const controller = f.files();
+  const statusFiles = statusAwareFiles(controller.service, path);
+  const store = storeFor(statusFiles.service);
+  let decodeCount = 0;
+  storeStats.sameEventsCalls = 0;
+  onDecode = () => { decodeCount++; };
+  try {
+    assert.equal(await store.load(), true);
+    assert.equal(decodeCount, 1, "the subscription and read result share one parse");
+    assert.equal(storeStats.sameEventsCalls, 1, "initial events are compared once against the empty list");
+    let notifications = 0;
+    store.subscribe(() => { notifications++; });
+
+    await controller.service.read(otherPath);
+    assert.equal(decodeCount, 1, "an unrelated file update does not decode stored events again");
+    assert.equal(notifications, 0, "an unrelated file update does not republish an unchanged event snapshot");
+
+    statusFiles.setSaveState("saving");
+    assert.equal(decodeCount, 1, "a save-state notification with the same bytes does not reparse events");
+    assert.equal(store.getSnapshot().saving, true, "save state still reaches the consumer");
+    statusFiles.setSaveState("error");
+    assert.equal(store.getSnapshot().error, "disk unavailable", "save errors still reach the consumer");
+    statusFiles.setSaveState("saved");
+    assert.equal(store.getSnapshot().error, null, "successful save clears the visible file error");
+    assert.equal(decodeCount, 1);
+    assert.equal(storeStats.sameEventsCalls, 1, "save-state notifications do not recompare events");
+
+    f.disk.set(f.key("/book", path), Array.from(new TextEncoder().encode(JSON.stringify(storedEvents([event()]), null, 4))));
+    await controller.service.read(path);
+    assert.equal(decodeCount, 2, "a new immutable byte version is parsed");
+    assert.equal(storeStats.sameEventsCalls, 2, "semantically unchanged events are compared once and retain their current reference");
+    f.disk.set(f.key("/book", otherPath), Array.from(new TextEncoder().encode("another change")));
+    await controller.service.read(otherPath);
+    assert.equal(decodeCount, 2, "an unrelated update reuses the current parse result");
+    assert.equal(storeStats.sameEventsCalls, 2, "the same parse-result and events-reference pair is compared only once");
+
+    f.disk.set(f.key("/book", path), Array.from(new TextEncoder().encode("{")));
+    await controller.service.read(path);
+    assert.equal(decodeCount, 3, "an externally changed file is checked once when refreshed");
+    assert.equal(store.getSnapshot().blocked, true);
+    f.disk.set(f.key("/book", otherPath), Array.from(new TextEncoder().encode("changed")));
+    await controller.service.read(otherPath);
+    assert.equal(decodeCount, 3, "repeated notifications reuse the cached parse error");
+    assert.equal(storeStats.sameEventsCalls, 2, "an invalid cached result does not compare the current event list");
+
+    f.disk.set(f.key("/book", path), Array.from(new TextEncoder().encode(JSON.stringify(storedEvents([event({offset: 9})])))));
+    assert.equal(await store.retry(), true);
+    assert.equal(decodeCount, 4, "a repaired file with new bytes is parsed");
+    assert.equal(storeStats.sameEventsCalls, 3, "changed event contents are compared and adopted once");
+    assert.equal(store.getSnapshot().events[0].offset, 9);
+  } finally {
+    onDecode = null;
+    store.dispose();
+    await controller.dispose();
+  }
 });
 
 test("shared ProjectFiles bytes stay canonical and concurrent mutations cannot overwrite one another", async () => {

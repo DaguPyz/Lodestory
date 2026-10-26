@@ -1,7 +1,7 @@
 import type {ProjectDirectoryListing, ProjectFileCreateOptions, ProjectFileData, ProjectFileSnapshot, ProjectFile, ProjectFiles} from "@lodestory/sdk/project-storage";
 import {FileSession} from "./FileSession";
 import {createDirectory, createFile, deleteFile, listDirectory, readFile, saveFile, storageErrorMessage, type FileRecord} from "./storageApi";
-import {copyBytes, equalBytes} from "./bytes";
+import {copyBytes, copyBytesAsync, equalBytes} from "./bytes";
 
 type Options = {canMutate?: () => boolean; canLoad?: () => boolean};
 
@@ -65,11 +65,12 @@ export function createProjectFiles(projectPath: string, options: Options = {}) {
     buffers.set(record.path, buffer);
     return buffer;
   }
-  function validateRecord(record: FileRecord, path: string) {
+  async function validateRecord(record: FileRecord, path: string): Promise<FileRecord> {
     if (!record || record.path !== path || record.fileName !== path.split("/").pop() || !Array.isArray(record.bytes)) {
       throw new Error("项目文件返回了无效内容。");
     }
-    copyBytes(record.bytes);
+    const captured = {...record};
+    return {...captured, bytes: await copyBytesAsync(captured.bytes)};
   }
   async function saveAllInternal() {
     const current = [...buffers.values()];
@@ -97,8 +98,7 @@ export function createProjectFiles(projectPath: string, options: Options = {}) {
       if (previous) return previous;
       const operation = run(async () => {
         try {
-          const record = await readFile(projectPath, path);
-          validateRecord(record, path);
+          const record = await validateRecord(await readFile(projectPath, path), path);
           if (disposed) return null;
           const latest = buffers.get(path);
           if (latest?.isDirty || latest?.file.saveState === "saving") return latest.file;
@@ -129,8 +129,7 @@ export function createProjectFiles(projectPath: string, options: Options = {}) {
       }
       return run(async () => {
         try {
-          const record = await createFile(projectPath, path, bytes, createOptions);
-          validateRecord(record, path);
+          const record = await validateRecord(await createFile(projectPath, path, bytes, createOptions), path);
           existing?.finishDelete();
           const file = install(record).file;
           error = null;

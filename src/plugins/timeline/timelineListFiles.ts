@@ -45,6 +45,7 @@ function timelinePath(id: string): string {
 /** Timeline owns this private path and UTF-8 JSON convention; project storage owns the shared bytes. */
 export function createTimelineListFiles(source: ProjectFiles) {
   const listeners = new Set<() => void>();
+  const decodedByPath = new Map<string, {bytes: ProjectFileBytes; content: string | null}>();
   let knownPaths = new Set<string>();
   let issues: TimelineListFileIssue[] = [];
   let loaded = false;
@@ -55,10 +56,37 @@ export function createTimelineListFiles(source: ProjectFiles) {
   let alive = true;
   let generation = 0;
   let loadOperation: Promise<boolean> | null = null;
-  let snapshot = buildSnapshot(source.getSnapshot());
+  const initialStorageSnapshot = source.getSnapshot();
+  let snapshot: TimelineListFilesSnapshot = Object.freeze({
+    files: Object.freeze([]),
+    issues: Object.freeze([]),
+    loaded: false,
+    loading: false,
+    creating: false,
+    deletingId: null,
+    blocked: initialStorageSnapshot.blocked,
+    error: initialStorageSnapshot.blocked ? initialStorageSnapshot.error : null,
+  });
+
+  function decodeFile(path: string, bytes: ProjectFileBytes): string | null {
+    const previous = decodedByPath.get(path);
+    if (previous?.bytes === bytes) return previous.content;
+    let content: string | null;
+    try { content = decodeUtf8(bytes); }
+    catch { content = null; }
+    decodedByPath.set(path, {bytes, content});
+    return content;
+  }
+
+  function sameIssues(left: readonly TimelineListFileIssue[], right: readonly TimelineListFileIssue[]): boolean {
+    return left.length === right.length && left.every((issue, index) =>
+      issue.name === right[index].name && issue.message === right[index].message);
+  }
 
   function buildSnapshot(sourceSnapshot: ProjectFileSnapshot): TimelineListFilesSnapshot {
     const fileByPath = new Map(sourceSnapshot.files.map(file => [file.path, file]));
+    const previousSnapshot = snapshot;
+    const previousFileById = new Map(previousSnapshot.files.map(file => [file.id, file]));
     const files: TimelineListFile[] = [];
     const nextIssues = [...issues];
     for (const path of knownPaths) {
@@ -66,17 +94,25 @@ export function createTimelineListFiles(source: ProjectFiles) {
       if (!id) continue;
       const file = fileByPath.get(path);
       if (!file) continue;
-      try {
-        files.push(Object.freeze({id, content: decodeUtf8(file.bytes), saveState: file.saveState, saveError: file.saveError}));
-      } catch {
+      const content = decodeFile(path, file.bytes);
+      if (content !== null) {
+        const previous = previousFileById.get(id);
+        files.push(previous && previous.content === content && previous.saveState === file.saveState && previous.saveError === file.saveError
+          ? previous
+          : Object.freeze({id, content, saveState: file.saveState, saveError: file.saveError}));
+      } else {
         if (!nextIssues.some(issue => issue.name === path && issue.message.includes("UTF-8"))) {
           nextIssues.push({name: path, message: "文件不是有效 UTF-8，已保留原始字节。"});
         }
       }
     }
-    return Object.freeze({
-      files: Object.freeze(files),
-      issues: Object.freeze(nextIssues),
+    const previousFiles = previousSnapshot.files;
+    const sameFiles = previousFiles.length === files.length
+      && previousFiles.every((file, index) => file === files[index]);
+    const sameIssueList = sameIssues(previousSnapshot.issues, nextIssues);
+    const result = Object.freeze({
+      files: sameFiles ? previousFiles : Object.freeze(files),
+      issues: sameIssueList ? previousSnapshot.issues : Object.freeze(nextIssues),
       loaded,
       loading,
       creating,
@@ -84,13 +120,22 @@ export function createTimelineListFiles(source: ProjectFiles) {
       blocked: sourceSnapshot.blocked,
       error: error ?? (sourceSnapshot.blocked ? sourceSnapshot.error : null),
     });
+    if (result.files === previousSnapshot.files && result.issues === previousSnapshot.issues
+      && result.loaded === previousSnapshot.loaded && result.loading === previousSnapshot.loading
+      && result.creating === previousSnapshot.creating && result.deletingId === previousSnapshot.deletingId
+      && result.blocked === previousSnapshot.blocked && result.error === previousSnapshot.error) return previousSnapshot;
+    return result;
   }
 
   function publish() {
     if (!alive) return;
-    snapshot = buildSnapshot(source.getSnapshot());
+    const next = buildSnapshot(source.getSnapshot());
+    if (next === snapshot) return;
+    snapshot = next;
     for (const listener of [...listeners]) listener();
   }
+
+  snapshot = buildSnapshot(initialStorageSnapshot);
 
   const unsubscribe = source.subscribe(publish);
 
@@ -139,6 +184,7 @@ export function createTimelineListFiles(source: ProjectFiles) {
         // Keep only paths from the latest successful directory listing. The shared storage snapshot
         // remains the sole owner of their bytes, including previously loaded bytes after a read error.
         knownPaths = nextPaths;
+        for (const path of decodedByPath.keys()) if (!nextPaths.has(path)) decodedByPath.delete(path);
         issues = nextIssues;
         error = null;
         loaded = true;
@@ -153,9 +199,7 @@ export function createTimelineListFiles(source: ProjectFiles) {
               issues.push({name: path, message: "文件读取失败，已保留已有内容。"});
               continue;
             }
-            // Decode here so malformed bytes become a local issue without any write-back.
-            try { decodeUtf8(file.bytes); }
-            catch { issues.push({name: path, message: "文件不是有效 UTF-8，已保留原始字节。"}); }
+            // Decoding is performed by the snapshot builder and cached by the canonical byte array.
           } catch (cause) {
             if (!alive || requestGeneration !== generation) return false;
             issues.push({name: path, message: cause instanceof Error ? cause.message : "文件读取失败，已保留已有内容。"});
@@ -207,7 +251,9 @@ export function createTimelineListFiles(source: ProjectFiles) {
       knownPaths.add(path);
       issues = issues.filter(issue => issue.name !== path);
       try {
-        const created = Object.freeze({id, content: decodeUtf8(file.bytes), saveState: file.saveState, saveError: file.saveError});
+        const content = decodeFile(path, file.bytes);
+        if (content === null) throw new Error("创建后的时间线文件不是有效 UTF-8。");
+        const created = Object.freeze({id, content, saveState: file.saveState, saveError: file.saveError});
         return created;
       } catch {
         error = "创建后的时间线文件不是有效 UTF-8。";
@@ -246,6 +292,7 @@ export function createTimelineListFiles(source: ProjectFiles) {
         return false;
       }
       knownPaths.delete(path);
+      decodedByPath.delete(path);
       issues = issues.filter(issue => issue.name !== path);
       return true;
     } catch (cause) {
@@ -286,6 +333,7 @@ export function createTimelineListFiles(source: ProjectFiles) {
       generation++;
       unsubscribe();
       listeners.clear();
+      decodedByPath.clear();
     },
   };
 }

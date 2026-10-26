@@ -6,17 +6,22 @@ import ts from "typescript";
 
 const source = await readFile(new URL("../src/plugins/timeline/timelineListModel.ts", import.meta.url), "utf8");
 const filesSource = await readFile(new URL("../src/plugins/timeline/timelineListFiles.ts", import.meta.url), "utf8");
+const metrics = {decodes: 0, parses: 0};
+class CountingTextDecoder extends TextDecoder {
+  decode(...args) { metrics.decodes++; return super.decode(...args); }
+}
+const trackedJSON = {...JSON, stringify: (...args) => JSON.stringify(...args), parse(...args) { metrics.parses++; return JSON.parse(...args); }};
 const compiled = ts.transpileModule(source, {
   compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS},
 }).outputText;
 const modelExports = {};
-vm.runInNewContext(compiled, {exports: modelExports, crypto: {randomUUID: () => "00000000-0000-4000-8000-000000000099"}, Date, JSON, Object, Array, Number, String, Set, Map, Math});
+vm.runInNewContext(compiled, {exports: modelExports, crypto: {randomUUID: () => "00000000-0000-4000-8000-000000000099"}, Date, JSON: trackedJSON, Object, Array, Number, String, Set, Map, Math});
 const {createTimelineListModel, isCanonicalUuid, isUtcRfc3339, validateTimelineFile} = modelExports;
 const filesCompiled = ts.transpileModule(filesSource, {
   compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS},
 }).outputText;
 const filesExports = {};
-vm.runInNewContext(filesCompiled, {exports: filesExports, TextDecoder, TextEncoder, Uint8Array, Object, Array, Map, Set, Promise, Error});
+vm.runInNewContext(filesCompiled, {exports: filesExports, TextDecoder: CountingTextDecoder, TextEncoder, Uint8Array, Object, Array, Map, Set, Promise, Error});
 const {createTimelineListFiles} = filesExports;
 
 const ids = [
@@ -150,6 +155,128 @@ test("outline byte adapter owns the unchanged hidden path and UTF-8 JSON convent
   assert.equal(await adapter.delete(ids[1]), true);
   assert.equal(writes.at(-1).path, invalidUtf8Path);
   adapter.dispose();
+});
+
+test("timeline metadata reuses unchanged decoded bytes, parsed entries, and sort order", async () => {
+  metrics.decodes = 0;
+  metrics.parses = 0;
+  const directory = ".lodestory/outline-design/timelines";
+  const paths = ids.slice(0, 2).map(id => `${directory}/${id}.json`);
+  const encode = value => Array.from(new TextEncoder().encode(value));
+  const makeStoredFile = (id, value, bytes = encode(JSON.stringify(value))) => ({
+    path: `${directory}/${id}.json`, fileName: `${id}.json`, bytes,
+    dirty: false, saveState: "saved", saveError: null,
+  });
+  const values = new Map(ids.slice(0, 2).map(id => [
+    `${directory}/${id}.json`, makeStoredFile(id, file(id, {title: id === ids[0] ? "第一条" : "第二条"})),
+  ]));
+  let storageSnapshot = {files: [], blocked: false, error: null};
+  const listeners = new Set();
+  const notify = () => { for (const listener of [...listeners]) listener(); };
+  const listing = () => ({exists: true, entries: [...values.values()].map(stored => ({
+    path: stored.path, name: stored.fileName, kind: "file", size: stored.bytes.length,
+  })), issues: []});
+  const storage = {
+    getSnapshot: () => storageSnapshot,
+    subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
+    async list() { return listing(); },
+    async read(path) {
+      const stored = values.get(path);
+      if (stored && !storageSnapshot.files.some(item => item.path === path)) {
+        storageSnapshot = {...storageSnapshot, files: [...storageSnapshot.files, stored]};
+        notify();
+      }
+      return stored ?? null;
+    },
+    async create() { return null; }, write() { return false; },
+    async save() { return true; }, async saveAll() { return true; },
+    async delete(path) {
+      values.delete(path);
+      storageSnapshot = {...storageSnapshot, files: storageSnapshot.files.filter(item => item.path !== path)};
+      notify();
+      return true;
+    },
+    async createDirectory() { return false; }, clearError() {},
+  };
+  const adapter = createTimelineListFiles(storage);
+  assert.equal(await adapter.load(), true);
+  assert.equal(metrics.decodes, 2, "each path is decoded once when its shared byte buffer arrives");
+  const model = createTimelineListModel(adapter, {createId: () => ids[2], now: () => stamp});
+  assert.equal(metrics.parses, 2, "each valid metadata string is parsed once");
+  const initialFilesSnapshot = adapter.getSnapshot();
+  const initialModelSnapshot = model.getSnapshot();
+  const entryById = new Map(initialModelSnapshot.entries.map(entry => [entry.id, entry]));
+  let adapterNotifications = 0;
+  let modelNotifications = 0;
+  adapter.subscribe(() => adapterNotifications++);
+  model.subscribe(() => modelNotifications++);
+
+  storageSnapshot = {...storageSnapshot, files: [...storageSnapshot.files]};
+  notify();
+  assert.equal(metrics.decodes, 2, "an unrelated storage notification does not decode metadata again");
+  assert.equal(metrics.parses, 2, "an unrelated storage notification does not parse metadata again");
+  assert.strictEqual(adapter.getSnapshot(), initialFilesSnapshot, "the adapter keeps an unchanged public snapshot");
+  assert.strictEqual(model.getSnapshot(), initialModelSnapshot, "the model keeps an unchanged public snapshot");
+  assert.equal(adapterNotifications, 0);
+  assert.equal(modelNotifications, 0);
+
+  const firstPath = paths[0];
+  const firstStored = storageSnapshot.files.find(item => item.path === firstPath);
+  const saveErrorFile = {...firstStored, saveState: "error", saveError: "保存失败"};
+  values.set(firstPath, saveErrorFile);
+  storageSnapshot = {...storageSnapshot, files: storageSnapshot.files.map(item => item.path === firstPath ? saveErrorFile : item)};
+  notify();
+  assert.equal(metrics.decodes, 2, "a save-state update reuses the decoded content");
+  assert.equal(metrics.parses, 2, "a save-state update reuses the parsed metadata");
+  assert.equal(model.getSnapshot().entries.find(entry => entry.id === ids[0]).saveError, "保存失败");
+  assert.strictEqual(model.getSnapshot().entries.find(entry => entry.id === ids[1]), entryById.get(ids[1]), "unaffected entries retain their identity");
+
+  const afterSaveAdapterSnapshot = adapter.getSnapshot();
+  const afterSaveModelSnapshot = model.getSnapshot();
+  const equivalent = {...values.get(firstPath), bytes: Array.from(values.get(firstPath).bytes)};
+  values.set(firstPath, equivalent);
+  storageSnapshot = {...storageSnapshot, files: storageSnapshot.files.map(item => item.path === firstPath ? equivalent : item)};
+  notify();
+  assert.equal(metrics.decodes, 3, "a replacement byte array is decoded once even when it contains the same text");
+  assert.equal(metrics.parses, 2, "identical metadata text does not trigger another JSON parse");
+  assert.strictEqual(adapter.getSnapshot(), afterSaveAdapterSnapshot);
+  assert.strictEqual(model.getSnapshot(), afterSaveModelSnapshot);
+
+  const changed = makeStoredFile(ids[0], file(ids[0], {title: "更新后的第一条"}));
+  values.set(firstPath, changed);
+  storageSnapshot = {...storageSnapshot, files: storageSnapshot.files.map(item => item.path === firstPath ? changed : item)};
+  notify();
+  assert.equal(metrics.decodes, 4, "new bytes are decoded once");
+  assert.equal(metrics.parses, 3, "new content is parsed once");
+  assert.equal(model.getSnapshot().entries.find(entry => entry.id === ids[0]).title, "更新后的第一条");
+
+  const invalidUtf8 = {...changed, bytes: [0xff]};
+  values.set(firstPath, invalidUtf8);
+  storageSnapshot = {...storageSnapshot, files: storageSnapshot.files.map(item => item.path === firstPath ? invalidUtf8 : item)};
+  notify();
+  assert.equal(metrics.decodes, 5, "invalid bytes are checked once and the error is cached");
+  assert.ok(adapter.getSnapshot().issues.some(issue => issue.name === firstPath && issue.message.includes("UTF-8")));
+  assert.equal(model.getSnapshot().entries.some(entry => entry.id === ids[0]), false);
+
+  const repaired = makeStoredFile(ids[0], file(ids[0], {title: "修复后的第一条"}));
+  values.set(firstPath, repaired);
+  storageSnapshot = {...storageSnapshot, files: storageSnapshot.files.map(item => item.path === firstPath ? repaired : item)};
+  notify();
+  assert.equal(metrics.decodes, 6, "repaired bytes are decoded as a new version");
+  assert.equal(metrics.parses, 4, "repaired metadata is parsed after its bytes change");
+  assert.equal(adapter.getSnapshot().issues.some(issue => issue.name === firstPath && issue.message.includes("UTF-8")), false);
+  assert.equal(model.getSnapshot().entries.find(entry => entry.id === ids[0]).title, "修复后的第一条");
+
+  await adapter.delete(ids[1]);
+  assert.equal(model.getSnapshot().entries.some(entry => entry.id === ids[1]), false);
+  await adapter.load();
+  const rebuilt = makeStoredFile(ids[1], file(ids[1], {title: "重建条目"}));
+  values.set(paths[1], rebuilt);
+  await adapter.load();
+  assert.equal(metrics.parses, 5, "a deleted path is parsed again when it is recreated");
+  assert.equal(model.getSnapshot().entries.find(entry => entry.id === ids[1]).title, "重建条目");
+  assert.ok(adapterNotifications > 0 && modelNotifications > 0, "real content and save-state changes still notify subscribers");
+  model.dispose();
 });
 
 test("outline byte adapter distinguishes an absent directory from read failure and retries cleanly", async () => {

@@ -1,0 +1,504 @@
+{
+  "date": "2026-10-26",
+  "baselineRevision": "e3a99959a0d65b8bce374c36c3f64ad3be959adf",
+  "node": "v25.6.1",
+  "scope": "Fresh JavaScript process per run; source compilation and disk pre-read excluded; native calls and React rendering replaced by startup fixture.",
+  "input": {
+    "sha256": "6db9a7657358fb6e41a4ce98702afdca6c6960b348543a2051fbd3849341cda8",
+    "files": 79,
+    "timelines": 26,
+    "events": 2158,
+    "assets": 668,
+    "bytes": 3763861
+  },
+  "before": {
+    "implementationSha256": "7f1e172c42e6688e26f7ad357abdd1338a58150f8faf4f956dd6890643de5052",
+    "summary": {
+      "openResolvedMs": {
+        "median": 16788.652417,
+        "slowest": 20640.900792
+      },
+      "allLoadedMs": {
+        "median": 16788.970292,
+        "slowest": 20654.465291999997
+      }
+    },
+    "runs": [
+      {
+        "openResolvedMs": 17678.956541,
+        "allLoadedMs": 17680.090791,
+        "native": {
+          "reads": 79,
+          "lists": 54,
+          "documentLists": 1,
+          "writes": 0
+        },
+        "decodes": {
+          "lodestory.asset-schema": {
+            "calls": 81,
+            "bytes": 98824698
+          },
+          "lodestory.timeline-list-entry": {
+            "calls": 1181,
+            "bytes": 530763
+          },
+          "lodestory.timeline-axis-settings": {
+            "calls": 1054,
+            "bytes": 186058
+          },
+          "lodestory.timeline-events": {
+            "calls": 1028,
+            "bytes": 103451235
+          }
+        },
+        "summaryEventConversions": 3460292
+      },
+      {
+        "openResolvedMs": 20640.900792,
+        "allLoadedMs": 20654.465291999997,
+        "native": {
+          "reads": 79,
+          "lists": 54,
+          "documentLists": 1,
+          "writes": 0
+        },
+        "decodes": {
+          "lodestory.asset-schema": {
+            "calls": 81,
+            "bytes": 98824698
+          },
+          "lodestory.timeline-list-entry": {
+            "calls": 1181,
+            "bytes": 530763
+          },
+          "lodestory.timeline-axis-settings": {
+            "calls": 1054,
+            "bytes": 186058
+          },
+          "lodestory.timeline-events": {
+            "calls": 1028,
+            "bytes": 103451235
+          }
+        },
+        "summaryEventConversions": 3460292
+      },
+      {
+        "openResolvedMs": 15224.249625,
+        "allLoadedMs": 15224.517333,
+        "native": {
+          "reads": 79,
+          "lists": 54,
+          "documentLists": 1,
+          "writes": 0
+        },
+        "decodes": {
+          "lodestory.asset-schema": {
+            "calls": 81,
+            "bytes": 98824698
+          },
+          "lodestory.timeline-list-entry": {
+            "calls": 1181,
+            "bytes": 530763
+          },
+          "lodestory.timeline-axis-settings": {
+            "calls": 1054,
+            "bytes": 186058
+          },
+          "lodestory.timeline-events": {
+            "calls": 1028,
+            "bytes": 103451235
+          }
+        },
+        "summaryEventConversions": 3460292
+      },
+      {
+        "openResolvedMs": 15153.484917,
+        "allLoadedMs": 15153.755584,
+        "native": {
+          "reads": 79,
+          "lists": 54,
+          "documentLists": 1,
+          "writes": 0
+        },
+        "decodes": {
+          "lodestory.asset-schema": {
+            "calls": 81,
+            "bytes": 98824698
+          },
+          "lodestory.timeline-list-entry": {
+            "calls": 1181,
+            "bytes": 530763
+          },
+          "lodestory.timeline-axis-settings": {
+            "calls": 1054,
+            "bytes": 186058
+          },
+          "lodestory.timeline-events": {
+            "calls": 1028,
+            "bytes": 103451235
+          }
+        },
+        "summaryEventConversions": 3460292
+      },
+      {
+        "openResolvedMs": 16788.652417,
+        "allLoadedMs": 16788.970292,
+        "native": {
+          "reads": 79,
+          "lists": 54,
+          "documentLists": 1,
+          "writes": 0
+        },
+        "decodes": {
+          "lodestory.asset-schema": {
+            "calls": 81,
+            "bytes": 98824698
+          },
+          "lodestory.timeline-list-entry": {
+            "calls": 1181,
+            "bytes": 530763
+          },
+          "lodestory.timeline-axis-settings": {
+            "calls": 1054,
+            "bytes": 186058
+          },
+          "lodestory.timeline-events": {
+            "calls": 1028,
+            "bytes": 103451235
+          }
+        },
+        "summaryEventConversions": 3460292
+      }
+    ]
+  },
+  "after": {
+    "implementationSha256": "0140efe8f86f4de5db2a2838451135315a4522c2dc310b8210c75c419ec65dcf",
+    "summary": {
+      "openResolvedMs": {
+        "median": 1144.3755829999998,
+        "slowest": 1193.258667
+      },
+      "allLoadedMs": {
+        "median": 1144.549875,
+        "slowest": 1193.4005419999999
+      }
+    },
+    "runs": [
+      {
+        "openResolvedMs": 1144.257167,
+        "allLoadedMs": 1144.4354580000002,
+        "native": {
+          "reads": 79,
+          "lists": 54,
+          "documentLists": 1,
+          "writes": 0
+        },
+        "decodes": {
+          "lodestory.asset-schema": {
+            "calls": 1,
+            "bytes": 1220058
+          },
+          "lodestory.timeline-list-entry": {
+            "calls": 26,
+            "bytes": 11600
+          },
+          "lodestory.timeline-axis-settings": {
+            "calls": 26,
+            "bytes": 4594
+          },
+          "lodestory.timeline-events": {
+            "calls": 26,
+            "bytes": 2527609
+          }
+        },
+        "summaryEventConversions": 2158
+      },
+      {
+        "openResolvedMs": 1144.3755829999998,
+        "allLoadedMs": 1144.549875,
+        "native": {
+          "reads": 79,
+          "lists": 54,
+          "documentLists": 1,
+          "writes": 0
+        },
+        "decodes": {
+          "lodestory.asset-schema": {
+            "calls": 1,
+            "bytes": 1220058
+          },
+          "lodestory.timeline-list-entry": {
+            "calls": 26,
+            "bytes": 11600
+          },
+          "lodestory.timeline-axis-settings": {
+            "calls": 26,
+            "bytes": 4594
+          },
+          "lodestory.timeline-events": {
+            "calls": 26,
+            "bytes": 2527609
+          }
+        },
+        "summaryEventConversions": 2158
+      },
+      {
+        "openResolvedMs": 1193.258667,
+        "allLoadedMs": 1193.4005419999999,
+        "native": {
+          "reads": 79,
+          "lists": 54,
+          "documentLists": 1,
+          "writes": 0
+        },
+        "decodes": {
+          "lodestory.asset-schema": {
+            "calls": 1,
+            "bytes": 1220058
+          },
+          "lodestory.timeline-list-entry": {
+            "calls": 26,
+            "bytes": 11600
+          },
+          "lodestory.timeline-axis-settings": {
+            "calls": 26,
+            "bytes": 4594
+          },
+          "lodestory.timeline-events": {
+            "calls": 26,
+            "bytes": 2527609
+          }
+        },
+        "summaryEventConversions": 2158
+      },
+      {
+        "openResolvedMs": 1158.514792,
+        "allLoadedMs": 1158.6519590000003,
+        "native": {
+          "reads": 79,
+          "lists": 54,
+          "documentLists": 1,
+          "writes": 0
+        },
+        "decodes": {
+          "lodestory.asset-schema": {
+            "calls": 1,
+            "bytes": 1220058
+          },
+          "lodestory.timeline-list-entry": {
+            "calls": 26,
+            "bytes": 11600
+          },
+          "lodestory.timeline-axis-settings": {
+            "calls": 26,
+            "bytes": 4594
+          },
+          "lodestory.timeline-events": {
+            "calls": 26,
+            "bytes": 2527609
+          }
+        },
+        "summaryEventConversions": 2158
+      },
+      {
+        "openResolvedMs": 1130.3737919999999,
+        "allLoadedMs": 1130.5488340000002,
+        "native": {
+          "reads": 79,
+          "lists": 54,
+          "documentLists": 1,
+          "writes": 0
+        },
+        "decodes": {
+          "lodestory.asset-schema": {
+            "calls": 1,
+            "bytes": 1220058
+          },
+          "lodestory.timeline-list-entry": {
+            "calls": 26,
+            "bytes": 11600
+          },
+          "lodestory.timeline-axis-settings": {
+            "calls": 26,
+            "bytes": 4594
+          },
+          "lodestory.timeline-events": {
+            "calls": 26,
+            "bytes": 2527609
+          }
+        },
+        "summaryEventConversions": 2158
+      }
+    ]
+  },
+  "openMedianReductionPercent": 93.18363645529276,
+  "sameInputLoadedDataAndIOAcrossAllRuns": true,
+  "loaded": {
+    "timelines": 26,
+    "events": 2158,
+    "assets": 668,
+    "periods": [
+      [
+        "1b756772-66bb-540a-a206-2f7ee2675ede",
+        "1–195 剧情节点"
+      ],
+      [
+        "322649c0-683e-5b3c-8da6-eafa3ab6a8f5",
+        "1–100 阅读序号"
+      ],
+      [
+        "b1767e4b-8312-5ad4-bfb4-17b841190e9b",
+        "101–200 阅读序号"
+      ],
+      [
+        "a72723f7-8fee-536d-a09e-d0fa4f7f5f31",
+        "201–300 阅读序号"
+      ],
+      [
+        "641e2cd7-e4e8-5732-8746-0e3fdb60e7ac",
+        "301–400 阅读序号"
+      ],
+      [
+        "72846165-a0d7-528b-bc1c-f823880d1cd1",
+        "401–500 阅读序号"
+      ],
+      [
+        "a7623bf0-74ff-50e8-81a0-ff7240deba1e",
+        "501–600 阅读序号"
+      ],
+      [
+        "15744f17-2792-5e8c-a314-230ce8605ba3",
+        "601–700 阅读序号"
+      ],
+      [
+        "38b229ad-4815-5734-8521-11c2596c733b",
+        "701–800 阅读序号"
+      ],
+      [
+        "8c827620-65a6-5567-80b4-f01181ea6fbc",
+        "801–900 阅读序号"
+      ],
+      [
+        "e13a5a68-1714-51ef-aea3-b2ba1cb7c7c5",
+        "901–1000 阅读序号"
+      ],
+      [
+        "fbefa5b8-7625-57e1-a121-4b995e334c9e",
+        "1001–1100 阅读序号"
+      ],
+      [
+        "f83e3b2b-ed51-567d-a139-dc5cffe11961",
+        "1101–1200 阅读序号"
+      ],
+      [
+        "68a28ef0-fad2-5bcf-ac0e-69825e4b8c19",
+        "1201–1300 阅读序号"
+      ],
+      [
+        "b99be11d-3410-5624-8c54-c1e3ce4ec0a5",
+        "1301–1400 阅读序号"
+      ],
+      [
+        "2c44de26-68dc-5ac2-ab58-3cb2ccdf5942",
+        "1401–1500 阅读序号"
+      ],
+      [
+        "a6a4f299-4201-50f4-af8d-e67fd074885a",
+        "1501–1600 阅读序号"
+      ],
+      [
+        "d487b8fc-204f-5015-b8d6-01b60da1dd5a",
+        "1601–1672 阅读序号"
+      ],
+      [
+        "71276854-2e46-56b8-8442-916a0b60a682",
+        "1–195 剧情节点"
+      ],
+      [
+        "b520641d-10c6-5a34-aedd-b172eafe8c42",
+        "5–173 剧情节点"
+      ],
+      [
+        "7e5a1426-08d4-590a-b9c6-1beb4a8640e0",
+        "3–195 剧情节点"
+      ],
+      [
+        "53e9aac0-fbc8-5caf-86c6-5c9ca31a4008",
+        "25–195 剧情节点"
+      ],
+      [
+        "41d42003-fd18-5c6d-a8bf-bce116b0f581",
+        "14–121 剧情节点"
+      ],
+      [
+        "ca452dbf-43f5-56cb-b953-72679a837a73",
+        "78–195 剧情节点"
+      ],
+      [
+        "d3d196fc-4042-5043-bef6-67bba676e523",
+        "61–194 剧情节点"
+      ],
+      [
+        "d19e22a9-7e02-5b10-bf3f-36b6a858dfc4",
+        "11–187 剧情节点"
+      ]
+    ]
+  },
+  "reactBrowserCheck": {
+    "scope": "real React/Vite app; Tauri and project filesystem commands mapped to read-only memory data",
+    "metrics": {
+      "pageReadyMs": 3323.5,
+      "timelinesReadyMs": 3357.600000000093,
+      "firstCanvasMs": 3386,
+      "openCalls": 2,
+      "fileReads": 158,
+      "directoryReads": 108,
+      "writes": []
+    },
+    "rowCount": 26,
+    "longTasks": [
+      {
+        "start": 504.5,
+        "duration": 3317
+      },
+      {
+        "start": 3950.100000000093,
+        "duration": 50
+      },
+      {
+        "start": 4065.2999999998137,
+        "duration": 3216
+      }
+    ],
+    "checks": [
+      "open project",
+      "all 26 timeline rows ready",
+      "first canvas",
+      "switch timeline and return",
+      "linked asset in event editor",
+      "cancel editing",
+      "return to welcome",
+      "reopen and open canvas"
+    ],
+    "consoleErrors": 0,
+    "runtimeExceptions": 0
+  },
+  "verification": {
+    "targetedModelTests": 145,
+    "timelineBrowserTests": 7,
+    "build": "passed",
+    "fullSuite": {
+      "tests": 576,
+      "passed": 555,
+      "failed": 16,
+      "skipped": 5
+    },
+    "baselineComparison": {
+      "tests": 44,
+      "passed": 28,
+      "failed": 16,
+      "failureLocationsAndNamesMatchFullSuite": true
+    },
+    "skippedReason": "Playwright is not installed for five unrelated browser checks."
+  }
+}

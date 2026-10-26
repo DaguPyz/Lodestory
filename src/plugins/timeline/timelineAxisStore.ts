@@ -108,6 +108,10 @@ function parseStoredAxis(bytes: ProjectFileBytes, id: string): {settings: Timeli
   return {settings: validated.settings, error: null};
 }
 
+function sameSettings(left: TimelineAxisSettings, right: TimelineAxisSettings): boolean {
+  return left.origin === right.origin && left.step === right.step && left.unit === right.unit;
+}
+
 function serializeAxis(id: string, settings: TimelineAxisSettings): ProjectFileBytes {
   const file: StoredAxis = Object.freeze({format: FORMAT, schemaVersion: SCHEMA_VERSION, id, ...settings});
   return encodeUtf8(`${JSON.stringify(file, null, 2)}\n`);
@@ -129,6 +133,9 @@ export function createTimelineAxisStore(files: ProjectFiles, timelineId: string)
   let loadOperation: Promise<boolean> | null = null;
   let createOperation: Promise<boolean> | null = null;
   let retryMode: "load" | "create" | "save" | "idle" = "load";
+  let parsedBytes: ProjectFileBytes | undefined;
+  let hasParsedBytes = false;
+  let cachedParse: ReturnType<typeof parseStoredAxis> | undefined;
   let snapshot = buildSnapshot(files.getSnapshot());
 
   function fileFrom(sourceFiles = files.getSnapshot().files): ProjectFile | undefined {
@@ -151,9 +158,26 @@ export function createTimelineAxisStore(files: ProjectFiles, timelineId: string)
     });
   }
 
+  function parseFile(bytes: ProjectFileBytes): ReturnType<typeof parseStoredAxis> {
+    if (!hasParsedBytes || bytes !== parsedBytes) {
+      parsedBytes = bytes;
+      hasParsedBytes = true;
+      cachedParse = parseStoredAxis(bytes, timelineId);
+    }
+    return cachedParse!;
+  }
+
+  function sameSnapshot(left: TimelineAxisSnapshot, right: TimelineAxisSnapshot): boolean {
+    return left.settings === right.settings && left.loaded === right.loaded && left.loading === right.loading
+      && left.saving === right.saving && left.dirty === right.dirty && left.pendingCreate === right.pendingCreate
+      && left.error === right.error && left.blocked === right.blocked && left.saveState === right.saveState;
+  }
+
   function publish() {
     if (!alive) return;
-    snapshot = buildSnapshot();
+    const next = buildSnapshot();
+    if (sameSnapshot(snapshot, next)) return;
+    snapshot = next;
     for (const listener of [...listeners]) listener();
   }
 
@@ -162,9 +186,9 @@ export function createTimelineAxisStore(files: ProjectFiles, timelineId: string)
     const sharedFile = fileFrom();
     if (sharedFile) {
       knownFile = true;
-      const parsed = parseStoredAxis(sharedFile.bytes, timelineId);
+      const parsed = parseFile(sharedFile.bytes);
       if (parsed.settings) {
-        settings = parsed.settings;
+        if (!sameSettings(settings, parsed.settings)) settings = parsed.settings;
         pendingCreate = false;
         localBlocked = false;
       } else if (loaded) {
@@ -178,8 +202,8 @@ export function createTimelineAxisStore(files: ProjectFiles, timelineId: string)
   });
 
   async function readKnownFile(file: ProjectFile, requestGeneration: number): Promise<boolean> {
-    const parsed = parseStoredAxis(file.bytes, timelineId);
     if (!alive || requestGeneration !== generation) return false;
+    const parsed = parseFile(file.bytes);
     if (!parsed.settings) {
       loaded = false;
       localBlocked = true;
@@ -188,7 +212,7 @@ export function createTimelineAxisStore(files: ProjectFiles, timelineId: string)
       publish();
       return false;
     }
-    settings = parsed.settings;
+    if (!sameSettings(settings, parsed.settings)) settings = parsed.settings;
     knownFile = true;
     pendingCreate = false;
     loaded = true;
@@ -343,7 +367,7 @@ export function createTimelineAxisStore(files: ProjectFiles, timelineId: string)
           retryMode = "create";
           return false;
         }
-        const parsed = parseStoredAxis(created.bytes, timelineId);
+        const parsed = parseFile(created.bytes);
         if (!parsed.settings) {
           loaded = false;
           localBlocked = true;
@@ -356,7 +380,7 @@ export function createTimelineAxisStore(files: ProjectFiles, timelineId: string)
         loaded = true;
         localBlocked = false;
         localError = null;
-        settings = parsed.settings;
+        if (!sameSettings(settings, parsed.settings)) settings = parsed.settings;
         retryMode = "save";
         return true;
       } catch (cause) {
@@ -453,6 +477,9 @@ export function createTimelineAxisStore(files: ProjectFiles, timelineId: string)
       generation++;
       unsubscribe();
       listeners.clear();
+      parsedBytes = undefined;
+      hasParsedBytes = false;
+      cachedParse = undefined;
       loading = false;
       creating = false;
       snapshot = Object.freeze({...snapshot, loading: false, saving: false, blocked: true});

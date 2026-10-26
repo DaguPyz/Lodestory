@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {deferred, flushStartup} from "./helpers/mainStartupFixture.mjs";
+import {createMainFixture, deferred, flushStartup} from "./helpers/mainStartupFixture.mjs";
 import {byteStorageFixture} from "./helpers/byteStorageFixture.mjs";
 
 test("project storage owns one shared byte buffer without encoding or file-format rules", async () => {
@@ -176,6 +176,312 @@ test("byte snapshots and accepted writes are isolated from mutable caller-owned 
   assert.equal(files.write("raw.bin", [256]), false);
   assert.equal(await files.create("invalid.bin", [-1]), null);
   assert.equal(f.disk.has("/book/invalid.bin"), false);
+  await controller.dispose();
+});
+
+test("a native read with invalid bytes keeps the previously loaded snapshot", async () => {
+  const f = byteStorageFixture();
+  f.disk.set("/book/chapter.bin", [0, 255, 128]);
+  const controller = f.files();
+  const files = controller.service;
+  const original = await files.read("chapter.bin");
+  f.disk.set("/book/chapter.bin", [0, 256, 128]);
+
+  assert.equal(await files.read("chapter.bin"), null);
+  assert.strictEqual(files.getSnapshot().files[0], original);
+  assert.deepEqual(original.bytes, [0, 255, 128]);
+  assert.match(files.getSnapshot().error, /字节/);
+  await controller.dispose();
+});
+
+test("native read and create isolate their response arrays and install the same validated canonical bytes", async () => {
+  const nativeBytes = new Map([["read.bin", [0, 255, 128]], ["create.bin", [128, 255, 0]]]);
+  const f = createMainFixture({invokeHandler(command, args) {
+    assert.ok(["read_project_file", "create_project_file"].includes(command));
+    return {path: args.path, fileName: args.path, bytes: nativeBytes.get(args.path)};
+  }});
+  const bytes = f.loadModule("plugins/project-storage/bytes.ts");
+  const copy = bytes.copyBytes;
+  const copyAsync = bytes.copyBytesAsync;
+  const copies = [];
+  bytes.copyBytes = input => {
+    const result = copy(input);
+    copies.push({input, result});
+    return result;
+  };
+  bytes.copyBytesAsync = async input => {
+    const result = await copyAsync(input);
+    copies.push({input, result});
+    return result;
+  };
+  const controller = f.loadModule("plugins/project-storage/createProjectFiles.ts").createProjectFiles("/book");
+  try {
+    const read = await controller.service.read("read.bin");
+    const created = await controller.service.create("create.bin", [128, 255, 0]);
+    for (const file of [read, created]) {
+      const original = nativeBytes.get(file.path);
+      const normalization = copies.find(call => call.input === original);
+      assert.ok(normalization, "native bytes are copied and validated at the boundary");
+      assert.notStrictEqual(normalization.result, original);
+      assert.strictEqual(file.bytes, normalization.result, "the buffer installs the canonical bytes without another full copy");
+      assert.ok(copies.some(call => call.input === file.bytes && call.result === file.bytes), "FileSession can reuse only already owned immutable bytes");
+      const expected = [...file.bytes];
+      original.fill(7);
+      assert.deepEqual(file.bytes, expected, "later mutation of the native response cannot change a buffer");
+      assert.equal(Object.isFrozen(file.bytes), true);
+    }
+  } finally {
+    bytes.copyBytes = copy;
+    bytes.copyBytesAsync = copyAsync;
+    await controller.dispose();
+  }
+});
+
+test("malformed native read and create records never install or replace a canonical buffer", async () => {
+  let malformed = null;
+  const f = createMainFixture({invokeHandler(command, args) {
+    assert.ok(["read_project_file", "create_project_file"].includes(command));
+    const record = {path: args.path, fileName: args.path, bytes: [0, 255]};
+    return malformed ? malformed(record) : record;
+  }});
+  const controller = f.loadModule("plugins/project-storage/createProjectFiles.ts").createProjectFiles("/book");
+  const files = controller.service;
+  try {
+    const original = await files.read("kept.bin");
+    for (const badRecord of [
+      () => null,
+      record => ({...record, path: "other.bin"}),
+      record => ({...record, fileName: "other.bin"}),
+      record => ({...record, bytes: new Uint8Array([0, 255])}),
+      record => ({...record, bytes: [0, 256]}),
+    ]) {
+      malformed = badRecord;
+      assert.equal(await files.read("kept.bin"), null);
+      assert.strictEqual(files.getSnapshot().files[0], original);
+      assert.equal(await files.create("new.bin", [0, 255]), null);
+      assert.deepEqual(Array.from(files.getSnapshot().files, file => file.path), ["kept.bin"]);
+      assert.ok(files.getSnapshot().error);
+    }
+  } finally {
+    await controller.dispose();
+  }
+});
+
+function pauseLargeNormalization(f) {
+  const bytes = f.loadModule("plugins/project-storage/bytes.ts");
+  const original = bytes.copyBytesAsync;
+  const entered = deferred();
+  const release = deferred();
+  let closed = 0;
+  bytes.copyBytesAsync = input => original(input, {schedulerFactory() {
+    let paused = false;
+    return {
+      now: () => 0,
+      yieldTask() {
+        if (!paused) { paused = true; entered.resolve(); return release.promise; }
+        return Promise.resolve();
+      },
+      close() { closed++; },
+    };
+  }});
+  return {entered: entered.promise, release: () => release.resolve(), closed: () => closed,
+    restore() { bytes.copyBytesAsync = original; }};
+}
+
+test("concurrent reads share the same large normalization and native read", async () => {
+  const fixture = byteStorageFixture();
+  fixture.disk.set("/book/large.bin", Array.from({length: 65_537}, (_value, index) => index % 256));
+  const pause = pauseLargeNormalization(fixture.f);
+  const controller = fixture.files();
+  try {
+    const first = controller.service.read("large.bin");
+    await pause.entered;
+    assert.equal(controller.service.getSnapshot().files.length, 0, "partial bytes are not published");
+
+    const second = controller.service.read("large.bin");
+    assert.strictEqual(second, first, "a read during normalization joins the opening operation");
+    assert.equal(fixture.calls.filter(call => call.command === "read_project_file").length, 1);
+
+    pause.release();
+    const [firstResult, secondResult] = await Promise.all([first, second]);
+    assert.strictEqual(firstResult, secondResult);
+    assert.strictEqual(controller.service.getSnapshot().files[0], firstResult);
+    assert.equal(firstResult.bytes.length, 65_537);
+    assert.equal(firstResult.bytes[65_536], 0);
+    assert.equal(Object.isFrozen(firstResult.bytes), true);
+    assert.equal(pause.closed(), 1);
+  } finally { pause.release(); pause.restore(); await controller.dispose(); }
+});
+
+test("leave waits for full large-byte normalization and captures native metadata and data before yielding", async () => {
+  const response = {path: "large.bin", fileName: "large.bin", bytes: Array.from({length: 65_537}, (_, index) => index % 256)};
+  const f = createMainFixture({invokeHandler(command) {
+    assert.equal(command, "read_project_file");
+    return response;
+  }});
+  const pause = pauseLargeNormalization(f);
+  const controller = f.loadModule("plugins/project-storage/createProjectFiles.ts").createProjectFiles("/book");
+  try {
+    const reading = controller.service.read("large.bin");
+    await pause.entered;
+    assert.equal(controller.service.getSnapshot().files.length, 0, "partial arrays are never published");
+    response.path = "changed.bin"; response.fileName = "changed.bin"; response.bytes.fill(9);
+    let left = false;
+    const leaving = controller.beginLeave().then(value => { left = true; return value; });
+    await Promise.resolve(); await Promise.resolve();
+    assert.equal(left, false, "accepted normalization belongs to the storage pending queue");
+    assert.equal(controller.service.getSnapshot().blocked, true);
+    pause.release();
+    const file = await reading;
+    assert.equal(await leaving, true);
+    assert.equal(file.path, "large.bin");
+    assert.equal(file.fileName, "large.bin");
+    assert.equal(file.bytes[0], 0);
+    assert.equal(file.bytes[65_536], 0);
+    assert.equal(Object.isFrozen(file.bytes), true);
+    assert.equal(pause.closed(), 1);
+  } finally { pause.release(); pause.restore(); await controller.dispose(); }
+});
+
+test("disposing during large-byte normalization drains work and never installs the abandoned read", async () => {
+  const fixture = byteStorageFixture();
+  fixture.disk.set("/book/large.bin", Array(65_537).fill(1));
+  const pause = pauseLargeNormalization(fixture.f);
+  const controller = fixture.files();
+  try {
+    const reading = controller.service.read("large.bin");
+    await pause.entered;
+    let stopped = false;
+    const stopping = controller.dispose().then(() => { stopped = true; });
+    await Promise.resolve(); await Promise.resolve();
+    assert.equal(stopped, false);
+    pause.release();
+    assert.equal(await reading, null);
+    await stopping;
+    assert.equal(controller.service.getSnapshot().files.length, 0);
+    assert.equal(controller.service.getSnapshot().blocked, true);
+    assert.equal(pause.closed(), 1);
+  } finally { pause.release(); pause.restore(); await controller.dispose(); }
+});
+
+test("edits made during a large clean refresh retain their old conflict baseline", async () => {
+  const fixture = byteStorageFixture();
+  fixture.disk.set("/book/large.bin", [0, 255]);
+  const controller = fixture.files();
+  const files = controller.service;
+  await files.read("large.bin");
+  const pause = pauseLargeNormalization(fixture.f);
+  fixture.disk.set("/book/large.bin", Array(65_537).fill(1));
+  try {
+    const refreshing = files.read("large.bin");
+    await pause.entered;
+    assert.equal(files.write("large.bin", [99, 128]), true);
+    const edited = files.getSnapshot().files[0];
+    pause.release();
+    assert.strictEqual(await refreshing, edited, "refresh never replaces a newly dirty buffer");
+    assert.equal(await files.save("large.bin"), false, "external disk changes still cause a conflict");
+    assert.deepEqual(Array.from(files.getSnapshot().files[0].bytes), [99, 128]);
+    assert.equal(files.getSnapshot().files[0].saveState, "error");
+    assert.equal(fixture.disk.get("/book/large.bin").length, 65_537);
+    await assert.rejects(controller.dispose(), error => {
+      assert.deepEqual(Array.from(error.snapshot.files[0].bytes), [99, 128]);
+      return true;
+    });
+  } finally { pause.release(); pause.restore(); }
+});
+
+test("an accepted large create finishes normalization before leave and preserves captured caller bytes", async () => {
+  const fixture = byteStorageFixture();
+  const pause = pauseLargeNormalization(fixture.f);
+  const controller = fixture.files();
+  const input = Array(65_537).fill(7);
+  try {
+    const creating = controller.service.create("large.bin", input);
+    input.fill(9);
+    await pause.entered;
+    assert.equal(fixture.disk.get("/book/large.bin")[0], 7, "native create accepted the original bytes");
+    assert.equal(controller.service.getSnapshot().files.length, 0);
+    let left = false;
+    const leaving = controller.beginLeave().then(result => { left = true; return result; });
+    await Promise.resolve(); await Promise.resolve();
+    assert.equal(left, false);
+    pause.release();
+    const created = await creating;
+    assert.equal(created.bytes[0], 7);
+    assert.equal(Object.isFrozen(created.bytes), true);
+    assert.equal(await leaving, true);
+    assert.equal(pause.closed(), 1);
+  } finally { pause.release(); pause.restore(); await controller.dispose(); }
+});
+
+test("an invalid large create response releases its path and can be retried without publishing partial bytes", async () => {
+  const persisted = new Map();
+  const nativeCalls = [];
+  let returnMalformedResponse = true;
+  const f = createMainFixture({invokeHandler(command, args) {
+    assert.equal(command, "create_project_file");
+    nativeCalls.push(args);
+    const current = persisted.get(args.path);
+    if (current) {
+      assert.equal(args.acceptIdentical, true, "retry explicitly accepts only the identical existing file");
+      assert.deepEqual(args.bytes, current);
+    } else {
+      persisted.set(args.path, [...args.bytes]);
+    }
+    const responseBytes = [...persisted.get(args.path)];
+    if (returnMalformedResponse) {
+      returnMalformedResponse = false;
+      responseBytes[4_500] = 256;
+    }
+    return {path: args.path, fileName: args.path, bytes: responseBytes};
+  }});
+  const pause = pauseLargeNormalization(f);
+  const controller = f.loadModule("plugins/project-storage/createProjectFiles.ts").createProjectFiles("/book");
+  const input = Array(65_537).fill(7);
+  try {
+    const firstCreate = controller.service.create("large.bin", input);
+    await pause.entered;
+    assert.equal(controller.service.getSnapshot().files.length, 0, "partial response bytes are never published");
+    pause.release();
+
+    assert.equal(await firstCreate, null);
+    assert.match(controller.service.getSnapshot().error, /字节/);
+    assert.equal(controller.service.getSnapshot().files.length, 0);
+    assert.equal(persisted.get("large.bin").length, 65_537, "the native create is present with the original valid input");
+    assert.equal(pause.closed(), 1, "the failed async normalization closes its scheduler");
+
+    const retry = await controller.service.create("large.bin", input, {acceptIdentical: true});
+    assert.ok(retry, "the same path is no longer left in the changing state");
+    assert.equal(retry.bytes.length, 65_537);
+    assert.equal(retry.bytes[4_500], 7);
+    assert.equal(Object.isFrozen(retry.bytes), true);
+    assert.deepEqual(Array.from(controller.service.getSnapshot().files, file => file.path), ["large.bin"]);
+    assert.equal(nativeCalls.length, 2);
+    assert.equal(pause.closed(), 2);
+  } finally { pause.release(); pause.restore(); await controller.dispose(); }
+});
+
+test("reading a file while its save is in progress reuses the protected buffer", async () => {
+  const entered = deferred();
+  const release = deferred();
+  const f = byteStorageFixture({async onInvoke(command) {
+    if (command === "save_project_file") { entered.resolve(); await release.promise; }
+  }});
+  f.disk.set("/book/chapter.bin", [0, 255]);
+  const controller = f.files();
+  const files = controller.service;
+  await files.read("chapter.bin");
+  files.write("chapter.bin", [128, 0, 255]);
+  const saving = files.save("chapter.bin");
+  await entered.promise;
+
+  const duringSave = files.getSnapshot().files[0];
+  assert.equal(duringSave.saveState, "saving");
+  assert.strictEqual(await files.read("chapter.bin"), duringSave);
+  assert.equal(f.calls.filter(call => call.command === "read_project_file").length, 1);
+  release.resolve();
+  assert.equal(await saving, true);
+  assert.deepEqual(f.disk.get("/book/chapter.bin"), [128, 0, 255]);
   await controller.dispose();
 });
 

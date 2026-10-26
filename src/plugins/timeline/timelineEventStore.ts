@@ -175,6 +175,11 @@ export function createTimelineEventStore(files: ProjectFiles, timelineId: string
   let generation = 0;
   let loadOperation: Promise<boolean> | null = null;
   let mutationOperation: Promise<boolean> | null = null;
+  let parsedBytes: ProjectFileBytes | undefined;
+  let hasParsedBytes = false;
+  let cachedParse: ReturnType<typeof parseEvents> | undefined;
+  let comparedParsedEvents: readonly TimelineEvent[] | undefined;
+  let comparedCurrentEvents: readonly TimelineEvent[] | undefined;
   let snapshot = buildSnapshot(files.getSnapshot());
 
   function fileFrom(sourceFiles = files.getSnapshot().files): ProjectFile | undefined {
@@ -199,22 +204,54 @@ export function createTimelineEventStore(files: ProjectFiles, timelineId: string
     });
   }
 
+  function parseFile(bytes: ProjectFileBytes): ReturnType<typeof parseEvents> {
+    if (!hasParsedBytes || bytes !== parsedBytes) {
+      comparedParsedEvents = undefined;
+      comparedCurrentEvents = undefined;
+      parsedBytes = bytes;
+      hasParsedBytes = true;
+      cachedParse = parseEvents(bytes, timelineId);
+    }
+    return cachedParse!;
+  }
+
+  function applyParsedEvents(parsedEvents: readonly TimelineEvent[]) {
+    if (events === parsedEvents) return;
+    if (comparedParsedEvents === parsedEvents && comparedCurrentEvents === events) return;
+    const unchanged = sameEvents(events, parsedEvents);
+    comparedParsedEvents = parsedEvents;
+    comparedCurrentEvents = events;
+    if (!unchanged) {
+      events = parsedEvents;
+      comparedParsedEvents = undefined;
+      comparedCurrentEvents = undefined;
+    }
+  }
+
+  function sameSnapshot(left: TimelineEventSnapshot, right: TimelineEventSnapshot): boolean {
+    return left.events === right.events && left.loaded === right.loaded && left.loading === right.loading
+      && left.saving === right.saving && left.dirty === right.dirty && left.pendingCreate === right.pendingCreate
+      && left.error === right.error && left.blocked === right.blocked && left.saveState === right.saveState;
+  }
+
   function publish() {
     if (!alive) return;
-    snapshot = buildSnapshot();
+    const next = buildSnapshot();
+    if (sameSnapshot(snapshot, next)) return;
+    snapshot = next;
     for (const listener of [...listeners]) listener();
   }
 
   function acceptFile(file: ProjectFile, requestGeneration?: number): boolean {
-    const parsed = parseEvents(file.bytes, timelineId);
     if (!alive || requestGeneration !== undefined && requestGeneration !== generation) return false;
+    const parsed = parseFile(file.bytes);
     if (!parsed.events) {
       loaded = false;
       localBlocked = true;
       localError = parsed.error;
       return false;
     }
-    if (!sameEvents(events, parsed.events)) events = parsed.events;
+    applyParsedEvents(parsed.events);
     knownFile = true;
     pendingCreate = false;
     pendingWrite = false;
@@ -233,9 +270,9 @@ export function createTimelineEventStore(files: ProjectFiles, timelineId: string
       // A mutation not yet accepted by the shared byte store is authoritative locally. In particular,
       // do not let another notification replace a failed first-create draft with an older snapshot.
       if (!localDraft) {
-        const parsed = parseEvents(sharedFile.bytes, timelineId);
+        const parsed = parseFile(sharedFile.bytes);
         if (parsed.events) {
-          if (!sameEvents(events, parsed.events)) events = parsed.events;
+          applyParsedEvents(parsed.events);
           pendingCreate = false;
           pendingWrite = false;
           localBlocked = false;
@@ -428,6 +465,8 @@ export function createTimelineEventStore(files: ProjectFiles, timelineId: string
   function mutate(nextEvents: readonly TimelineEvent[]): Promise<boolean> {
     if (!alive || !loaded || snapshot.blocked || mutating || !path) return Promise.resolve(false);
     events = Object.freeze([...nextEvents]);
+    comparedParsedEvents = undefined;
+    comparedCurrentEvents = undefined;
     localDraft = true;
     pendingCreate = !knownFile && !fileFrom();
     pendingWrite = false;
@@ -532,6 +571,11 @@ export function createTimelineEventStore(files: ProjectFiles, timelineId: string
       generation++;
       unsubscribe();
       listeners.clear();
+      parsedBytes = undefined;
+      hasParsedBytes = false;
+      cachedParse = undefined;
+      comparedParsedEvents = undefined;
+      comparedCurrentEvents = undefined;
       loading = false;
       mutating = false;
       snapshot = Object.freeze({...snapshot, loading: false, saving: false, blocked: true});

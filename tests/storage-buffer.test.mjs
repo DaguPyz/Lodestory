@@ -27,6 +27,17 @@ function fixture(write, changed = () => {}) {
 }
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return {promise, resolve}; }
 
+test("only internally owned canonical frozen bytes are reused without revalidation", () => {
+  const canonical = byteExports.copyBytes([0, 128, 255]);
+  assert.equal(Object.isFrozen(canonical), true);
+  assert.strictEqual(byteExports.copyBytes(canonical), canonical);
+  const externalFrozen = Object.freeze([0, 128, 255]);
+  assert.notStrictEqual(byteExports.copyBytes(externalFrozen), externalFrozen);
+  for (const invalid of [[0, 256], [-1], [0.5], [NaN], [Infinity], ["1"], Array(1)]) {
+    assert.throws(() => byteExports.copyBytes(Object.freeze(invalid)), /字节/);
+  }
+});
+
 test("byte edits schedule autosave, save the latest bytes, and skip identical data", async () => {
   const writes = [];
   const {session, flushTimer, timers} = fixture(async (...args) => { writes.push(args); });

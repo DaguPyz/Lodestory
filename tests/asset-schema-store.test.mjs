@@ -11,8 +11,15 @@ const compiled = ts.transpileModule(source, {
   compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS},
 }).outputText;
 const storeExports = {};
+const parseStats = {decodes: 0};
+class CountingTextDecoder extends TextDecoder {
+  decode(...args) {
+    parseStats.decodes++;
+    return super.decode(...args);
+  }
+}
 vm.runInNewContext(compiled, {
-  exports: storeExports, TextDecoder, TextEncoder, Uint8Array, Object, Array, Number, String,
+  exports: storeExports, TextDecoder: CountingTextDecoder, TextEncoder, Uint8Array, Object, Array, Number, String,
   Set, Map, Promise, Error, RegExp, JSON, Math,
 });
 const {createAssetSchemaStore} = storeExports;
@@ -53,6 +60,19 @@ function legacySchema(types = [], fields = []) {
 
 function diskSchema(f) {
   return JSON.parse(new TextDecoder().decode(new Uint8Array(f.disk.get(f.key("/book", path)))));
+}
+
+function projectFilesWithOverlay(base, overlay) {
+  return Object.freeze({
+    ...base,
+    getSnapshot() {
+      const snapshot = base.getSnapshot();
+      const patch = overlay();
+      if (!patch) return snapshot;
+      return Object.freeze({...snapshot, files: Object.freeze(snapshot.files.map(file => file.path === path
+        ? Object.freeze({...file, ...patch}) : file))});
+    },
+  });
 }
 
 test("missing schema loads empty without creating a file; type and field edits persist by stable IDs", async () => {
@@ -1053,5 +1073,99 @@ test("dispose cancels in-flight loading and prevents late notifications", async 
   assert.equal(notifications, beforeRelease);
   assert.equal(store.getSnapshot().loading, false);
   assert.equal(await store.createType({id: typeId, name: "不应写入", description: ""}), false);
+  await controller.dispose();
+});
+
+test("disposing synchronously from the protected-file loading notification skips parsing and stale writes", async () => {
+  const f = byteStorageFixture();
+  seedFile(f, path, JSON.stringify(storedSchema([type()])));
+  const controller = f.files();
+  assert.ok(await controller.service.read(path));
+
+  const service = projectFilesWithOverlay(controller.service, () => ({dirty: true, saveState: "saving"}));
+  const store = storeFor(service);
+  let disposedSnapshot;
+  store.subscribe(() => {
+    if (!store.getSnapshot().loading) return;
+    store.dispose();
+    disposedSnapshot = store.getSnapshot();
+  });
+  const beforeLoad = parseStats.decodes;
+
+  assert.equal(await store.load(), false);
+  assert.equal(parseStats.decodes - beforeLoad, 0, "protected bytes are not parsed after synchronous disposal");
+  assert.ok(disposedSnapshot);
+  assert.strictEqual(store.getSnapshot(), disposedSnapshot, "the abandoned load does not publish stale state");
+  assert.equal(disposedSnapshot.loading, false);
+  assert.equal(disposedSnapshot.saving, false);
+  assert.equal(disposedSnapshot.blocked, true);
+
+  await controller.dispose();
+});
+
+test("unrelated file notifications reuse parsed asset bytes and publish only changed state", async () => {
+  const f = byteStorageFixture();
+  seedFile(f, path, JSON.stringify(storedSchema([type()])));
+  const controller = f.files();
+  let overlay = null;
+  const service = projectFilesWithOverlay(controller.service, () => overlay);
+  const store = storeFor(service);
+  let notifications = 0;
+  store.subscribe(() => { notifications++; });
+  const beforeLoad = parseStats.decodes;
+
+  assert.equal(await store.load(), true);
+  assert.equal(parseStats.decodes - beforeLoad, 1, "the read notification and load result share one parse");
+  const loaded = store.getSnapshot();
+  const afterLoadNotifications = notifications;
+
+  assert.ok(await controller.service.create(`${directory}/unrelated.json`, [1], {createParents: false}));
+  assert.strictEqual(store.getSnapshot(), loaded, "an unrelated file keeps the public snapshot stable");
+  assert.equal(parseStats.decodes - beforeLoad, 1);
+  assert.equal(notifications, afterLoadNotifications);
+
+  overlay = {saveState: "error", saveError: "保存暂不可用"};
+  assert.ok(await controller.service.create(`${directory}/another.json`, [2], {createParents: false}));
+  const failedSave = store.getSnapshot();
+  assert.notStrictEqual(failedSave, loaded, "a save-state change is still published for the same bytes");
+  assert.equal(failedSave.saveState, "error");
+  assert.equal(failedSave.error, "保存暂不可用");
+  assert.equal(parseStats.decodes - beforeLoad, 1, "save-state changes do not decode unchanged bytes");
+  assert.equal(notifications, afterLoadNotifications + 1);
+
+  assert.ok(await controller.service.create(`${directory}/third.json`, [3], {createParents: false}));
+  assert.strictEqual(store.getSnapshot(), failedSave, "repeat notifications do not rebuild an unchanged snapshot");
+  assert.equal(notifications, afterLoadNotifications + 1);
+  assert.equal(parseStats.decodes - beforeLoad, 1);
+
+  store.dispose();
+  await controller.dispose();
+});
+
+test("unchanged invalid bytes are not reparsed and a replacement schema is validated", async () => {
+  const f = byteStorageFixture();
+  seedFile(f, path, [0xff]);
+  const controller = f.files();
+  const store = storeFor(controller.service);
+  const beforeLoad = parseStats.decodes;
+
+  assert.equal(await store.load(), false);
+  assert.equal(store.getSnapshot().loaded, false);
+  assert.match(store.getSnapshot().error, /UTF-8/);
+  assert.equal(parseStats.decodes - beforeLoad, 1);
+  const invalid = store.getSnapshot();
+
+  assert.ok(await controller.service.create(`${directory}/unrelated.json`, [1], {createParents: false}));
+  assert.strictEqual(store.getSnapshot(), invalid);
+  assert.equal(parseStats.decodes - beforeLoad, 1, "the failed parse is cached for the same immutable bytes");
+
+  assert.equal(await controller.service.delete(path, {discardChanges: true}), true);
+  assert.ok(await controller.service.create(path, new TextEncoder().encode(JSON.stringify(storedSchema([type()]))),
+    {createParents: false}));
+  assert.equal(store.getSnapshot().loaded, true);
+  assert.deepEqual(plain(store.getSnapshot().types), [type()]);
+  assert.equal(parseStats.decodes - beforeLoad, 2, "a replacement byte array is parsed and validated once");
+
+  store.dispose();
   await controller.dispose();
 });

@@ -133,34 +133,88 @@ export function createTimelineListModel(collection: TimelineListCollection, opti
   const createId = options.createId ?? (() => crypto.randomUUID());
   const now = options.now ?? (() => new Date().toISOString());
   const listeners = new Set<() => void>();
+  const parsedById = new Map<string, {content: string; result: ReturnType<typeof parseFile>}>();
+  const entryById = new Map<string, {content: string; saveState: TimelineListEntry["saveState"]; saveError: string | null; entry: TimelineListEntry}>();
   let selectedId: string | null = null;
   let createDraft: TimelineCreateDraft | null = null;
   let failure: TimelineListFailure = {kind: "load"};
   let alive = true;
   let collectionSnapshot = collection.getSnapshot();
-  let snapshot = buildSnapshot(collectionSnapshot);
+  let snapshot: TimelineListSnapshot = Object.freeze({
+    entries: Object.freeze([]),
+    selectedId: null,
+    createDraft: null,
+    issues: Object.freeze([]),
+    loaded: false,
+    loading: false,
+    creating: false,
+    busy: true,
+    retryDisabled: true,
+    error: null,
+    retryLabel: "重试读取",
+  });
+  snapshot = buildSnapshot(collectionSnapshot);
+
+  function sameIssues(left: readonly TimelineListIssue[], right: readonly TimelineListIssue[]): boolean {
+    return left.length === right.length && left.every((issue, index) =>
+      issue.name === right[index].name && issue.message === right[index].message);
+  }
 
   function buildSnapshot(source: TimelineListFilesSnapshot): TimelineListSnapshot {
-    const entries: TimelineListEntry[] = [];
+    const previousSnapshot = snapshot;
+    const unsortedEntries: TimelineListEntry[] = [];
+    const currentEntryIds = new Set<string>();
     const issues: TimelineListIssue[] = [...source.issues];
     for (const file of source.files) {
-      const parsed = parseFile(file);
-      if (parsed.entry) entries.push(parsed.entry);
-      if (parsed.issue) issues.push(parsed.issue);
+      let cached = parsedById.get(file.id);
+      if (!cached || cached.content !== file.content) {
+        cached = {content: file.content, result: parseFile(file)};
+        parsedById.set(file.id, cached);
+      }
+      if (cached.result.entry) {
+        const previous = entryById.get(file.id);
+        const entry = previous && previous.content === file.content && previous.saveState === file.saveState
+          && previous.saveError === file.saveError
+          ? previous.entry
+          : Object.freeze({...cached.result.entry, saveState: file.saveState, saveError: file.saveError});
+        entryById.set(file.id, {content: file.content, saveState: file.saveState, saveError: file.saveError, entry});
+        unsortedEntries.push(entry);
+        currentEntryIds.add(file.id);
+      } else {
+        entryById.delete(file.id);
+      }
+      if (cached.result.issue) issues.push(cached.result.issue);
     }
-    sortEntries(entries);
-    const selected = selectedId && entries.some(entry => entry.id === selectedId) ? selectedId : null;
+    const currentFileIds = new Set(source.files.map(file => file.id));
+    for (const id of parsedById.keys()) if (!currentFileIds.has(id)) parsedById.delete(id);
+    for (const id of entryById.keys()) if (!currentEntryIds.has(id)) entryById.delete(id);
+
+    const previousEntries = previousSnapshot.entries;
+    const sameSortKeys = previousEntries.length === unsortedEntries.length
+      && previousEntries.every(previous => {
+        const current = entryById.get(previous.id)?.entry;
+        return current !== undefined && current.createdAt === previous.createdAt;
+      });
+    const sortedEntries = sameSortKeys
+      ? previousEntries.map(previous => entryById.get(previous.id)!.entry)
+      : sortEntries(unsortedEntries);
+    const sameEntryList = previousEntries.length === sortedEntries.length
+      && previousEntries.every((entry, index) => entry === sortedEntries[index]);
+    const entries = sameEntryList ? previousEntries : Object.freeze(sortedEntries);
+    const previousIssues = previousSnapshot.issues;
+    const stableIssues = sameIssues(previousIssues, issues) ? previousIssues : Object.freeze(issues);
+    const selected = selectedId && currentEntryIds.has(selectedId) ? selectedId : null;
     if (selected !== selectedId) selectedId = selected;
     const retryDisabled = isCollectionBusy(source);
     const busy = !source.loaded || retryDisabled;
     const retryLabel = failure.kind === "create" ? "重试创建"
       : failure.kind === "delete" ? "重试删除"
         : failure.kind === "save" ? "重试保存" : "重试读取";
-    return Object.freeze({
-      entries: Object.freeze(entries),
+    const next = Object.freeze({
+      entries,
       selectedId,
       createDraft,
-      issues: Object.freeze(issues),
+      issues: stableIssues,
       loaded: source.loaded,
       loading: source.loading,
       creating: source.creating,
@@ -169,6 +223,13 @@ export function createTimelineListModel(collection: TimelineListCollection, opti
       error: source.error,
       retryLabel,
     });
+    if (next.entries === previousSnapshot.entries && next.selectedId === previousSnapshot.selectedId
+      && next.createDraft === previousSnapshot.createDraft && next.issues === previousSnapshot.issues
+      && next.loaded === previousSnapshot.loaded && next.loading === previousSnapshot.loading
+      && next.creating === previousSnapshot.creating && next.busy === previousSnapshot.busy
+      && next.retryDisabled === previousSnapshot.retryDisabled && next.error === previousSnapshot.error
+      && next.retryLabel === previousSnapshot.retryLabel) return previousSnapshot;
+    return next;
   }
 
   function isCollectionBusy(source: TimelineListFilesSnapshot): boolean {
@@ -179,7 +240,9 @@ export function createTimelineListModel(collection: TimelineListCollection, opti
   function publish(source = collection.getSnapshot()) {
     if (!alive) return;
     collectionSnapshot = source;
-    snapshot = buildSnapshot(source);
+    const next = buildSnapshot(source);
+    if (next === snapshot) return;
+    snapshot = next;
     for (const listener of [...listeners]) listener();
   }
 
@@ -324,6 +387,8 @@ export function createTimelineListModel(collection: TimelineListCollection, opti
       alive = false;
       unsubscribe();
       collection.dispose();
+      parsedById.clear();
+      entryById.clear();
       listeners.clear();
     },
   };

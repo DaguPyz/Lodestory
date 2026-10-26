@@ -1,0 +1,6744 @@
+{
+  "date": "2026-10-26",
+  "scope": "Real macOS Tauri 2.12.0 debug host, system WKWebView, production frontend via loopback HTTP, actual native project-file commands and filesystem; isolated config and native project writes rejected.",
+  "environment": {
+    "system": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "nativeBinarySha256": "1249550755d3a5ed470e9a57e3fd3a6bb62f0f99586a6f79d6cbde06859fa460",
+    "sampleDefinition": "5 project-close/reopen cycles in one app process per build; foreground focus and visible state calibrated; OS filesystem caches were not cleared."
+  },
+  "input": {
+    "sha256": "6db9a7657358fb6e41a4ce98702afdca6c6960b348543a2051fbd3849341cda8",
+    "files": 79,
+    "timelines": 26,
+    "events": 2158,
+    "assets": 668,
+    "bytes": 3763861
+  },
+  "beforeBuild": {
+    "sha256": "47cc58de990c071c9b302ac5f440cc8a9ecde0927bb63f3e30a0126de2dab9f6",
+    "files": 187
+  },
+  "afterBuild": {
+    "sha256": "a475cd0f98c3dba68c570f41bb34f6b20c43873b99d3595d87f3d11d08cb2511",
+    "files": 187
+  },
+  "beforeStorageSourceSha256": "28e198ba0306c56209a95505c9ede6ab215ea2576876f30b38c042ce43b4cfb8",
+  "afterStorageSourceSha256": "e4572e371f057e4b5df9595f3a1f421050813b8f16d2b42e084f00b2a8e7c48b",
+  "sameTimelineTitlesCountsOrderAndPeriodsAcrossAllRounds": true,
+  "projectWriteCommands": 0,
+  "timelineData": [
+    {
+      "eventCount": 195,
+      "period": "1–195 剧情节点",
+      "title": "00 · 全书关键剧情"
+    },
+    {
+      "eventCount": 100,
+      "period": "1–100 阅读序号",
+      "title": "01 · 原文细读 0001—0100"
+    },
+    {
+      "eventCount": 100,
+      "period": "101–200 阅读序号",
+      "title": "02 · 原文细读 0101—0200"
+    },
+    {
+      "eventCount": 100,
+      "period": "201–300 阅读序号",
+      "title": "03 · 原文细读 0201—0300"
+    },
+    {
+      "eventCount": 100,
+      "period": "301–400 阅读序号",
+      "title": "04 · 原文细读 0301—0400"
+    },
+    {
+      "eventCount": 100,
+      "period": "401–500 阅读序号",
+      "title": "05 · 原文细读 0401—0500"
+    },
+    {
+      "eventCount": 100,
+      "period": "501–600 阅读序号",
+      "title": "06 · 原文细读 0501—0600"
+    },
+    {
+      "eventCount": 100,
+      "period": "601–700 阅读序号",
+      "title": "07 · 原文细读 0601—0700"
+    },
+    {
+      "eventCount": 100,
+      "period": "701–800 阅读序号",
+      "title": "08 · 原文细读 0701—0800"
+    },
+    {
+      "eventCount": 100,
+      "period": "801–900 阅读序号",
+      "title": "09 · 原文细读 0801—0900"
+    },
+    {
+      "eventCount": 100,
+      "period": "901–1000 阅读序号",
+      "title": "10 · 原文细读 0901—1000"
+    },
+    {
+      "eventCount": 100,
+      "period": "1001–1100 阅读序号",
+      "title": "11 · 原文细读 1001—1100"
+    },
+    {
+      "eventCount": 100,
+      "period": "1101–1200 阅读序号",
+      "title": "12 · 原文细读 1101—1200"
+    },
+    {
+      "eventCount": 100,
+      "period": "1201–1300 阅读序号",
+      "title": "13 · 原文细读 1201—1300"
+    },
+    {
+      "eventCount": 100,
+      "period": "1301–1400 阅读序号",
+      "title": "14 · 原文细读 1301—1400"
+    },
+    {
+      "eventCount": 100,
+      "period": "1401–1500 阅读序号",
+      "title": "15 · 原文细读 1401—1500"
+    },
+    {
+      "eventCount": 100,
+      "period": "1501–1600 阅读序号",
+      "title": "16 · 原文细读 1501—1600"
+    },
+    {
+      "eventCount": 72,
+      "period": "1601–1672 阅读序号",
+      "title": "17 · 原文细读 1601—1672"
+    },
+    {
+      "eventCount": 174,
+      "period": "1–195 剧情节点",
+      "title": "18 · 萧炎成长"
+    },
+    {
+      "eventCount": 25,
+      "period": "5–173 剧情节点",
+      "title": "19 · 药尘与师徒传承"
+    },
+    {
+      "eventCount": 16,
+      "period": "3–195 剧情节点",
+      "title": "20 · 薰儿与古族"
+    },
+    {
+      "eventCount": 11,
+      "period": "25–195 剧情节点",
+      "title": "21 · 彩鳞与蛇人族"
+    },
+    {
+      "eventCount": 11,
+      "period": "14–121 剧情节点",
+      "title": "22 · 小医仙与厄难毒体"
+    },
+    {
+      "eventCount": 4,
+      "period": "78–195 剧情节点",
+      "title": "23 · 紫研与太虚古龙"
+    },
+    {
+      "eventCount": 27,
+      "period": "61–194 剧情节点",
+      "title": "24 · 魂殿与魂族"
+    },
+    {
+      "eventCount": 23,
+      "period": "11–187 剧情节点",
+      "title": "25 · 异火与功法"
+    }
+  ],
+  "before": {
+    "page": {
+      "dpr": 2,
+      "platform": "MacIntel",
+      "tauriBridge": {
+        "invokeConfigurable": false,
+        "invokeType": "function",
+        "invokeWritable": false,
+        "rootConfigurable": false,
+        "rootWritable": false
+      },
+      "url": "http://127.0.0.1:1420/",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+    },
+    "status": "success",
+    "timingSummary": {
+      "fullOpenUseCloseCycle": {
+        "count": 5,
+        "maxMs": 3101,
+        "meanMs": 2903.4,
+        "medianMs": 2850,
+        "p95Ms": 3101
+      },
+      "openToAllDataReady": {
+        "count": 5,
+        "maxMs": 2839,
+        "meanMs": 2700.8,
+        "medianMs": 2663,
+        "p95Ms": 2839
+      },
+      "openToFirstCanvasReady": {
+        "count": 5,
+        "maxMs": 2894,
+        "meanMs": 2734.8,
+        "medianMs": 2691,
+        "p95Ms": 2894
+      },
+      "openToTimelineListReady": {
+        "count": 5,
+        "maxMs": 2681,
+        "meanMs": 2478,
+        "medianMs": 2421,
+        "p95Ms": 2681
+      },
+      "openToToolbar": {
+        "count": 5,
+        "maxMs": 2537,
+        "meanMs": 2448.6,
+        "medianMs": 2420,
+        "p95Ms": 2537
+      },
+      "projectCloseToWelcome": {
+        "count": 5,
+        "maxMs": 80,
+        "meanMs": 79.6,
+        "medianMs": 80,
+        "p95Ms": 80
+      }
+    },
+    "frameGapSummary": {
+      "1": {
+        "count": 35,
+        "maxMs": 1141,
+        "meanMs": 88.88571428571429,
+        "medianMs": 18,
+        "p95Ms": 192
+      },
+      "2": {
+        "count": 38,
+        "maxMs": 1093,
+        "meanMs": 75.15789473684211,
+        "medianMs": 17,
+        "p95Ms": 175
+      },
+      "3": {
+        "count": 37,
+        "maxMs": 1124,
+        "meanMs": 78.51351351351352,
+        "medianMs": 17,
+        "p95Ms": 168
+      },
+      "4": {
+        "count": 37,
+        "maxMs": 1064,
+        "meanMs": 76.70270270270271,
+        "medianMs": 17,
+        "p95Ms": 192
+      },
+      "5": {
+        "count": 38,
+        "maxMs": 1052,
+        "meanMs": 74.6842105263158,
+        "medianMs": 17,
+        "p95Ms": 182
+      }
+    },
+    "rounds": [
+      {
+        "allDataReadyAtMs": 3054,
+        "allDataReadyMs": 2839,
+        "betweenRoundSettleMs": 100,
+        "canvasInputConsoleErrors": [],
+        "canvasInputDelivered": true,
+        "canvasInputDurationMs": 74,
+        "canvasInputFrames": {
+          "elapsedMs": 72,
+          "firstFrame": 3111,
+          "secondFrame": 3183
+        },
+        "canvasInputRuntimeErrors": [],
+        "canvasInputTarget": "00 · 全书关键剧情时间轴",
+        "canvasViewportAfterInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportBeforeInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportUnchanged": true,
+        "completedAtMs": 3316,
+        "documentAfterFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "documentBeforeFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "firstCanvasReadyAtMs": 3109,
+        "firstTimelineAxisAnchorCount": 5,
+        "firstTimelineEventCount": 0,
+        "firstTimelineEventTitleCount": 4,
+        "firstTimelineEventTitles": [
+          "萧炎测出斗之力三段",
+          "萧炎讲述前世与斗气大陆",
+          "熏儿辨明云岚宗来客身份",
+          "萧炎与纳兰嫣然定下三年之约"
+        ],
+        "foregroundCalibrated": true,
+        "foregroundFrames": {
+          "elapsedMs": 10,
+          "firstFrame": 204,
+          "secondFrame": 214
+        },
+        "fullCycleMs": 3101,
+        "nativeFocusDurationMs": 4,
+        "nativeFocusStartedAtMs": 200,
+        "nativeWindow": {
+          "innerSize": {
+            "height": 1800,
+            "width": 2880
+          },
+          "isFocused": true,
+          "isMinimized": false,
+          "isVisible": true,
+          "operationErrors": [],
+          "outerPosition": {
+            "x": 240,
+            "y": 120
+          },
+          "queryErrors": []
+        },
+        "openClickAtMs": 215,
+        "openToFirstCanvasReadyMs": 2894,
+        "openToTimelineListReadyMs": 2681,
+        "openToToolbarMs": 2537,
+        "projectCloseToWelcomeMs": 79,
+        "round": 1,
+        "settledAtMs": 3416,
+        "startedAtMs": 200,
+        "switchBackToFirstMs": 26,
+        "switchToSecondMs": 27,
+        "timelineEventCountTotal": 2158,
+        "timelineListReadyAtMs": 2896,
+        "timelineRowCount": 26,
+        "toolbarAtMs": 2752
+      },
+      {
+        "allDataReadyAtMs": 6112,
+        "allDataReadyMs": 2663,
+        "betweenRoundSettleMs": 100,
+        "canvasInputConsoleErrors": [],
+        "canvasInputDelivered": true,
+        "canvasInputDurationMs": 24,
+        "canvasInputFrames": {
+          "elapsedMs": 17,
+          "firstFrame": 6148,
+          "secondFrame": 6165
+        },
+        "canvasInputRuntimeErrors": [],
+        "canvasInputTarget": "00 · 全书关键剧情时间轴",
+        "canvasViewportAfterInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportBeforeInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportUnchanged": true,
+        "completedAtMs": 6299,
+        "documentAfterFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "documentBeforeFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "firstCanvasReadyAtMs": 6140,
+        "firstTimelineAxisAnchorCount": 5,
+        "firstTimelineEventCount": 0,
+        "firstTimelineEventTitleCount": 4,
+        "firstTimelineEventTitles": [
+          "萧炎测出斗之力三段",
+          "萧炎讲述前世与斗气大陆",
+          "熏儿辨明云岚宗来客身份",
+          "萧炎与纳兰嫣然定下三年之约"
+        ],
+        "foregroundCalibrated": true,
+        "foregroundFrames": {
+          "elapsedMs": 17,
+          "firstFrame": 3432,
+          "secondFrame": 3449
+        },
+        "fullCycleMs": 2850,
+        "nativeFocusDurationMs": 6,
+        "nativeFocusStartedAtMs": 3416,
+        "nativeWindow": {
+          "innerSize": {
+            "height": 1800,
+            "width": 2880
+          },
+          "isFocused": true,
+          "isMinimized": false,
+          "isVisible": true,
+          "operationErrors": [],
+          "outerPosition": {
+            "x": 240,
+            "y": 120
+          },
+          "queryErrors": []
+        },
+        "openClickAtMs": 3449,
+        "openToFirstCanvasReadyMs": 2691,
+        "openToTimelineListReadyMs": 2421,
+        "openToToolbarMs": 2420,
+        "projectCloseToWelcomeMs": 80,
+        "round": 2,
+        "settledAtMs": 6399,
+        "startedAtMs": 3416,
+        "switchBackToFirstMs": 26,
+        "switchToSecondMs": 27,
+        "timelineEventCountTotal": 2158,
+        "timelineListReadyAtMs": 5870,
+        "timelineRowCount": 26,
+        "toolbarAtMs": 5869
+      },
+      {
+        "allDataReadyAtMs": 9151,
+        "allDataReadyMs": 2719,
+        "betweenRoundSettleMs": 100,
+        "canvasInputConsoleErrors": [],
+        "canvasInputDelivered": true,
+        "canvasInputDurationMs": 18,
+        "canvasInputFrames": {
+          "elapsedMs": 11,
+          "firstFrame": 9187,
+          "secondFrame": 9198
+        },
+        "canvasInputRuntimeErrors": [],
+        "canvasInputTarget": "00 · 全书关键剧情时间轴",
+        "canvasViewportAfterInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportBeforeInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportUnchanged": true,
+        "completedAtMs": 9332,
+        "documentAfterFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "documentBeforeFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "firstCanvasReadyAtMs": 9180,
+        "firstTimelineAxisAnchorCount": 5,
+        "firstTimelineEventCount": 0,
+        "firstTimelineEventTitleCount": 4,
+        "firstTimelineEventTitles": [
+          "萧炎测出斗之力三段",
+          "萧炎讲述前世与斗气大陆",
+          "熏儿辨明云岚宗来客身份",
+          "萧炎与纳兰嫣然定下三年之约"
+        ],
+        "foregroundCalibrated": true,
+        "foregroundFrames": {
+          "elapsedMs": 17,
+          "firstFrame": 6415,
+          "secondFrame": 6432
+        },
+        "fullCycleMs": 2900,
+        "nativeFocusDurationMs": 6,
+        "nativeFocusStartedAtMs": 6399,
+        "nativeWindow": {
+          "innerSize": {
+            "height": 1800,
+            "width": 2880
+          },
+          "isFocused": true,
+          "isMinimized": false,
+          "isVisible": true,
+          "operationErrors": [],
+          "outerPosition": {
+            "x": 240,
+            "y": 120
+          },
+          "queryErrors": []
+        },
+        "openClickAtMs": 6432,
+        "openToFirstCanvasReadyMs": 2748,
+        "openToTimelineListReadyMs": 2480,
+        "openToToolbarMs": 2479,
+        "projectCloseToWelcomeMs": 80,
+        "round": 3,
+        "settledAtMs": 9432,
+        "startedAtMs": 6399,
+        "switchBackToFirstMs": 26,
+        "switchToSecondMs": 26,
+        "timelineEventCountTotal": 2158,
+        "timelineListReadyAtMs": 8912,
+        "timelineRowCount": 26,
+        "toolbarAtMs": 8911
+      },
+      {
+        "allDataReadyAtMs": 12109,
+        "allDataReadyMs": 2643,
+        "betweenRoundSettleMs": 100,
+        "canvasInputConsoleErrors": [],
+        "canvasInputDelivered": true,
+        "canvasInputDurationMs": 24,
+        "canvasInputFrames": {
+          "elapsedMs": 16,
+          "firstFrame": 12149,
+          "secondFrame": 12165
+        },
+        "canvasInputRuntimeErrors": [],
+        "canvasInputTarget": "00 · 全书关键剧情时间轴",
+        "canvasViewportAfterInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportBeforeInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportUnchanged": true,
+        "completedAtMs": 12299,
+        "documentAfterFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "documentBeforeFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "firstCanvasReadyAtMs": 12140,
+        "firstTimelineAxisAnchorCount": 5,
+        "firstTimelineEventCount": 0,
+        "firstTimelineEventTitleCount": 4,
+        "firstTimelineEventTitles": [
+          "萧炎测出斗之力三段",
+          "萧炎讲述前世与斗气大陆",
+          "熏儿辨明云岚宗来客身份",
+          "萧炎与纳兰嫣然定下三年之约"
+        ],
+        "foregroundCalibrated": true,
+        "foregroundFrames": {
+          "elapsedMs": 16,
+          "firstFrame": 9449,
+          "secondFrame": 9465
+        },
+        "fullCycleMs": 2833,
+        "nativeFocusDurationMs": 7,
+        "nativeFocusStartedAtMs": 9432,
+        "nativeWindow": {
+          "innerSize": {
+            "height": 1800,
+            "width": 2880
+          },
+          "isFocused": true,
+          "isMinimized": false,
+          "isVisible": true,
+          "operationErrors": [],
+          "outerPosition": {
+            "x": 240,
+            "y": 120
+          },
+          "queryErrors": []
+        },
+        "openClickAtMs": 9466,
+        "openToFirstCanvasReadyMs": 2674,
+        "openToTimelineListReadyMs": 2407,
+        "openToToolbarMs": 2406,
+        "projectCloseToWelcomeMs": 80,
+        "round": 4,
+        "settledAtMs": 12399,
+        "startedAtMs": 9432,
+        "switchBackToFirstMs": 26,
+        "switchToSecondMs": 27,
+        "timelineEventCountTotal": 2158,
+        "timelineListReadyAtMs": 11873,
+        "timelineRowCount": 26,
+        "toolbarAtMs": 11872
+      },
+      {
+        "allDataReadyAtMs": 15072,
+        "allDataReadyMs": 2640,
+        "betweenRoundSettleMs": 100,
+        "canvasInputConsoleErrors": [],
+        "canvasInputDelivered": true,
+        "canvasInputDurationMs": 32,
+        "canvasInputFrames": {
+          "elapsedMs": 17,
+          "firstFrame": 15115,
+          "secondFrame": 15132
+        },
+        "canvasInputRuntimeErrors": [],
+        "canvasInputTarget": "00 · 全书关键剧情时间轴",
+        "canvasViewportAfterInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportBeforeInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportUnchanged": true,
+        "completedAtMs": 15265,
+        "documentAfterFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "documentBeforeFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "firstCanvasReadyAtMs": 15099,
+        "firstTimelineAxisAnchorCount": 5,
+        "firstTimelineEventCount": 0,
+        "firstTimelineEventTitleCount": 4,
+        "firstTimelineEventTitles": [
+          "萧炎测出斗之力三段",
+          "萧炎讲述前世与斗气大陆",
+          "熏儿辨明云岚宗来客身份",
+          "萧炎与纳兰嫣然定下三年之约"
+        ],
+        "foregroundCalibrated": true,
+        "foregroundFrames": {
+          "elapsedMs": 17,
+          "firstFrame": 12415,
+          "secondFrame": 12432
+        },
+        "fullCycleMs": 2833,
+        "nativeFocusDurationMs": 6,
+        "nativeFocusStartedAtMs": 12399,
+        "nativeWindow": {
+          "innerSize": {
+            "height": 1800,
+            "width": 2880
+          },
+          "isFocused": true,
+          "isMinimized": false,
+          "isVisible": true,
+          "operationErrors": [],
+          "outerPosition": {
+            "x": 240,
+            "y": 120
+          },
+          "queryErrors": []
+        },
+        "openClickAtMs": 12432,
+        "openToFirstCanvasReadyMs": 2667,
+        "openToTimelineListReadyMs": 2401,
+        "openToToolbarMs": 2401,
+        "projectCloseToWelcomeMs": 79,
+        "round": 5,
+        "settledAtMs": 15366,
+        "startedAtMs": 12399,
+        "switchBackToFirstMs": 26,
+        "switchToSecondMs": 27,
+        "timelineEventCountTotal": 2158,
+        "timelineListReadyAtMs": 14833,
+        "timelineRowCount": 26,
+        "toolbarAtMs": 14833
+      }
+    ],
+    "nativeActions": {
+      "documents.list": {
+        "count": 5,
+        "maxMs": 0.7160829999999999,
+        "meanMs": 0.5237166,
+        "totalMs": 2.618583
+      },
+      "store.list_directory": {
+        "count": 270,
+        "maxMs": 2.0733330000000003,
+        "meanMs": 0.38529537407407405,
+        "totalMs": 104.02975099999999
+      },
+      "store.read": {
+        "count": 395,
+        "maxMs": 2.2581670000000003,
+        "meanMs": 0.3479390278481014,
+        "totalMs": 137.43591600000005
+      }
+    },
+    "nativeCommands": [
+      {
+        "command": "list_recent_projects",
+        "durationMs": 0.3745
+      },
+      {
+        "command": "open_project",
+        "durationMs": 7.655042
+      },
+      {
+        "command": "list_documents",
+        "durationMs": 0.745833
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.156
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.714292
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.105125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.428958
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.698792
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.9694579999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.1285830000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.287709
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.25325
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.26175
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.345792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.442333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.236167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.399584
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.22924999999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.423125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.678834
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.25141600000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.334042
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.34600000000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.33754199999999995
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.532667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.382333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.5694170000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5037079999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.363375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.5501250000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.504291
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.287875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.878875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.485417
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.49275
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.700167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.319959
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.37483299999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.577708
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.44370899999999996
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.320917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.33345800000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.377667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.145167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.464208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.559167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.959084
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.938375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.927042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.060667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.5615
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.838041
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.941875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.2973329999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.601
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.16525
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.45399999999999996
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.245083
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.14741600000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.538459
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.240458
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.36525
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.69425
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.0614999999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.226417
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.9452090000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.0717079999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.292625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.37929199999999996
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.721291
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.49512500000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.6565
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.972708
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.2390420000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.370917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.010916
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.361791
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.405542
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.4365
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.6035419999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.08875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.532916
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.43525
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.5154590000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.680375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.46791699999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.831875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.871166
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.986375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.950958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.025208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.37825
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.300125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.308167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.4095
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.6693330000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.964375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.8419169999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.945458
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.9840420000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.04725
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.25025
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.096917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.113917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.244083
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.521167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.620625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.7062499999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.922417
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.1929589999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.397167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.350709
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.41604100000000005
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.49645799999999995
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.624958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.322792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.475833
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.6302909999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.682834
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.83475
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.32225
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.626958
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.587708
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.643792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.778334
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.265083
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.23033299999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.39520799999999995
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.657167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.346875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.2489999999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.770208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.367666
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.529875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.403583
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.469167
+      },
+      {
+        "command": "list_recent_projects",
+        "durationMs": 0.347125
+      },
+      {
+        "command": "open_project",
+        "durationMs": 7.514208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.228917
+      },
+      {
+        "command": "list_documents",
+        "durationMs": 0.500125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.36200000000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.383084
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.135
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.24525000000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.312041
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.258125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.09674999999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.189042
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.17
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.106333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.123583
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.087666
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.10366600000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.182708
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.251042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.200084
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.274167
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.311458
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.513916
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.47791700000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.475541
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.157917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.29725
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.127083
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.390958
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.975541
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.11758300000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.37920800000000005
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.652625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.8328749999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.8190409999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.350458
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.12429100000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.188
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.25875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.417375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.431
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.364375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.856958
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.865791
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.857166
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.28904100000000005
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.39595800000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.24937499999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.746042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.48624999999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.30325
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.455917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.455
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.430042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.407083
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.18483400000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.178
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.225792
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.48270799999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.447458
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.2925
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.213542
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.219292
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.381875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.24983299999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.2605
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.26304099999999997
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.328208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.472917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.44258299999999995
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.363292
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.292083
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.4025
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.457458
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.440625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.4685
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.466833
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.536
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.531208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.649583
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.10500000000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.175208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.389292
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.5819589999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.553041
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.180209
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.307209
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.63625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 2.171292
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 2.291083
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.14291600000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.29775
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.35975
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.39575
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.345916
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.265833
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.24250000000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.255791
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.454958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.3735
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.231084
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.26887500000000003
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.203833
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.3265
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.31675
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.197917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.186875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.216042
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.399542
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.398333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.137291
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.21475
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.33304100000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.380666
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.447666
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.320916
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.35904200000000003
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.442208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.517708
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.49229199999999995
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.156584
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.2155
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.194334
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.14704099999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.174792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.29704200000000003
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.34125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.39145800000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.382
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.27975
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.216209
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.302542
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.403542
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.44379199999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.276584
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.262208
+      },
+      {
+        "command": "list_recent_projects",
+        "durationMs": 0.293209
+      },
+      {
+        "command": "open_project",
+        "durationMs": 7.588458999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.24275
+      },
+      {
+        "command": "list_documents",
+        "durationMs": 0.5536249999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.406333
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.424
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.19699999999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.297333
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.300416
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.26275000000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.2275
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.381042
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5255420000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.678917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.668708
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.27787500000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.28558300000000003
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.42475
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5756249999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.47600000000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.309167
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.31437499999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.149916
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.274208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.7324579999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.407208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.461375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.39841699999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.340167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.266334
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.265666
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.156416
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.521667
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.587458
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.527
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.17716600000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.47437500000000005
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.19287500000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.171833
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.184875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.18775
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.426709
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.446792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.355333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.45199999999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.265833
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.19975
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.478958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.341958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.539459
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.419292
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.656
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.6881250000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.642375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.597584
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.27666700000000005
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.321792
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.37474999999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.401208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.328416
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.208208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.269917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.32879200000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.21787499999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.2235
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.243583
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.380792
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.469375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.44337499999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.414959
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.223
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.19616699999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.23616600000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.466167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.42824999999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.200875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.27779200000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.27641699999999997
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.392208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.368958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.294709
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.33595800000000003
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.628917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.838
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.931709
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.240833
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.27995800000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.23170800000000003
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.212667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.145
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.23741600000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.26558400000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.33795800000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.117125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.511709
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.260208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.15100000000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.28883400000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.39675000000000005
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.40125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.24212499999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.27075
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.452833
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.357125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.368833
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.1575
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.241459
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.34204100000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.321708
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.221
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.113083
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.137834
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.201584
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.221583
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.09975
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.285291
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.351166
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.34
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.275584
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.53175
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.213
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.223959
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.226333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.281
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.273
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.296791
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.25275
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.240375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.479792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.429125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.286416
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.485333
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.711583
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.176958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.324667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.41575
+      },
+      {
+        "command": "list_recent_projects",
+        "durationMs": 0.251625
+      },
+      {
+        "command": "open_project",
+        "durationMs": 7.834667
+      },
+      {
+        "command": "list_documents",
+        "durationMs": 0.525375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.204875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.346792
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.358917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.135792
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.232334
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.392416
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.31
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.096708
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.199125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.170208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.158875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.130917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.084125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.241959
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.26699999999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.26087499999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.351625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.236334
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.27183399999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.29224999999999995
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.7025
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.564458
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.185417
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.32941699999999996
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.38499999999999995
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.390209
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.29125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.261417
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.202125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.559666
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.453542
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.45395800000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.449542
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.230375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.40454199999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.451834
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.43524999999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.194125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.23458400000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.40495899999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.48624999999999996
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.524208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.232916
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.532583
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.552917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.630666
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.522042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.265
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.26345799999999997
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.248041
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.36458399999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.237542
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.453208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.59975
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.680583
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.661041
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.662541
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.327167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.391042
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.4365
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.6284580000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.49974999999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.204917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.32620899999999997
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.43304200000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.363
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.585542
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.449083
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.13275
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5321250000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.648958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.575833
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.10204099999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.36975
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.27375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.20341700000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.244625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.308
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5069589999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.49387499999999995
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.46925
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.503709
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.247625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.242209
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.255625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.242708
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.19333299999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.255792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.283542
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.32358400000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5998340000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.468583
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.36612500000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.227667
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.522583
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.545208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.49799999999999994
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.23125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.300084
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.221166
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.167042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.171208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.1265
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.321708
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.3235
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.45287499999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.400667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.11875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.093458
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.167917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.33599999999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.312792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.297041
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.297958
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.29945900000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.4165
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.33754100000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.145875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.12929200000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.176958
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.239792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.172541
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.131125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.183792
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.227166
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.154959
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.093459
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.183375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.176916
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.30570800000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.334375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.272166
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.237083
+      },
+      {
+        "command": "list_recent_projects",
+        "durationMs": 0.293375
+      },
+      {
+        "command": "open_project",
+        "durationMs": 8.028542
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.197959
+      },
+      {
+        "command": "list_documents",
+        "durationMs": 0.508125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.34875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.344667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.120583
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.213625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.24320799999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.26033399999999995
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.0965
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.123667
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.347583
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.343708
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.283041
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.135959
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.1825
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.16608399999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.23762499999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.290417
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.201042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.306208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.178459
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.29508399999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.3035
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.077916
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.335625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.537333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.476416
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.266042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.081042
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.176375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.25879199999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.312042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.5155
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.26766700000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.27579200000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.211167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.705667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.234042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.39
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.12233400000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.17683400000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.406292
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.544917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.32308400000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.337291
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.462625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.517
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.617209
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.414583
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.451958
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.505125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.367666
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.35525
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.21729099999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.30683400000000005
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.290875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.428458
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.34175
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.256875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.21537499999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.509
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.510375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.623666
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.224584
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.181083
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.223125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.416541
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.330125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.274709
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.202625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.29895900000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.35562499999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.339292
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.15412499999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.131166
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.531042
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.609875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.48241700000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.2665
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.35966699999999996
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.7061660000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.613417
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.670917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.12404199999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.224875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.331875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.099375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.521625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.193375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.18100000000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.369625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.447375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.438375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.209917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.214583
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.310709
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.29870800000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.236666
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.457416
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.354583
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.10175000000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.11124999999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.672292
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.395083
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.43574999999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.463333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.47758300000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.539375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.13899999999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.088375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.250291
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.229708
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.094875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.196959
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.26033300000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.486708
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.436959
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.386916
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.14737499999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.20450000000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.17049999999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.116625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.20987499999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.151542
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.452542
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.882209
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.468458
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.417417
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.222917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.236625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.356583
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.197417
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.302417
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.11587499999999999
+      },
+      {
+        "command": "list_recent_projects",
+        "durationMs": 0.289083
+      }
+    ],
+    "consoleErrors": [],
+    "runtimeErrors": [],
+    "failures": []
+  },
+  "after": {
+    "page": {
+      "dpr": 2,
+      "platform": "MacIntel",
+      "tauriBridge": {
+        "invokeConfigurable": false,
+        "invokeType": "function",
+        "invokeWritable": false,
+        "rootConfigurable": false,
+        "rootWritable": false
+      },
+      "url": "http://127.0.0.1:1420/",
+      "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)"
+    },
+    "status": "success",
+    "timingSummary": {
+      "fullOpenUseCloseCycle": {
+        "count": 5,
+        "maxMs": 1866,
+        "meanMs": 1736.8,
+        "medianMs": 1715,
+        "p95Ms": 1866
+      },
+      "openToAllDataReady": {
+        "count": 5,
+        "maxMs": 1659,
+        "meanMs": 1546,
+        "medianMs": 1521,
+        "p95Ms": 1659
+      },
+      "openToFirstCanvasReady": {
+        "count": 5,
+        "maxMs": 1715,
+        "meanMs": 1580.4,
+        "medianMs": 1551,
+        "p95Ms": 1715
+      },
+      "openToTimelineListReady": {
+        "count": 5,
+        "maxMs": 1563,
+        "meanMs": 1436,
+        "medianMs": 1434,
+        "p95Ms": 1563
+      },
+      "openToToolbar": {
+        "count": 5,
+        "maxMs": 1481,
+        "meanMs": 1419.4,
+        "medianMs": 1434,
+        "p95Ms": 1481
+      },
+      "projectCloseToWelcome": {
+        "count": 5,
+        "maxMs": 80,
+        "meanMs": 79,
+        "medianMs": 79,
+        "p95Ms": 80
+      }
+    },
+    "frameGapSummary": {
+      "1": {
+        "count": 35,
+        "maxMs": 637,
+        "meanMs": 54.2,
+        "medianMs": 17,
+        "p95Ms": 111
+      },
+      "2": {
+        "count": 37,
+        "maxMs": 593,
+        "meanMs": 46.567567567567565,
+        "medianMs": 17,
+        "p95Ms": 100
+      },
+      "3": {
+        "count": 35,
+        "maxMs": 573,
+        "meanMs": 49.142857142857146,
+        "medianMs": 17,
+        "p95Ms": 107
+      },
+      "4": {
+        "count": 39,
+        "maxMs": 557,
+        "meanMs": 44,
+        "medianMs": 17,
+        "p95Ms": 90
+      },
+      "5": {
+        "count": 37,
+        "maxMs": 578,
+        "meanMs": 46.027027027027025,
+        "medianMs": 17,
+        "p95Ms": 100
+      }
+    },
+    "rounds": [
+      {
+        "allDataReadyAtMs": 1947,
+        "allDataReadyMs": 1659,
+        "betweenRoundSettleMs": 100,
+        "canvasInputConsoleErrors": [],
+        "canvasInputDelivered": true,
+        "canvasInputDurationMs": 17,
+        "canvasInputFrames": {
+          "elapsedMs": 15,
+          "firstFrame": 2006,
+          "secondFrame": 2021
+        },
+        "canvasInputRuntimeErrors": [],
+        "canvasInputTarget": "00 · 全书关键剧情时间轴",
+        "canvasViewportAfterInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportBeforeInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportUnchanged": true,
+        "completedAtMs": 2154,
+        "documentAfterFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "documentBeforeFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "firstCanvasReadyAtMs": 2003,
+        "firstTimelineAxisAnchorCount": 5,
+        "firstTimelineEventCount": 0,
+        "firstTimelineEventTitleCount": 4,
+        "firstTimelineEventTitles": [
+          "萧炎测出斗之力三段",
+          "萧炎讲述前世与斗气大陆",
+          "熏儿辨明云岚宗来客身份",
+          "萧炎与纳兰嫣然定下三年之约"
+        ],
+        "foregroundCalibrated": true,
+        "foregroundFrames": {
+          "elapsedMs": 17,
+          "firstFrame": 270,
+          "secondFrame": 287
+        },
+        "fullCycleMs": 1866,
+        "nativeFocusDurationMs": 6,
+        "nativeFocusStartedAtMs": 255,
+        "nativeWindow": {
+          "innerSize": {
+            "height": 1800,
+            "width": 2880
+          },
+          "isFocused": true,
+          "isMinimized": false,
+          "isVisible": true,
+          "operationErrors": [],
+          "outerPosition": {
+            "x": 240,
+            "y": 120
+          },
+          "queryErrors": []
+        },
+        "openClickAtMs": 288,
+        "openToFirstCanvasReadyMs": 1715,
+        "openToTimelineListReadyMs": 1563,
+        "openToToolbarMs": 1481,
+        "projectCloseToWelcomeMs": 79,
+        "round": 1,
+        "settledAtMs": 2255,
+        "startedAtMs": 255,
+        "switchBackToFirstMs": 26,
+        "switchToSecondMs": 26,
+        "timelineEventCountTotal": 2158,
+        "timelineListReadyAtMs": 1851,
+        "timelineRowCount": 26,
+        "toolbarAtMs": 1769
+      },
+      {
+        "allDataReadyAtMs": 3808,
+        "allDataReadyMs": 1521,
+        "betweenRoundSettleMs": 100,
+        "canvasInputConsoleErrors": [],
+        "canvasInputDelivered": true,
+        "canvasInputDurationMs": 31,
+        "canvasInputFrames": {
+          "elapsedMs": 16,
+          "firstFrame": 3854,
+          "secondFrame": 3870
+        },
+        "canvasInputRuntimeErrors": [],
+        "canvasInputTarget": "00 · 全书关键剧情时间轴",
+        "canvasViewportAfterInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportBeforeInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportUnchanged": true,
+        "completedAtMs": 4004,
+        "documentAfterFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "documentBeforeFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "firstCanvasReadyAtMs": 3838,
+        "firstTimelineAxisAnchorCount": 5,
+        "firstTimelineEventCount": 0,
+        "firstTimelineEventTitleCount": 4,
+        "firstTimelineEventTitles": [
+          "萧炎测出斗之力三段",
+          "萧炎讲述前世与斗气大陆",
+          "熏儿辨明云岚宗来客身份",
+          "萧炎与纳兰嫣然定下三年之约"
+        ],
+        "foregroundCalibrated": true,
+        "foregroundFrames": {
+          "elapsedMs": 17,
+          "firstFrame": 2270,
+          "secondFrame": 2287
+        },
+        "fullCycleMs": 1717,
+        "nativeFocusDurationMs": 6,
+        "nativeFocusStartedAtMs": 2255,
+        "nativeWindow": {
+          "innerSize": {
+            "height": 1800,
+            "width": 2880
+          },
+          "isFocused": true,
+          "isMinimized": false,
+          "isVisible": true,
+          "operationErrors": [],
+          "outerPosition": {
+            "x": 240,
+            "y": 120
+          },
+          "queryErrors": []
+        },
+        "openClickAtMs": 2287,
+        "openToFirstCanvasReadyMs": 1551,
+        "openToTimelineListReadyMs": 1434,
+        "openToToolbarMs": 1434,
+        "projectCloseToWelcomeMs": 80,
+        "round": 2,
+        "settledAtMs": 4104,
+        "startedAtMs": 2255,
+        "switchBackToFirstMs": 26,
+        "switchToSecondMs": 27,
+        "timelineEventCountTotal": 2158,
+        "timelineListReadyAtMs": 3721,
+        "timelineRowCount": 26,
+        "toolbarAtMs": 3721
+      },
+      {
+        "allDataReadyAtMs": 5674,
+        "allDataReadyMs": 1536,
+        "betweenRoundSettleMs": 100,
+        "canvasInputConsoleErrors": [],
+        "canvasInputDelivered": true,
+        "canvasInputDurationMs": 17,
+        "canvasInputFrames": {
+          "elapsedMs": 16,
+          "firstFrame": 5704,
+          "secondFrame": 5720
+        },
+        "canvasInputRuntimeErrors": [],
+        "canvasInputTarget": "00 · 全书关键剧情时间轴",
+        "canvasViewportAfterInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportBeforeInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportUnchanged": true,
+        "completedAtMs": 5853,
+        "documentAfterFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "documentBeforeFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "firstCanvasReadyAtMs": 5702,
+        "firstTimelineAxisAnchorCount": 5,
+        "firstTimelineEventCount": 0,
+        "firstTimelineEventTitleCount": 4,
+        "firstTimelineEventTitles": [
+          "萧炎测出斗之力三段",
+          "萧炎讲述前世与斗气大陆",
+          "熏儿辨明云岚宗来客身份",
+          "萧炎与纳兰嫣然定下三年之约"
+        ],
+        "foregroundCalibrated": true,
+        "foregroundFrames": {
+          "elapsedMs": 17,
+          "firstFrame": 4120,
+          "secondFrame": 4137
+        },
+        "fullCycleMs": 1715,
+        "nativeFocusDurationMs": 7,
+        "nativeFocusStartedAtMs": 4104,
+        "nativeWindow": {
+          "innerSize": {
+            "height": 1800,
+            "width": 2880
+          },
+          "isFocused": true,
+          "isMinimized": false,
+          "isVisible": true,
+          "operationErrors": [],
+          "outerPosition": {
+            "x": 240,
+            "y": 120
+          },
+          "queryErrors": []
+        },
+        "openClickAtMs": 4138,
+        "openToFirstCanvasReadyMs": 1564,
+        "openToTimelineListReadyMs": 1434,
+        "openToToolbarMs": 1434,
+        "projectCloseToWelcomeMs": 79,
+        "round": 3,
+        "settledAtMs": 5953,
+        "startedAtMs": 4104,
+        "switchBackToFirstMs": 26,
+        "switchToSecondMs": 27,
+        "timelineEventCountTotal": 2158,
+        "timelineListReadyAtMs": 5572,
+        "timelineRowCount": 26,
+        "toolbarAtMs": 5572
+      },
+      {
+        "allDataReadyAtMs": 7480,
+        "allDataReadyMs": 1493,
+        "betweenRoundSettleMs": 100,
+        "canvasInputConsoleErrors": [],
+        "canvasInputDelivered": true,
+        "canvasInputDurationMs": 26,
+        "canvasInputFrames": {
+          "elapsedMs": 17,
+          "firstFrame": 7520,
+          "secondFrame": 7537
+        },
+        "canvasInputRuntimeErrors": [],
+        "canvasInputTarget": "00 · 全书关键剧情时间轴",
+        "canvasViewportAfterInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportBeforeInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportUnchanged": true,
+        "completedAtMs": 7674,
+        "documentAfterFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "documentBeforeFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "firstCanvasReadyAtMs": 7510,
+        "firstTimelineAxisAnchorCount": 5,
+        "firstTimelineEventCount": 0,
+        "firstTimelineEventTitleCount": 4,
+        "firstTimelineEventTitles": [
+          "萧炎测出斗之力三段",
+          "萧炎讲述前世与斗气大陆",
+          "熏儿辨明云岚宗来客身份",
+          "萧炎与纳兰嫣然定下三年之约"
+        ],
+        "foregroundCalibrated": true,
+        "foregroundFrames": {
+          "elapsedMs": 17,
+          "firstFrame": 5970,
+          "secondFrame": 5987
+        },
+        "fullCycleMs": 1687,
+        "nativeFocusDurationMs": 7,
+        "nativeFocusStartedAtMs": 5953,
+        "nativeWindow": {
+          "innerSize": {
+            "height": 1800,
+            "width": 2880
+          },
+          "isFocused": true,
+          "isMinimized": false,
+          "isVisible": true,
+          "operationErrors": [],
+          "outerPosition": {
+            "x": 240,
+            "y": 120
+          },
+          "queryErrors": []
+        },
+        "openClickAtMs": 5987,
+        "openToFirstCanvasReadyMs": 1523,
+        "openToTimelineListReadyMs": 1361,
+        "openToToolbarMs": 1361,
+        "projectCloseToWelcomeMs": 78,
+        "round": 4,
+        "settledAtMs": 7775,
+        "startedAtMs": 5953,
+        "switchBackToFirstMs": 31,
+        "switchToSecondMs": 27,
+        "timelineEventCountTotal": 2158,
+        "timelineListReadyAtMs": 7348,
+        "timelineRowCount": 26,
+        "toolbarAtMs": 7348
+      },
+      {
+        "allDataReadyAtMs": 9325,
+        "allDataReadyMs": 1521,
+        "betweenRoundSettleMs": 100,
+        "canvasInputConsoleErrors": [],
+        "canvasInputDelivered": true,
+        "canvasInputDurationMs": 17,
+        "canvasInputFrames": {
+          "elapsedMs": 16,
+          "firstFrame": 9355,
+          "secondFrame": 9371
+        },
+        "canvasInputRuntimeErrors": [],
+        "canvasInputTarget": "00 · 全书关键剧情时间轴",
+        "canvasViewportAfterInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportBeforeInput": {
+          "centerX": 0,
+          "centerY": 0,
+          "zoom": 1
+        },
+        "canvasViewportUnchanged": true,
+        "completedAtMs": 9503,
+        "documentAfterFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "documentBeforeFocus": {
+          "hasFocus": true,
+          "visibilityState": "visible"
+        },
+        "firstCanvasReadyAtMs": 9353,
+        "firstTimelineAxisAnchorCount": 5,
+        "firstTimelineEventCount": 0,
+        "firstTimelineEventTitleCount": 4,
+        "firstTimelineEventTitles": [
+          "萧炎测出斗之力三段",
+          "萧炎讲述前世与斗气大陆",
+          "熏儿辨明云岚宗来客身份",
+          "萧炎与纳兰嫣然定下三年之约"
+        ],
+        "foregroundCalibrated": true,
+        "foregroundFrames": {
+          "elapsedMs": 17,
+          "firstFrame": 7787,
+          "secondFrame": 7804
+        },
+        "fullCycleMs": 1699,
+        "nativeFocusDurationMs": 7,
+        "nativeFocusStartedAtMs": 7775,
+        "nativeWindow": {
+          "innerSize": {
+            "height": 1800,
+            "width": 2880
+          },
+          "isFocused": true,
+          "isMinimized": false,
+          "isVisible": true,
+          "operationErrors": [],
+          "outerPosition": {
+            "x": 240,
+            "y": 120
+          },
+          "queryErrors": []
+        },
+        "openClickAtMs": 7804,
+        "openToFirstCanvasReadyMs": 1549,
+        "openToTimelineListReadyMs": 1388,
+        "openToToolbarMs": 1387,
+        "projectCloseToWelcomeMs": 79,
+        "round": 5,
+        "settledAtMs": 9603,
+        "startedAtMs": 7775,
+        "switchBackToFirstMs": 26,
+        "switchToSecondMs": 26,
+        "timelineEventCountTotal": 2158,
+        "timelineListReadyAtMs": 9192,
+        "timelineRowCount": 26,
+        "toolbarAtMs": 9191
+      }
+    ],
+    "nativeActions": {
+      "documents.list": {
+        "count": 5,
+        "maxMs": 0.564333,
+        "meanMs": 0.45948320000000004,
+        "totalMs": 2.297416
+      },
+      "store.list_directory": {
+        "count": 270,
+        "maxMs": 1.351166,
+        "meanMs": 0.3390964518518519,
+        "totalMs": 91.556042
+      },
+      "store.read": {
+        "count": 395,
+        "maxMs": 1.607292,
+        "meanMs": 0.3158301772151902,
+        "totalMs": 124.75292000000013
+      }
+    },
+    "nativeCommands": [
+      {
+        "command": "list_recent_projects",
+        "durationMs": 0.695
+      },
+      {
+        "command": "open_project",
+        "durationMs": 6.448958
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.18429199999999998
+      },
+      {
+        "command": "list_documents",
+        "durationMs": 0.38125000000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.634459
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.399042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.332
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.555125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.752084
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.045291
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.289125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.235083
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.228708
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.347958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.449334
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.300125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.38275
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.36166699999999996
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.361917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.43516699999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.214917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.294459
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.36537499999999995
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.463708
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.794875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.44499999999999995
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.856916
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.234542
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.629
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.955084
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.6811659999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.514541
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.457584
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.9833330000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.913541
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.262625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.297958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.253125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.971667
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.463667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.49716699999999997
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.271125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.36424999999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.517833
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.523
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.6441669999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.734209
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.838334
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.84275
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.974709
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.6840839999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.999125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.827458
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.003833
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.210791
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.505541
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.74825
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.76975
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.853417
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.911792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.462125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.463458
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5535829999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.651042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.898417
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.399375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.48733400000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.457417
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5427919999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.725792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.412166
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.591125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.592416
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.804334
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.631375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.438
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.676875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.7288330000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.77375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.9078750000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.547667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.862708
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.8484999999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.922417
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.137542
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.6156659999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.753417
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.8678750000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.970542
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.0751249999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.583125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.8230419999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.8105
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.824708
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.967625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.476584
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.610042
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.610375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.614958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.7903749999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.514834
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.8115410000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.8376669999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.915875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.034917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.21091600000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.31775
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.42025
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.618166
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.7085
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.458333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.607125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5583330000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.634792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.601209
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.30325
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.340416
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.230375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.23154100000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.592542
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.169459
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.16325
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.202916
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.28662499999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.502458
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.310625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.5353330000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.46737500000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.4915
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.599334
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.4285
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.7865
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.37254200000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.801125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.44595799999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.5011669999999999
+      },
+      {
+        "command": "list_recent_projects",
+        "durationMs": 0.294042
+      },
+      {
+        "command": "open_project",
+        "durationMs": 7.1769169999999995
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.15929200000000002
+      },
+      {
+        "command": "list_documents",
+        "durationMs": 0.417375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.356917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.323042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.120209
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.23575000000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.31920800000000005
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.29333400000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.12333400000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.188167
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.194041
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.11691700000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.15083300000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.079875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.256417
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.39845800000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.394792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.403333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.14024999999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.1875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.263042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.437
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.43937499999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.141208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.09095800000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.211667
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.413416
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.21075
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.15729200000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.724375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.8497910000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.771875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.10325
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.1015
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.16425
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.197792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.13375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.426958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.106167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.479
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.18154099999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.463125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.1545
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.312458
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.42908300000000005
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.47404199999999996
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.517542
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.675209
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.22266699999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.203292
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.28862499999999996
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.35575
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.345125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.38666599999999995
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.332125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.502417
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.864958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.7927919999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.14975
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.328334
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.522458
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.589416
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.51325
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.12316700000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.200833
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.200625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.140625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.200125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.11445799999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.10625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.441083
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.282959
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.329666
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.30075
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.207
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.107917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.27579200000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.393667
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.345167
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.37625000000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.40004100000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.349541
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.377833
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.22841699999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.192208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.229875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.4165
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.34025
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.20416600000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.299667
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.297041
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.336542
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.407167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.198291
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.228334
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.247166
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.165208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.13774999999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.20008299999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.202458
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.242875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.14383300000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.14720799999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.142667
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.288375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.48591599999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.407916
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.435375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.12029100000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.21366700000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.374875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.323625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.23075
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.22775
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.237791
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.36975
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.406542
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.46245800000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.169709
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.145208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.239583
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.355666
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.330209
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.364917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.319333
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.426916
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5177499999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.45725
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.270125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.270209
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.412791
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.234542
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.358166
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.188541
+      },
+      {
+        "command": "list_recent_projects",
+        "durationMs": 0.288833
+      },
+      {
+        "command": "open_project",
+        "durationMs": 6.359458
+      },
+      {
+        "command": "list_documents",
+        "durationMs": 0.502542
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.221709
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.35924999999999996
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.384458
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.155792
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.249625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.339458
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.42666699999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.161459
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.239584
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.26095799999999997
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.299291
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.26504099999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.15620799999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.275959
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5359590000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.707542
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.727667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.222292
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.283125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.379708
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.316417
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.371166
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.13241699999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.19366699999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.202167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.091667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.13783299999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.169917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.44858400000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.515375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.370666
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.313125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.44049999999999995
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.349209
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.516375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.919083
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.980083
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.13791699999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.444334
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.472792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.602792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.508167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.24675
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.294875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.135041
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.4325
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.339167
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.404417
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.6980419999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.68375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.559709
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.664875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.11683299999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.153833
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.17775000000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.29991700000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.24641700000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.111917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.170375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.19420900000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.281958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.351875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.11745799999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.129167
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.18329199999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.36987499999999995
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.518167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.2745
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.425917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.48995799999999995
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.249417
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.262709
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.205334
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.19725
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.440541
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.40825
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.637291
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.397667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.170875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.406459
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.41125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.6805
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.245166
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.128
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.245917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.25179199999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.340625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.25858400000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.232375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.271708
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.39466700000000005
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.34808300000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.277417
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.25912500000000005
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.500667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.397292
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.46108299999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.267917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.352125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.520541
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.6535420000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.6675
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.40912499999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.41525
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.587209
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.589875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.742292
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.13916699999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.119375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.229084
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.443334
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.499333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.14225
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.153334
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.237875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.390208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.389959
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.219292
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.19625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.19629200000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.254833
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.27558299999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.16387500000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.360625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.560459
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.602375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.756084
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.174209
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.258416
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.317834
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.43
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.376208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.442208
+      },
+      {
+        "command": "list_recent_projects",
+        "durationMs": 0.279708
+      },
+      {
+        "command": "open_project",
+        "durationMs": 8.392541999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.257375
+      },
+      {
+        "command": "list_documents",
+        "durationMs": 0.61075
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.397834
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.418209
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.18904100000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.23954099999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.276292
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.28125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.112291
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.23258299999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.12295900000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.338959
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.22425
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.126833
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.202542
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.24525000000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.215958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.5330419999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.13799999999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.560958
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.22566599999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.222583
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.390083
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.122875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.253708
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.241208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.198625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.148625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.190541
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.42362500000000003
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.550458
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.705416
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.15045799999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.259625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.243625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.419916
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.49141699999999994
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.791041
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.35562499999999997
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.33570900000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.281875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.41579099999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.6775
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.15745900000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.255625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.233125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.42833299999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.507208
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.188708
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.328167
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.3795
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.48416699999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.451625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.24454199999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.300666
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.262625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.36675
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.340416
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.285958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.3035
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5441670000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.7712910000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.761833
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.237375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.205458
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.38775000000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.419375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.431709
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.393042
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.23916700000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5959169999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.779625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.52425
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.414917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.353292
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.408167
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.46058299999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.49520800000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.284167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.333833
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.403041
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.431333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.524833
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.110583
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.298917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.342
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.292542
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.586958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.131416
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.720708
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.031083
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.035291
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.1090410000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.227917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.350458
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.27545800000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.42070799999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.180917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.25212500000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.560792
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.399833
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.544292
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.031375
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.378125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.40937500000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.371208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.39045799999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.19304200000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.232542
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.202208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.27599999999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.15829200000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.253334
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.230792
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.269291
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.11983300000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.459875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.303167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.231125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.210459
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.270916
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.142417
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.210958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.18275
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.27754100000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.428834
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.412875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.442958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.161916
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.143166
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.21937500000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.46329200000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.27875000000000005
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.334458
+      },
+      {
+        "command": "list_recent_projects",
+        "durationMs": 0.344709
+      },
+      {
+        "command": "open_project",
+        "durationMs": 7.5187919999999995
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.258125
+      },
+      {
+        "command": "list_documents",
+        "durationMs": 0.5966670000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.437667
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.40691700000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.12562500000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.19037500000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.273291
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.287708
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.180166
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.15729200000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.2575
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.24641700000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.35066600000000003
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.183917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.13362500000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.369292
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.584291
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.55825
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.200792
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.394709
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.513333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.459625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.46287500000000004
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.13158399999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.321875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5279170000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.6734589999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.847459
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.5982080000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.144208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.347875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.561709
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.559875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.268083
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.328625
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.836042
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.939875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.964708
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.557041
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.422625
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.880958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.9593750000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.315667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.207875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.2565
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.484084
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.5003749999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.51075
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.277916
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.315958
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.365208
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.36025
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.479875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.375958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.367917
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.573417
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.613541
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.57075
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.24854199999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.36275
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.393166
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.40462499999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.507792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.29100000000000004
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.22145800000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.42725
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.457416
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.463709
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.330709
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.42179099999999997
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.5388339999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.5658329999999999
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.646
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.208125
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.313417
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.288416
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.26575
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.273333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.16699999999999998
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.228583
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.46349999999999997
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.571916
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.535292
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.176666
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.13029200000000002
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.175875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.22683299999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.313709
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.146916
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.120083
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.419958
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.411708
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.44949999999999996
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.12449999999999999
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.420333
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.7859590000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.8466250000000001
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 1.004583
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.499292
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.340875
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.800584
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 1.015833
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.461084
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.254792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.23441700000000001
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.221584
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.24366700000000002
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.305958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.235542
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.22275
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.206167
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.155792
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.462667
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.129
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.186083
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.22275
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.207875
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.142542
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.158167
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.233083
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.245958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.218416
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.14404199999999998
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.125333
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.118416
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.423
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.349792
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.4125
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.113917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.217375
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.513042
+      },
+      {
+        "command": "list_project_directory",
+        "durationMs": 0.770917
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.226958
+      },
+      {
+        "command": "read_project_file",
+        "durationMs": 0.173875
+      },
+      {
+        "command": "list_recent_projects",
+        "durationMs": 0.26887500000000003
+      }
+    ],
+    "consoleErrors": [],
+    "runtimeErrors": [],
+    "failures": []
+  },
+  "medianReductionPercent": {
+    "openToToolbar": 40.743801652892564,
+    "openToTimelineListReady": 40.76827757125155,
+    "openToAllDataReady": 42.883965452497186,
+    "openToFirstCanvasReady": 42.36343366778149
+  },
+  "diagnosticBefore": {
+    "scope": "Separate instrumented real Tauri build used only to locate synchronous work, not for headline UI latency; an occluded RAF wait occurred outside these synchronous function spans.",
+    "cpu": {
+      "plugins/asset-management/AssetRecordsView.tsx:RecordsEditor": {
+        "count": 17,
+        "maxMs": 1,
+        "totalMs": 6
+      },
+      "plugins/asset-management/assetSchemaStore.ts:parseSchema": {
+        "count": 5,
+        "maxMs": 66,
+        "totalMs": 315
+      },
+      "plugins/project-storage/FileSession.ts:constructor": {
+        "count": 395,
+        "maxMs": 527,
+        "totalMs": 6022
+      },
+      "plugins/project-storage/bytes.ts:copyBytes": {
+        "count": 790,
+        "maxMs": 584,
+        "totalMs": 12189
+      },
+      "plugins/project-storage/createProjectFiles.ts:validateRecord": {
+        "count": 395,
+        "maxMs": 584,
+        "totalMs": 6169
+      },
+      "plugins/timeline/timelineEventStore.ts:parseEvents": {
+        "count": 130,
+        "maxMs": 10,
+        "totalMs": 491
+      }
+    },
+    "nestedTimingNote": "validateRecord and FileSession constructor include copyBytes; their times must not be added to copyBytes."
+  },
+  "verification": {
+    "storageTests": 20,
+    "launcherTests": 6,
+    "build": "passed",
+    "fullSuite": {
+      "tests": 587,
+      "passed": 566,
+      "failed": 16,
+      "skipped": 5
+    },
+    "preexistingFailureLocationsAndNamesMatch": true,
+    "skippedReason": "Five unrelated Playwright checks are skipped because Playwright is not installed."
+  },
+  "remainingLimit": "The longest eligible foreground animation-frame gap was 637 ms after optimization. Retaining immutable frozen byte arrays still has cost for a large single file; this iteration does not claim stall-free loading."
+}

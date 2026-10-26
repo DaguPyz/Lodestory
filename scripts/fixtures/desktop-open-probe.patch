@@ -1,0 +1,1154 @@
+diff --git a/src-tauri/Cargo.toml b/src-tauri/Cargo.toml
+index ee617b5..b8a7b92 100644
+--- a/src-tauri/Cargo.toml
++++ b/src-tauri/Cargo.toml
+@@ -3,11 +3,16 @@ name = "lodestory"
+ version = "0.1.0"
+ description = "Lodestory desktop application"
+ edition = "2021"
++autobins = false
+ 
+ [lib]
+ name = "lodestory_lib"
+ crate-type = ["staticlib", "cdylib", "rlib"]
+ 
++[[bin]]
++name = "lodestory-desktop-perf"
++path = "src/main.rs"
++
+ [build-dependencies]
+ tauri-build = { version = "2", features = [] }
+ 
+@@ -23,6 +28,7 @@ tauri-plugin-dialog = "2"
+ tauri-plugin-opener = "2"
+ tempfile = "3"
+ uuid = { version = "1", features = ["v4", "serde"] }
++objc2-app-kit = { version = "0.3.2", default-features = false, features = ["NSRunningApplication"] }
+ 
+ [profile.release]
+ codegen-units = 1
+diff --git a/src-tauri/src/desktop_perf.rs b/src-tauri/src/desktop_perf.rs
+new file mode 100644
+index 0000000..b0d6beb
+--- /dev/null
++++ b/src-tauri/src/desktop_perf.rs
+@@ -0,0 +1,215 @@
++use serde_json::{json, Value};
++use std::collections::BTreeMap;
++use std::io::Write;
++use std::sync::{Mutex, OnceLock};
++use std::time::Duration;
++use tauri::Manager;
++#[cfg(target_os = "macos")]
++use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication};
++
++static NATIVE_COMMANDS: OnceLock<Mutex<Vec<Value>>> = OnceLock::new();
++static NATIVE_ACTIONS: OnceLock<Mutex<BTreeMap<&'static str, ActionAggregate>>> = OnceLock::new();
++
++#[derive(Clone, Default)]
++struct ActionAggregate {
++    count: u64,
++    total_ms: f64,
++    max_ms: f64,
++}
++
++pub fn record_native(command: &'static str, elapsed: Duration) {
++    let calls = NATIVE_COMMANDS.get_or_init(|| Mutex::new(Vec::new()));
++    if let Ok(mut calls) = calls.lock() {
++        calls.push(json!({
++            "command": command,
++            "durationMs": elapsed.as_secs_f64() * 1000.0,
++        }));
++    }
++}
++
++pub fn record_native_action(action: &'static str, elapsed: Duration) {
++    let actions = NATIVE_ACTIONS.get_or_init(|| Mutex::new(BTreeMap::new()));
++    if let Ok(mut actions) = actions.lock() {
++        let aggregate = actions.entry(action).or_default();
++        let elapsed_ms = elapsed.as_secs_f64() * 1000.0;
++        aggregate.count += 1;
++        aggregate.total_ms += elapsed_ms;
++        aggregate.max_ms = aggregate.max_ms.max(elapsed_ms);
++    }
++}
++
++fn take_native_calls() -> Vec<Value> {
++    NATIVE_COMMANDS
++        .get_or_init(|| Mutex::new(Vec::new()))
++        .lock()
++        .map(|mut calls| std::mem::take(&mut *calls))
++        .unwrap_or_default()
++}
++
++fn take_native_actions() -> Value {
++    let actions = NATIVE_ACTIONS.get_or_init(|| Mutex::new(BTreeMap::new()));
++    let Ok(mut actions) = actions.lock() else {
++        return json!({});
++    };
++    let snapshot = std::mem::take(&mut *actions);
++    let mut result = serde_json::Map::new();
++    for (name, metrics) in snapshot {
++        result.insert(name.to_owned(), json!({
++            "count": metrics.count,
++            "totalMs": metrics.total_ms,
++            "meanMs": if metrics.count == 0 { 0.0 } else { metrics.total_ms / metrics.count as f64 },
++            "maxMs": metrics.max_ms,
++        }));
++    }
++    Value::Object(result)
++}
++
++pub fn current_native_snapshot() -> Value {
++    let commands = NATIVE_COMMANDS
++        .get_or_init(|| Mutex::new(Vec::new()))
++        .lock()
++        .map(|commands| commands.clone())
++        .unwrap_or_default();
++    let actions = NATIVE_ACTIONS.get_or_init(|| Mutex::new(BTreeMap::new()));
++    let mut action_snapshot = serde_json::Map::new();
++    if let Ok(actions) = actions.lock() {
++        for (name, metrics) in actions.iter() {
++            action_snapshot.insert((*name).to_owned(), json!({
++                "count": metrics.count,
++                "totalMs": metrics.total_ms,
++                "meanMs": if metrics.count == 0 { 0.0 } else { metrics.total_ms / metrics.count as f64 },
++                "maxMs": metrics.max_ms,
++            }));
++        }
++    }
++    json!({"nativeCommands": commands, "nativeActions": Value::Object(action_snapshot)})
++}
++
++#[tauri::command]
++pub fn desktop_perf_progress(payload: Value) {
++    write_progress(payload);
++}
++
++#[tauri::command]
++pub fn desktop_perf_focus(app: tauri::AppHandle) -> Result<Value, String> {
++    #[cfg(target_os = "macos")]
++    let mut operation_errors = Vec::new();
++    #[cfg(target_os = "macos")]
++    if let Err(error) = app.show() {
++        operation_errors.push(format!("app.show: {error}"));
++    }
++
++    let window = app
++        .get_webview_window("main")
++        .ok_or_else(|| "main webview window is not available".to_owned())?;
++    for (operation, result) in [
++        ("unminimize", window.unminimize()),
++        ("center", window.center()),
++        ("show", window.show()),
++        ("set_always_on_top", window.set_always_on_top(true)),
++        ("set_visible_on_all_workspaces", window.set_visible_on_all_workspaces(true)),
++    ] {
++        if let Err(error) = result {
++            operation_errors.push(format!("{operation}: {error}"));
++        }
++    }
++    #[cfg(target_os = "macos")]
++    if !NSRunningApplication::currentApplication().activateWithOptions(
++        NSApplicationActivationOptions::ActivateIgnoringOtherApps
++            | NSApplicationActivationOptions::ActivateAllWindows,
++    ) {
++        operation_errors.push("NSRunningApplication.activateWithOptions returned false".to_owned());
++    }
++    if let Err(error) = window.set_focus() {
++        operation_errors.push(format!("window.set_focus: {error}"));
++    }
++    if let Err(error) = window.as_ref().set_focus() {
++        operation_errors.push(format!("webview.set_focus: {error}"));
++    }
++
++    let visibility = window.is_visible();
++    let minimized = window.is_minimized();
++    let focused = window.is_focused();
++    let inner_size = window.inner_size();
++    let outer_position = window.outer_position();
++    let query_errors = [
++        visibility.as_ref().err().map(|error| format!("is_visible: {error}")),
++        minimized.as_ref().err().map(|error| format!("is_minimized: {error}")),
++        focused.as_ref().err().map(|error| format!("is_focused: {error}")),
++        inner_size.as_ref().err().map(|error| format!("inner_size: {error}")),
++        outer_position.as_ref().err().map(|error| format!("outer_position: {error}")),
++    ]
++    .into_iter()
++    .flatten()
++    .collect::<Vec<_>>();
++    Ok(json!({
++        "isVisible": visibility.as_ref().ok(),
++        "isMinimized": minimized.as_ref().ok(),
++        "isFocused": focused.as_ref().ok(),
++        "innerSize": inner_size.as_ref().ok().map(|size| json!({"width": size.width, "height": size.height})),
++        "outerPosition": outer_position.as_ref().ok().map(|position| json!({"x": position.x, "y": position.y})),
++        "queryErrors": query_errors,
++        "operationErrors": operation_errors,
++    }))
++}
++
++pub fn write_progress(payload: Value) {
++    let line = serde_json::to_string(&payload).unwrap_or_else(|error| {
++        format!("{{\"serializationError\":{:?}}}", error.to_string())
++    });
++    eprintln!("DESKTOP_PERF_PROGRESS {line}");
++    let Some(path) = std::env::var_os("LODESTORY_PERF_PROGRESS") else {
++        return;
++    };
++    if let Some(parent) = std::path::Path::new(&path).parent() {
++        if let Err(error) = std::fs::create_dir_all(parent) {
++            eprintln!("DESKTOP_PERF_PROGRESS_WRITE_FAILED directory: {error}");
++            return;
++        }
++    }
++    match std::fs::OpenOptions::new().create(true).append(true).open(&path) {
++        Ok(mut file) => {
++            if let Err(error) = writeln!(file, "{line}") {
++                eprintln!("DESKTOP_PERF_PROGRESS_WRITE_FAILED append: {error}");
++            }
++        }
++        Err(error) => eprintln!("DESKTOP_PERF_PROGRESS_WRITE_FAILED open: {error}"),
++    }
++}
++
++#[tauri::command]
++pub fn desktop_perf_report(app: tauri::AppHandle, report: Value) -> Result<(), String> {
++    let Some(output_path) = std::env::var_os("LODESTORY_PERF_OUTPUT") else {
++        eprintln!("DESKTOP_PERF_REPORT_FAILED: LODESTORY_PERF_OUTPUT is not set");
++        app.exit(2);
++        return Err("LODESTORY_PERF_OUTPUT is not set".to_owned());
++    };
++    let report = json!({
++        "frontend": report,
++        "nativeCommands": take_native_calls(),
++        "nativeActions": take_native_actions(),
++    });
++    let bytes = match serde_json::to_vec_pretty(&report) {
++        Ok(bytes) => bytes,
++        Err(error) => {
++            eprintln!("DESKTOP_PERF_REPORT_FAILED: serialization: {error}");
++            app.exit(2);
++            return Err(error.to_string());
++        }
++    };
++    if let Some(parent) = std::path::Path::new(&output_path).parent() {
++        if let Err(error) = std::fs::create_dir_all(parent) {
++            eprintln!("DESKTOP_PERF_REPORT_FAILED: output directory: {error}");
++            app.exit(2);
++            return Err(error.to_string());
++        }
++    }
++    if let Err(error) = std::fs::write(&output_path, &bytes) {
++        eprintln!("DESKTOP_PERF_REPORT_FAILED: output file: {error}");
++        app.exit(2);
++        return Err(format!("could not write measurement report: {error}"));
++    }
++    eprintln!("DESKTOP_PERF_REPORT {}", std::path::PathBuf::from(&output_path).display());
++    app.exit(0);
++    Ok(())
++}
+diff --git a/src-tauri/src/desktop_perf_probe.js b/src-tauri/src/desktop_perf_probe.js
+new file mode 100644
+index 0000000..86b851d
+--- /dev/null
++++ b/src-tauri/src/desktop_perf_probe.js
+@@ -0,0 +1,533 @@
++(() => {
++  if (window.__desktopPerf?.harnessVersion === "desktop-open-stage2-v3") return;
++  const PROJECT_NAME = "测试项目";
++  const FIRST_TIMELINE = "00 · 全书关键剧情";
++  const SECOND_TIMELINE = "01 · 原文细读 0001—0100";
++  const ROUND_COUNT = 5;
++  const EXPECTED_TIMELINE_COUNT = 26;
++  const EXPECTED_EVENT_COUNT = 2158;
++  const BETWEEN_ROUND_SETTLE_MS = 100;
++  const WAIT_MS = 30000;
++  const PROFILE_MODE = new URL(window.location.href).searchParams.get("desktopPerfProfile") === "1";
++  const timeOrigin = performance.now();
++
++  const state = {
++    mode: PROFILE_MODE ? "profile" : "baseline",
++    harnessVersion: "desktop-open-stage2-v3",
++    injectionPath: window.__desktopPerfEvalFallback
++      ? "on_page_load-finished-eval"
++      : window.__desktopPerfPluginInjected ? "tauri-plugin-js_init_script" : "unknown",
++    status: "starting",
++    startedAt: timeOrigin,
++    page: {url: window.location.href, userAgent: navigator.userAgent, platform: navigator.platform, dpr: window.devicePixelRatio},
++    milestones: [],
++    rounds: [],
++    longTasks: [],
++    frameGaps: [],
++    frameGapExclusions: {background: 0, unfocused: 0, roundNotCalibrated: 0, transitions: 0},
++    consoleErrors: [],
++    runtimeErrors: [],
++    failures: [],
++    cpu: Object.create(null),
++    profile: {arrayFrom: {count: 0, totalMs: 0, maxMs: 0}, objectFreeze: {count: 0, totalMs: 0, maxMs: 0}},
++    currentRound: 0,
++    phase: "boot",
++    startTime: null,
++    reportSent: false,
++  };
++  const rootBridgeDescriptor = Object.getOwnPropertyDescriptor(window, "__TAURI_INTERNALS__");
++  const invokeDescriptor = Object.getOwnPropertyDescriptor(window.__TAURI_INTERNALS__ ?? {}, "invoke");
++  state.page.tauriBridge = {
++    rootWritable: rootBridgeDescriptor?.writable ?? null,
++    rootConfigurable: rootBridgeDescriptor?.configurable ?? null,
++    invokeWritable: invokeDescriptor?.writable ?? null,
++    invokeConfigurable: invokeDescriptor?.configurable ?? null,
++    invokeType: typeof window.__TAURI_INTERNALS__?.invoke,
++  };
++  window.__desktopPerf = state;
++  function isActiveVisible(node) {
++    if (!node || !node.isConnected || !node.getClientRects().length) return false;
++    const rect = node.getBoundingClientRect();
++    if (rect.width <= 0 || rect.height <= 0) return false;
++    for (let ancestor = node; ancestor && ancestor.nodeType === 1; ancestor = ancestor.parentElement) {
++      if (ancestor.hidden || ancestor.inert || ancestor.getAttribute("aria-hidden") === "true") return false;
++      const style = getComputedStyle(ancestor);
++      if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
++    }
++    return true;
++  }
++  const activeAll = selector => [...document.querySelectorAll(selector)].filter(isActiveVisible);
++  const activeOne = selector => activeAll(selector)[0] ?? null;
++  function progressSnapshot() {
++    return {
++      url: window.location.href,
++      readyState: document.readyState,
++      probePresent: true,
++      status: state.status,
++      phase: state.phase,
++      currentRound: state.currentRound || null,
++      invokeReady: typeof window.__TAURI_INTERNALS__?.invoke === "function",
++      tauriBridge: state.page.tauriBridge,
++      errors: state.runtimeErrors.length + state.consoleErrors.length + state.failures.length,
++      activeUiPages: activeAll(".ui-page").length,
++      activeWelcomeRows: activeAll(".project-entry").length,
++      activeToolbars: activeAll(".workbench-toolbar").length,
++      activeTimelineRows: activeAll(".outline-design-entry").length,
++      activeCanvases: activeAll(".timeline-canvas-frame").length,
++    };
++  }
++  function sendProgress(phase, details = {}, retry = 0) {
++    const payload = {phase, atMs: performance.now(), round: state.currentRound || null, details, snapshot: progressSnapshot()};
++    const invoke = window.__TAURI_INTERNALS__?.invoke;
++    if (typeof invoke === "function") {
++      Promise.resolve(invoke("desktop_perf_progress", {payload})).catch(error => {
++        state.runtimeErrors.push({atMs: performance.now(), message: `progress IPC failed: ${String(error)}`});
++      });
++    } else if (retry < 400) {
++      setTimeout(() => sendProgress(phase, details, retry + 1), 25);
++    } else {
++      state.runtimeErrors.push({atMs: performance.now(), message: "Tauri invoke bridge did not appear for progress reporting"});
++    }
++  }
++  sendProgress("probe-boot");
++  window.__desktopProbeCpu = (label, milliseconds) => {
++    if (typeof label !== "string" || !Number.isFinite(milliseconds)) return;
++    const total = state.cpu[label] ??= {count: 0, totalMs: 0, maxMs: 0};
++    total.count++;
++    total.totalMs += milliseconds;
++    total.maxMs = Math.max(total.maxMs, milliseconds);
++  };
++
++  function recordProfile(bucket, elapsed) {
++    bucket.count++;
++    bucket.totalMs += elapsed;
++    bucket.maxMs = Math.max(bucket.maxMs, elapsed);
++  }
++
++  if (PROFILE_MODE) {
++    const originalArrayFrom = Array.from;
++    Array.from = function (...args) {
++      const started = performance.now();
++      try { return originalArrayFrom.apply(this, args); }
++      finally { recordProfile(state.profile.arrayFrom, performance.now() - started); }
++    };
++    const originalFreeze = Object.freeze;
++    Object.freeze = function (...args) {
++      const started = performance.now();
++      try { return originalFreeze.apply(this, args); }
++      finally { recordProfile(state.profile.objectFreeze, performance.now() - started); }
++    };
++  }
++
++  function formatError(value) {
++    if (value instanceof Error) return `${value.name}: ${value.message}`;
++    try { return JSON.stringify(value); } catch { return String(value); }
++  }
++  window.addEventListener("error", event => {
++    state.runtimeErrors.push({atMs: performance.now(), message: event.message || formatError(event.error)});
++  });
++  window.addEventListener("unhandledrejection", event => {
++    state.runtimeErrors.push({atMs: performance.now(), message: formatError(event.reason)});
++  });
++  const originalConsoleError = console.error.bind(console);
++  console.error = (...args) => {
++    state.consoleErrors.push({atMs: performance.now(), message: args.map(formatError).join(" ").slice(0, 1000)});
++    originalConsoleError(...args);
++  };
++  try {
++    new PerformanceObserver(list => {
++      for (const entry of list.getEntries()) state.longTasks.push({startMs: entry.startTime, durationMs: entry.duration});
++    }).observe({type: "longtask", buffered: true});
++  } catch {}
++
++  let previousFrame = null;
++  let foregroundTransitionSinceFrame = false;
++  window.addEventListener("blur", () => { foregroundTransitionSinceFrame = true; });
++  window.addEventListener("focus", () => { foregroundTransitionSinceFrame = true; });
++  document.addEventListener("visibilitychange", () => { foregroundTransitionSinceFrame = true; });
++  function sampleFrame(timestamp) {
++    const visible = document.visibilityState === "visible";
++    const focused = document.hasFocus();
++    if (previousFrame !== null) {
++      const gap = timestamp - previousFrame.timestamp;
++      const sameRound = previousFrame.round === state.currentRound;
++      const calibrated = state.currentRound > 0 && state.currentRound === state.rounds.length + 1;
++      if (!visible) state.frameGapExclusions.background++;
++      else if (!focused) state.frameGapExclusions.unfocused++;
++      else if (foregroundTransitionSinceFrame) state.frameGapExclusions.transitions++;
++      else if (!sameRound || !calibrated || !previousFrame.visible || !previousFrame.focused) state.frameGapExclusions.roundNotCalibrated++;
++      else if (gap > 0) state.frameGaps.push({
++        atMs: timestamp,
++        round: state.currentRound,
++        phase: state.phase,
++        gapMs: gap,
++        visibilityState: document.visibilityState,
++        hasFocus: focused,
++        foregroundCalibrated: true,
++      });
++    }
++    previousFrame = {timestamp, visible, focused, round: state.currentRound};
++    foregroundTransitionSinceFrame = false;
++    requestAnimationFrame(sampleFrame);
++  }
++  requestAnimationFrame(sampleFrame);
++
++  function mark(name, details = {}) {
++    const entry = {name, atMs: performance.now(), round: state.currentRound || null, phase: state.phase, ...details};
++    state.milestones.push(entry);
++    if (["dom-content-loaded", "welcome-row-ready", "round-start", "project-open-click", "workbench-toolbar-ready", "timeline-list-ready", "all-data-ready", "foreground-native-state", "first-timeline-canvas-ready", "second-timeline-ready", "first-timeline-restored", "project-returned-to-welcome"].includes(name)) {
++      sendProgress(name, details);
++    }
++    return entry.atMs;
++  }
++  const delay = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds));
++  function waitForAnimationFrames(timeoutMs = 1500) {
++    return new Promise((resolve, reject) => {
++      const timeout = setTimeout(() => reject(new Error(`two animation frames timed out after ${timeoutMs}ms`)), timeoutMs);
++      requestAnimationFrame(firstFrame => requestAnimationFrame(secondFrame => {
++        clearTimeout(timeout);
++        resolve({firstFrame, secondFrame, elapsedMs: secondFrame - firstFrame});
++      }));
++    });
++  }
++  function documentFocusSnapshot() {
++    return {visibilityState: document.visibilityState, hasFocus: document.hasFocus()};
++  }
++
++  async function waitFor(predicate, label, timeoutMs = WAIT_MS) {
++    const end = performance.now() + timeoutMs;
++    let lastError;
++    while (performance.now() < end) {
++      try {
++        const result = predicate();
++        if (result) return result;
++      } catch (error) { lastError = error; }
++      await delay(25);
++    }
++    throw new Error(`${label} timed out after ${timeoutMs}ms${lastError ? `: ${formatError(lastError)}` : ""}`);
++  }
++
++  function textOf(node) { return node?.innerText?.replace(/\s+/g, " ").trim() ?? ""; }
++  function findTimeline(title) {
++    return activeAll(".outline-design-entry").find(entry => textOf(entry).includes(title)) ?? null;
++  }
++  function rowsReady() {
++    const entries = activeAll(".outline-design-entry");
++    const loading = activeAll(".outline-design-list-status").some(node => textOf(node).includes("正在读取时间线"));
++    const error = activeOne(".outline-design-list-status[role=alert]");
++    return entries.length === 26 && !loading && !error;
++  }
++  function timelineDataSnapshot() {
++    const entries = activeAll(".outline-design-entry");
++    const rows = entries.map(entry => {
++      const title = textOf(entry.querySelector(".outline-design-entry-heading strong"));
++      const countText = textOf(entry.querySelector(".outline-design-entry-count"));
++      const eventCount = Number.parseInt(countText.match(/[\d,]+/)?.[0]?.replaceAll(",", "") ?? "", 10);
++      const period = textOf(entry.querySelector(".outline-design-entry-period"));
++      return {title, eventCount: Number.isFinite(eventCount) ? eventCount : null, period};
++    });
++    const totalEventCount = rows.reduce((sum, row) => sum + (row.eventCount ?? 0), 0);
++    const complete = rows.length === EXPECTED_TIMELINE_COUNT
++      && rows.every(row => row.title && row.eventCount !== null && row.period && !row.period.includes("时间待定"))
++      && totalEventCount === EXPECTED_EVENT_COUNT;
++    return {rows, totalEventCount, complete};
++  }
++  function visibleTimelineTitles() {
++    const overlay = activeOne('.timeline-events-overlay[data-active="true"]');
++    if (!overlay) return [];
++    return [...overlay.querySelectorAll(".timeline-event-title")].filter(node => {
++      if (!node.isConnected || !node.getClientRects().length) return false;
++      const rect = node.getBoundingClientRect();
++      if (rect.width <= 0 || rect.height <= 0) return false;
++      for (let ancestor = node; ancestor && ancestor.nodeType === 1; ancestor = ancestor.parentElement) {
++        if (ancestor.hidden || ancestor.inert) return false;
++        const style = getComputedStyle(ancestor);
++        if (style.display === "none" || style.visibility === "hidden" || Number(style.opacity) === 0) return false;
++      }
++      return true;
++    });
++  }
++  function activeAxisAnchorCount() {
++    return activeOne('.timeline-events-overlay[data-active="true"]')
++      ?.querySelectorAll(".timeline-event-axis-marker").length ?? 0;
++  }
++  function canvasViewportSnapshot(surface) {
++    if (!surface) return null;
++    return {
++      centerX: Number(surface.getAttribute("data-canvas-center-x")),
++      centerY: Number(surface.getAttribute("data-canvas-center-y")),
++      zoom: Number(surface.getAttribute("data-canvas-zoom")),
++    };
++  }
++  function domSnapshot() {
++    const toolbar = activeOne(".workbench-toolbar [data-toolbar-project-name]");
++    const selected = activeOne('.outline-design-entry[aria-pressed="true"]');
++    const canvas = activeOne(".timeline-canvas-frame");
++    const axis = activeOne(".timeline-axis-svg");
++    return {
++      title: document.title,
++      readyState: document.readyState,
++      activeUiPages: activeAll(".ui-page").length,
++      welcomeRows: activeAll(".project-entry").length,
++      toolbar: Boolean(toolbar),
++      projectName: textOf(toolbar),
++      outlineRows: activeAll(".outline-design-entry").length,
++      outlineLoading: activeAll(".outline-design-list-status").map(textOf),
++      selectedTimeline: textOf(selected),
++      canvas: Boolean(canvas),
++      axis: axis?.getAttribute("aria-label") ?? null,
++      tauriBridge: state.page.tauriBridge,
++    };
++  }
++
++  function durationStats(values) {
++    if (!values.length) return {count: 0, meanMs: null, medianMs: null, p95Ms: null, maxMs: null};
++    const sorted = [...values].sort((left, right) => left - right);
++    const at = percentile => sorted[Math.min(sorted.length - 1, Math.ceil(percentile * sorted.length) - 1)];
++    return {
++      count: sorted.length,
++      meanMs: sorted.reduce((sum, value) => sum + value, 0) / sorted.length,
++      medianMs: at(0.5),
++      p95Ms: at(0.95),
++      maxMs: sorted[sorted.length - 1],
++    };
++  }
++
++  function finalizeShape() {
++    const frameGapsByRound = {};
++    for (const gap of state.frameGaps) {
++      const key = String(gap.round ?? "startup");
++      (frameGapsByRound[key] ??= []).push(gap.gapMs);
++    }
++    return {
++      ...state,
++      commandMeasurements: "native Rust command and store action timings are attached by the desktop report command",
++      timingSummary: {
++        openToToolbar: durationStats(state.rounds.map(round => round.openToToolbarMs).filter(Number.isFinite)),
++        openToTimelineListReady: durationStats(state.rounds.map(round => round.openToTimelineListReadyMs).filter(Number.isFinite)),
++        openToAllDataReady: durationStats(state.rounds.map(round => round.allDataReadyMs).filter(Number.isFinite)),
++        openToFirstCanvasReady: durationStats(state.rounds.map(round => round.openToFirstCanvasReadyMs).filter(Number.isFinite)),
++        projectCloseToWelcome: durationStats(state.rounds.map(round => round.projectCloseToWelcomeMs).filter(Number.isFinite)),
++        fullOpenUseCloseCycle: durationStats(state.rounds.map(round => round.fullCycleMs).filter(Number.isFinite)),
++      },
++      frameGapSummary: Object.fromEntries(Object.entries(frameGapsByRound).map(([round, values]) => [round, durationStats(values)])),
++      domAtReport: domSnapshot(),
++    };
++  }
++
++  async function reportAndExit(status, error = null) {
++    if (state.reportSent) return;
++    state.reportSent = true;
++    state.status = status;
++    if (error) state.failures.push({atMs: performance.now(), message: formatError(error), dom: domSnapshot()});
++    state.finishedAt = performance.now();
++    const report = finalizeShape();
++    try {
++      if (typeof window.__TAURI_INTERNALS__?.invoke !== "function") throw new Error("Tauri invoke bridge is not available");
++      await window.__TAURI_INTERNALS__.invoke("desktop_perf_progress", {payload: {
++        phase: error ? "probe-error" : "probe-finished",
++        atMs: performance.now(),
++        round: state.currentRound || null,
++        details: error ? {message: formatError(error)} : {},
++        snapshot: progressSnapshot(),
++      }});
++      await window.__TAURI_INTERNALS__.invoke("desktop_perf_report", {report});
++    } catch (reportError) {
++      state.failures.push({atMs: performance.now(), message: `Could not deliver report: ${formatError(reportError)}`});
++      console.error("DESKTOP_PERF_REPORT_FAILED", state.failures);
++    }
++  }
++
++  async function runRound(roundNumber) {
++    const round = {round: roundNumber, startedAtMs: performance.now()};
++    state.currentRound = roundNumber;
++    state.phase = "foreground-calibration";
++    round.documentBeforeFocus = documentFocusSnapshot();
++    round.nativeFocusStartedAtMs = performance.now();
++    try {
++      round.nativeWindow = await window.__TAURI_INTERNALS__.invoke("desktop_perf_focus");
++      mark("foreground-native-state", {round: roundNumber, nativeWindow: round.nativeWindow});
++      await waitFor(() => document.visibilityState === "visible" && document.hasFocus(), `visible focused webview before round ${roundNumber}`, 30000);
++      round.documentAfterFocus = documentFocusSnapshot();
++      round.nativeFocusDurationMs = performance.now() - round.nativeFocusStartedAtMs;
++      round.foregroundFrames = await waitForAnimationFrames(1500);
++      round.foregroundCalibrated = document.visibilityState === "visible" && document.hasFocus();
++      if (!round.foregroundCalibrated) throw new Error("webview lost visibility or focus during foreground calibration");
++    } catch (error) {
++      round.documentAfterFocus ??= documentFocusSnapshot();
++      round.foregroundCalibrated = false;
++      round.foregroundCalibrationError = formatError(error);
++      state.rounds.push(round);
++      throw new Error(`round ${roundNumber} foreground calibration failed; frame gaps cannot be interpreted as CPU stalls: ${formatError(error)}`);
++    }
++    mark("foreground-calibrated", {
++      round: roundNumber,
++      nativeFocusDurationMs: round.nativeFocusDurationMs,
++      document: round.documentAfterFocus,
++      twoFrameWaitMs: round.foregroundFrames.elapsedMs,
++    });
++    state.phase = "open-project";
++    mark("round-start", {round: roundNumber});
++    const openButton = await waitFor(
++      () => activeAll(`.project-entry[aria-label="打开项目 ${PROJECT_NAME}"]:not(:disabled)`)[0],
++      `recent project button for ${PROJECT_NAME}`,
++    );
++    round.openClickAtMs = performance.now();
++    openButton.click();
++    mark("project-open-click", {round: roundNumber});
++    const toolbar = await waitFor(
++      () => {
++        const button = activeOne(".workbench-toolbar [data-toolbar-project-name]");
++        return button && textOf(button) === PROJECT_NAME ? button : null;
++      },
++      `workbench toolbar after round ${roundNumber}`,
++    );
++    round.toolbarAtMs = performance.now();
++    round.openToToolbarMs = round.toolbarAtMs - round.openClickAtMs;
++    mark("workbench-toolbar-ready", {round: roundNumber, latencyMs: round.openToToolbarMs});
++
++    state.phase = "timeline-list";
++    const outlineToggle = await waitFor(
++      () => activeOne('button[aria-label="大纲设计"]'),
++      `outline toggle after round ${roundNumber}`,
++    );
++    if (outlineToggle.getAttribute("aria-pressed") !== "true") outlineToggle.click();
++    await waitFor(rowsReady, `26 timeline rows with no loading state after round ${roundNumber}`);
++    round.timelineListReadyAtMs = performance.now();
++    round.openToTimelineListReadyMs = round.timelineListReadyAtMs - round.openClickAtMs;
++    round.timelineRowCount = activeAll(".outline-design-entry").length;
++    mark("timeline-list-ready", {round: roundNumber, latencyMs: round.openToTimelineListReadyMs, rowCount: round.timelineRowCount});
++    const completeTimelineData = await waitFor(() => {
++      const snapshot = timelineDataSnapshot();
++      return snapshot.complete ? snapshot : null;
++    }, `complete timeline titles, counts totaling ${EXPECTED_EVENT_COUNT}, and periods after round ${roundNumber}`);
++    round.allDataReadyAtMs = performance.now();
++    round.allDataReadyMs = round.allDataReadyAtMs - round.openClickAtMs;
++    round.timelineData = completeTimelineData.rows;
++    round.timelineEventCountTotal = completeTimelineData.totalEventCount;
++    mark("all-data-ready", {
++      round: roundNumber,
++      latencyMs: round.allDataReadyMs,
++      timelineCount: completeTimelineData.rows.length,
++      eventCountTotal: completeTimelineData.totalEventCount,
++    });
++
++    state.phase = "first-timeline-canvas";
++    const first = findTimeline(FIRST_TIMELINE);
++    if (!first) throw new Error(`Could not find first timeline: ${FIRST_TIMELINE}`);
++    first.click();
++    await waitFor(() => {
++      const axis = activeOne(".timeline-axis-svg");
++      return axis?.getAttribute("aria-label")?.includes(FIRST_TIMELINE)
++        && !activeAll(".timeline-axis-feedback[role=status]").length
++        && visibleTimelineTitles().length > 0
++        ? axis : null;
++    }, `first timeline canvas with visible event titles after round ${roundNumber}`);
++    round.firstCanvasReadyAtMs = performance.now();
++    round.openToFirstCanvasReadyMs = round.firstCanvasReadyAtMs - round.openClickAtMs;
++    round.firstTimelineEventTitleCount = visibleTimelineTitles().length;
++    round.firstTimelineEventTitles = visibleTimelineTitles().map(textOf);
++    round.firstTimelineAxisAnchorCount = activeAxisAnchorCount();
++    mark("first-timeline-canvas-ready", {
++      round: roundNumber,
++      latencyMs: round.openToFirstCanvasReadyMs,
++      visibleEventTitles: round.firstTimelineEventTitleCount,
++      axisAnchors: round.firstTimelineAxisAnchorCount,
++    });
++
++    const surface = await waitFor(() => activeOne(".canvas-surface[aria-label$='时间轴']"), `first timeline surface after round ${roundNumber}`);
++    const rect = surface.getBoundingClientRect();
++    const canvasClickStarted = performance.now();
++    const runtimeErrorStart = state.runtimeErrors.length;
++    const consoleErrorStart = state.consoleErrors.length;
++    round.canvasViewportBeforeInput = canvasViewportSnapshot(surface);
++    const pointerId = 7100 + roundNumber;
++    try {
++      surface.dispatchEvent(new PointerEvent("pointerdown", {bubbles: true, pointerId, pointerType: "mouse", isPrimary: true, button: 0, buttons: 1, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2}));
++      surface.dispatchEvent(new PointerEvent("pointerup", {bubbles: true, pointerId, pointerType: "mouse", isPrimary: true, button: 0, buttons: 0, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2}));
++      surface.dispatchEvent(new MouseEvent("click", {bubbles: true, button: 0, clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2}));
++    } catch (error) {
++      state.runtimeErrors.push({atMs: performance.now(), phase: "canvas-input", round: roundNumber, message: formatError(error)});
++    }
++    round.canvasInputFrames = await waitForAnimationFrames(1500);
++    round.canvasInputDurationMs = performance.now() - canvasClickStarted;
++    round.canvasInputTarget = surface.getAttribute("aria-label");
++    round.canvasInputDelivered = activeOne(".timeline-axis-svg")?.getAttribute("aria-label")?.includes(FIRST_TIMELINE) ?? false;
++    round.canvasViewportAfterInput = canvasViewportSnapshot(surface);
++    round.canvasViewportUnchanged = JSON.stringify(round.canvasViewportBeforeInput) === JSON.stringify(round.canvasViewportAfterInput);
++    round.canvasInputRuntimeErrors = state.runtimeErrors.slice(runtimeErrorStart);
++    round.canvasInputConsoleErrors = state.consoleErrors.slice(consoleErrorStart);
++    mark("first-canvas-input-delivered", {round: roundNumber, durationMs: round.canvasInputDurationMs});
++
++    state.phase = "switch-second-timeline";
++    const switchStarted = performance.now();
++    const second = findTimeline(SECOND_TIMELINE);
++    if (!second) throw new Error(`Could not find second timeline: ${SECOND_TIMELINE}`);
++    second.click();
++    await waitFor(() => {
++      const axis = activeOne(".timeline-axis-svg");
++      return axis?.getAttribute("aria-label")?.includes(SECOND_TIMELINE)
++        && activeOne('.outline-design-entry[aria-pressed="true"]') === second
++        ? axis : null;
++    }, `switch to second timeline after round ${roundNumber}`);
++    round.switchToSecondMs = performance.now() - switchStarted;
++    mark("second-timeline-ready", {round: roundNumber, durationMs: round.switchToSecondMs});
++
++    state.phase = "switch-first-timeline";
++    const switchBackStarted = performance.now();
++    const firstAgain = findTimeline(FIRST_TIMELINE);
++    firstAgain?.click();
++    await waitFor(() => {
++      const axis = activeOne(".timeline-axis-svg");
++      return axis?.getAttribute("aria-label")?.includes(FIRST_TIMELINE)
++        && activeOne('.outline-design-entry[aria-pressed="true"]') === firstAgain
++        ? axis : null;
++    }, `switch back to first timeline after round ${roundNumber}`);
++    round.switchBackToFirstMs = performance.now() - switchBackStarted;
++    mark("first-timeline-restored", {round: roundNumber, durationMs: round.switchBackToFirstMs});
++
++    state.phase = "close-project";
++    const closeStarted = performance.now();
++    const projectTrigger = await waitFor(() => activeOne("[data-toolbar-project-trigger]"), `project menu trigger after round ${roundNumber}`);
++    projectTrigger.click();
++    await waitFor(() => activeOne(`[aria-label="${PROJECT_NAME}项目菜单"]`), `project menu after round ${roundNumber}`);
++    const leaveButton = activeAll("[data-toolbar-menu-item]").find(button => textOf(button).includes("返回欢迎页"));
++    if (!leaveButton) throw new Error("Could not find the actual '返回欢迎页' toolbar menu item");
++    leaveButton.click();
++    await waitFor(() => {
++      const welcome = activeAll(`.project-entry[aria-label="打开项目 ${PROJECT_NAME}"]:not(:disabled)`)[0];
++      return welcome && !activeOne(".workbench-toolbar") ? welcome : null;
++    }, `active welcome page with old toolbar absent after round ${roundNumber}`);
++    round.projectCloseToWelcomeMs = performance.now() - closeStarted;
++    round.completedAtMs = performance.now();
++    round.fullCycleMs = round.completedAtMs - round.openClickAtMs;
++    state.rounds.push(round);
++    mark("project-returned-to-welcome", {round: roundNumber, latencyMs: round.projectCloseToWelcomeMs, fullCycleMs: round.fullCycleMs});
++    state.phase = "between-round-settle";
++    await delay(BETWEEN_ROUND_SETTLE_MS);
++    round.betweenRoundSettleMs = BETWEEN_ROUND_SETTLE_MS;
++    round.settledAtMs = performance.now();
++  }
++
++  async function run() {
++    state.phase = "initial-page-ready";
++    mark("dom-content-loaded", {readyState: document.readyState});
++    await waitFor(() => document.querySelector("#root"), "React root");
++    await waitFor(() => activeAll(`.project-entry[aria-label="打开项目 ${PROJECT_NAME}"]:not(:disabled)`)[0], "initial real recent-project row");
++    state.initialWelcomeReadyAtMs = performance.now();
++    mark("welcome-row-ready", {latencyMs: state.initialWelcomeReadyAtMs - state.startedAt});
++
++    for (let round = 1; round <= ROUND_COUNT; round++) await runRound(round);
++    state.currentRound = 0;
++    state.phase = "done";
++    state.status = "success";
++    await reportAndExit("success");
++  }
++
++  const begin = () => { run().catch(error => reportAndExit("error", error)); };
++  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", begin, {once: true});
++  else setTimeout(begin, 0);
++  setTimeout(() => {
++    if (!state.reportSent) reportAndExit("timeout", new Error(`Global measurement timeout in phase ${state.phase}`));
++  }, 5 * 60 * 1000);
++})();
+diff --git a/src-tauri/src/document_commands.rs b/src-tauri/src/document_commands.rs
+index 2d70b2d..ef3c117 100644
+--- a/src-tauri/src/document_commands.rs
++++ b/src-tauri/src/document_commands.rs
+@@ -3,6 +3,7 @@ use crate::{
+     project_index::ProjectError,
+ };
+ use std::path::Path;
++use std::time::Instant;
+ use tauri::{AppHandle, Manager};
+ 
+ #[tauri::command]
+@@ -10,8 +11,12 @@ pub async fn list_documents(
+     app: AppHandle,
+     project_path: String,
+ ) -> Result<Vec<TreeEntry>, ProjectError> {
+-    tauri::async_runtime::spawn_blocking(move || {
+-        app.state::<Documents>().list(Path::new(&project_path))
++    let started = Instant::now();
++    let result = tauri::async_runtime::spawn_blocking(move || {
++        let started = Instant::now();
++        let result = app.state::<Documents>().list(Path::new(&project_path));
++        crate::desktop_perf::record_native_action("documents.list", started.elapsed());
++        result
+     })
+     .await
+     .map_err(|error| {
+@@ -19,5 +24,7 @@ pub async fn list_documents(
+             "document_operation_failed",
+             format!("文档操作失败：{error}"),
+         )
+-    })?
++    })?;
++    crate::desktop_perf::record_native("list_documents", started.elapsed());
++    result
+ }
+diff --git a/src-tauri/src/lib.rs b/src-tauri/src/lib.rs
+index 0331a91..adac397 100644
+--- a/src-tauri/src/lib.rs
++++ b/src-tauri/src/lib.rs
+@@ -1,4 +1,5 @@
+ mod app_config;
++mod desktop_perf;
+ mod document_commands;
+ mod documents;
+ mod project_commands;
+@@ -7,6 +8,8 @@ mod project_files;
+ mod project_index;
+ mod system_fonts;
+ 
++use std::path::PathBuf;
++use std::time::Duration;
+ use tauri::Manager;
+ 
+ #[tauri::command]
+@@ -17,14 +20,125 @@ fn greet(name: &str) -> String {
+ #[cfg_attr(mobile, tauri::mobile_entry_point)]
+ pub fn run() {
+     tauri::Builder::default()
++        .plugin(
++            tauri::plugin::Builder::<tauri::Wry, ()>::new("desktop_perf_probe")
++                .js_init_script(format!(
++                    "window.__desktopPerfPluginInjected = true;\n{}",
++                    include_str!("desktop_perf_probe.js")
++                ))
++                .build(),
++        )
+         .plugin(tauri_plugin_dialog::init())
+         .plugin(tauri_plugin_opener::init())
++        .on_page_load(|webview, payload| {
++            let url = payload.url().to_string();
++            let event = payload.event();
++            eprintln!("DESKTOP_PERF_PAGE_LOAD event={event:?} url={url}");
++            if matches!(event, tauri::webview::PageLoadEvent::Started) {
++                let webview = webview.clone();
++                let _ = tauri::async_runtime::spawn_blocking(move || {
++                    std::thread::sleep(Duration::from_secs(5));
++                    let script = r#"(() => ({
++                      phase: "native-five-second-snapshot",
++                      url: location.href,
++                      readyState: document.readyState,
++                      probePresent: Boolean(window.__desktopPerf),
++                      probePhase: window.__desktopPerf?.phase ?? null,
++                      probeStatus: window.__desktopPerf?.status ?? null,
++                      currentRound: window.__desktopPerf?.currentRound ?? null,
++                      runtimeErrorCount: window.__desktopPerf?.runtimeErrors?.length ?? null,
++                      bridge: {
++                        root: Object.getOwnPropertyDescriptor(window, "__TAURI_INTERNALS__") ?? null,
++                        invoke: Object.getOwnPropertyDescriptor(window.__TAURI_INTERNALS__ ?? {}, "invoke") ?? null,
++                        invokeType: typeof window.__TAURI_INTERNALS__?.invoke
++                      },
++                      activeUiPages: document.querySelectorAll(".ui-page:not([hidden])").length,
++                      welcomeRows: document.querySelectorAll(".ui-page:not([hidden]) .project-entry").length,
++                      activeToolbars: document.querySelectorAll(".ui-page:not([hidden]) .workbench-toolbar").length,
++                      activeTimelineRows: document.querySelectorAll(".ui-page:not([hidden]) .outline-design-entry").length,
++                      activeCanvases: document.querySelectorAll(".ui-page:not([hidden]) .timeline-canvas-frame").length
++                    }))()"#;
++                    if let Err(error) = webview.eval_with_callback(script, |result| {
++                        eprintln!("DESKTOP_PERF_NATIVE_AFTER_5S {result}");
++                        let page = serde_json::from_str::<serde_json::Value>(&result)
++                            .ok()
++                            .and_then(|value| match value {
++                                serde_json::Value::String(text) => serde_json::from_str(&text).ok(),
++                                value => Some(value),
++                            })
++                            .unwrap_or_else(|| serde_json::json!({
++                                "raw": result,
++                            }));
++                        let snapshot = serde_json::json!({
++                            "phase": "native-five-second-snapshot",
++                            "page": page,
++                            "native": desktop_perf::current_native_snapshot(),
++                        });
++                        desktop_perf::write_progress(snapshot);
++                    }) {
++                        eprintln!("DESKTOP_PERF_NATIVE_AFTER_5S_EVAL_FAILED {error}");
++                    }
++                });
++            }
++            if matches!(event, tauri::webview::PageLoadEvent::Finished) {
++                let probe_script = format!(
++                    "window.__desktopPerfEvalFallback = true;\n{}",
++                    include_str!("desktop_perf_probe.js")
++                );
++                if let Err(error) = webview.eval(probe_script) {
++                    eprintln!("DESKTOP_PERF_FINISHED_EVAL_FAILED url={url} error={error}");
++                } else {
++                    eprintln!("DESKTOP_PERF_FINISHED_EVAL_REQUESTED url={url}");
++                    let state_script = r#"(() => ({
++                      phase: "finished-eval-checkpoint",
++                      url: location.href,
++                      readyState: document.readyState,
++                      probePresent: Boolean(window.__desktopPerf),
++                      probePhase: window.__desktopPerf?.phase ?? null,
++                      probeStatus: window.__desktopPerf?.status ?? null,
++                      injectionPath: window.__desktopPerf?.injectionPath ?? null,
++                      currentRound: window.__desktopPerf?.currentRound ?? null,
++                      runtimeErrorCount: window.__desktopPerf?.runtimeErrors?.length ?? null,
++                      activeUiPages: document.querySelectorAll(".ui-page:not([hidden])").length,
++                      welcomeRows: document.querySelectorAll(".ui-page:not([hidden]) .project-entry").length,
++                      activeToolbars: document.querySelectorAll(".ui-page:not([hidden]) .workbench-toolbar").length,
++                      activeTimelineRows: document.querySelectorAll(".ui-page:not([hidden]) .outline-design-entry").length,
++                      activeCanvases: document.querySelectorAll(".ui-page:not([hidden]) .timeline-canvas-frame").length
++                    }))()"#;
++                    if let Err(error) = webview.eval_with_callback(state_script, |result| {
++                        eprintln!("DESKTOP_PERF_FINISHED_EVAL_STATE {result}");
++                        let page = serde_json::from_str::<serde_json::Value>(&result)
++                            .ok()
++                            .and_then(|value| match value {
++                                serde_json::Value::String(text) => serde_json::from_str(&text).ok(),
++                                value => Some(value),
++                            })
++                            .unwrap_or_else(|| serde_json::json!({"raw": result}));
++                        desktop_perf::write_progress(serde_json::json!({
++                            "phase": "finished-eval-checkpoint",
++                            "page": page,
++                            "native": desktop_perf::current_native_snapshot(),
++                        }));
++                    }) {
++                        eprintln!("DESKTOP_PERF_FINISHED_STATE_EVAL_FAILED {error}");
++                    }
++                }
++            }
++        })
+         .setup(|app| {
+-            let directory = app.path().app_config_dir()?;
+-            let legacy = app.path().config_dir()?.join("com.lodestory.app");
+-            app_config::migrate_legacy_directory(&directory, &legacy)?;
+-            let path = directory.join(project_index::INDEX_FILENAME);
+-            app.manage(project_index::ProjectIndex::new(path));
++            // The measurement harness must never discover or migrate the user's real app config.
++            let directory = std::env::var_os("LODESTORY_PERF_CONFIG_DIR")
++                .map(PathBuf::from)
++                .ok_or_else(|| std::io::Error::other("LODESTORY_PERF_CONFIG_DIR is required"))?;
++            std::fs::create_dir_all(&directory)?;
++            let project_path = std::env::var_os("LODESTORY_PERF_PROJECT")
++                .map(PathBuf::from)
++                .ok_or_else(|| std::io::Error::other("LODESTORY_PERF_PROJECT is required"))?;
++
++            // Seed only the isolated harness index by using the real ProjectIndex implementation.
++            let index = project_index::ProjectIndex::new(directory.join(project_index::INDEX_FILENAME));
++            index.open(&project_path).map_err(|error| std::io::Error::other(error.message))?;
++            app.manage(index);
+             app.manage(documents::Documents::default());
+             app.manage(project_files::ProjectFiles::default());
+             Ok(())
+@@ -45,6 +159,9 @@ pub fn run() {
+             project_file_commands::list_project_directory,
+             project_file_commands::create_project_directory,
+             system_fonts::list_system_font_families,
++            desktop_perf::desktop_perf_focus,
++            desktop_perf::desktop_perf_progress,
++            desktop_perf::desktop_perf_report,
+         ])
+         .run(tauri::generate_context!())
+         .expect("error while running tauri application");
+diff --git a/src-tauri/src/project_commands.rs b/src-tauri/src/project_commands.rs
+index 89a8fbc..3d567b4 100644
+--- a/src-tauri/src/project_commands.rs
++++ b/src-tauri/src/project_commands.rs
+@@ -2,6 +2,7 @@ use crate::project_index::{OpenedProject, ProjectError, ProjectIndex, RecentProj
+ use std::path::Path;
+ use tauri::{AppHandle, Manager, WebviewWindow};
+ use tauri_plugin_dialog::DialogExt;
++use std::time::Instant;
+ use uuid::Uuid;
+ 
+ async fn with_index<T: Send + 'static>(
+@@ -15,12 +16,18 @@ async fn with_index<T: Send + 'static>(
+ 
+ #[tauri::command]
+ pub async fn list_recent_projects(app: AppHandle) -> Result<Vec<RecentProject>, ProjectError> {
+-    with_index(app, ProjectIndex::list).await
++    let started = Instant::now();
++    let result = with_index(app, ProjectIndex::list).await;
++    crate::desktop_perf::record_native("list_recent_projects", started.elapsed());
++    result
+ }
+ 
+ #[tauri::command]
+ pub async fn open_project(app: AppHandle, path: String) -> Result<OpenedProject, ProjectError> {
+-    with_index(app, move |index| index.open(Path::new(&path))).await
++    let started = Instant::now();
++    let result = with_index(app, move |index| index.open(Path::new(&path))).await;
++    crate::desktop_perf::record_native("open_project", started.elapsed());
++    result
+ }
+ 
+ #[tauri::command]
+@@ -29,10 +36,11 @@ pub async fn create_project(
+     parent_path: String,
+     name: String,
+ ) -> Result<OpenedProject, ProjectError> {
+-    with_index(app, move |index| {
+-        index.create(Path::new(&parent_path), &name)
+-    })
+-    .await
++    let _ = (app, parent_path, name);
++    Err(ProjectError::new(
++        "measurement_read_only",
++        "Project creation is disabled in the desktop measurement harness.",
++    ))
+ }
+ 
+ #[tauri::command]
+diff --git a/src-tauri/src/project_file_commands.rs b/src-tauri/src/project_file_commands.rs
+index 1ba4d09..e00687c 100644
+--- a/src-tauri/src/project_file_commands.rs
++++ b/src-tauri/src/project_file_commands.rs
+@@ -3,6 +3,7 @@ use crate::{
+     project_index::ProjectError,
+ };
+ use std::path::Path;
++use std::time::Instant;
+ use tauri::{AppHandle, Manager};
+ 
+ async fn with_project_files<T: Send + 'static>(
+@@ -25,10 +26,16 @@ pub async fn read_project_file(
+     project_path: String,
+     path: String,
+ ) -> Result<ProjectFileRecord, ProjectError> {
+-    with_project_files(app, move |store| {
+-        store.read(Path::new(&project_path), &path)
++    let started = Instant::now();
++    let result = with_project_files(app, move |store| {
++        let started = Instant::now();
++        let result = store.read(Path::new(&project_path), &path);
++        crate::desktop_perf::record_native_action("store.read", started.elapsed());
++        result
+     })
+-    .await
++    .await;
++    crate::desktop_perf::record_native("read_project_file", started.elapsed());
++    result
+ }
+ 
+ #[tauri::command]
+@@ -40,16 +47,11 @@ pub async fn create_project_file(
+     create_parents: Option<bool>,
+     accept_identical: Option<bool>,
+ ) -> Result<ProjectFileRecord, ProjectError> {
+-    with_project_files(app, move |store| {
+-        store.create(
+-            Path::new(&project_path),
+-            &path,
+-            &bytes,
+-            create_parents.unwrap_or(false),
+-            accept_identical.unwrap_or(false),
+-        )
+-    })
+-    .await
++    let _ = (app, project_path, path, bytes, create_parents, accept_identical);
++    Err(ProjectError::new(
++        "measurement_read_only",
++        "Project writes are disabled in the desktop measurement harness.",
++    ))
+ }
+ 
+ #[tauri::command]
+@@ -60,10 +62,11 @@ pub async fn save_project_file(
+     bytes: Vec<u8>,
+     expected_bytes: Vec<u8>,
+ ) -> Result<(), ProjectError> {
+-    with_project_files(app, move |store| {
+-        store.save(Path::new(&project_path), &path, &bytes, &expected_bytes)
+-    })
+-    .await
++    let _ = (app, project_path, path, bytes, expected_bytes);
++    Err(ProjectError::new(
++        "measurement_read_only",
++        "Project writes are disabled in the desktop measurement harness.",
++    ))
+ }
+ 
+ #[tauri::command]
+@@ -73,10 +76,11 @@ pub async fn delete_project_file(
+     path: String,
+     expected_bytes: Vec<u8>,
+ ) -> Result<(), ProjectError> {
+-    with_project_files(app, move |store| {
+-        store.delete(Path::new(&project_path), &path, &expected_bytes)
+-    })
+-    .await
++    let _ = (app, project_path, path, expected_bytes);
++    Err(ProjectError::new(
++        "measurement_read_only",
++        "Project writes are disabled in the desktop measurement harness.",
++    ))
+ }
+ 
+ #[tauri::command]
+@@ -85,10 +89,16 @@ pub async fn list_project_directory(
+     project_path: String,
+     path: String,
+ ) -> Result<ProjectDirectoryListing, ProjectError> {
+-    with_project_files(app, move |store| {
+-        store.list_directory(Path::new(&project_path), &path)
++    let started = Instant::now();
++    let result = with_project_files(app, move |store| {
++        let started = Instant::now();
++        let result = store.list_directory(Path::new(&project_path), &path);
++        crate::desktop_perf::record_native_action("store.list_directory", started.elapsed());
++        result
+     })
+-    .await
++    .await;
++    crate::desktop_perf::record_native("list_project_directory", started.elapsed());
++    result
+ }
+ 
+ #[tauri::command]
+@@ -98,8 +108,9 @@ pub async fn create_project_directory(
+     path: String,
+     recursive: Option<bool>,
+ ) -> Result<(), ProjectError> {
+-    with_project_files(app, move |store| {
+-        store.create_directory(Path::new(&project_path), &path, recursive.unwrap_or(false))
+-    })
+-    .await
++    let _ = (app, project_path, path, recursive);
++    Err(ProjectError::new(
++        "measurement_read_only",
++        "Project writes are disabled in the desktop measurement harness.",
++    ))
+ }

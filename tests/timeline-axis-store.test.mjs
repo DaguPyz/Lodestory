@@ -11,8 +11,15 @@ const compiled = ts.transpileModule(source, {
   compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS},
 }).outputText;
 const axisExports = {};
+let onDecode = null;
+class InstrumentedTextDecoder extends TextDecoder {
+  decode(...args) {
+    onDecode?.();
+    return super.decode(...args);
+  }
+}
 vm.runInNewContext(compiled, {
-  exports: axisExports, TextDecoder, TextEncoder, Uint8Array, Object, Array, Number, String,
+  exports: axisExports, TextDecoder: InstrumentedTextDecoder, TextEncoder, Uint8Array, Object, Array, Number, String,
   Set, Map, Promise, Error, RegExp, JSON, Math,
 });
 const {createTimelineAxisStore} = axisExports;
@@ -42,6 +49,42 @@ function storedAxis(patch = {}) {
     step: 5,
     unit: "天",
     ...patch,
+  };
+}
+
+function statusAwareFiles(service, targetPath) {
+  let statusOverride = null;
+  const listeners = new Set();
+  return {
+    service: {
+      getSnapshot() {
+        const snapshot = service.getSnapshot();
+        if (!statusOverride) return snapshot;
+        const files = snapshot.files.map(file => file.path === targetPath
+          ? Object.freeze({...file, dirty: statusOverride !== "saved", saveState: statusOverride,
+            saveError: statusOverride === "error" ? "disk unavailable" : null})
+          : file);
+        return {...snapshot, files};
+      },
+      subscribe(listener) {
+        listeners.add(listener);
+        const unsubscribe = service.subscribe(() => { for (const current of [...listeners]) current(); });
+        return () => { listeners.delete(listener); unsubscribe(); };
+      },
+      read: (...args) => service.read(...args),
+      create: (...args) => service.create(...args),
+      write: (...args) => service.write(...args),
+      save: (...args) => service.save(...args),
+      saveAll: (...args) => service.saveAll(...args),
+      delete: (...args) => service.delete(...args),
+      list: (...args) => service.list(...args),
+      createDirectory: (...args) => service.createDirectory(...args),
+      clearError: (...args) => service.clearError(...args),
+    },
+    setSaveState(state) {
+      statusOverride = state;
+      for (const listener of [...listeners]) listener();
+    },
   };
 }
 
@@ -204,6 +247,54 @@ test("retry reloads a clean malformed buffer after the disk file is repaired", a
   assert.deepEqual({...store.getSnapshot().settings}, {origin: 3.25, step: 0.5, unit: "天"});
   store.dispose();
   await controller.dispose();
+});
+
+test("a stored axis byte version is parsed once across notifications and read completion", async () => {
+  const f = byteStorageFixture();
+  const otherPath = ".lodestory/unrelated.json";
+  seedFile(f, path, JSON.stringify(storedAxis({origin: 4})));
+  seedFile(f, otherPath, "unrelated");
+  const controller = f.files();
+  const statusFiles = statusAwareFiles(controller.service, path);
+  const store = storeFor(statusFiles.service);
+  let decodeCount = 0;
+  onDecode = () => { decodeCount++; };
+  try {
+    assert.equal(await store.load(), true);
+    assert.equal(decodeCount, 1, "the subscription and read result share one parse");
+    let notifications = 0;
+    store.subscribe(() => { notifications++; });
+
+    await controller.service.read(otherPath);
+    assert.equal(decodeCount, 1, "an unrelated file update does not decode the stored axis again");
+    assert.equal(notifications, 0, "an unrelated file update does not republish an unchanged axis snapshot");
+
+    statusFiles.setSaveState("saving");
+    assert.equal(decodeCount, 1, "a save-state notification with the same bytes does not reparse the axis");
+    assert.equal(store.getSnapshot().saving, true, "save state still reaches the consumer");
+    statusFiles.setSaveState("error");
+    assert.equal(store.getSnapshot().error, "disk unavailable", "save errors still reach the consumer");
+    statusFiles.setSaveState("saved");
+    assert.equal(store.getSnapshot().error, null, "successful save clears the visible file error");
+    assert.equal(decodeCount, 1);
+
+    f.disk.set(f.key("/book", path), Array.from(new TextEncoder().encode("{")));
+    await controller.service.read(path);
+    assert.equal(decodeCount, 2, "an externally changed file is checked once when refreshed");
+    assert.equal(await store.retry(), false);
+    f.disk.set(f.key("/book", otherPath), Array.from(new TextEncoder().encode("changed")));
+    await controller.service.read(otherPath);
+    assert.equal(decodeCount, 2, "repeated notifications reuse the cached parse error");
+
+    f.disk.set(f.key("/book", path), Array.from(new TextEncoder().encode(JSON.stringify(storedAxis({origin: 9})))));
+    assert.equal(await store.retry(), true);
+    assert.equal(decodeCount, 3, "a repaired file with new bytes is parsed");
+    assert.equal(store.getSnapshot().settings.origin, 9);
+  } finally {
+    onDecode = null;
+    store.dispose();
+    await controller.dispose();
+  }
 });
 
 test("concurrent loads share one read and dispose invalidates an in-flight timeline switch", async () => {

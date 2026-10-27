@@ -1,0 +1,87 @@
+.workbench-page {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workbench-page-content {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.workbench-page-content > * { flex: 1; min-width: 0; min-height: 0; }
+
+.workbench-loading {
+  position: fixed;
+  z-index: 100;
+  inset-inline-end: var(--ui-space-5);
+  inset-block-end: max(var(--ui-space-5), env(safe-area-inset-bottom, 0px));
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-4);
+  width: min(28rem, calc(100vw - 2 * var(--ui-space-5)));
+  box-sizing: border-box;
+  padding: var(--ui-space-4) var(--ui-space-5);
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--ui-radius-overlay);
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-panel);
+}
+
+.workbench-loading-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--ui-space-1);
+  min-width: 0;
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+.workbench-loading-copy > span { color: var(--ui-text-secondary); }
+
+.workbench-loading-progress {
+  appearance: none;
+  flex: 0 0 7rem;
+  width: 7rem;
+  height: 6px;
+  overflow: hidden;
+  border: 0;
+  border-radius: 3px;
+  background: var(--ui-border-default);
+  color: var(--ui-text-primary);
+}
+.workbench-loading-progress::-webkit-progress-bar { background: var(--ui-border-default); }
+.workbench-loading-progress::-webkit-progress-value { background: var(--ui-text-primary); }
+.workbench-loading-progress::-moz-progress-bar { background: var(--ui-text-primary); }
+
+@media (forced-colors: active) {
+  .workbench-loading-progress { appearance: auto; }
+}
+
+.workbench-loading-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--ui-space-2);
+}
+
+@media (max-width: 36rem) {
+  .workbench-loading {
+    inset-inline: var(--ui-space-3);
+    bottom: max(var(--ui-space-3), env(safe-area-inset-bottom, 0px));
+    flex-wrap: wrap;
+    gap: var(--ui-space-2) var(--ui-space-4);
+    width: auto;
+  }
+
+  .workbench-loading-copy { flex-basis: 10rem; }
+  .workbench-loading-progress { flex-basis: 100%; width: 100%; }
+}

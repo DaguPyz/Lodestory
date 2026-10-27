@@ -3,7 +3,7 @@ import test from "node:test";
 import {createMainFixture} from "./helpers/mainStartupFixture.mjs";
 
 function loadFormat() {
-  const fixture = createMainFixture();
+  const fixture = createMainFixture({sameRealm: true});
   return fixture.loadModule("plugins/rich-text-editor/richDeltaFormat.ts");
 }
 
@@ -44,7 +44,7 @@ test("damaged or unsupported rich Delta content is rejected instead of rewritten
 });
 
 test("plain-text paste replaces the selected range with normalized line endings", () => {
-  const fixture = createMainFixture();
+  const fixture = createMainFixture({sameRealm: true});
   const {createPlainTextPasteDelta} = fixture.loadModule("plugins/rich-text-editor/plainTextPaste.ts");
 
   assert.deepEqual(createPlainTextPasteDelta({index: 2, length: 3}, "a\r\nb"), {
@@ -128,4 +128,10 @@ test("rich Delta formatting rejects unsupported alignment, unsafe font values, a
   assert.equal(isRichTextColor("#AbC"), true);
   assert.equal(isRichTextColor("rgb(0, 128, 255)"), true);
   assert.equal(isRichTextColor("rgb(0, 128, 256)"), false);
+});
+
+test("rich Delta serialization rejects non-plain operation objects", () => {
+  const {serializeRichDelta} = loadFormat();
+  class Operation { insert = "文本\n"; }
+  assert.throws(() => serializeRichDelta([new Operation()]), /只支持 insert 操作/);
 });

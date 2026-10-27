@@ -78,6 +78,16 @@ function collectErrors(value, found = [], seen = new Set()) {
   return found;
 }
 
+async function waitForWorkbenchReady(workbench) {
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
+    const snapshot = workbench.getSnapshot();
+    if (snapshot.loading?.error) assert.fail(snapshot.loading.error.message);
+    if (!snapshot.busy) return;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.fail("workbench startup did not settle");
+}
+
 test("the entry delegates UI composition and page registration to the plugin catalog", async () => {
   const fixture = createMainFixture();
 
@@ -209,8 +219,10 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.ok(findElement(themeProvider.props.children, fixture.components.ToolbarRecovery), "the toolbar recovery entry is mounted in the UI wrapper");
 
   // Visiting each route proves that all three page plugins registered with the real UI service.
-  await uiService.openPage("editor", { project: { id: "novel-1", name: "Novel", path: "/novel" } });
-  await uiService.openPage("settings");
+  assert.equal(await uiService.openPage("editor", { project: { id: "novel-1", name: "Novel", path: "/novel" } }), true);
+  const workbench = fixture.getService(fixture.requireSdk("@lodestory/sdk/workbench").workbenchKey);
+  await waitForWorkbenchReady(workbench);
+  assert.equal(await uiService.openPage("settings"), true);
   const visited = uiService.getSnapshot();
   assert.deepEqual(Array.from(visited.pages, ({id, active}) => ({id, active})), [
     {id: "welcome", active: false},

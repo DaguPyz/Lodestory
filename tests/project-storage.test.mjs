@@ -3,6 +3,19 @@ import test from "node:test";
 import {createMainFixture, deferred, flushStartup} from "./helpers/mainStartupFixture.mjs";
 import {byteStorageFixture} from "./helpers/byteStorageFixture.mjs";
 
+function waitForWorkbenchReady(workbench) {
+  return new Promise((resolve, reject) => {
+    let unsubscribe = () => {};
+    const check = () => {
+      const state = workbench.getSnapshot();
+      if (state.loading?.error) { unsubscribe(); reject(new Error(state.loading.error.message)); }
+      else if (state.session && !state.busy) { unsubscribe(); resolve(); }
+    };
+    unsubscribe = workbench.subscribe(check);
+    check();
+  });
+}
+
 test("project storage owns one shared byte buffer without encoding or file-format rules", async () => {
   const f = byteStorageFixture();
   f.disk.set("/book/chapter.md", [0, 255, 128]);
@@ -122,6 +135,7 @@ test("the workbench waits for an accepted document creation before releasing pro
   const storage = f.getService(f.requireSdk("@lodestory/sdk/project-storage").projectStorageKey);
   const project = {id: "book", name: "故事", path: "/book"};
   assert.equal(await workbench.openProject(project), true);
+  await waitForWorkbenchReady(workbench);
   const session = workbench.getSnapshot().session;
   const workspace = documents.getWorkspace(session.id);
   const fileStore = storage.getFiles(session.id);
@@ -136,7 +150,28 @@ test("the workbench waits for an accepted document creation before releasing pro
   assert.equal(storage.getFiles(session.id), null);
   assert.equal(fileStore.write("未完成写入.md", [88]), false);
   assert.equal(await workbench.openProject(project), true);
+  await waitForWorkbenchReady(workbench);
   assert.equal(await documents.getWorkspace(workbench.getSnapshot().session.id).open("未完成写入.md"), true);
+  await f.createdCores.at(-1).unmountAll();
+});
+
+test("project storage permits initialization reads while blocking edits until the workbench is ready", async () => {
+  const entered = deferred(), release = deferred();
+  const {f} = byteStorageFixture({async onInvoke(command) {
+    if (command === "list_documents") { entered.resolve(); await release.promise; }
+  }});
+  f.start(); await flushStartup();
+  const workbench = f.getService(f.requireSdk("@lodestory/sdk/workbench").workbenchKey);
+  const storage = f.getService(f.requireSdk("@lodestory/sdk/project-storage").projectStorageKey);
+  assert.equal(await workbench.openProject({id: "book", name: "故事", path: "/book"}), true);
+  await entered.promise;
+  const snapshot = workbench.getSnapshot();
+  assert.equal(snapshot.busy, true);
+  const files = storage.getFiles(snapshot.session.id);
+  assert.ok(await files.list(".lodestory/assets"), "startup participants can read project data");
+  assert.equal(await files.create("late.txt", []), null, "editing stays locked during startup");
+  release.resolve();
+  await waitForWorkbenchReady(workbench);
   await f.createdCores.at(-1).unmountAll();
 });
 

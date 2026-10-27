@@ -225,9 +225,12 @@
       ];
       window.isTauri = true;
       mockWindows("main");
+      let releaseProjectTree;
+      const projectTreeGate = new Promise(resolve => { releaseProjectTree = resolve; });
+      if (scenario === "project-loading-gate") window.__releaseProjectTree = releaseProjectTree;
       mockIPC(async (command, args) => {
         if (command.startsWith("plugin:")) return command === "plugin:window|theme" ? (query.get("theme") === "Light" ? "Light" : "Dark") : 1;
-        if (["list_documents", "read_project_file", "create_project_file", "save_project_file", "delete_project_file", "list_project_directory", "create_project_directory"].includes(command)) {
+        if (["list_documents", "read_project_file", "read_project_file_base64", "create_project_file", "save_project_file", "delete_project_file", "list_project_directory", "create_project_directory"].includes(command)) {
           const state = projectFiles(args.projectPath);
           const path = args.path ?? "";
           const inTimeline = path === timelineDirectory || path.startsWith(`${timelineDirectory}/`);
@@ -240,7 +243,14 @@
               state.directories.add(candidate);
             }
           }
-          if (command === "list_documents") return documentTree(state);
+          if (command === "list_documents") {
+            if (scenario === "project-loading-gate") await projectTreeGate;
+            if (scenario === "project-loading-error-once" && !state.treeLoadFailed) {
+              state.treeLoadFailed = true;
+              throw {message: "模拟项目文件树读取失败。"};
+            }
+            return documentTree(state);
+          }
           if (command === "list_project_directory") {
             if (scenario === "outline-read-error" && inTimeline) throw {message: "大纲列表读取失败：目录不可访问。"};
             if (state.files.has(path)) throw {message: "路径不是目录。"};
@@ -251,8 +261,14 @@
             ] : [];
             return {exists, entries, issues: []};
           }
-          if (command === "read_project_file") {
+          if (command === "read_project_file" || command === "read_project_file_base64") {
             if (!state.files.has(path)) throw {message: "文件不存在。"};
+            if (command === "read_project_file_base64") {
+              const bytes = state.files.get(path);
+              let binary = "";
+              for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.slice(i, i + 8192));
+              return {path, fileName: path.split("/").at(-1), bytesBase64: btoa(binary), byteLength: bytes.length};
+            }
             return {path, fileName: path.split("/").at(-1), bytes: [...state.files.get(path)]};
           }
           if (command === "create_project_directory") {

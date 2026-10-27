@@ -42,7 +42,7 @@ export function createProjectStoragePlugin(): Plugin {
             const unsubscribe = workbench.subscribe(() => {
                 const state = workbench.getSnapshot();
                 for (const [id, session] of sessions) {
-                    if (state.session?.id === id) session.staged = false;
+                    if (state.session?.id === id && !state.busy) session.staged = false;
                     session.files.refreshBlocked();
                 }
             });
@@ -55,6 +55,7 @@ export function createProjectStoragePlugin(): Plugin {
             };
             removeParticipant = workbench.registerParticipant({
                 id: "project-storage",
+                label: "项目存储",
                 start(session) {
                     if (!alive || sessions.has(session.id)) throw new Error(`Project storage session '${session.id}' cannot be started.`);
                     let managed!: StorageSession;

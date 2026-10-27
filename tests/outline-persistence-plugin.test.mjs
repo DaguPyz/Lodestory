@@ -81,6 +81,7 @@ function persistenceFixture({failFirstRead = false, deferAxisSave = false, failE
         }
         return {exists, entries: [...directEntries.values()], issues: []};
       }
+      if (command === "list_documents") return [];
       throw new Error(`Unexpected command: ${command}`);
     },
   });
@@ -109,6 +110,23 @@ function services(f) {
 
 const project = {id: "book", name: "故事", path: "/projects/book"};
 
+async function waitForStartup(workbench) {
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
+    const snapshot = workbench.getSnapshot();
+    if (!snapshot.busy || snapshot.loading?.error) return snapshot;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.fail("workbench startup did not settle");
+}
+
+async function openReadyProject(workbench, target) {
+  assert.equal(await workbench.openProject(target), true);
+  const snapshot = await waitForStartup(workbench);
+  assert.equal(snapshot.loading?.error ?? null, null, snapshot.loading?.error?.message ?? "project startup failed");
+  assert.equal(snapshot.busy, false);
+  return snapshot;
+}
+
 test("timeline owns the main canvas and one session-only viewport per timeline while outline only navigates", async () => {
   const {f} = persistenceFixture();
   f.start(); await flushStartup();
@@ -119,7 +137,7 @@ test("timeline owns the main canvas and one session-only viewport per timeline w
   assert.ok(contribution, "outline registers navigation separately from the timeline main view");
   assert.strictEqual(contribution.render({active: true}).props.timelines, timelines,
     "outline consumes the public timeline capability rather than a private model import");
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   const sessionId = workbench.getSnapshot().session.id;
   const listModel = model();
 
@@ -177,7 +195,7 @@ test("timeline owns the main canvas and one session-only viewport per timeline w
   assert.equal(viewports.has(secondId), false, "a deleted timeline releases its viewport");
   assert.strictEqual(viewports.get(firstId), firstViewport);
 
-  assert.equal(await workbench.openProject({...project, id: "other", path: "/projects/other"}), true);
+  await openReadyProject(workbench, {...project, id: "other", path: "/projects/other"});
   assert.equal(firstViewport.getSnapshot().disposed, true, "switching projects disposes every old-session viewport");
   assert.equal(canvasElement().tree.props.className, "timeline-canvas-empty", "a new session cannot display the previous project's canvas");
   assert.equal(await workbench.closeProject(), true);
@@ -188,7 +206,7 @@ test("outline persists only list fields through shared project bytes and reads t
   const {f, disk, bytesOf, keyOf} = persistenceFixture();
   f.start(); await flushStartup();
   const {workbench, documents, storage, layout, model} = services(f);
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   const session = workbench.getSnapshot().session;
   const workspace = documents.getWorkspace(session.id);
   const projectFiles = storage.getFiles(session.id);
@@ -228,29 +246,35 @@ test("outline persists only list fields through shared project bytes and reads t
   assert.equal(await workbench.closeProject(), true);
   assert.equal(firstModel.beginCreate(), null, "closed-session handles cannot accept new work");
   assert.equal(storage.getFiles(session.id), null);
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   assert.notStrictEqual(model(), firstModel);
   assert.deepEqual(Array.from(model().getSnapshot().entries, entry => [entry.id, entry.title, entry.summary]), [[draft.id, "归乡", "带着家书，返回北境。"]]);
   assert.equal(await model().remove(draft.id), true);
   assert.equal(disk.has(keyOf(project.path, timelinePath)), false);
   assert.equal(await workbench.closeProject(), true);
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   assert.equal(model().getSnapshot().entries.length, 0, "deleted records stay removed in the next session");
-  assert.equal(await workbench.openProject({...project, id: "other", path: "/projects/other"}), true);
+  await openReadyProject(workbench, {...project, id: "other", path: "/projects/other"});
   assert.equal(model().getSnapshot().entries.length, 0, "another project has a separate collection");
   await f.createdCores.at(-1).unmountAll();
 });
 
-test("an initial outline read failure remains visible without preventing project opening and can be retried", async () => {
+test("an initial outline read failure blocks project startup and retries through the workbench", async () => {
   const {f} = persistenceFixture({failFirstRead: true});
   f.start(); await flushStartup();
   const {workbench, model} = services(f);
-  assert.equal(await workbench.openProject(project), true);
-  assert.equal(model().getSnapshot().loaded, false);
-  assert.match(model().getSnapshot().error, /暂时无法读取/);
-  assert.equal(model().beginCreate(), null, "unread storage cannot be mistaken for a known empty collection");
-  assert.equal(await model().retry(), true);
-  assert.equal(model().getSnapshot().loaded, true);
+  assert.equal(await workbench.openProject(project), true, "the editor route commits before timeline initialization settles");
+  const failed = await waitForStartup(workbench);
+  assert.equal(failed.session, null, "a failed initial read does not expose a partial session");
+  assert.equal(failed.busy, true, "startup remains locked while recovery is available");
+  assert.equal(failed.loading.error.participantId, "timeline");
+  assert.match(failed.loading.error.message, /暂时无法读取时间线目录/);
+
+  assert.equal(await workbench.retryProject(), true);
+  const retried = await waitForStartup(workbench);
+  assert.equal(retried.loading, null);
+  assert.equal(retried.busy, false);
+  assert.equal(model().getSnapshot().loaded, true, "retry creates a fresh timeline model after the initial read succeeds");
   assert.equal(model().getSnapshot().error, null);
   await f.createdCores.at(-1).unmountAll();
 });
@@ -274,7 +298,7 @@ test("bad UTF-8 and bad JSON stay untouched while other timeline files remain re
   paths.forEach((path, index) => disk.set(keyOf(project.path, path), originalBytes[index]));
   f.start(); await flushStartup();
   const {workbench, model} = services(f);
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   const snapshot = model().getSnapshot();
   assert.deepEqual(Array.from(snapshot.entries, entry => entry.id), [validId]);
   assert.ok(snapshot.issues.some(issue => issue.message.includes("UTF-8")));
@@ -288,7 +312,7 @@ test("an unfinished outline form keeps its project session until the author comp
   const {f, disk} = persistenceFixture();
   f.start(); await flushStartup();
   const {workbench, model} = services(f);
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   const session = workbench.getSnapshot().session;
   const originalModel = model();
   originalModel.beginCreate();
@@ -306,7 +330,7 @@ test("timeline commands reject new drafts during an awaited leave flush and pres
   const {f, axisSaveStarted, finishAxisSave} = persistenceFixture({deferAxisSave: true});
   f.start(); await flushStartup();
   const {workbench, layout, timelines, model} = services(f);
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   const sessionId = workbench.getSnapshot().session.id;
   const listModel = model();
   listModel.beginCreate();
@@ -345,7 +369,7 @@ test("timeline event counts and ranges load from project storage and return afte
   const {f} = persistenceFixture();
   f.start(); await flushStartup();
   const {workbench, layout, model} = services(f);
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   const list = model();
   list.beginCreate();
   list.updateCreateDraft({title: "事件统计"});
@@ -363,7 +387,7 @@ test("timeline event counts and ranges load from project storage and return afte
   assert.equal(list.getSnapshot().entries[0].period, "82–123 年");
 
   assert.equal(await workbench.closeProject(), true);
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   const restoredList = model();
   const restoredSessionId = workbench.getSnapshot().session.id;
   const restoredResources = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main").render({active: true}).props.sessions.get(restoredSessionId);
@@ -380,7 +404,7 @@ test("timeline summaries reuse unchanged entries and only scan the changed timel
   const {f} = persistenceFixture();
   f.start(); await flushStartup();
   const {workbench, layout, timelines, storage, model} = services(f);
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   const list = model();
   const sessionId = workbench.getSnapshot().session.id;
   const resources = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main").render({active: true}).props.sessions.get(sessionId);
@@ -438,7 +462,7 @@ test("a failed event write blocks project leave and retains its event draft", as
   const {f} = persistenceFixture({failEventCreate: true});
   f.start(); await flushStartup();
   const {workbench, layout, model} = services(f);
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   const list = model();
   list.beginCreate();
   list.updateCreateDraft({title: "保留事件"});
@@ -462,7 +486,7 @@ test("deleting a timeline waits for dirty events to reach project storage", asyn
   const {f, disk, keyOf, eventCreateStarted, finishEventCreate} = persistenceFixture({deferEventCreate: true});
   f.start(); await flushStartup();
   const {workbench, layout, model} = services(f);
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   const list = model();
   list.beginCreate();
   list.updateCreateDraft({title: "删除前保存"});
@@ -491,7 +515,7 @@ test("event flush keeps list commands closed while the workbench is busy and dis
   const {f, eventCreateStarted, finishEventCreate, calls} = persistenceFixture({deferEventCreate: true});
   f.start(); await flushStartup();
   const {workbench, layout, model} = services(f);
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   const list = model();
   list.beginCreate();
   list.updateCreateDraft({title: "离开时保存"});
@@ -538,7 +562,7 @@ test("timeline receives the current session asset catalog and keeps opaque asset
   const assetCatalogKey = f.requireSdk("@lodestory/sdk/asset-catalog").assetCatalogKey;
   const assetCatalogService = f.getService(assetCatalogKey);
   assert.ok(assetCatalogService, "asset management publishes its public session catalog service");
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
 
   const createSelectedTimeline = async () => {
     const list = model();
@@ -571,7 +595,7 @@ test("timeline receives the current session asset catalog and keeps opaque asset
   assert.equal(await workbench.closeProject(), true);
   assert.equal(assetCatalogService.getCatalog(currentSessionId), null, "closing the project releases its catalog");
 
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   const restoredSessionId = workbench.getSnapshot().session.id;
   assert.equal(timelines.open(restoredSessionId, timelineId), true);
   const restoredCatalog = assetCatalogService.getCatalog(restoredSessionId);
@@ -599,7 +623,7 @@ test("timeline receives the current session asset catalog and keeps opaque asset
     "asset removal does not rewrite the timeline's opaque reference");
 
   assert.equal(await workbench.closeProject(), true);
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   const finalSessionId = workbench.getSnapshot().session.id;
   assert.equal(timelines.open(finalSessionId, timelineId), true);
   const finalCatalog = assetCatalogService.getCatalog(finalSessionId);

@@ -75,6 +75,7 @@ export function createAssetManagementPlugin(): Plugin {
         });
         removeParticipant = workbench.registerParticipant({
           id: "asset-management",
+          label: "资产管理",
           async start(session) {
             if (!alive || sessions.has(session.id)) {
               throw new Error(`Asset schema session '${session.id}' cannot be started.`);
@@ -88,10 +89,12 @@ export function createAssetManagementPlugin(): Plugin {
               catalog: catalogController.catalog,
               editing: new Set(),
             };
-            // Publish before loading so the mounted view can observe loading and any recoverable error.
-            sessions.set(session.id, resource);
             try {
-              await store.load();
+              const loaded = await store.load();
+              if (!loaded) throw new Error(store.getSnapshot().error ?? "资产数据加载失败。");
+              if (!alive) throw new Error("Asset management stopped while the project was loading.");
+              // Views and capability consumers only receive a fully initialized resource.
+              sessions.set(session.id, resource);
             } catch (error) {
               try { catalogController.dispose(); }
               finally {

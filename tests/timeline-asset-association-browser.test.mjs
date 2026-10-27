@@ -92,6 +92,7 @@ test("timeline event associates assets by type, searches, preserves missing link
     });
     server = await createServer({
       configFile: false, root: process.cwd(), appType: "mpa",
+      cacheDir: path.join(profile, "vite-cache"),
       server: {host: "127.0.0.1", port: 0, strictPort: true, hmr: false}, logLevel: "error",
     });
     await server.listen();

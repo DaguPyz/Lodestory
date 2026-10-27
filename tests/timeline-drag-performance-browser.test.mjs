@@ -95,6 +95,7 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
     });
     server = await createServer({
       configFile: false, root: process.cwd(), appType: "mpa",
+      cacheDir: path.join(profile, "vite-cache"),
       server: {host: "127.0.0.1", port: 0, strictPort: true, hmr: false}, logLevel: "error",
     });
     await server.listen();

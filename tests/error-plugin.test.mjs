@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import { createServer } from 'vite';
@@ -42,7 +44,9 @@ test('React 19 error boundaries isolate failures and keep the root usable', asyn
 
   let browser;
   let server;
+  let temp;
   try {
+    temp = await mkdtemp(path.join(tmpdir(), 'lodestory-error-plugin-'));
     try {
       browser = await playwright.chromium.launch({ headless: true });
     } catch (error) {
@@ -55,6 +59,7 @@ test('React 19 error boundaries isolate failures and keep the root usable', asyn
 
     server = await createServer({
       configFile: false,
+      cacheDir: path.join(temp, 'vite-cache'),
       root: process.cwd(),
       appType: 'mpa',
       server: { host: '127.0.0.1', port: 0, strictPort: true },
@@ -94,5 +99,6 @@ test('React 19 error boundaries isolate failures and keep the root usable', asyn
   } finally {
     await browser?.close();
     await server?.close();
+    if (temp) await rm(temp, {recursive: true, force: true, maxRetries: 5, retryDelay: 100});
   }
 });

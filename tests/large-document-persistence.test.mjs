@@ -1,16 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {createRequire} from "node:module";
-import {readFile} from "node:fs/promises";
-import vm from "node:vm";
-import ts from "typescript";
 import {byteStorageFixture} from "./helpers/byteStorageFixture.mjs";
 
-const compiled = ts.transpileModule(await readFile(new URL("../src/plugins/rich-text-editor/largePlainTextDriver.ts", import.meta.url), "utf8"), {
-  compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS},
-}).outputText;
-const editor = {};
-vm.runInNewContext(compiled, {exports: editor, require: createRequire(import.meta.url), console});
 const encoder = new TextEncoder();
 
 test("large text edits round-trip through shared storage, leave checks, failed saves, and reopen", async () => {
@@ -28,13 +19,12 @@ test("large text edits round-trip through shared storage, leave checks, failed s
   try {
     assert.equal(await workspace.service.open("large.txt"), true);
     let document = workspace.service.getSnapshot().documents[0];
-    let model = editor.createLargePlainTextState(document.content, false);
     assert.equal(await workspace.service.save(document.id), true);
     assert.deepEqual(fixture.disk.get("/book/large.txt"), initialBytes, "initial load and no-edit save preserve original BOM/CRLF bytes");
     assert.equal(fixture.calls.filter(call => call.command === "save_project_file").length, 0);
 
-    model = model.update({changes: {from: 1, insert: "新增中文"}, userEvent: "input.type"}).state;
-    const edited = model.doc.toString();
+    const editorText = document.content.replace(/\r\n?/g, "\n");
+    const edited = editorText.slice(0, 1) + "新增中文" + editorText.slice(1);
     workspace.service.update(document.id, edited);
     assert.equal(workspace.service.getSnapshot().documents[0].content, edited);
     failSave = true;

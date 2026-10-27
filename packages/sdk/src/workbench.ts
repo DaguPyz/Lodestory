@@ -18,7 +18,17 @@ export type WorkbenchSnapshot = {
   readonly session: WorkbenchSession | null;
   readonly active: boolean;
   readonly busy: boolean;
+  /** Startup step status; errors keep the workspace locked until retry or return. */
+  readonly loading: WorkbenchLoading | null;
 };
+
+export type WorkbenchLoading = Readonly<{
+  completed: number;
+  total: number;
+  /** Optional user-facing label supplied by the participant, never its internal ID. */
+  current: string | null;
+  error: Readonly<{participantId: string; message: string}> | null;
+}>;
 
 export type LeaveReason = "suspend" | "switch" | "close" | "shutdown";
 type Awaitable<T> = T | Promise<T>;
@@ -32,6 +42,7 @@ export type WorkbenchParticipation = {
 /** 应用启动时登记一次，按登记顺序随每个项目启动，按逆序结束。 */
 export type WorkbenchParticipant = {
   readonly id: string;
+  readonly label?: string;
   /** 创建失败时参与者自行释放尚未返回的部分资源。 */
   readonly start: (session: WorkbenchSession) => Awaitable<WorkbenchParticipation>;
 };
@@ -39,6 +50,8 @@ export type WorkbenchParticipant = {
 export type WorkbenchService = {
   openProject(project: WorkbenchProject): Promise<boolean>;
   closeProject(): Promise<boolean>;
+  retryProject(): Promise<boolean>;
+  returnProject(): Promise<boolean>;
   getSnapshot(): WorkbenchSnapshot;
   subscribe(listener: () => void): () => void;
   /** 启动期登记；撤销幂等。撤销正在使用的参与者会先停止 UI，再等待资源清理。 */

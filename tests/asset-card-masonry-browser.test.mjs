@@ -102,6 +102,7 @@ test("asset cards keep all columns populated and rebalance in a real browser", a
 
     server = await createServer({
       configFile: false,
+      cacheDir: path.join(profile, "vite-cache"),
       root: process.cwd(),
       appType: "mpa",
       server: {host: "127.0.0.1", port: 0, strictPort: true, hmr: false},

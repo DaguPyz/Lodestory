@@ -209,6 +209,11 @@ test("outline navigation switches independently while preserving editor contents
   }
   const ui = f.getService(f.requireSdk("@lodestory/sdk/ui").uiKey);
   await ui.openPage("editor", {project: {id: "one", name: "one", path: "/one"}});
+  const startupWorkbench = f.getService(f.requireSdk("@lodestory/sdk/workbench").workbenchKey);
+  for (let attempt = 0; attempt < 1000 && startupWorkbench.getSnapshot().busy; attempt += 1) {
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.equal(startupWorkbench.getSnapshot().busy, false, "editor participants finish initialization before the layout lifecycle checks");
   const session = workbench.getSnapshot().session;
   assert.ok(session, "opening the editor establishes a workbench session");
   const editorContents = ["body-editor.main", "document-tabs.tabs"];
@@ -242,24 +247,26 @@ test("outline navigation switches independently while preserving editor contents
   assert.equal(layout.getSnapshot().shownIds.includes("project-management.files"), true, "page navigation does not reset layout selection");
   assert.equal(layout.getSnapshot().shownIds.includes(outline.id), false);
   assert.strictEqual(workbench.getSnapshot().session, session, "temporary page navigation retains the current project session");
-  await f.createdCores.at(-1).unmount("asset-management");
+  const core = f.createdCores.at(-1);
+  await core.unmount("outline-design");
+  assert.ok(!layout.getSnapshot().contents.some(({id}) => id === outline.id), "unmounting outline-design revokes its contribution");
+  assert.ok(layout.getSnapshot().contents.some(({id}) => id === canvas.id), "unmounting outline-design leaves the timeline-owned canvas registered");
+  assert.ok(layout.getSnapshot().contents.some(({id}) => id === "project-management.files"), "revoking the outline leaves the project-files contribution registered");
+  await core.unmount("timeline");
+  assert.ok(!layout.getSnapshot().contents.some(({id}) => id === canvas.id), "unmounting timeline revokes its main contribution");
+  await core.unmount("asset-management");
   assert.ok(!layout.getSnapshot().contents.some(({id}) => id === assetManagement.id), "unmounting asset-management revokes its contribution");
   assert.ok(!layout.getSnapshot().contents.some(({id}) => id === assetTypes.id), "unmounting asset-management revokes its main contribution");
   assert.ok(layout.getSnapshot().contents.some(({id}) => id === "body-editor.main"), "unmounting asset-management leaves the editor registered");
   assert.equal(workbench.getSnapshot().session, null, "revoking the asset participant stops the view and releases project-session resources");
-  await f.createdCores.at(-1).unmount("outline-design");
-  assert.ok(!layout.getSnapshot().contents.some(({id}) => id === outline.id), "unmounting outline-design revokes its contribution");
-  assert.ok(layout.getSnapshot().contents.some(({id}) => id === canvas.id), "unmounting outline-design leaves the timeline-owned canvas registered");
-  assert.ok(layout.getSnapshot().contents.some(({id}) => id === "project-management.files"), "revoking the outline leaves the project-files contribution registered");
-  await f.createdCores.at(-1).unmount("timeline");
-  assert.ok(!layout.getSnapshot().contents.some(({id}) => id === canvas.id), "unmounting timeline revokes its main contribution");
-  await f.createdCores.at(-1).unmount("workbench-toolbar");
+  await core.unmount("workbench-toolbar");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
     "body-editor.main", "document-tabs.tabs", "project-management.files", "writing-status.status",
   ]);
   await f.createdCores.at(-1).unmount("writing-status");
   await f.createdCores.at(-1).unmount("rich-text-editor");
   await f.createdCores.at(-1).unmount("markdown-editor");
+  await f.createdCores.at(-1).unmount("plain-text-editor");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
     "body-editor.main", "document-tabs.tabs", "project-management.files",
   ]);

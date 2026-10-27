@@ -6,6 +6,17 @@ function uiFor(fixture) {
   return fixture.getService(fixture.requireSdk("@lodestory/sdk/ui").uiKey);
 }
 
+async function openReadyProject(workbench, target) {
+  assert.equal(await workbench.openProject(target), true);
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
+    const snapshot = workbench.getSnapshot();
+    if (snapshot.loading?.error) assert.fail(snapshot.loading.error.message);
+    if (!snapshot.busy) return snapshot;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.fail("workbench startup did not settle");
+}
+
 function registeredPage(fixture, ui, id) {
   const tree = fixture.UiPages({service: ui});
   const pageNode = tree.props.children.find((item) => item.key === id);
@@ -322,8 +333,8 @@ test("a navigation guard rejection preserves the active project and route", asyn
 
   const ui = uiFor(fixture);
   const workbench = fixture.getService(fixture.requireSdk("@lodestory/sdk/workbench").workbenchKey);
-  assert.equal(await workbench.openProject(project), true);
-  const sessionId = workbench.getSnapshot().session.id;
+  const opened = await openReadyProject(workbench, project);
+  const sessionId = opened.session.id;
   assert.equal(await ui.openPage("settings"), true);
 
   const settings = registeredPage(fixture, ui, "settings");

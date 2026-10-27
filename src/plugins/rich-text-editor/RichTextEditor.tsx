@@ -6,7 +6,6 @@ import {createRichDeltaFromPlainText, parseRichDeltaEnvelope, serializeRichDelta
 import {createPlainTextPasteDelta} from "./plainTextPaste";
 import {createRichTextRegistry} from "./quillRichTextRegistry";
 import {createQuillSelectControls, type QuillSelectControls} from "./quillSelectControls";
-import {createLazyPlainTextDriver, needsVirtualPlainText} from "./virtualPlainText";
 import "./rich-text-editor.css";
 
 type Session = ReturnType<typeof createRichTextEditorSession>;
@@ -32,13 +31,6 @@ export default function RichTextEditor(props: RichTextEditorProps) {
   const conversionRequest = useRef(0);
   const conversionDocumentId = useRef<string | null>(null);
   const mounted = useRef(false);
-  const rendering = useRef<{documentId: string; format: EditorFormat; virtual: boolean} | null>(null);
-  if (!rendering.current || rendering.current.documentId !== props.documentId || rendering.current.format !== props.format) {
-    rendering.current = {documentId: props.documentId, format: props.format,
-      virtual: props.format === "plain-text" && needsVirtualPlainText(props.content)};
-  }
-  const virtualText = rendering.current.virtual;
-
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -103,8 +95,7 @@ export default function RichTextEditor(props: RichTextEditorProps) {
         throw new Error("Quill 编辑器不支持该文档格式。");
       }
       const initial = current.current;
-      driver = virtualText ? createLazyPlainTextDriver(editorRoot, initial.content)
-        : createQuillDriver(editorRoot, initial.content, initial.format);
+      driver = createQuillDriver(editorRoot, initial.content, initial.format);
       driver.setFontFamilies(fontFamilies.current);
       activeDriver.current = driver;
       instance = createRichTextEditorSession(driver, {
@@ -150,7 +141,7 @@ export default function RichTextEditor(props: RichTextEditorProps) {
       if (instance) void instance.dispose().catch(error => console.error("Quill editor cleanup failed", error));
       mount.remove();
     };
-  }, [props.documentId, props.format, virtualText]);
+  }, [props.documentId, props.format]);
 
   async function convertToRichText() {
     if (conversionLock.current || !current.current.onSaveAs || current.current.format !== "plain-text"
@@ -184,7 +175,7 @@ export default function RichTextEditor(props: RichTextEditorProps) {
     }
   }
 
-  return <div className="rich-text-editor" data-virtual-text={virtualText || undefined} aria-busy={!ready || converting}>
+  return <div className="rich-text-editor" aria-busy={!ready || converting}>
     {conversionError && <p className="rich-text-editor-error" role="alert">{conversionError}</p>}
     {props.format === "rich-delta" && fontLoading &&
       <p className="rich-text-editor-loading" role="status">正在读取系统字体…</p>}
@@ -192,7 +183,7 @@ export default function RichTextEditor(props: RichTextEditorProps) {
       <span>{fontError}</span>
       <button type="button" onClick={() => setFontRetry(value => value + 1)} disabled={fontLoading}>重试</button>
     </div>}
-    {!ready && <p className="rich-text-editor-loading" role="status">{virtualText ? "正在准备纯文本编辑器…" : "正在准备富文本编辑器…"}</p>}
+    {!ready && <p className="rich-text-editor-loading" role="status">正在准备富文本编辑器…</p>}
     <div ref={root} className="rich-text-editor-root" />
   </div>;
 }

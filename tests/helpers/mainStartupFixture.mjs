@@ -15,7 +15,7 @@ export function deferred() {
   return { promise, resolve: resolvePromise };
 }
 
-export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, omitNavigationLayout = false, omitWindowShell = false, preference, configBaseValues, configOverrides, configStorageReadError, configStorageWriteError, layoutFactory, navigationLayoutFactory, windowShellFactory, additionalPlugins = [], invokeHandler, moduleMocks = {}, mockWorkbenchToolbar = true } = {}) {
+export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSetError = false, missingRoot = false, themeDefinitions = [], omitBuiltinThemes = false, omitNavigationLayout = false, omitWindowShell = false, preference, configBaseValues, configOverrides, configStorageReadError, configStorageWriteError, layoutFactory, navigationLayoutFactory, windowShellFactory, additionalPlugins = [], invokeHandler, moduleMocks = {}, mockWorkbenchToolbar = true, sameRealm = false } = {}) {
   const modules = new Map();
   const sdk = createSdkLoader({ modules });
   const createdCores = [];
@@ -360,7 +360,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     }).outputText;
     const exports = {};
     modules.set(path, exports);
-    vm.runInNewContext(compiled, {
+    const globals = {
       exports,
       console: {
         error(...args) { logs.push({ level: "error", args }); },
@@ -419,7 +419,11 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         if (specifier === "@tauri-apps/api/window") return { getCurrentWindow: () => appWindow };
         return load(resolveLocal(path, specifier));
       },
-    }, { filename: path });
+    };
+    // Some modules validate plain-object prototypes or return objects to the test.
+    // Run those modules in the test's realm so literals, JSON, and injected values agree.
+    if (sameRealm) vm.compileFunction(compiled, Object.keys(globals), {filename: path})(...Object.values(globals));
+    else vm.runInNewContext(compiled, globals, {filename: path});
 
     if (/^plugins\/ui\/[^/]*UiPages\.tsx$/i.test(relativePath)) {
       UiPages = exports.UiPages ?? exports.default;

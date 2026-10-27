@@ -6,6 +6,7 @@ test("rich text editor instances register independently and revoke only their ow
   function EditorStub() {}
   const fontLoaders = [];
   const fixture = createMainFixture({
+    sameRealm: true,
     moduleMocks: {
       "plugins/rich-text-editor/RichTextEditor.tsx": {default: EditorStub},
       "plugins/rich-text-editor/systemFonts.ts": {

@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import {mkdtemp, rm} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import {createServer} from 'vite';
@@ -57,7 +59,9 @@ test('real layout mounts the resizer, previews its width, and persists only on p
 
   let browser;
   let server;
+  let temp;
   try {
+    temp = await mkdtemp(path.join(tmpdir(), 'lodestory-navigation-resizer-'));
     try { browser = await playwright.chromium.launch({headless: true}); }
     catch (error) {
       if (missingChromium(error)) {
@@ -68,6 +72,7 @@ test('real layout mounts the resizer, previews its width, and persists only on p
     }
     server = await createServer({
       configFile: false,
+      cacheDir: path.join(temp, 'vite-cache'),
       root: process.cwd(),
       appType: 'mpa',
       plugins: [stubLayoutChrome()],
@@ -129,5 +134,6 @@ test('real layout mounts the resizer, previews its width, and persists only on p
   } finally {
     await browser?.close();
     await server?.close();
+    if (temp) await rm(temp, {recursive: true, force: true, maxRetries: 5, retryDelay: 100});
   }
 });

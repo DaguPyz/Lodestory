@@ -77,6 +77,24 @@ function project(id, name, path) {
   return { id, name, path, lastOpenedAt: "2026-10-12T08:00:00.000Z" };
 }
 
+async function waitForWorkbench(workbench) {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    const snapshot = workbench.getSnapshot();
+    if (!snapshot.busy || snapshot.loading?.error) {
+      assert.equal(snapshot.loading?.error?.message, undefined, snapshot.loading?.error?.message);
+      return;
+    }
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+  assert.fail("workbench startup did not settle");
+}
+
+async function openWorkbenchProject(workbench, target) {
+  const opened = await workbench.openProject(target);
+  if (opened) await waitForWorkbench(workbench);
+  return opened;
+}
+
 function gatePlugin(workbenchKey, gate) {
   return {
     id: "test-workbench-gate",
@@ -164,6 +182,7 @@ test("workbench retains a project across settings and gives each reopened projec
 
   const welcome = renderPageContent(fixture, renderRegisteredPage(fixture, ui, "welcome"));
   assert.equal(await welcome.props.onOpenProject(firstProject), true);
+  await waitForWorkbench(workbench);
   let editor = renderEditor(fixture, ui);
   const firstSessionId = workbench.getSnapshot().session.id;
   let view = renderWorkbenchView(fixture, editor);
@@ -190,6 +209,7 @@ test("workbench retains a project across settings and gives each reopened projec
   assert.equal(workbench.getSnapshot().session, null, "back cannot reopen a closed project");
   const welcomeAgain = renderPageContent(fixture, renderRegisteredPage(fixture, ui, "welcome"));
   assert.equal(await welcomeAgain.props.onOpenProject(firstProject), true);
+  await waitForWorkbench(workbench);
   editor = renderEditor(fixture, ui);
   const reopenedSessionId = workbench.getSnapshot().session.id;
   assert.notEqual(reopenedSessionId, firstSessionId, "reopening the same project must create a fresh session");
@@ -209,6 +229,7 @@ test("direct navigation, back, and same-page project switching all honor workben
   const secondProject = project("novel-2", "第二本", "/stories/second");
 
   assert.equal(await ui.openPage("editor", { project: firstProject }), true);
+  await waitForWorkbench(workbench);
   const firstSessionId = workbench.getSnapshot().session.id;
   assert.equal(gate.started.length, 1);
 
@@ -224,9 +245,11 @@ test("direct navigation, back, and same-page project switching all honor workben
 
   gate.allowed = true;
   assert.equal(await ui.openPage("editor", { project: firstProject }), true, "reopening the current project reuses its session");
+  await waitForWorkbench(workbench);
   assert.equal(workbench.getSnapshot().session.id, firstSessionId);
   assert.equal(gate.started.length, 1);
   assert.equal(await ui.openPage("editor", { project: secondProject }), true);
+  await waitForWorkbench(workbench);
   const secondSessionId = workbench.getSnapshot().session.id;
   assert.notEqual(secondSessionId, firstSessionId);
   assert.equal(gate.started.length, 2);
@@ -244,6 +267,7 @@ test("normal window close uses the same asynchronous leave checks and preserves 
   const activeProject = project("novel-1", "第一本", "/stories/first");
   assert.equal(fixture.closeRequestListeners.size, 1, "the workbench should install a native close listener");
   assert.equal(await workbench.openProject(activeProject), true);
+  await waitForWorkbench(workbench);
   const sessionId = workbench.getSnapshot().session.id;
 
   const rejected = await fixture.requestWindowClose();
@@ -268,6 +292,7 @@ test("navigation waits for an asynchronous participant decision before committin
   const ui = getUi(fixture);
   const workbench = getWorkbench(fixture);
   await ui.openPage("editor", { project: project("novel-1", "第一本", "/stories/first") });
+  await waitForWorkbench(workbench);
 
   const navigation = ui.openPage("settings");
   assert.equal(workbench.getSnapshot().busy, true, "the workbench should lock edits while leave approval is pending");
@@ -298,10 +323,12 @@ test("page plugins revoke their route contributions and the UI root unmounts onl
   await core.unmount("workbench-toolbar");
   assert.equal(core.isMounted("workbench-toolbar"), false);
   // Release workbench consumers and body-editor implementations before their providers.
-  await core.unmount("asset-management");
   await core.unmount("outline-design");
   await core.unmount("writing-status");
+  await core.unmount("timeline");
+  await core.unmount("asset-management");
   await core.unmount("markdown-editor");
+  await core.unmount("plain-text-editor");
   await core.unmount("rich-text-editor");
   await core.unmount("document-tabs");
   await core.unmount("body-editor");
@@ -310,7 +337,6 @@ test("page plugins revoke their route contributions and the UI root unmounts onl
   assert.equal(core.isMounted("project-management"), false);
   await core.unmount("documents");
   assert.equal(core.isMounted("documents"), false);
-  await core.unmount("timeline");
   await core.unmount("canvas");
   await core.unmount("project-storage");
   await core.unmount("workbench");
@@ -345,7 +371,7 @@ test("a cleanup failure after an approved native close does not leave an unmount
     additionalPlugins: ({ requireSdk }) => [gatePlugin(requireSdk("@lodestory/sdk/workbench").workbenchKey, gate)],
   });
   const workbench = getWorkbench(fixture);
-  await workbench.openProject(project("novel-1", "第一本", "/stories/first"));
+  await openWorkbenchProject(workbench, project("novel-1", "第一本", "/stories/first"));
 
   const closed = await fixture.requestWindowClose();
   assert.equal(closed.prevented, false, "save approval has already committed the close");
@@ -365,6 +391,7 @@ test("project file UI and the independent dialog wrapper connect through the SDK
   const documents = fixture.getService(fixture.requireSdk("@lodestory/sdk/documents").documentsKey);
   const activeProject = project("novel-documents", "文档集成", "/stories/documents");
   assert.equal(await workbench.openProject(activeProject), true);
+  await waitForWorkbench(workbench);
   await flushStartup();
   const sessionId = workbench.getSnapshot().session.id;
   const workspace = documents.getWorkspace(sessionId);
@@ -415,7 +442,7 @@ test("a failed document save blocks project close and keeps the draft available 
   const workbench = getWorkbench(fixture);
   const layout = fixture.getService(fixture.requireSdk("@lodestory/sdk/layout").layoutKey);
   const documents = fixture.getService(fixture.requireSdk("@lodestory/sdk/documents").documentsKey);
-  await workbench.openProject(project("novel-save-failure", "保存保护", "/stories/save-failure"));
+  await openWorkbenchProject(workbench, project("novel-save-failure", "保存保护", "/stories/save-failure"));
   await flushStartup();
   const sessionId = workbench.getSnapshot().session.id;
   const workspace = documents.getWorkspace(sessionId);
@@ -457,7 +484,7 @@ test("a delayed document reveal request cannot replace a newer selection or its 
   const workbench = getWorkbench(fixture);
   const {documentsKey, documentRevealRequested} = fixture.requireSdk("@lodestory/sdk/documents");
   const layout = fixture.getService(fixture.requireSdk("@lodestory/sdk/layout").layoutKey);
-  await workbench.openProject(project("delayed-reveal", "延迟通知", "/stories/delayed-reveal"));
+  await openWorkbenchProject(workbench, project("delayed-reveal", "延迟通知", "/stories/delayed-reveal"));
   await flushStartup();
   const sessionId = workbench.getSnapshot().session.id;
   const workspace = fixture.getService(documentsKey).getWorkspace(sessionId);
@@ -483,14 +510,14 @@ test("project switching releases the old document handle and starts an isolated 
   const fixture = await startFixture();
   const workbench = getWorkbench(fixture);
   const documents = fixture.getService(fixture.requireSdk("@lodestory/sdk/documents").documentsKey);
-  assert.equal(await workbench.openProject(project("novel-first", "第一本", "/stories/first")), true);
+  assert.equal(await openWorkbenchProject(workbench, project("novel-first", "第一本", "/stories/first")), true);
   const firstSessionId = workbench.getSnapshot().session.id;
   const firstWorkspace = documents.getWorkspace(firstSessionId);
   assert.ok(firstWorkspace);
   const created = await firstWorkspace.create("", "第一章.md");
   assert.ok(created);
 
-  assert.equal(await workbench.openProject(project("novel-second", "第二本", "/stories/second")), true);
+  assert.equal(await openWorkbenchProject(workbench, project("novel-second", "第二本", "/stories/second")), true);
   const secondSessionId = workbench.getSnapshot().session.id;
   const secondWorkspace = documents.getWorkspace(secondSessionId);
   assert.ok(secondWorkspace);

@@ -21,6 +21,7 @@ export function createWorkbenchToolbarPlugin(): Plugin {
       const layout = context.get(layoutKey);
       removeParticipant = workbench.registerParticipant({
         id: "workbench-toolbar",
+        label: "工具栏",
         start(session) {
           const model = createWorkbenchToolbarModel(session, workbench, ui, layout);
           models.set(session.id, model);

@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {createMainFixture, flushStartup} from "./helpers/mainStartupFixture.mjs";
 
-function setup({wrapperError} = {}) {
-  const fixture = createMainFixture();
+function setup({wrapperError, invokeHandler} = {}) {
+  const fixture = createMainFixture({invokeHandler});
   const sdk = specifier => fixture.requireSdk(specifier);
   const {workbenchKey} = sdk("@lodestory/sdk/workbench");
   const {documentsKey, documentCreateRequested, documentRevealRequested} = sdk("@lodestory/sdk/documents");
@@ -49,7 +49,7 @@ function setup({wrapperError} = {}) {
       participation = value;
       return async () => {
         lifecycle.push("participant.remove");
-        await activeParticipation?.dispose?.();
+        await (await activeParticipation)?.dispose?.();
         activeParticipation = undefined;
       };
     },
@@ -137,7 +137,7 @@ test("project management registers its own navigation and a dialog wrapper indep
   assert.equal(f.wrappers.length, 1);
   assert.equal(f.wrappers[0].id, "project-management.dialogs");
 
-  f.startParticipant();
+  await f.startParticipant();
   await flushStartup();
   const navigation = f.contributions[0].render({active: false});
   const filesView = navigation.type(navigation.props);
@@ -177,4 +177,21 @@ test("partial activation failure removes the event listeners, participant, and l
   assert.equal(f.eventListeners.get(f.documentRevealRequested).size, 0);
   assert.ok(f.lifecycle.includes("participant.remove"));
   assert.ok(f.lifecycle.includes("layout.remove"));
+});
+
+test("initial project tree failure rejects participant startup, cleans its model, and allows retry", async () => {
+  let listCalls = 0;
+  const f = setup({invokeHandler(command) {
+    if (command !== "list_documents") throw new Error(`Unexpected command '${command}'.`);
+    listCalls += 1;
+    if (listCalls === 1) throw {message: "目录读取失败"};
+    return [];
+  }});
+  f.plugin.activate(f.context);
+
+  await assert.rejects(f.startParticipant(), /目录读取失败/);
+  assert.equal(listCalls, 1, "startup waits for the initial tree request");
+  await f.startParticipant();
+  assert.equal(listCalls, 2, "retry creates a fresh tree model and starts a new request");
+  await f.plugin.deactivate();
 });

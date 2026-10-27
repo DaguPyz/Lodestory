@@ -152,6 +152,7 @@ export function createTimelinePlugin(): Plugin {
 
       removeParticipant = workbench.registerParticipant({
         id: "timeline",
+        label: "大纲时间线",
         async start(session) {
           if (!alive || sessions.has(session.id)) throw new Error(`Timeline session '${session.id}' cannot be started.`);
           const files = storage.getFiles(session.id);
@@ -205,10 +206,13 @@ export function createTimelinePlugin(): Plugin {
             save(id) { return canMutate() && resource.editing.size === 0 ? model.save(id) : Promise.resolve(false); },
             retry() { return canMutate() && resource.editing.size === 0 ? model.retry() : Promise.resolve(false); },
           });
-          sessions.set(session.id, resource);
           resource.unsubscribe = model.subscribe(() => syncResources(files, resource));
           try {
-            await model.load();
+            const loaded = await model.load();
+            if (!loaded) throw new Error(model.getSnapshot().error ?? "时间线数据加载失败。");
+            if (!alive) throw new Error("Timeline stopped while the project was loading.");
+            // The public model becomes visible only after its initial read settles.
+            sessions.set(session.id, resource);
           } catch (error) {
             resource.unsubscribe();
             for (const viewport of resource.viewports.values()) viewport.dispose();
@@ -217,6 +221,7 @@ export function createTimelinePlugin(): Plugin {
             for (const unsubscribe of resource.eventUnsubscribes.values()) unsubscribe();
             for (const events of resource.events.values()) events.dispose();
             resource.summaries.clear();
+            resource.listeners.clear();
             model.dispose();
             if (sessions.get(session.id) === resource) sessions.delete(session.id);
             throw error;

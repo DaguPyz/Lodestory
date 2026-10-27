@@ -42,6 +42,7 @@ export function createDocumentsPlugin(): Plugin {
       });
       removeParticipant = workbench.registerParticipant({
         id: "documents",
+        label: "文稿",
         start(session) {
           if (!alive || sessions.has(session.id)) throw new Error(`Document session '${session.id}' cannot be started.`);
           const projectFiles = storage.getFiles(session.id);

@@ -98,6 +98,7 @@ test("asset card masonry respects WebKit grid bounds and keeps all three columns
 
     server = await createServer({
       configFile: false,
+      cacheDir: path.join(temp, "vite-cache"),
       root,
       appType: "mpa",
       server: {host: "127.0.0.1", port: 0, strictPort: true, hmr: false},

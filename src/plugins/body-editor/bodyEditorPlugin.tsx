@@ -60,6 +60,7 @@ export function createBodyEditorPlugin(): Plugin {
       }));
       removeParticipant = workbench.registerParticipant({
         id: "body-editor",
+        label: "编辑器",
         start(session) {
           const workspace = documents.getWorkspace(session.id);
           if (!workspace) throw new Error(`Documents workspace is unavailable for session '${session.id}'.`);

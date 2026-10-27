@@ -84,6 +84,23 @@ function fixture() {
 
 const project = {id: "book", name: "故事", path: "/projects/book"};
 
+async function waitForStartup(workbench) {
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
+    const snapshot = workbench.getSnapshot();
+    if (!snapshot.busy || snapshot.loading?.error) return snapshot;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.fail("workbench startup did not settle");
+}
+
+async function openReadyProject(workbench, target) {
+  assert.equal(await workbench.openProject(target), true);
+  const snapshot = await waitForStartup(workbench);
+  assert.equal(snapshot.loading?.error ?? null, null, snapshot.loading?.error?.message ?? "project startup failed");
+  assert.equal(snapshot.busy, false);
+  return snapshot;
+}
+
 test("asset schema sessions own their stores, guard project leave, and release resources after the views stop", async () => {
   const {f, stores, controls} = fixture();
   f.start(); await flushStartup();
@@ -128,8 +145,8 @@ test("asset schema sessions own their stores, guard project leave, and release r
   assert.strictEqual(assetsProps.contextMenus, contextMenus,
     "the object editor receives the same context-menu service instance");
 
-  assert.equal(await workbench.openProject(project), true);
-  const session = workbench.getSnapshot().session;
+  const opened = await openReadyProject(workbench, project);
+  const session = opened.session;
   const navProps = navigation.render({active: true}).props;
   const resource = navProps.sessions.get(session.id);
   assert.ok(resource);
@@ -156,18 +173,29 @@ test("asset schema sessions own their stores, guard project leave, and release r
   assert.equal(navProps.sessions.has(session.id), false);
 
   controls.load = "fail";
-  assert.equal(await workbench.openProject(project), true, "a recoverable schema read failure does not block opening the project");
-  const nextSession = workbench.getSnapshot().session;
+  assert.equal(await workbench.openProject(project), true, "the editor route commits before schema initialization settles");
+  const failed = await waitForStartup(workbench);
+  assert.equal(failed.session, null, "failed initialization does not expose a partially loaded project session");
+  assert.equal(failed.loading.error.participantId, "asset-management");
+  assert.match(failed.loading.error.message, /schema cannot be read/);
+  assert.equal(stores[1].disposed, true, "failed schema initialization releases its temporary store");
+  assert.equal(navProps.sessions.has(session.id), false, "failed initialization leaves no session resource behind");
+
+  controls.load = "success";
+  assert.equal(await workbench.retryProject(), true);
+  const retried = await waitForStartup(workbench);
+  const nextSession = retried.session;
+  assert.ok(nextSession);
   const nextResource = navigation.render({active: true}).props.sessions.get(nextSession.id);
   assert.notStrictEqual(nextResource.store, resource.store, "a reopened project gets a fresh session store");
-  assert.equal(nextResource.store.getSnapshot().error, "schema cannot be read");
-  assert.equal(await workbench.closeProject(), true, "a clean load error does not trap the project session");
-  assert.equal(stores[1].disposed, true);
+  assert.equal(nextResource.store.getSnapshot().loaded, true, "retry exposes the fully loaded schema");
+  assert.equal(await workbench.closeProject(), true);
+  assert.equal(stores[2].disposed, true);
 
   await f.createdCores.at(-1).unmountAll();
 });
 
-test("an unexpected schema load rejection disposes the partially started session", async () => {
+test("an unexpected schema load rejection disposes the failed session and can be retried", async () => {
   const {f, stores, controls} = fixture();
   controls.load = "throw";
   f.start(); await flushStartup();
@@ -176,9 +204,24 @@ test("an unexpected schema load rejection disposes the partially started session
   const workbench = f.getService(f.requireSdk("@lodestory/sdk/workbench").workbenchKey);
   const navigation = layout.getSnapshot().contents.find(({id}) => id === "asset-management.navigation");
   const sessions = navigation.render({active: true}).props.sessions;
-  await assert.rejects(workbench.openProject(project), /schema load rejected/);
+  assert.equal(await workbench.openProject(project), true, "the route commits before the asynchronous load failure is reported");
+  const failed = await waitForStartup(workbench);
+  assert.equal(failed.session, null);
+  assert.equal(failed.loading.error.participantId, "asset-management");
+  assert.match(failed.loading.error.message, /schema load rejected/);
   assert.equal(stores[0].disposed, true);
   assert.equal(sessions.size, 0, "failed start removes the resource from the session map");
+
+  controls.load = "success";
+  assert.equal(await workbench.retryProject(), true, "the failed participant can be restarted from the recovery screen");
+  const retried = await waitForStartup(workbench);
+  assert.equal(retried.loading, null);
+  assert.equal(retried.busy, false);
+  assert.ok(retried.session);
+  assert.equal(sessions.size, 1, "retry publishes only the successfully initialized store");
+  assert.equal(stores[1].disposed, false);
+  assert.equal(await workbench.closeProject(), true);
+  assert.equal(stores[1].disposed, true, "the successful retry is released when its session closes");
   await f.createdCores.at(-1).unmountAll();
 });
 
@@ -190,7 +233,7 @@ test("asset creation and value edits retain the session draft when saving fails"
   const workbench = f.getService(f.requireSdk("@lodestory/sdk/workbench").workbenchKey);
   const navigation = layout.getSnapshot().contents.find(({id}) => id === "asset-management.navigation");
   const sessions = navigation.render({active: true}).props.sessions;
-  assert.equal(await workbench.openProject(project), true);
+  await openReadyProject(workbench, project);
   const session = workbench.getSnapshot().session;
   const resource = sessions.get(session.id);
   const assetId = "50000000-0000-4000-8000-000000000001";
@@ -300,7 +343,7 @@ test("asset type and field definitions persist by stable IDs and stay isolated b
   const secondFieldId = "40000000-0000-4000-8000-000000000003";
   const schemaPath = ".lodestory/assets/schema.json";
 
-  assert.equal(await workbench.openProject(originalProject), true);
+  await openReadyProject(workbench, originalProject);
   const originalSessionId = workbench.getSnapshot().session.id;
   const originalStore = sessions.get(originalSessionId).store;
   assert.equal(originalStore.getSnapshot().loaded, true);
@@ -320,7 +363,7 @@ test("asset type and field definitions persist by stable IDs and stay isolated b
 
   assert.equal(await workbench.closeProject(), true);
   assert.equal(sessions.has(originalSessionId), false);
-  assert.equal(await workbench.openProject(otherProject), true);
+  await openReadyProject(workbench, otherProject);
   const otherSessionId = workbench.getSnapshot().session.id;
   const otherStore = sessions.get(otherSessionId).store;
   assert.notStrictEqual(otherStore, originalStore);
@@ -329,7 +372,7 @@ test("asset type and field definitions persist by stable IDs and stay isolated b
   assert.equal(storage.disk.has(storage.key(otherProject.path, schemaPath)), false);
 
   assert.equal(await workbench.closeProject(), true);
-  assert.equal(await workbench.openProject(originalProject), true);
+  await openReadyProject(workbench, originalProject);
   const restoredSessionId = workbench.getSnapshot().session.id;
   const restoredStore = sessions.get(restoredSessionId).store;
   assert.notStrictEqual(restoredStore, originalStore, "reopening creates a new store for the new workbench session");
@@ -361,7 +404,7 @@ test("asset deletion survives a failed leave retry and persists after reopening 
   const otherAssetId = "60000000-0000-4000-8000-000000000004";
   const customFieldId = "60000000-0000-4000-8000-000000000005";
 
-  assert.equal(await workbench.openProject(target), true);
+  await openReadyProject(workbench, target);
   const sessionId = workbench.getSnapshot().session.id;
   const store = sessions.get(sessionId).store;
   assert.equal(await store.createType({id: typeId, name: "人物", description: "故事中的人物"}), true);
@@ -388,7 +431,7 @@ test("asset deletion survives a failed leave retry and persists after reopening 
   controls.failSchemaSave = false;
   assert.equal(await workbench.closeProject(), true, "leave retries and persists the deletion");
   assert.equal(sessions.has(sessionId), false);
-  assert.equal(await workbench.openProject(target), true);
+  await openReadyProject(workbench, target);
   const reopenedId = workbench.getSnapshot().session.id;
   const reopenedStore = sessions.get(reopenedId).store;
   assert.deepEqual(Array.from(reopenedStore.getSnapshot().assets, asset => asset.id), [otherAssetId]);
@@ -416,7 +459,7 @@ test("type deletion survives a failed leave retry and reopens without removing u
   const assetFieldId = "70000000-0000-4000-8000-000000000006";
   const schemaPath = ".lodestory/assets/schema.json";
 
-  assert.equal(await workbench.openProject(target), true);
+  await openReadyProject(workbench, target);
   const sessionId = workbench.getSnapshot().session.id;
   const store = sessions.get(sessionId).store;
   assert.equal(await store.createType({id: removedTypeId, name: "待删除类型", description: "待移除"}), true);
@@ -446,7 +489,7 @@ test("type deletion survives a failed leave retry and reopens without removing u
   controls.failSchemaSave = false;
   assert.equal(await workbench.closeProject(), true, "leave retries and persists the type deletion");
 
-  assert.equal(await workbench.openProject(target), true);
+  await openReadyProject(workbench, target);
   const reopenedStore = sessions.get(workbench.getSnapshot().session.id).store;
   assert.deepEqual(Array.from(reopenedStore.getSnapshot().types, type => type.id), [retainedTypeId]);
   assert.deepEqual(Array.from(reopenedStore.getSnapshot().fields, field => field.id).sort(), [retainedFieldId, assetFieldId].sort());
@@ -496,7 +539,7 @@ test("template scopes preserve per-type object values and an explicit unclassifi
   const workbench = f.getService(f.requireSdk("@lodestory/sdk/workbench").workbenchKey);
   const navigation = layout.getSnapshot().contents.find(({id}) => id === "asset-management.navigation");
   const sessions = navigation.render({active: true}).props.sessions;
-  assert.equal(await workbench.openProject(target), true);
+  await openReadyProject(workbench, target);
   const store = sessions.get(workbench.getSnapshot().session.id).store;
   assert.deepEqual(Array.from(store.getSnapshot().assets, asset => [asset.id, asset.typeId, asset.values[asset.typeId === typeOneId ? fieldOneId : fieldTwoId]]), [
     [objectOneId, typeOneId, "旅人"], [objectTwoId, typeTwoId, "北境"], [legacyObjectId, null, undefined],
@@ -525,7 +568,7 @@ test("template scopes preserve per-type object values and an explicit unclassifi
   ]);
 
   assert.equal(await workbench.closeProject(), true);
-  assert.equal(await workbench.openProject(target), true);
+  await openReadyProject(workbench, target);
   const reopened = sessions.get(workbench.getSnapshot().session.id).store;
   assert.equal(reopened.getSnapshot().assets.find(asset => asset.id === objectOneId).values[fieldOneId], "旅人");
   assert.equal(reopened.getSnapshot().assets.find(asset => asset.id === objectTwoId).values[fieldTwoId], "北境·旧城区");

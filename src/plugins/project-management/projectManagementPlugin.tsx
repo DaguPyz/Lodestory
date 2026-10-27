@@ -48,11 +48,18 @@ export function createProjectManagementPlugin(): Plugin {
             }));
             removeParticipant = workbench.registerParticipant({
                 id: "project-management",
-                start(session) {
+                label: "项目文件",
+                async start(session) {
                     if (!active || models.has(session.id)) throw new Error(`Project files session '${session.id}' cannot be started.`);
                     const workspace = documents.getWorkspace(session.id);
                     if (!workspace) throw new Error(`Documents workspace is unavailable for session '${session.id}'.`);
                     const model = createProjectManagementModel(session, workbench, workspace);
+                    try {
+                        await model.ready();
+                    } catch (error) {
+                        model.dispose();
+                        throw error;
+                    }
                     models.set(session.id, model);
                     return {
                         dispose() {

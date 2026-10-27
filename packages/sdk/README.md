@@ -236,9 +236,9 @@ export const inkThemePlugin: Plugin = {
 
 ## 工作台服务
 
-工作台通过 `workbenchKey` 提供项目会话服务。`openProject(project)` 创建会话或在异步离开检查通过后切换项目；`closeProject()` 检查并结束当前会话。两者以 `Promise<boolean>` 表示是否完成，离开被拒绝时返回 `false`，操作错误以 Promise rejection 报告。`getSnapshot()` 与 `subscribe()` 提供 `{session, active, busy}` 状态；`registerParticipant()` 登记应用级参与者并返回异步撤销函数 `() => Promise<void>`。工作台运行中撤销参与者会先停止 UI，并等待会话数据清理。
+工作台通过 `workbenchKey` 提供项目会话服务。`openProject(project)` 在离开检查通过后提交工作台页面，并在后台启动会话；其 `true` 表示页面已进入，不表示项目已加载完毕。`closeProject()` 检查并结束当前会话。离开被拒绝时返回 `false`，导航错误以 Promise rejection 报告。`getSnapshot()` 与 `subscribe()` 提供 `{session, active, busy, loading}` 状态：`loading` 提供完成数、总数、可选阶段名称和失败信息；启动成功后为 `null`。失败时工作台继续保持 `busy`，可通过 `retryProject()` 重试或 `returnProject()` 返回原项目／欢迎页。`registerParticipant()` 登记应用级参与者并返回异步撤销函数 `() => Promise<void>`。工作台运行中撤销参与者会先停止 UI，并等待会话数据清理。
 
-项目会话由 `{id, project: {id, name, path}}` 构成。参与者在项目打开时按登记顺序执行 `start(session)`，返回 `beforeLeave(reason)` 和 `dispose()`；项目真正结束时按启动逆序清理。`suspend` 代表暂时离开工作台，检查通过后保留会话和资源；`switch`、`close`、`shutdown` 在检查通过后结束当前会话。`busy` 期间 UI 应阻止新的编辑操作，已有保存继续执行。统一离开检查覆盖 UI 页面 `open`、`back`、同页项目替换和原生窗口关闭。详细规则见[工作台插件设计](../../文档/需求设计/工作台插件.md)。
+项目会话由 `{id, project: {id, name, path}}` 构成。参与者在页面进入后按登记顺序执行 `start(session)`，返回 `beforeLeave(reason)` 和 `dispose()`；可选 `label` 用于展示当前加载阶段。参与者负责清理未成功返回的部分资源；项目真正结束时工作台在视图停止使用后按启动逆序清理已返回资源。`suspend` 代表暂时离开工作台，检查通过后保留会话和资源；切换项目时旧会话保留到新会话准备成功，失败可返回旧会话。`busy` 期间 UI 应阻止新的编辑操作，已有保存继续执行。统一离开检查覆盖 UI 页面 `open`、`back`、同页项目替换和原生窗口关闭。详细规则见[工作台插件设计](../../文档/需求设计/工作台插件.md)。
 
 ## 文档服务
 

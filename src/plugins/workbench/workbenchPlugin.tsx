@@ -7,6 +7,7 @@ import {errorUiKey} from "@lodestory/sdk/error";
 import {windowShellKey} from "@lodestory/sdk/window-shell";
 import {isTauri} from "@tauri-apps/api/core";
 import {getCurrentWindow} from "@tauri-apps/api/window";
+import {flushSync} from "react-dom";
 import {appPages} from "../../app/pages";
 import "../../styles.css";
 import {WorkbenchPage} from "./WorkbenchPage";
@@ -31,7 +32,8 @@ export function createWorkbenchPlugin(): Plugin {
       let alive = true;
       const store = createWorkbenchStore(ui, {
         editorPage: appPages.editor, welcomePage: appPages.welcome,
-        stopView: () => removePage?.(),
+        stopView: () => flushSync(() => removePage?.()),
+        flushView: update => flushSync(update),
       });
       cleanup = async () => {
         alive = false;

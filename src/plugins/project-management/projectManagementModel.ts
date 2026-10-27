@@ -29,6 +29,7 @@ export type ProjectManagementSnapshot = Readonly<{
 export type ProjectManagementModel = {
     getSnapshot(): ProjectManagementSnapshot;
     subscribe(listener: () => void): () => void;
+    ready(): Promise<void>;
     refresh(): Promise<void>;
     selectFolder(path: string): boolean;
     openDocument(path: string): Promise<boolean>;
@@ -91,6 +92,7 @@ export function createProjectManagementModel(
     let disposed = false;
     let readSequence = 0;
     let currentRefresh: Promise<void> | undefined;
+    let initialLoad: Promise<void> | undefined;
     let refreshAgain = false;
     let removeWorkbench = () => {
     };
@@ -155,6 +157,50 @@ export function createProjectManagementModel(
         return true;
     }
 
+    function refresh(rejectOnError = false): Promise<void> {
+        if (disposed) return Promise.resolve();
+        const sequence = ++readSequence;
+        // Install the request before notifying subscribers, including synchronous reentry.
+        const operation = Promise.resolve().then(async () => {
+            if (disposed || sequence !== readSequence) {
+                if (rejectOnError && disposed) throw new Error("Project files initialization was cancelled.");
+                return;
+            }
+            let failure: unknown;
+            let failed = false;
+            try {
+                const records = await listDocuments(session.project.path);
+                if (!disposed && sequence === readSequence) {
+                    entries = immutableEntries(records);
+                    if (!isDirectory(selectedFolder)) selectedFolder = "";
+                }
+            } catch (cause) {
+                const message = projectFilesErrorMessage(cause);
+                if (!disposed && sequence === readSequence) error = message;
+                failure = new Error(message);
+                failed = true;
+            } finally {
+                if (!disposed && sequence === readSequence) {
+                    loading = false;
+                    currentRefresh = undefined;
+                    const again = refreshAgain;
+                    refreshAgain = false;
+                    if (!again) missingPaths.clear();
+                    publish();
+                    if (again) void model.refresh();
+                }
+            }
+            if (rejectOnError && (disposed || failed)) {
+                throw failure ?? new Error("Project files initialization was cancelled.");
+            }
+        });
+        currentRefresh = operation;
+        loading = true;
+        error = null;
+        publish();
+        return operation;
+    }
+
     const model: ProjectManagementModel = {
         getSnapshot: () => snapshot,
         subscribe(listener) {
@@ -166,38 +212,8 @@ export function createProjectManagementModel(
                 listeners.delete(subscription);
             };
         },
-        refresh() {
-            if (disposed) return Promise.resolve();
-            const sequence = ++readSequence;
-            // Install the request before notifying subscribers, including synchronous reentry.
-            const operation = Promise.resolve().then(async () => {
-                if (disposed || sequence !== readSequence) return;
-                try {
-                    const records = await listDocuments(session.project.path);
-                    if (!disposed && sequence === readSequence) {
-                        entries = immutableEntries(records);
-                        if (!isDirectory(selectedFolder)) selectedFolder = "";
-                    }
-                } catch (cause) {
-                    if (!disposed && sequence === readSequence) error = projectFilesErrorMessage(cause);
-                } finally {
-                    if (!disposed && sequence === readSequence) {
-                        loading = false;
-                        currentRefresh = undefined;
-                        const again = refreshAgain;
-                        refreshAgain = false;
-                        if (!again) missingPaths.clear();
-                        publish();
-                        if (again) void model.refresh();
-                    }
-                }
-            });
-            currentRefresh = operation;
-            loading = true;
-            error = null;
-            publish();
-            return operation;
-        },
+        ready() { return initialLoad ?? Promise.resolve(); },
+        refresh() { return refresh(); },
         selectFolder(path) {
             if (blocked() || !isDirectory(path)) return false;
             selectedFolder = path;
@@ -340,7 +356,10 @@ export function createProjectManagementModel(
             }
             publish();
         });
-        void model.refresh();
+        initialLoad = refresh(true);
+        // The model is also consumed outside workbench startup in tests and previews;
+        // callers can still observe the original rejection through ready().
+        void initialLoad.catch(() => {});
         return model;
     } catch (cause) {
         model.dispose();

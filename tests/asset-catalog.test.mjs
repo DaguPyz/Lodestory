@@ -45,6 +45,17 @@ function fixture() {
 
 const project = {id: "catalog-book", name: "目录测试", path: "/projects/catalog-book"};
 
+async function openReadyProject(workbench, target) {
+  assert.equal(await workbench.openProject(target), true);
+  for (let attempt = 0; attempt < 1000; attempt += 1) {
+    const snapshot = workbench.getSnapshot();
+    if (snapshot.loading?.error) assert.fail(snapshot.loading.error.message);
+    if (!snapshot.busy) return snapshot;
+    await new Promise(resolve => setImmediate(resolve));
+  }
+  assert.fail("workbench startup did not settle");
+}
+
 test("asset catalog uses one shared SDK key and publishes an immutable metadata-only projection", async () => {
   const {f, stores} = fixture();
   const contract = f.requireSdk("@lodestory/sdk/asset-catalog");
@@ -56,8 +67,8 @@ test("asset catalog uses one shared SDK key and publishes an immutable metadata-
   assert.strictEqual(plugin.provides[0], contract.assetCatalogKey);
   const service = f.getService(contract.assetCatalogKey);
   const workbench = f.getService(f.requireSdk("@lodestory/sdk/workbench").workbenchKey);
-  assert.equal(await workbench.openProject(project), true);
-  const sessionId = workbench.getSnapshot().session.id;
+  const opened = await openReadyProject(workbench, project);
+  const sessionId = opened.session.id;
   const catalog = service.getCatalog(sessionId);
   assert.ok(catalog);
   assert.equal(catalog.getSnapshot().loaded, true);
@@ -114,8 +125,8 @@ test("catalogs are isolated by workbench session and expire with their session",
   const service = f.getService(contract.assetCatalogKey);
   const workbench = f.getService(f.requireSdk("@lodestory/sdk/workbench").workbenchKey);
 
-  assert.equal(await workbench.openProject(project), true);
-  const firstSessionId = workbench.getSnapshot().session.id;
+  const first = await openReadyProject(workbench, project);
+  const firstSessionId = first.session.id;
   const expired = service.getCatalog(firstSessionId);
   assert.ok(expired);
   assert.equal(await workbench.closeProject(), true);
@@ -125,8 +136,8 @@ test("catalogs are isolated by workbench session and expire with their session",
   assert.equal(await expired.retry(), false, "an expired handle cannot retry its disposed store");
   assert.equal(stores[0].retryCalls, 0);
 
-  assert.equal(await workbench.openProject({...project, id: "catalog-book-two", path: "/projects/catalog-book-two"}), true);
-  const secondSessionId = workbench.getSnapshot().session.id;
+  const second = await openReadyProject(workbench, {...project, id: "catalog-book-two", path: "/projects/catalog-book-two"});
+  const secondSessionId = second.session.id;
   const current = service.getCatalog(secondSessionId);
   assert.ok(current);
   assert.notEqual(secondSessionId, firstSessionId);

@@ -155,8 +155,7 @@ test("the project model reports directory failures and can recover through refre
     if (attempts === 1) throw new Error("目录读取失败");
     return entries(["chapters/one.md"]);
   }});
-  await Promise.resolve();
-  await new Promise(resolve => setImmediate(resolve));
+  await assert.rejects(f.model.ready(), /目录读取失败/);
 
   assert.equal(f.model.getSnapshot().loading, false);
   assert.equal(f.model.getSnapshot().error, "目录读取失败");
@@ -172,15 +171,18 @@ test("overlapping directory reads publish only the newest result", async () => {
   const newest = deferred();
   let call = 0;
   const f = createFixture({listDocuments: () => (++call === 1 ? older.promise : newest.promise)});
+  const ready = f.model.ready();
   await Promise.resolve();
   assert.equal(call, 1, "the constructor's initial read should have started");
   const refresh = f.model.refresh();
   newest.resolve(entries(["fresh.md"]));
   await refresh;
   older.resolve(entries(["stale.md"]));
+  await ready;
   await new Promise(resolve => setImmediate(resolve));
 
   assert.deepEqual(Array.from(f.model.getSnapshot().entries, entry => entry.path), ["fresh.md"]);
+  assert.equal(call, 2, "ready reuses the constructor's initial request rather than starting another read");
   assert.equal(f.model.getSnapshot().loading, false);
   f.model.dispose();
 });
@@ -315,12 +317,14 @@ test("a denied project leave keeps the create dialog open and blocks operations 
 test("disposed session models ignore late tree results and release subscriptions", async () => {
   const pending = deferred();
   const f = createFixture({listDocuments: () => pending.promise});
+  const ready = f.model.ready();
   let notifications = 0;
   const unsubscribe = f.model.subscribe(() => notifications++);
   const before = f.model.getSnapshot();
   f.model.dispose();
   const disposedSnapshot = f.model.getSnapshot();
   pending.resolve(entries(["late.md"]));
+  await assert.rejects(ready, /cancelled/);
   await new Promise(resolve => setImmediate(resolve));
 
   assert.notEqual(disposedSnapshot, before, "dispose closes the dialog and blocks the stale model");

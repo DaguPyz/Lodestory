@@ -17,6 +17,7 @@ import {createAssetManagementPlugin} from "../plugins/asset-management/assetMana
 import {createCanvasPlugin} from "../plugins/canvas/canvasPlugin";
 import {createTimelinePlugin} from "../plugins/timeline/timelinePlugin";
 import {createBodyEditorPlugin} from "../plugins/body-editor/bodyEditorPlugin";
+import {createPlainTextEditorPlugin} from "../plugins/plain-text-editor/plainTextEditorPlugin";
 import {createMarkdownEditorPlugin} from "../plugins/markdown-editor/markdownEditorPlugin";
 import {createRichTextEditorPlugin} from "../plugins/rich-text-editor/richTextEditorPlugin";
 import {createDocumentTabsPlugin} from "../plugins/document-tabs/documentTabsPlugin";
@@ -46,6 +47,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createOutlineDesignPlugin(),
         createAssetManagementPlugin(),
         createBodyEditorPlugin(),
+        createPlainTextEditorPlugin(),
         createMarkdownEditorPlugin(),
         createRichTextEditorPlugin(),
         createDocumentTabsPlugin(),

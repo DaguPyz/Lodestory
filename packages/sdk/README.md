@@ -17,11 +17,13 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/workbench`：项目与工作台会话、参与者生命周期、快照和服务类型，以及共享单例 `workbenchKey`。
 - `@lodestory/sdk/project-storage`：项目字节文件缓冲与存储服务类型，以及共享单例 `projectStorageKey`。
 - `@lodestory/sdk/documents`：打开文档与文档工作区类型，以及 `documentsKey` 和新建/显示请求事件。
-- `@lodestory/sdk/body-editor`：正文格式、编辑器定义与宿主传入的编辑器属性、正文 main 内容 ID；`EditorHandle` 可按需贡献通用上下文菜单操作。
+- `@lodestory/sdk/body-editor`：正文格式、编辑器定义与宿主传入的编辑器属性、正文 main 内容 ID；`EditorHandle` 可按需贡献通用上下文菜单操作，格式插件可通过 `EditorDefinition.conversions` 声明转换，由正文宿主统一提供另存为入口。插件可通过 `EditorDefinition.replaces` 声明按格式替代的旧编辑器映射，由注册表兼容读取已有配置。
 - `@lodestory/sdk/context-menu`：共享菜单项类型、菜单区域属性类型，以及 context-menu 插件提供的 `contextMenuKey` 和 `ContextMenuService`。
 - `@lodestory/sdk/theme`：主题定义、仅含 ID 的选择配置、选择策略、管理服务和快照类型，以及共享单例 `themeKey`。
 
 正文格式插件可通过 `EditorHandle.getContextMenuActions()` 动态返回当前操作快照。每项操作由编辑器插件拥有，包含稳定的 `id`、`label`、可选 `disabled` 和 `run()`；正文宿主负责展示并在执行时复核编辑器生命周期与编辑状态。未提供该方法的编辑器无需贡献菜单操作。
+
+存在原生输入合成状态的编辑器可提供 `EditorHandle.flushContent(currentContent?)`，同步提交已经发生的输入并返回完整持久化内容。传入的 `currentContent` 是宿主最新缓冲；格式实现应先接纳尚未通过 React 属性送达的外部替换，避免旧界面覆盖新内容。正文宿主会将该句柄通过文档工作区的可选 `registerContentReader(documentId, reader)` 接口登记；保存、切换和离开前由文档插件调用读取器并更新既有共享缓冲。读取错误会阻止对应操作，句柄失效后不能继续读取。登记返回的撤销函数只撤销自身批次，旧实例不能移除新实例的读取器。
 
 ## 生命周期与 key
 
@@ -300,7 +302,13 @@ const removeParticipant = workbench.registerParticipant({
 });
 ```
 
-`ProjectStorageService.getFiles(sessionId)` 返回稳定的 `ProjectFiles`，提供 `read`、`create`、`write`、`save`、`saveAll`、`delete`、`list`、`createDirectory` 和 `clearError`。`ProjectFile` 快照包含相对路径、文件名、只读字节数组、dirty 标记和保存状态。同一会话同一路径共享一个缓冲、保存队列、冲突检查和 700 毫秒自动保存。`read(path)` 使用完整相对路径；`create(path, bytes, options)` 使用调用方给定的完整路径和字节；目录是否递归创建及相同内容重试由显式选项决定。项目存储不解码 UTF-8、不解释 JSON，也不根据扩展名推断格式。
+`ProjectStorageService.getFiles(sessionId)` 返回稳定的 `ProjectFiles`，提供 `read`、`create`、`write`、`save`、`saveAll`、`delete`、`list`、`createDirectory`、`clearError` 和可选的 `captureBytes`。同一会话同一路径共享一个缓冲、保存队列、冲突检查和 700 毫秒自动保存。`read(path)` 使用完整相对路径；`create(path, bytes, options)` 使用调用方给定的完整路径和字节；目录是否递归创建及相同内容重试由显式选项决定。项目存储不解码 UTF-8、不解释 JSON，也不根据扩展名推断格式。
+
+默认 `ProjectFile.bytes` 仍是只读冻结字节数组。调用方可在 `read`、`write` 的访问选项或 `create` 选项中显式设置 `preferByteView: true`，启用紧凑的 `ProjectByteView`；紧凑模式下快照提供 `byteView`，而兼容用的 `bytes` 数组只在被读取时才物化。`ProjectByteView` 暴露 `byteLength`、写入调用方 `Uint8Array` 的 `copyTo` 和逐字节比较用的 `equals`，不暴露内部可变缓冲区。该选项不改变字节内容，也不会自动迁移未选择它的调用方；当前 TXT 文档适配器选择此路径，Markdown、富文本和普通数组调用仍沿用原有表示。
+
+`ProjectFiles.captureBytes?(data)` 是可选的无副作用辅助方法：它把调用方数据捕获为不可变 `ProjectByteView`，不会登记文件、修改缓冲或安排保存；文件服务停止后调用会抛出错误。当前内置项目存储在变更写入确实安装该 view 时会复用其身份，便于消费者验证刚写入的投影；若字节与现有缓冲相同，存储可能保留旧 view。替代实现无需保留对象身份，消费者在身份不同时仍须按字节精确比较。
+
+桌面端的紧凑读取、创建和删除仍用 base64 内容命令传输字节。紧凑保存使用单个原始二进制 IPC 帧：UTF-8 JSON 元数据后依次放置新文件字节和保存前的精确字节基线，各自长度由元数据标明；宿主据此按原始字节执行现有路径检查和冲突保护。使用只读数组的旧保存调用继续走原有数组命令。传输方式不改变文件字节、单路径共享缓冲、保存队列或 700 毫秒自动保存；项目存储不负责选择 UTF-8 或其他文件编码。
 
 统一字节命令是 `read_project_file`、`create_project_file`、`save_project_file`、`delete_project_file`、`list_project_directory` 和 `create_project_directory`。宿主处理相对路径、符号链接和 expected-bytes 冲突保护，不知道文本或业务格式。documents 自己将正文数据解码为字符串；timeline 自己定义 UTF-8 与 `.lodestory/outline-design/timelines/<uuid>.json` 目录和 JSON 格式。存储契约只提供路径文件操作。
 

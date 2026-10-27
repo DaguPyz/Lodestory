@@ -1,4 +1,4 @@
-import type {BodyEditorService, EditorDefinition, EditorFormat} from "@lodestory/sdk/body-editor";
+import type {BodyEditorService, EditorConversion, EditorDefinition, EditorFormat, EditorReplacement} from "@lodestory/sdk/body-editor";
 
 type EditorModule = Awaited<ReturnType<EditorDefinition["load"]>>;
 type Entry = {
@@ -8,6 +8,8 @@ type Entry = {
 };
 
 const formats: readonly EditorFormat[] = ["markdown", "plain-text", "rich-delta"];
+
+export type ResolvedEditorConversion = Readonly<EditorConversion & {key: string}>;
 
 export function getEditorFormat(fileName: string): EditorFormat | undefined {
   const extension = fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase();
@@ -69,6 +71,15 @@ export function createBodyEditorRegistry(
     return pending;
   }
 
+  function resolveEntry(format: EditorFormat): Entry | undefined {
+    const id = associations[format];
+    const configured = id === undefined ? undefined : entries.get(id);
+    if (configured?.source.formats.includes(format)) return configured;
+    if (id === undefined) return undefined;
+    return [...entries.values()].find(candidate => candidate.source.formats.includes(format)
+      && candidate.source.replaces?.some((replacement: EditorReplacement) => replacement.id === id && replacement.format === format));
+  }
+
   const service: BodyEditorService = Object.freeze({
     registerEditor(definition: EditorDefinition) {
       checkActive();
@@ -81,11 +92,35 @@ export function createBodyEditorRegistry(
         throw new TypeError("Editor formats must be a non-empty list of distinct supported formats.");
       }
       if (typeof definition.load !== "function") throw new TypeError("Editor must have a load function.");
+      if (definition.conversions !== undefined && (!Array.isArray(definition.conversions)
+        || definition.conversions.some(conversion => !conversion || typeof conversion !== "object"
+          || typeof conversion.id !== "string" || !conversion.id.trim()
+          || typeof conversion.label !== "string" || !conversion.label.trim()
+          || !formats.includes(conversion.from)
+          || typeof conversion.extension !== "string" || !/^[a-z0-9][a-z0-9_-]*$/i.test(conversion.extension)
+          || typeof conversion.convert !== "function")
+        || new Set(definition.conversions.map(conversion => conversion.id)).size !== definition.conversions.length)) {
+        throw new TypeError("Editor conversions must have distinct ids, supported source formats, and valid handlers.");
+      }
+      if (definition.replaces !== undefined && (!Array.isArray(definition.replaces)
+        || definition.replaces.some(replacement => !replacement || typeof replacement !== "object"
+          || typeof replacement.id !== "string" || !replacement.id.trim() || !definition.formats.includes(replacement.format))
+        || new Set(definition.replaces.map(replacement => `${replacement.format}:${replacement.id}`)).size !== definition.replaces.length)) {
+        throw new TypeError("Editor replacements must have distinct ids and supported formats.");
+      }
+      for (const replacement of definition.replaces ?? []) {
+        if ([...entries.values()].some(entry => entry.source.replaces?.some(previous =>
+          previous.id === replacement.id && previous.format === replacement.format))) {
+          throw new Error("An editor replacement is already registered for this id and format.");
+        }
+      }
       if (entries.has(definition.id)) throw new Error("Editor id is already registered.");
       const source: Readonly<EditorDefinition> = Object.freeze({
         id: definition.id,
         formats: Object.freeze([...definition.formats]),
         ...(definition.getText ? {getText: definition.getText} : {}),
+        ...(definition.conversions ? {conversions: Object.freeze(definition.conversions.map(conversion => Object.freeze({...conversion})))} : {}),
+        ...(definition.replaces ? {replaces: Object.freeze(definition.replaces.map(replacement => Object.freeze({...replacement})))} : {}),
         load: definition.load,
       });
       const entry: Entry = {source, definition: source};
@@ -107,8 +142,7 @@ export function createBodyEditorRegistry(
       if (!alive || !started) return undefined;
       const format = getEditorFormat(fileName);
       if (!format) return undefined;
-      const id = associations[format];
-      const entry = id === undefined ? undefined : entries.get(id);
+      const entry = resolveEntry(format);
       const definition = entry?.source.formats.includes(format) ? entry.definition : undefined;
       if (!definition) return undefined;
       if (!definition.getText) return format === "rich-delta" ? undefined : content;
@@ -135,9 +169,14 @@ export function createBodyEditorRegistry(
     resolve(format: EditorFormat): Readonly<EditorDefinition> | undefined {
       checkActive();
       if (!started) throw new Error("Body editor registry is not ready.");
-      const id = associations[format];
-      const entry = id === undefined ? undefined : entries.get(id);
-      return entry?.source.formats.includes(format) ? entry.definition : undefined;
+      return resolveEntry(format)?.definition;
+    },
+    getConversions(format: EditorFormat): readonly ResolvedEditorConversion[] {
+      checkActive();
+      if (!started) throw new Error("Body editor registry is not ready.");
+      return Object.freeze([...entries.values()].flatMap(entry => (entry.source.conversions ?? [])
+        .filter(conversion => conversion.from === format)
+        .map(conversion => Object.freeze({...conversion, key: `${entry.source.id}:${conversion.id}`}))));
     },
     dispose() {
       if (!alive) return;

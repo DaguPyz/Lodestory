@@ -1,5 +1,5 @@
 import {useId} from "react";
-import {Icon, TextField} from "@lodestory/ui";
+import {TextField} from "@lodestory/ui";
 import {ASSET_COLOR_PRESETS, assetCardColorStyle, isAssetColor} from "./assetCardColor";
 
 export function AssetColorPicker({value, disabled, onChange}: {
@@ -14,12 +14,12 @@ export function AssetColorPicker({value, disabled, onChange}: {
       <label className="asset-color-choice asset-color-default" title="使用默认卡片背景">
         <input type="radio" name={`${id}-preset`} value="default" aria-label="默认" checked={value === null}
           onChange={() => onChange(null)}/>
-        <span><Icon name="check" size="small"/>默认</span>
+        <span>默认</span>
       </label>
       {ASSET_COLOR_PRESETS.map(preset => <label key={preset.value} className="asset-color-choice" title={`${preset.name} · ${preset.value.toUpperCase()}`}>
         <input type="radio" name={`${id}-preset`} value={preset.value} aria-label={preset.name}
           checked={value?.toLowerCase() === preset.value} onChange={() => onChange(preset.value)}/>
-        <span style={assetCardColorStyle(preset.value)}><Icon name="check" size="small"/></span>
+        <span style={assetCardColorStyle(preset.value)} />
       </label>)}
     </div>
     <div className="asset-color-custom">

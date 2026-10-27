@@ -8,11 +8,20 @@ const source = await readFile(new URL("../src/plugins/project-storage/bytes.ts",
 const compiled = ts.transpileModule(source, {
   compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS},
 }).outputText;
+const byteViewSource = await readFile(new URL("../src/plugins/project-storage/byteView.ts", import.meta.url), "utf8");
+const compiledByteView = ts.transpileModule(byteViewSource, {
+  compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS},
+}).outputText;
 
 function loadBytes(overrides = {}) {
+  const byteViewExports = {};
+  vm.runInNewContext(compiledByteView, {
+    exports: byteViewExports, Array, Object, Number, WeakMap, ArrayBuffer, Uint8Array,
+  });
   const exports = {};
   vm.runInNewContext(compiled, {
     exports, Array, Object, Number, Uint8Array, WeakSet, Promise, Date,
+    require(name) { if (name === "./byteView") return byteViewExports; throw new Error(`Unexpected import ${name}`); },
     ...overrides,
   });
   return exports;
@@ -72,6 +81,65 @@ test("small async copies keep the synchronous frozen-array behavior and Array.fr
   assert.notStrictEqual(copy, input);
 });
 
+test("Uint8Array captures return isolated ordinary frozen arrays", async () => {
+  const bytes = loadBytes();
+  const input = new Uint8Array([0, 128, 255]);
+  const synchronous = bytes.copyBytes(input);
+  const asynchronous = await bytes.copyBytesAsync(input);
+
+  for (const copy of [synchronous, asynchronous]) {
+    assert.deepEqual(copy, [0, 128, 255]);
+    assert.equal(Array.isArray(copy), true);
+    assert.equal(Object.isFrozen(copy), true);
+    assert.notStrictEqual(copy, input);
+  }
+});
+
+test("Uint8Array instances with a custom iterator retain Array.from semantics", async () => {
+  const bytes = loadBytes();
+  const input = new Uint8Array([1, 2, 3]);
+  let iteratorReads = 0;
+  Object.defineProperty(input, Symbol.iterator, {
+    get() {
+      iteratorReads++;
+      return function* () { yield 255; yield 0; };
+    },
+  });
+
+  assert.deepEqual(bytes.copyBytes(input), [255, 0]);
+  assert.equal(iteratorReads, 1, "capturing a custom iterator does not evaluate its getter twice");
+  assert.deepEqual(await bytes.copyBytesAsync(input), [255, 0]);
+  assert.equal(iteratorReads, 2, "each copy reads the custom iterator exactly once");
+});
+
+test("typed-array prototype iterator overrides retain Array.from semantics", () => {
+  const bytes = loadBytes();
+  const prototype = Object.getPrototypeOf(Uint8Array.prototype);
+  const descriptor = Object.getOwnPropertyDescriptor(prototype, Symbol.iterator);
+  try {
+    Object.defineProperty(prototype, Symbol.iterator, {
+      configurable: true,
+      writable: true,
+      value: function* () { yield 255; yield 0; },
+    });
+    assert.deepEqual(bytes.copyBytes(new Uint8Array([1, 2, 3])), [255, 0]);
+  } finally {
+    Object.defineProperty(prototype, Symbol.iterator, descriptor);
+  }
+});
+
+test("Uint8Array indexed capture uses the intrinsic length and preserves detached-buffer errors", async () => {
+  const bytes = loadBytes();
+  const input = new Uint8Array([1, 2, 3]);
+  Object.defineProperty(input, "length", {value: 1});
+  assert.deepEqual(bytes.copyBytes(input), [1, 2, 3], "an own length property does not alter native iterator output");
+
+  const detached = new Uint8Array([4, 5]);
+  structuredClone(detached.buffer, {transfer: [detached.buffer]});
+  assert.throws(() => bytes.copyBytes(detached), /detached ArrayBuffer/);
+  await assert.rejects(bytes.copyBytesAsync(detached), /detached ArrayBuffer/);
+});
+
 test("large async copies yield in bounded batches and match a frozen dense ordinary Array", async () => {
   const tracker = testScheduler();
   const bytes = trackedBytes(tracker);
@@ -99,7 +167,7 @@ test("large async copies yield in bounded batches and match a frozen dense ordin
   assert.throws(() => { "use strict"; copy[0] = 99; }, TypeError);
   assert.throws(() => Object.defineProperty(copy, "0", {value: 99}), TypeError);
   assert.ok(schedule.yields > 0);
-  assert.ok(schedule.maxChunk <= 2048);
+  assert.equal(schedule.maxChunk, 65_536, "the fixed item cap is 64 KiB per task");
   assert.equal(schedule.closes, 1);
 });
 
@@ -111,8 +179,8 @@ test("large async copies yield when the 3.5ms budget expires before the item cap
   await bytes.copyBytesAsync(input, {schedulerFactory: () => tracker.scheduler});
   const schedule = tracker.result();
 
-  assert.equal(schedule.chunks[0], 32);
-  assert.ok(schedule.chunks[0] < 2048);
+  assert.equal(schedule.chunks[0], 64, "the periodic clock check yields before the item cap");
+  assert.ok(schedule.chunks[0] < 65_536);
   assert.ok(schedule.yields > 0);
   assert.equal(schedule.closes, 1);
 });
@@ -120,8 +188,8 @@ test("large async copies yield when the 3.5ms budget expires before the item cap
 test("large async copies validate after yields without exposing or owning a partial result", async () => {
   const tracker = testScheduler();
   const bytes = trackedBytes(tracker);
-  const input = new Array(65_537).fill(7);
-  input[4_500] = 256;
+  const input = new Array(196_609).fill(7);
+  input[140_000] = 256;
   const pending = bytes.copyBytesAsync(input, {schedulerFactory: () => tracker.scheduler});
   assert.equal(input[0], 7);
   await assert.rejects(pending, /文件字节必须是 0 到 255 的整数/);

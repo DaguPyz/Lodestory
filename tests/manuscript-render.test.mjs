@@ -4,7 +4,7 @@ import {uiPluginFixture} from "./helpers/uiPluginFixture.mjs";
 
 const editorCases = [
   {format: "markdown", fileName: "chapter.md", id: "milkdown"},
-  {format: "plain-text", fileName: "chapter.txt", id: "quill"},
+  {format: "plain-text", fileName: "chapter.txt", id: "plain-text"},
   {format: "rich-delta", fileName: "chapter.lode", id: "quill"},
 ];
 

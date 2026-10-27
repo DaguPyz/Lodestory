@@ -331,43 +331,6 @@
   --prosemirror-virtual-cursor-color: var(--ui-caret-foreground);
 }
 
-/* Reserve a check slot for textual choices; icon-only format buttons stay centered. */
-.markdown-editor .milkdown :is(
-  .milkdown-top-bar .top-bar-heading-option,
-  .milkdown-slash-menu .tab-group ul li,
-  .milkdown-slash-menu .menu-groups .menu-group li,
-  .milkdown-code-block .language-list-item
-) {
-  position: relative;
-  padding-inline-end: calc(var(--ui-space-4) + var(--ui-space-3) + var(--ui-space-1));
-}
-
-.markdown-editor .milkdown :is(
-  .milkdown-top-bar .top-bar-heading-option,
-  .milkdown-slash-menu .tab-group ul li,
-  .milkdown-slash-menu .menu-groups .menu-group li,
-  .milkdown-code-block .language-list-item
-)::after {
-  position: absolute;
-  inset-block: 0;
-  inset-inline-end: var(--ui-space-4);
-  width: var(--ui-space-3);
-  height: var(--ui-space-3);
-  margin-block: auto;
-  background: currentColor;
-  clip-path: polygon(40% 60%, 18% 38%, 4% 52%, 41% 90%, 98% 19%, 83% 7%);
-  content: "";
-  opacity: 0;
-  pointer-events: none;
-}
-
-.markdown-editor .milkdown .milkdown-top-bar .top-bar-heading-option:is(.active, .selected)::after,
-.markdown-editor .milkdown .milkdown-slash-menu .tab-group ul li.selected::after,
-.markdown-editor .milkdown .milkdown-slash-menu .menu-groups .menu-group li:is(.selected, [aria-selected="true"])::after,
-.markdown-editor .milkdown .milkdown-code-block .language-list-item[aria-selected="true"]::after {
-  opacity: 1;
-}
-
 .markdown-editor .milkdown .milkdown-code-block .language-list-item[aria-selected="true"] {
   color: var(--ui-state-selected-foreground);
   background: var(--ui-surface-selected);

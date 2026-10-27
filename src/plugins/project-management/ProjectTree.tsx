@@ -111,9 +111,6 @@ function TreeNode({
           <span className="file-tree-spacer" />
           <Icon name="file" />
           <span className="file-tree-label">{node.name}</span>
-          <span className="file-tree-entry-state" aria-hidden="true">
-            {selected && <Icon name="check" size="small" />}
-          </span>
         </button>
       </ContextMenuRegion>
     </li>

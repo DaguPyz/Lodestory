@@ -19,6 +19,8 @@ export type EditorContextMenuAction = Readonly<{
 /** 编辑器实例对宿主开放的最小控制能力。 */
 export type EditorHandle = Readonly<{
     focus(): void;
+    /** 同步提交原生输入并返回全文；传入宿主最新内容，以先接纳尚未渲染的外部替换。 */
+    flushContent?(currentContent?: string): string;
     /** 每次调用返回当前可用的菜单操作快照。 */
     getContextMenuActions?(): readonly EditorContextMenuAction[];
 }>;
@@ -46,7 +48,22 @@ export type EditorDefinition = Readonly<{
     id: string;
     formats: readonly EditorFormat[];
     getText?(content: string, format: EditorFormat): string;
+    /** 可由宿主展示的内容转换；转换器属于声明目标格式的插件。 */
+    conversions?: readonly EditorConversion[];
+    /** 声明本实现替代的旧注册 ID 与格式；用于透明迁移已保存的编辑器映射。 */
+    replaces?: readonly EditorReplacement[];
     load(): Promise<{ default: ComponentType<EditorProps> }>;
+}>;
+
+export type EditorReplacement = Readonly<{id: string; format: EditorFormat}>;
+
+/** 格式插件贡献的转换操作；宿主负责调用 onSaveAs 持久化转换结果。 */
+export type EditorConversion = Readonly<{
+    id: string;
+    label: string;
+    from: EditorFormat;
+    extension: string;
+    convert(content: string): string;
 }>;
 
 /** 正文宿主使用的编辑器注册表能力。 */

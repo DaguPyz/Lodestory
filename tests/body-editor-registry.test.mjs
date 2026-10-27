@@ -12,6 +12,21 @@ function definition(id, formats, load = async () => ({default: function Editor()
   return {id, formats, load};
 }
 
+test("replacement declarations cannot choose between implementations by registration order", () => {
+  const registry = createRegistry({"plain-text": "former-editor"});
+  const replacement = {id: "former-editor", format: "plain-text"};
+  const first = {...definition("new-text", ["plain-text"]), replaces: [replacement]};
+  registry.service.registerEditor(first);
+  assert.throws(() => registry.service.registerEditor({
+    ...definition("another-text", ["plain-text"]), replaces: [replacement],
+  }), /already registered/);
+  assert.throws(() => registry.service.registerEditor({
+    ...definition("markdown-only", ["markdown"]), replaces: [{id: "other", format: "plain-text"}],
+  }), /supported formats/);
+  registry.start();
+  assert.equal(registry.resolve("plain-text").id, "new-text");
+});
+
 test("body editor registry validates registrations and routes only through explicit defaults", () => {
   const registry = createRegistry({markdown: "markdown-editor", "plain-text": "missing-editor"});
 
@@ -36,6 +51,49 @@ test("body editor registry validates registrations and routes only through expli
 
   removeMarkdown();
   assert.equal(registry.resolve("markdown"), undefined);
+  registry.dispose();
+});
+
+test("format plugins contribute conversions that the host can discover by source format", () => {
+  const registry = createRegistry({"plain-text": "plain-text"});
+  const conversion = {
+    id: "convert-to-rich-text", label: "转换为富文本文档", from: "plain-text", extension: "lode",
+    convert: content => JSON.stringify({format: "rich", text: content}),
+  };
+  registry.service.registerEditor({...definition("plain-text", ["plain-text"])});
+  registry.service.registerEditor({...definition("rich", ["rich-delta"]), conversions: [conversion]});
+  registry.start();
+
+  const conversions = registry.getConversions("plain-text");
+  assert.equal(conversions.length, 1);
+  assert.equal(conversions[0].key, "rich:convert-to-rich-text");
+  assert.equal(conversions[0].extension, "lode");
+  assert.deepEqual(JSON.parse(conversions[0].convert("全文\n")), {format: "rich", text: "全文\n"});
+  assert.deepEqual(Array.from(registry.getConversions("markdown")), [], "converters are selected by their declared source format");
+  registry.dispose();
+
+  const invalid = createRegistry();
+  assert.throws(() => invalid.service.registerEditor({...definition("bad", ["rich-delta"]), conversions: [
+    {...conversion, extension: "../lode"},
+  ]}), /conversions/);
+  invalid.dispose();
+});
+
+test("a format replacement transparently routes legacy mappings without affecting other formats", () => {
+  const registry = createRegistry({"plain-text": "quill", "rich-delta": "quill", markdown: "missing"});
+  registry.service.registerEditor({...definition("plain-text", ["plain-text"]),
+    replaces: [{id: "quill", format: "plain-text"}],
+    getText: content => content,
+  });
+  registry.service.registerEditor(definition("quill", ["rich-delta"]));
+  registry.start();
+
+  assert.equal(registry.resolve("plain-text").id, "plain-text");
+  assert.equal(registry.resolve("rich-delta").id, "quill");
+  assert.equal(registry.resolve("markdown"), undefined, "unrelated unavailable mappings are preserved");
+  assert.equal(registry.service.getText("chapter.txt", "\uFEFFA\r\nB"), "\uFEFFA\r\nB");
+  assert.equal(registry.service.getText("chapter.lode", "opaque"), undefined,
+    "replacement is scoped to its declared format");
   registry.dispose();
 });
 

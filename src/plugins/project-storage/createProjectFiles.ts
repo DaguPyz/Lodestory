@@ -1,7 +1,8 @@
-import type {ProjectDirectoryListing, ProjectFileCreateOptions, ProjectFileData, ProjectFileSnapshot, ProjectFile, ProjectFiles} from "@lodestory/sdk/project-storage";
+import type {ProjectByteView, ProjectDirectoryListing, ProjectFileAccessOptions, ProjectFileCreateOptions, ProjectFileData, ProjectFileSnapshot, ProjectFile, ProjectFiles} from "@lodestory/sdk/project-storage";
 import {FileSession} from "./FileSession";
 import {createDirectory, createFile, deleteFile, listDirectory, readFile, saveFile, storageErrorMessage, type FileRecord} from "./storageApi";
-import {copyBytes, copyBytesAsync, equalBytes} from "./bytes";
+import {copyBytes, copyBytesAsync} from "./bytes";
+import {createProjectByteView, projectFileDataEquals} from "./byteView";
 
 type Options = {canMutate?: () => boolean; canLoad?: () => boolean};
 
@@ -59,17 +60,19 @@ export function createProjectFiles(projectPath: string, options: Options = {}) {
       && path.split("/").every(part => part.length > 0 && part !== "." && part !== ".."));
   }
   function fail(cause: unknown) { error = storageErrorMessage(cause); publish(); }
-  function install(record: FileRecord) {
+  function install(record: FileRecord, preferByteView = false) {
     const buffer = new FileSession(record,
-      (path, bytes, expectedBytes) => saveFile(projectPath, path, bytes, expectedBytes), publish);
+      (path, bytes, expectedBytes) => saveFile(projectPath, path, bytes, expectedBytes), publish, preferByteView);
     buffers.set(record.path, buffer);
     return buffer;
   }
-  async function validateRecord(record: FileRecord, path: string): Promise<FileRecord> {
-    if (!record || record.path !== path || record.fileName !== path.split("/").pop() || !Array.isArray(record.bytes)) {
+  async function validateRecord(record: FileRecord, path: string, preferByteView = false): Promise<FileRecord> {
+    if (!record || record.path !== path || record.fileName !== path.split("/").pop()) {
       throw new Error("项目文件返回了无效内容。");
     }
-    const captured = {...record};
+    const captured = {path: record.path, fileName: record.fileName, bytes: record.bytes};
+    if (preferByteView) return {...captured, bytes: createProjectByteView(captured.bytes)};
+    if (!Array.isArray(captured.bytes)) throw new Error("项目文件返回了无效内容。");
     return {...captured, bytes: await copyBytesAsync(captured.bytes)};
   }
   async function saveAllInternal() {
@@ -89,22 +92,48 @@ export function createProjectFiles(projectPath: string, options: Options = {}) {
       listeners.add(subscription);
       return () => { listeners.delete(subscription); };
     },
-    read(path: string) {
+    captureBytes(data: ProjectFileData): ProjectByteView {
+      if (disposed) throw new Error("项目文件服务已关闭，无法捕获字节。");
+      return createProjectByteView(data);
+    },
+    read(path: string, accessOptions: ProjectFileAccessOptions = {}) {
       if (disposed || checkingLeave || !canLoad() || changing.has(path)) return Promise.resolve(null);
+      if (!accessOptions || typeof accessOptions !== "object"
+        || accessOptions.preferByteView !== undefined && typeof accessOptions.preferByteView !== "boolean") {
+        fail("文件访问选项无效。"); return Promise.resolve(null);
+      }
+      const preferByteView = accessOptions.preferByteView === true;
       if (!validPath(path)) { fail("文件路径必须是项目内的有效相对路径。"); return Promise.resolve(null); }
       const existing = buffers.get(path);
-      if (existing?.isDirty || existing?.file.saveState === "saving") return Promise.resolve(existing.file);
+      if (existing?.isDirty || existing?.file.saveState === "saving") {
+        if (preferByteView) existing.useByteView();
+        return Promise.resolve(existing.file);
+      }
       const previous = opening.get(path);
-      if (previous) return previous;
+      if (previous) {
+        if (!preferByteView) return previous;
+        return previous.then(file => {
+          if (!file) return null;
+          const latest = buffers.get(path);
+          latest?.useByteView();
+          return latest?.file ?? file;
+        });
+      }
       const operation = run(async () => {
         try {
-          const record = await validateRecord(await readFile(projectPath, path), path);
+          const record = await validateRecord(await readFile(projectPath, path, {preferByteView}), path, preferByteView);
           if (disposed) return null;
           const latest = buffers.get(path);
-          if (latest?.isDirty || latest?.file.saveState === "saving") return latest.file;
-          if (latest && equalBytes(latest.persistedBytes, record.bytes)) return latest.file;
+          if (latest?.isDirty || latest?.file.saveState === "saving") {
+            if (preferByteView) latest.useByteView();
+            return latest.file;
+          }
+          if (latest && projectFileDataEquals(latest.persistedData, record.bytes)) {
+            if (preferByteView) latest.useByteView();
+            return latest.file;
+          }
           latest?.finishDelete();
-          const file = install(record).file;
+          const file = install(record, preferByteView).file;
           error = null;
           publish();
           return file;
@@ -116,22 +145,28 @@ export function createProjectFiles(projectPath: string, options: Options = {}) {
     },
     create(path: string, data: ProjectFileData, options: ProjectFileCreateOptions = {}) {
       if (blocked()) return Promise.resolve(null);
-      let bytes;
-      try { bytes = copyBytes(data); } catch (cause) { fail(cause); return Promise.resolve(null); }
-      if (!validPath(path) || options.createParents !== undefined && typeof options.createParents !== "boolean"
+      if (!options || typeof options !== "object"
+        || options.preferByteView !== undefined && typeof options.preferByteView !== "boolean"
+        || options.createParents !== undefined && typeof options.createParents !== "boolean"
         || options.acceptIdentical !== undefined && typeof options.acceptIdentical !== "boolean") {
         fail("文件路径或创建选项无效。"); return Promise.resolve(null);
       }
-      const createOptions = {createParents: options.createParents ?? false, acceptIdentical: options.acceptIdentical ?? false};
+      const preferByteView = options.preferByteView === true;
+      let bytes: ProjectFileData;
+      try { bytes = preferByteView ? createProjectByteView(data) : copyBytes(data); } catch (cause) { fail(cause); return Promise.resolve(null); }
+      if (!validPath(path)) {
+        fail("文件路径或创建选项无效。"); return Promise.resolve(null);
+      }
+      const createOptions = {preferByteView, createParents: options.createParents ?? false, acceptIdentical: options.acceptIdentical ?? false};
       const existing = buffers.get(path);
       if (changing.has(path) || opening.has(path) || existing?.isDirty || existing?.file.saveState === "saving") {
         fail("同一路径文件正在编辑或操作。"); return Promise.resolve(null);
       }
       return run(async () => {
         try {
-          const record = await validateRecord(await createFile(projectPath, path, bytes, createOptions), path);
+          const record = await validateRecord(await createFile(projectPath, path, bytes, createOptions), path, preferByteView);
           existing?.finishDelete();
-          const file = install(record).file;
+          const file = install(record, preferByteView).file;
           error = null;
           publish();
           return file;
@@ -171,11 +206,15 @@ export function createProjectFiles(projectPath: string, options: Options = {}) {
         catch (cause) { fail(cause); return false; }
       });
     },
-    write(path: string, bytes: ProjectFileData) {
+    write(path: string, bytes: ProjectFileData, accessOptions: ProjectFileAccessOptions = {}) {
       if (blocked() || changing.has(path)) return false;
+      if (!accessOptions || typeof accessOptions !== "object"
+        || accessOptions.preferByteView !== undefined && typeof accessOptions.preferByteView !== "boolean") {
+        fail("文件访问选项无效。"); return false;
+      }
       const buffer = buffers.get(path);
       if (!buffer) return false;
-      try { buffer.write(bytes); return true; }
+      try { buffer.write(bytes, accessOptions); return true; }
       catch (cause) { fail(cause); return false; }
     },
     save(path: string) {
@@ -203,7 +242,7 @@ export function createProjectFiles(projectPath: string, options: Options = {}) {
       return run(async () => {
         try {
           if (!await acceptedSave) throw new Error(buffer?.file.saveError ?? "删除前保存失败，内容已保留。");
-          const expectedBytes = buffer ? buffer.persistedBytes : (await readFile(projectPath, path)).bytes;
+          const expectedBytes = buffer ? buffer.persistedData : (await readFile(projectPath, path)).bytes;
           await deleteFile(projectPath, path, expectedBytes);
           deleted = true;
           buffer?.finishDelete();

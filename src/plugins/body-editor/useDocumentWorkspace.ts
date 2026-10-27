@@ -14,6 +14,7 @@ export function useDocumentWorkspace(workspace: DocumentWorkspace) {
     close: workspace.close,
     select: workspace.select,
     update: workspace.update,
+    registerContentReader: workspace.registerContentReader,
     save: workspace.save,
     saveAs: workspace.saveAs,
     saveAll: workspace.saveAll,

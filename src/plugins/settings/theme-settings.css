@@ -1,0 +1,10 @@
+.theme-radio::after {
+  content: "";
+  width: .5rem;
+  height: .5rem;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0;
+}
+
+.theme-option:has(input:checked) .theme-radio::after { opacity: 1; }

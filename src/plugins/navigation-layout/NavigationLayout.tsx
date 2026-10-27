@@ -49,9 +49,6 @@ export function NavigationLayout({pageId, active, items, onNavigate, children}: 
     >
       {item.icon && <span className="navigation-icon" aria-hidden="true">{item.icon}</span>}
       <span className="navigation-label">{item.label}</span>
-      <span className="navigation-item-state" aria-hidden="true">
-        {pageId === item.id && <Icon name="check" size="small" />}
-      </span>
     </button>);
   }
 

@@ -87,7 +87,6 @@ export function Select({ value, options, onValueChange, variant = "field", trigg
             <BaseSelect.List className="ui-select-list">
               {options.map(option => <BaseSelect.Item key={option.value} value={option.value} disabled={option.disabled}
                 label={option.label} className="ui-select-option">
-                <BaseSelect.ItemIndicator className="ui-select-indicator" keepMounted><Icon name="check" size="small" /></BaseSelect.ItemIndicator>
                 {option.swatch && <Swatch color={option.swatch} />}
                 <BaseSelect.ItemText className="ui-select-option-text">{option.label}</BaseSelect.ItemText>
               </BaseSelect.Item>)}

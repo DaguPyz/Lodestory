@@ -1,0 +1,2182 @@
+{
+  "status": "success",
+  "title": "TXT 自研编辑器真实桌面端验证",
+  "lastUpdated": "2026-10-27",
+  "scope": "isolated temporary Tauri app using a static Vite frontend and a minimal copy of the novel; all edits were made to the temporary copy only.",
+  "source": {
+    "path": "/Users/yinzhenpu/projects/Lodestory/测试项目/小说原文/斗破苍穹（原始文件）.txt",
+    "bytes": 18776845,
+    "utf16CodeUnits": 6832815,
+    "logicalLines": 198037,
+    "sha256Before": "b9d215ca65f35d5cba75c3d27237cdafa748b45d3834afc15babf65315485628",
+    "sha256After": "b9d215ca65f35d5cba75c3d27237cdafa748b45d3834afc15babf65315485628",
+    "temporaryProjectCopySha256AfterE2E": "a2b66a6c3a2a4f2adfd59473dc37681e1a4fb743a4a77a25aaf4476a3d0e8cf5"
+  },
+  "validDesktopEvidence": [
+    {
+      "run": "fresh static Tauri baseline before ByteView/base64 change",
+      "foreground": {
+        "documentVisibility": "visible",
+        "documentHasFocus": true,
+        "nativeWindowFocused": true
+      },
+      "projectOpenMs": 57,
+      "largeWorkspaceOpenMs": 33984,
+      "documentBufferLoadedMs": 34059,
+      "editorMountedMarkerMs": 0,
+      "editorInput": "plain-text-input",
+      "nativeNovelReadMs": 5,
+      "nativeNovelReadCount": 1,
+      "nativeWritesDuringLargeNovelRead": 0,
+      "layout": {
+        "lineCount": 198037,
+        "rebuildMs": 26,
+        "estimateMs": 24,
+        "reindexMs": 2,
+        "configureMs": 28,
+        "renderMs": 4
+      },
+      "limitation": "The run stalled after mount in a harness-only full Object.isFrozen check, before save/reopen/edit/conversion validation. The 0ms marker is mount discovery only; the true ready interval was not emitted."
+    },
+    {
+      "run": "fresh static Tauri run with ProjectByteView and base64 bridge",
+      "status": "success",
+      "foreground": {
+        "documentHasFocus": true,
+        "nativeWindowFocused": true,
+        "visibilityState": "visible"
+      },
+      "stages": {
+        "createAppRuntimeMs": 44,
+        "projectOpenMs": 47,
+        "largeWorkspaceOpenMs": 982,
+        "documentBufferLoadedMs": 1090,
+        "openToFocusedEditorMs": 1113,
+        "editorWaitMs": 20,
+        "editorDiscoveryMs": 1,
+        "totalOpenToEditableMs": 1113
+      },
+      "document": {
+        "utf16CodeUnits": 6832815,
+        "rawBytes": 18776845,
+        "logicalLines": 198037,
+        "transport": "ProjectByteView",
+        "nativeBase64ReadMs": 125,
+        "byteViewSamplesAtFirstMiddleLast": [
+          {
+            "offset": 0,
+            "byte": 13
+          },
+          {
+            "offset": 9388422,
+            "byte": 182
+          },
+          {
+            "offset": 18776844,
+            "byte": 10
+          }
+        ]
+      },
+      "scroll": {
+        "documentClientHeight": 731,
+        "documentOverflowY": "hidden",
+        "documentScrollHeight": 731,
+        "documentScrollable": false,
+        "manuscriptClientHeight": 731,
+        "manuscriptExceedsParent": false,
+        "manuscriptScrollHeight": 731,
+        "viewportClientHeight": 731,
+        "viewportOverflowY": "auto",
+        "viewportScrollHeight": 9740256,
+        "viewportScrollable": true
+      },
+      "openFrames": {
+        "firstFrameMs": 2,
+        "maxGapMs": 100,
+        "samples": 57
+      },
+      "unchangedOpenClose": {
+        "passed": true,
+        "nativeWrites": {
+          "base64CreateAttempts": 0,
+          "base64ReadAttempts": 1,
+          "base64ReadMs": 125,
+          "base64SaveAttempts": 0,
+          "createAttempts": 0,
+          "lodeCreateAttempts": 0,
+          "novelNativeReadMs": 125,
+          "novelReadAttempts": 1,
+          "saveAttempts": 0,
+          "txtCreateAttempts": 0,
+          "txtSaveAttempts": 0
+        }
+      },
+      "bomCrlfRoundtrip": {
+        "passed": true,
+        "exactSource": true,
+        "hasBom": true,
+        "hasCRLF": true,
+        "savedUtf8Bytes": 33,
+        "sourceUtf8Bytes": 30
+      },
+      "pendingComposition": {
+        "passed": true,
+        "closePathExact": true,
+        "saveNativeAttempts": 3,
+        "savePathExact": true
+      },
+      "largeEdits": {
+        "passed": true,
+        "offsets": [
+          0,
+          3416407,
+          6832815
+        ],
+        "callbackDispatchMs": [
+          50,
+          40,
+          41
+        ],
+        "animationFrames": {
+          "firstFrameMs": 92,
+          "maxGapMs": 108,
+          "samples": 4
+        },
+        "autosaveCommands": 1,
+        "editedContentSha256": "a2b66a6c3a2a4f2adfd59473dc37681e1a4fb743a4a77a25aaf4476a3d0e8cf5"
+      },
+      "hostConversionToLode": {
+        "passed": true,
+        "createCommands": 1,
+        "outputBytes": 92,
+        "outputOperations": 1,
+        "sourceStillOpen": true,
+        "sourceUnchanged": true
+      },
+      "originalIntegrity": {
+        "originalSha256Before": "b9d215ca65f35d5cba75c3d27237cdafa748b45d3834afc15babf65315485628",
+        "originalSha256After": "b9d215ca65f35d5cba75c3d27237cdafa748b45d3834afc15babf65315485628",
+        "originalUnchanged": true,
+        "isolatedCopySha256AfterE2E": "a2b66a6c3a2a4f2adfd59473dc37681e1a4fb743a4a77a25aaf4476a3d0e8cf5",
+        "isolatedCopyChangedByExpectedEditScenarios": true
+      },
+      "nativeFileStats": {
+        "base64CreateAttempts": 0,
+        "base64ReadAttempts": 8,
+        "base64ReadMs": 454,
+        "base64SaveAttempts": 4,
+        "createAttempts": 1,
+        "lodeCreateAttempts": 1,
+        "novelNativeReadMs": 454,
+        "novelReadAttempts": 3,
+        "saveAttempts": 4,
+        "txtCreateAttempts": 0,
+        "txtSaveAttempts": 4
+      },
+      "pageErrors": [],
+      "unrecordedDiagnostics": "Harness custom storage/decode event listeners returned empty arrays, so native read time and end-to-end stage timings are reported directly; actualDocumentDecode is unavailable.",
+      "timingBoundary": {
+        "totalOpenToEditableMs": 1113,
+        "editorWaitMs": 20,
+        "editorWaitMeaning": "从 waitEditor 开始轮询句柄、等待宿主焦点恢复并完成两帧后的局部等待，不是从 workspace.open 开始的总耗时。",
+        "editorDiscoveryMs": 1,
+        "editorDiscoveryMeaning": "等待函数立即发现已经挂载的输入和 driver；不是 React 完整挂载耗时。",
+        "editAnimationFrameMaxGapMs": 108,
+        "openAnimationFrameMaxGapMs": 100
+      }
+    }
+  ],
+  "stackSamples": [
+    {
+      "file": "/private/tmp/lodestory-txt-desktop-e2e-7AQYqM/webkit-sample-open.txt",
+      "process": "isolated WebKit.WebContent PID 13693",
+      "phase": "large native read/copy, before large-txt-open-requested",
+      "durationSeconds": 2,
+      "observed": "709 main-thread samples; 691 were JavaScript microtask execution. 420 samples reached Object.defineProperty indexed-property insertion and SparseArrayValueMap::add/rehash.",
+      "interpretation": "This matches the pre-ByteView copyBytesAsync loop that Object.defineProperty()'d every byte. It is direct stack evidence for that copy stage, not yet a post-optimization measurement."
+    },
+    {
+      "file": "/private/tmp/lodestory-txt-desktop-e2e-7AQYqM/webkit-sample-post-mount.txt",
+      "process": "isolated WebKit.WebContent PID 13693",
+      "phase": "after TXT editor mount, before ready progress",
+      "durationSeconds": 2,
+      "observed": "959/959 main-thread samples were in JavaScriptCore Object.isFrozen -> testIntegrityLevel -> getOwnPropertyNames/Identifier::from. WebContent footprint was about 2.5 GB, peak about 3.0 GB.",
+      "interpretation": "This confirms the harness's full Object.isFrozen(array) over 18,776,845 indexed entries caused the post-mount stall. The harness now checks only Object.isExtensible and first/middle/last property descriptors."
+    }
+  ],
+  "harness": {
+    "path": "/private/tmp/lodestory-txt-desktop-e2e-7AQYqM/run-e2e.mjs",
+    "frontend": "Static Vite dist embedded in the isolated Tauri app; no dev server or HMR.",
+    "repeatableReset": "Refresh script syncs current src, packages/sdk, and src-tauri into temporary snapshots; run launcher rebuilds a temp SDK and frontend, checks TypeScript, builds the isolated native binary, resets only the temp project/app-data, and records stage progress.",
+    "typescriptCheck": "Passed on the final snapshot before launch; static frontend build and isolated native Cargo build also passed.",
+    "launch": "The first ordinary sandboxed launches stopped before native setup. The successful isolated GUI run used require_escalated; page visibility, document focus, and native window focus all reported true at each step.",
+    "newProtocolHarnessChanges": "Large TXT validation uses ProjectFile.byteView and copyTo samples; it never reads the novel legacy bytes getter or calls Object.isFrozen on the large array. Compatibility byte reads are restricted to small fixtures.",
+    "repeatableCommand": "node /private/tmp/lodestory-txt-desktop-e2e-7AQYqM/run-e2e.mjs",
+    "profileHarnesses": {
+      "baseline": "/private/tmp/lodestory-txt-profile-baseline/run-e2e.mjs",
+      "optimized": "/private/tmp/lodestory-txt-profile-optimized/run-e2e.mjs",
+      "windowTitle": "TXT 编辑停顿验证",
+      "staticBuildsAndTypeChecks": "Both passed before the profile runs."
+    }
+  },
+  "notYetVerified": [
+    "Separate read-only Array.from/Object.freeze versus chunked-copy contrast probe; it remains intentionally excluded from the product-path run."
+  ],
+  "finalVerification": {
+    "nodeSuite": {
+      "tests": 705,
+      "passed": 688,
+      "failed": 12,
+      "skipped": 5,
+      "note": "The remaining 12 failures match the independently reproduced pre-change HEAD baseline. The earlier concurrent-build launcher startup timeout passed in the final quiet full suite."
+    },
+    "focusedStorageAndProtocol": {
+      "tests": 63,
+      "passed": 63,
+      "failed": 0
+    },
+    "chunkedStatistics": {
+      "tests": 7,
+      "passed": 7,
+      "failed": 0
+    },
+    "nativeLibraryTests": {
+      "passed": 35,
+      "failed": 0
+    },
+    "desktopBuild": {
+      "status": "success",
+      "profile": "debug",
+      "frontendTypecheckAndViteBuild": "passed",
+      "path": "/Users/yinzhenpu/projects/Lodestory/src-tauri/target/debug/bundle/macos/Lodestory.app"
+    },
+    "functionalDesktopE2E": "editingPerformanceProfile.binarySaveFunctionalE2E",
+    "remainingPerformanceBoundary": "The editor still emits full strings and the document adapter encodes whole UTF-8 buffers after edits. The controlled 48-event typing comparison measured a 44ms maximum frame gap after optimization; raw-save confirmation measured 41ms in a separate one-edit run. These are local measurements, not guarantees for every size or hardware."
+  },
+  "editingPerformanceProfile": {
+    "runDate": "2026-10-27",
+    "source": {
+      "path": "/Users/yinzhenpu/projects/Lodestory/素材/斗破苍穹.txt",
+      "sha256BeforeAndAfterBothRuns": "b9d215ca65f35d5cba75c3d27237cdafa748b45d3834afc15babf65315485628",
+      "sameIsolatedSourceCopyForBothVariants": true
+    },
+    "method": {
+      "application": "Real Tauri desktop app with a static Vite bundle embedded in WebKit.",
+      "input": "Synthetic DOM keydown/beforeinput/input/keyup events plus textarea range mutation; follows the mounted plain-text driver, documents workspace, document-file adapter and storage session path. It is not physical keyboard input.",
+      "measuredEventsPerValidRun": 48,
+      "warmupEventsExcluded": 3,
+      "programmedInterEventWaitMs": 18,
+      "foregroundGate": "Before measurement, document visibility, document focus, and native-window focus had to remain true for 500ms. Native and DOM focus were checked after every event; a run losing focus was discarded and repeated after focus was restored.",
+      "inputStartIntervalBoundary": "Includes the programmed 18ms wait and the per-event native focus query; use synchronous dispatch for editor work latency.",
+      "timingBoundary": "Span timings are nested. Do not add parent and child spans; update total includes encoding, capture, validation, write notifications and subscriber work."
+    },
+    "baseline": {
+      "status": "success",
+      "openToFocusedEditorMs": 1126,
+      "source": {
+        "bytes": 18776845,
+        "utf16CodeUnits": 6832815,
+        "logicalLines": 9740256,
+        "sha256Before": "b9d215ca65f35d5cba75c3d27237cdafa748b45d3834afc15babf65315485628",
+        "sha256After": "b9d215ca65f35d5cba75c3d27237cdafa748b45d3834afc15babf65315485628",
+        "originalUnchanged": true,
+        "temporaryCopySha256After": "0b8fdbe326e7dae6ebd6dcd2c7241fca4a5270aaa728661d9ba296a88458a577"
+      },
+      "profileMethod": {
+        "warmupEditsExcluded": 3,
+        "measuredDomInputEvents": 48,
+        "inputPath": "synthetic DOM textarea keyboard/beforeinput/input events through the mounted Tauri driver/workspace/storage chain; not hardware keyboard input",
+        "foregroundStableMsBeforeEachAttempt": 500,
+        "perEventForegroundChecks": 48,
+        "allPerEventChecksPassed": true,
+        "discardedFocusLostAttempts": 1
+      },
+      "foregroundAtProfileEnd": {
+        "documentHasFocus": true,
+        "nativeWindowFocused": true,
+        "visibilityState": "visible"
+      },
+      "inputDispatchSyncMs": {
+        "count": 48,
+        "maxMs": 79,
+        "p50Ms": 41,
+        "p95Ms": 45
+      },
+      "inputStartIntervalMs": {
+        "count": 47,
+        "maxMs": 137,
+        "p50Ms": 97,
+        "p95Ms": 99
+      },
+      "animationFramesDuringTyping": {
+        "firstFrameMs": 119,
+        "maxGapMs": 119,
+        "samples": 137
+      },
+      "autosave": {
+        "animationFrames": {
+          "firstFrameMs": 0,
+          "maxGapMs": 261,
+          "samples": 72
+        },
+        "elapsedMs": 1665,
+        "foregroundFinished": {
+          "documentHasFocus": true,
+          "nativeWindowFocused": true,
+          "visibilityState": "visible"
+        },
+        "foregroundStarted": {
+          "documentHasFocus": true,
+          "nativeWindowFocused": true,
+          "visibilityState": "visible"
+        },
+        "saveState": "saved"
+      },
+      "isWellFormedAvailableInWebKit": true,
+      "spanStatisticsMs": {
+        "BodyEditorView.onChange.workspaceUpdate": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 71,
+            "p50Ms": 40,
+            "p95Ms": 71,
+            "totalMs": 510
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 41,
+            "p50Ms": 40,
+            "p95Ms": 41,
+            "totalMs": 478
+          },
+          "maxMs": 71,
+          "middle12": {
+            "count": 12,
+            "maxMs": 41,
+            "p50Ms": 39,
+            "p95Ms": 41,
+            "totalMs": 474
+          },
+          "p50Ms": 40,
+          "p95Ms": 42,
+          "totalMs": 1938
+        },
+        "FileSession.write.capture": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 5,
+            "p50Ms": 3,
+            "p95Ms": 5,
+            "totalMs": 37
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 3,
+            "p50Ms": 3,
+            "p95Ms": 3,
+            "totalMs": 34
+          },
+          "maxMs": 5,
+          "middle12": {
+            "count": 12,
+            "maxMs": 4,
+            "p50Ms": 3,
+            "p95Ms": 4,
+            "totalMs": 37
+          },
+          "p50Ms": 3,
+          "p95Ms": 4,
+          "totalMs": 142
+        },
+        "FileSession.write.equalCurrent": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 0,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 0
+        },
+        "FileSession.write.equalSaved": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 0,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 0
+        },
+        "FileSession.write.notify": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 16,
+            "p50Ms": 12,
+            "p95Ms": 16,
+            "totalMs": 151
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 13,
+            "p50Ms": 12,
+            "p95Ms": 13,
+            "totalMs": 150
+          },
+          "maxMs": 16,
+          "middle12": {
+            "count": 12,
+            "maxMs": 13,
+            "p50Ms": 12,
+            "p95Ms": 13,
+            "totalMs": 149
+          },
+          "p50Ms": 12,
+          "p95Ms": 13,
+          "totalMs": 599
+        },
+        "FileSession.write.total": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 20,
+            "p50Ms": 15,
+            "p95Ms": 20,
+            "totalMs": 188
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 16,
+            "p50Ms": 15,
+            "p95Ms": 16,
+            "totalMs": 184
+          },
+          "maxMs": 20,
+          "middle12": {
+            "count": 12,
+            "maxMs": 17,
+            "p50Ms": 15,
+            "p95Ms": 17,
+            "totalMs": 186
+          },
+          "p50Ms": 15,
+          "p95Ms": 17,
+          "totalMs": 741
+        },
+        "byteView.projectFileDataEquals": {
+          "count": 96,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 0,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 0
+        },
+        "documentFiles.sameFileBytes": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 16,
+            "p50Ms": 12,
+            "p95Ms": 16,
+            "totalMs": 151
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 13,
+            "p50Ms": 12,
+            "p95Ms": 13,
+            "totalMs": 149
+          },
+          "maxMs": 16,
+          "middle12": {
+            "count": 12,
+            "maxMs": 13,
+            "p50Ms": 12,
+            "p95Ms": 13,
+            "totalMs": 147
+          },
+          "p50Ms": 12,
+          "p95Ms": 13,
+          "totalMs": 595
+        },
+        "documentFiles.update.encode": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 36,
+            "p50Ms": 16,
+            "p95Ms": 36,
+            "totalMs": 209
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 16,
+            "p50Ms": 16,
+            "p95Ms": 16,
+            "totalMs": 187
+          },
+          "maxMs": 36,
+          "middle12": {
+            "count": 12,
+            "maxMs": 16,
+            "p50Ms": 15,
+            "p95Ms": 16,
+            "totalMs": 186
+          },
+          "p50Ms": 16,
+          "p95Ms": 16,
+          "totalMs": 770
+        },
+        "documentFiles.update.isWellFormed": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 15,
+            "p50Ms": 9,
+            "p95Ms": 15,
+            "totalMs": 113
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 9,
+            "p50Ms": 9,
+            "p95Ms": 9,
+            "totalMs": 107
+          },
+          "maxMs": 15,
+          "middle12": {
+            "count": 12,
+            "maxMs": 9,
+            "p50Ms": 8,
+            "p95Ms": 9,
+            "totalMs": 102
+          },
+          "p50Ms": 9,
+          "p95Ms": 9,
+          "totalMs": 427
+        },
+        "documentFiles.update.refresh": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 0,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 0
+        },
+        "documentFiles.update.sourceWrite": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 20,
+            "p50Ms": 15,
+            "p95Ms": 20,
+            "totalMs": 188
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 16,
+            "p50Ms": 15,
+            "p95Ms": 16,
+            "totalMs": 184
+          },
+          "maxMs": 20,
+          "middle12": {
+            "count": 12,
+            "maxMs": 17,
+            "p50Ms": 15,
+            "p95Ms": 17,
+            "totalMs": 186
+          },
+          "p50Ms": 15,
+          "p95Ms": 17,
+          "totalMs": 741
+        },
+        "documentFiles.update.total": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 71,
+            "p50Ms": 40,
+            "p95Ms": 71,
+            "totalMs": 510
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 41,
+            "p50Ms": 40,
+            "p95Ms": 41,
+            "totalMs": 478
+          },
+          "maxMs": 71,
+          "middle12": {
+            "count": 12,
+            "maxMs": 41,
+            "p50Ms": 39,
+            "p95Ms": 41,
+            "totalMs": 474
+          },
+          "p50Ms": 40,
+          "p95Ms": 42,
+          "totalMs": 1938
+        },
+        "documentWorkspace.update": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 71,
+            "p50Ms": 40,
+            "p95Ms": 71,
+            "totalMs": 510
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 41,
+            "p50Ms": 40,
+            "p95Ms": 41,
+            "totalMs": 478
+          },
+          "maxMs": 71,
+          "middle12": {
+            "count": 12,
+            "maxMs": 41,
+            "p50Ms": 39,
+            "p95Ms": 41,
+            "totalMs": 474
+          },
+          "p50Ms": 40,
+          "p95Ms": 42,
+          "totalMs": 1938
+        },
+        "driver.applyInput": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 77,
+            "p50Ms": 42,
+            "p95Ms": 77,
+            "totalMs": 533
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 42,
+            "p50Ms": 41,
+            "p95Ms": 42,
+            "totalMs": 494
+          },
+          "maxMs": 77,
+          "middle12": {
+            "count": 12,
+            "maxMs": 42,
+            "p50Ms": 41,
+            "p95Ms": 42,
+            "totalMs": 491
+          },
+          "p50Ms": 41,
+          "p95Ms": 44,
+          "totalMs": 2011
+        },
+        "driver.edit.notify": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 71,
+            "p50Ms": 40,
+            "p95Ms": 71,
+            "totalMs": 510
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 41,
+            "p50Ms": 40,
+            "p95Ms": 41,
+            "totalMs": 478
+          },
+          "maxMs": 71,
+          "middle12": {
+            "count": 12,
+            "maxMs": 41,
+            "p50Ms": 39,
+            "p95Ms": 41,
+            "totalMs": 475
+          },
+          "p50Ms": 40,
+          "p95Ms": 42,
+          "totalMs": 1939
+        },
+        "driver.edit.render": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 3,
+            "p50Ms": 1,
+            "p95Ms": 3,
+            "totalMs": 14
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 1,
+            "p95Ms": 1,
+            "totalMs": 12
+          },
+          "maxMs": 3,
+          "middle12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 1,
+            "p95Ms": 1,
+            "totalMs": 7
+          },
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "totalMs": 45
+        },
+        "driver.edit.total": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 77,
+            "p50Ms": 42,
+            "p95Ms": 77,
+            "totalMs": 533
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 42,
+            "p50Ms": 41,
+            "p95Ms": 42,
+            "totalMs": 494
+          },
+          "maxMs": 77,
+          "middle12": {
+            "count": 12,
+            "maxMs": 42,
+            "p50Ms": 41,
+            "p95Ms": 42,
+            "totalMs": 491
+          },
+          "p50Ms": 41,
+          "p95Ms": 44,
+          "totalMs": 2011
+        },
+        "driver.history.apply": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 5
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 1,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "totalMs": 8
+        },
+        "driver.layout.update": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 0,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 0
+        },
+        "driver.notify.callback": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 71,
+            "p50Ms": 40,
+            "p95Ms": 71,
+            "totalMs": 510
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 41,
+            "p50Ms": 40,
+            "p95Ms": 41,
+            "totalMs": 478
+          },
+          "maxMs": 71,
+          "middle12": {
+            "count": 12,
+            "maxMs": 41,
+            "p50Ms": 39,
+            "p95Ms": 41,
+            "totalMs": 474
+          },
+          "p50Ms": 40,
+          "p95Ms": 42,
+          "totalMs": 1938
+        },
+        "driver.notify.getText": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 1,
+          "middle12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 1
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 1
+        },
+        "driver.notify.total": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 71,
+            "p50Ms": 40,
+            "p95Ms": 71,
+            "totalMs": 510
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 41,
+            "p50Ms": 40,
+            "p95Ms": 41,
+            "totalMs": 478
+          },
+          "maxMs": 71,
+          "middle12": {
+            "count": 12,
+            "maxMs": 41,
+            "p50Ms": 39,
+            "p95Ms": 41,
+            "totalMs": 475
+          },
+          "p50Ms": 40,
+          "p95Ms": 42,
+          "totalMs": 1939
+        },
+        "driver.render": {
+          "count": 96,
+          "first12": {
+            "count": 12,
+            "maxMs": 3,
+            "p50Ms": 1,
+            "p95Ms": 3,
+            "totalMs": 14
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 1,
+            "p95Ms": 1,
+            "totalMs": 12
+          },
+          "maxMs": 3,
+          "middle12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 1,
+            "p95Ms": 1,
+            "totalMs": 9
+          },
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "totalMs": 89
+        },
+        "driver.reveal": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 2,
+            "p50Ms": 0,
+            "p95Ms": 2,
+            "totalMs": 4
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 4
+          },
+          "maxMs": 2,
+          "middle12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 1,
+            "p95Ms": 1,
+            "totalMs": 9
+          },
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "totalMs": 19
+        },
+        "textModel.getText": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 1,
+          "middle12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 1
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 1
+        }
+      },
+      "instrumentedCallCounts": {
+        "BodyEditorView.onChange": 48,
+        "FileSession.write.count": 48,
+        "documentFiles.notify": 48,
+        "documentFiles.update.count": 48,
+        "documentWorkspace.notify": 48,
+        "documentWorkspace.update.count": 48,
+        "driver.applyInput.count": 48,
+        "driver.notify.count": 48,
+        "projectFiles.notify": 48,
+        "react.BodyEditor.render": 48,
+        "react.EditorRuntime.render": 48,
+        "react.Manuscript.render": 48,
+        "react.PlainTextEditor.render": 48
+      }
+    },
+    "optimized": {
+      "status": "success",
+      "openToFocusedEditorMs": 1051,
+      "source": {
+        "bytes": 18776845,
+        "utf16CodeUnits": 6832815,
+        "logicalLines": 9740256,
+        "sha256Before": "b9d215ca65f35d5cba75c3d27237cdafa748b45d3834afc15babf65315485628",
+        "sha256After": "b9d215ca65f35d5cba75c3d27237cdafa748b45d3834afc15babf65315485628",
+        "originalUnchanged": true,
+        "temporaryCopySha256After": "5a43ffd1da025f149d09b99f6a76c97547a30d9fac37bb32ad990a64140ed026"
+      },
+      "profileMethod": {
+        "warmupEditsExcluded": 3,
+        "measuredDomInputEvents": 48,
+        "inputPath": "synthetic DOM textarea keyboard/beforeinput/input events through the mounted Tauri driver/workspace/storage chain; not hardware keyboard input",
+        "foregroundStableMsBeforeEachAttempt": 500,
+        "perEventForegroundChecks": 48,
+        "allPerEventChecksPassed": true,
+        "discardedFocusLostAttempts": 0
+      },
+      "foregroundAtProfileEnd": {
+        "documentHasFocus": true,
+        "nativeWindowFocused": true,
+        "visibilityState": "visible"
+      },
+      "inputDispatchSyncMs": {
+        "count": 48,
+        "maxMs": 37,
+        "p50Ms": 18,
+        "p95Ms": 21
+      },
+      "inputStartIntervalMs": {
+        "count": 47,
+        "maxMs": 59,
+        "p50Ms": 38,
+        "p95Ms": 41
+      },
+      "animationFramesDuringTyping": {
+        "firstFrameMs": 41,
+        "maxGapMs": 44,
+        "samples": 107
+      },
+      "autosave": {
+        "animationFrames": {
+          "firstFrameMs": 12,
+          "maxGapMs": 287,
+          "samples": 76
+        },
+        "elapsedMs": 1751,
+        "foregroundFinished": {
+          "documentHasFocus": true,
+          "nativeWindowFocused": true,
+          "visibilityState": "visible"
+        },
+        "foregroundStarted": {
+          "documentHasFocus": true,
+          "nativeWindowFocused": true,
+          "visibilityState": "visible"
+        },
+        "saveState": "saved"
+      },
+      "isWellFormedAvailableInWebKit": true,
+      "spanStatisticsMs": {
+        "BodyEditorView.onChange.workspaceUpdate": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 32,
+            "p50Ms": 17,
+            "p95Ms": 32,
+            "totalMs": 221
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 17,
+            "p50Ms": 16,
+            "p95Ms": 17,
+            "totalMs": 192
+          },
+          "maxMs": 32,
+          "middle12": {
+            "count": 12,
+            "maxMs": 17,
+            "p50Ms": 16,
+            "p95Ms": 17,
+            "totalMs": 193
+          },
+          "p50Ms": 16,
+          "p95Ms": 19,
+          "totalMs": 802
+        },
+        "FileSession.write.capture": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 0,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 0
+        },
+        "FileSession.write.equalCurrent": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 1
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 1,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 1
+        },
+        "FileSession.write.equalSaved": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 0,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 0
+        },
+        "FileSession.write.notify": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 3
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 2
+          },
+          "maxMs": 1,
+          "middle12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 3
+          },
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "totalMs": 8
+        },
+        "FileSession.write.total": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 4
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 2
+          },
+          "maxMs": 1,
+          "middle12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 3
+          },
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "totalMs": 9
+        },
+        "byteView.projectFileDataEquals": {
+          "count": 96,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 1,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 1
+        },
+        "documentFiles.sameFileBytes": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 0,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 0
+        },
+        "documentFiles.update.captureBytes": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 3,
+            "p50Ms": 2,
+            "p95Ms": 3,
+            "totalMs": 26
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 3,
+            "p50Ms": 2,
+            "p95Ms": 3,
+            "totalMs": 29
+          },
+          "maxMs": 5,
+          "middle12": {
+            "count": 12,
+            "maxMs": 3,
+            "p50Ms": 2,
+            "p95Ms": 3,
+            "totalMs": 25
+          },
+          "p50Ms": 2,
+          "p95Ms": 3,
+          "totalMs": 110
+        },
+        "documentFiles.update.encode": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 29,
+            "p50Ms": 14,
+            "p95Ms": 29,
+            "totalMs": 188
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 14,
+            "p50Ms": 13,
+            "p95Ms": 14,
+            "totalMs": 160
+          },
+          "maxMs": 29,
+          "middle12": {
+            "count": 12,
+            "maxMs": 14,
+            "p50Ms": 13,
+            "p95Ms": 14,
+            "totalMs": 161
+          },
+          "p50Ms": 14,
+          "p95Ms": 16,
+          "totalMs": 672
+        },
+        "documentFiles.update.isWellFormed": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 3
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 1
+          },
+          "maxMs": 1,
+          "middle12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 4
+          },
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "totalMs": 10
+        },
+        "documentFiles.update.refresh": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 0,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 0
+        },
+        "documentFiles.update.sourceWrite": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 4
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 2
+          },
+          "maxMs": 1,
+          "middle12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 3
+          },
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "totalMs": 10
+        },
+        "documentFiles.update.total": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 32,
+            "p50Ms": 17,
+            "p95Ms": 32,
+            "totalMs": 221
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 17,
+            "p50Ms": 16,
+            "p95Ms": 17,
+            "totalMs": 192
+          },
+          "maxMs": 32,
+          "middle12": {
+            "count": 12,
+            "maxMs": 17,
+            "p50Ms": 16,
+            "p95Ms": 17,
+            "totalMs": 193
+          },
+          "p50Ms": 16,
+          "p95Ms": 19,
+          "totalMs": 802
+        },
+        "documentWorkspace.update": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 32,
+            "p50Ms": 17,
+            "p95Ms": 32,
+            "totalMs": 221
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 17,
+            "p50Ms": 16,
+            "p95Ms": 17,
+            "totalMs": 192
+          },
+          "maxMs": 32,
+          "middle12": {
+            "count": 12,
+            "maxMs": 17,
+            "p50Ms": 16,
+            "p95Ms": 17,
+            "totalMs": 193
+          },
+          "p50Ms": 16,
+          "p95Ms": 19,
+          "totalMs": 802
+        },
+        "driver.applyInput": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 36,
+            "p50Ms": 18,
+            "p95Ms": 36,
+            "totalMs": 240
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 18,
+            "p50Ms": 17,
+            "p95Ms": 18,
+            "totalMs": 208
+          },
+          "maxMs": 36,
+          "middle12": {
+            "count": 12,
+            "maxMs": 19,
+            "p50Ms": 17,
+            "p95Ms": 19,
+            "totalMs": 210
+          },
+          "p50Ms": 17,
+          "p95Ms": 21,
+          "totalMs": 871
+        },
+        "driver.edit.notify": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 32,
+            "p50Ms": 17,
+            "p95Ms": 32,
+            "totalMs": 221
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 17,
+            "p50Ms": 16,
+            "p95Ms": 17,
+            "totalMs": 192
+          },
+          "maxMs": 32,
+          "middle12": {
+            "count": 12,
+            "maxMs": 17,
+            "p50Ms": 16,
+            "p95Ms": 17,
+            "totalMs": 193
+          },
+          "p50Ms": 16,
+          "p95Ms": 19,
+          "totalMs": 804
+        },
+        "driver.edit.render": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 2,
+            "p50Ms": 1,
+            "p95Ms": 2,
+            "totalMs": 8
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 1,
+            "p95Ms": 1,
+            "totalMs": 10
+          },
+          "maxMs": 2,
+          "middle12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 1,
+            "p95Ms": 1,
+            "totalMs": 11
+          },
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "totalMs": 36
+        },
+        "driver.edit.total": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 36,
+            "p50Ms": 18,
+            "p95Ms": 36,
+            "totalMs": 238
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 18,
+            "p50Ms": 17,
+            "p95Ms": 18,
+            "totalMs": 208
+          },
+          "maxMs": 36,
+          "middle12": {
+            "count": 12,
+            "maxMs": 19,
+            "p50Ms": 17,
+            "p95Ms": 19,
+            "totalMs": 210
+          },
+          "p50Ms": 17,
+          "p95Ms": 21,
+          "totalMs": 869
+        },
+        "driver.history.apply": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 2
+          },
+          "maxMs": 1,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "totalMs": 4
+        },
+        "driver.layout.update": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 0,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 0
+        },
+        "driver.notify.callback": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 32,
+            "p50Ms": 17,
+            "p95Ms": 32,
+            "totalMs": 221
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 17,
+            "p50Ms": 16,
+            "p95Ms": 17,
+            "totalMs": 192
+          },
+          "maxMs": 32,
+          "middle12": {
+            "count": 12,
+            "maxMs": 17,
+            "p50Ms": 16,
+            "p95Ms": 17,
+            "totalMs": 193
+          },
+          "p50Ms": 16,
+          "p95Ms": 19,
+          "totalMs": 804
+        },
+        "driver.notify.getText": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 0,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 0
+        },
+        "driver.notify.total": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 32,
+            "p50Ms": 17,
+            "p95Ms": 32,
+            "totalMs": 221
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 17,
+            "p50Ms": 16,
+            "p95Ms": 17,
+            "totalMs": 192
+          },
+          "maxMs": 32,
+          "middle12": {
+            "count": 12,
+            "maxMs": 17,
+            "p50Ms": 16,
+            "p95Ms": 17,
+            "totalMs": 193
+          },
+          "p50Ms": 16,
+          "p95Ms": 19,
+          "totalMs": 804
+        },
+        "driver.render": {
+          "count": 96,
+          "first12": {
+            "count": 12,
+            "maxMs": 2,
+            "p50Ms": 0,
+            "p95Ms": 2,
+            "totalMs": 5
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 1,
+            "p95Ms": 1,
+            "totalMs": 11
+          },
+          "maxMs": 2,
+          "middle12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 1,
+            "p95Ms": 1,
+            "totalMs": 9
+          },
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "totalMs": 71
+        },
+        "driver.reveal": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 2,
+            "p50Ms": 1,
+            "p95Ms": 2,
+            "totalMs": 9
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 4
+          },
+          "maxMs": 2,
+          "middle12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 0,
+            "p95Ms": 1,
+            "totalMs": 6
+          },
+          "p50Ms": 0,
+          "p95Ms": 1,
+          "totalMs": 25
+        },
+        "textModel.getText": {
+          "count": 48,
+          "first12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "maxMs": 0,
+          "middle12": {
+            "count": 12,
+            "maxMs": 0,
+            "p50Ms": 0,
+            "p95Ms": 0,
+            "totalMs": 0
+          },
+          "p50Ms": 0,
+          "p95Ms": 0,
+          "totalMs": 0
+        },
+        "writingStatus.chunkedCount.chunk": {
+          "count": 1096,
+          "first12": {
+            "count": 12,
+            "maxMs": 2,
+            "p50Ms": 1,
+            "p95Ms": 2,
+            "totalMs": 13
+          },
+          "last12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 1,
+            "p95Ms": 1,
+            "totalMs": 8
+          },
+          "maxMs": 2,
+          "middle12": {
+            "count": 12,
+            "maxMs": 1,
+            "p50Ms": 1,
+            "p95Ms": 1,
+            "totalMs": 7
+          },
+          "p50Ms": 1,
+          "p95Ms": 1,
+          "totalMs": 693
+        }
+      },
+      "instrumentedCallCounts": {
+        "BodyEditorView.onChange": 48,
+        "FileSession.write.count": 48,
+        "documentFiles.notify": 48,
+        "documentFiles.update.count": 48,
+        "documentWorkspace.notify": 48,
+        "documentWorkspace.update.count": 48,
+        "driver.applyInput.count": 48,
+        "driver.notify.count": 48,
+        "react.BodyEditor.render": 48,
+        "react.EditorRuntime.render": 48,
+        "react.EditorStatusBar.render": 48,
+        "react.Manuscript.render": 48,
+        "react.PlainTextEditor.render": 48,
+        "writingStatus.chunkedCount.chunk.count": 1096
+      },
+      "measurementStage": "Input-path optimizations before raw-byte saving. The later binary save change does not alter the measured input handler; its autosave results are reported separately."
+    },
+    "comparison": {
+      "syncDispatchP50ReductionPercent": 56.1,
+      "syncDispatchP95ReductionPercent": 53.3,
+      "syncDispatchMaxReductionPercent": 53.2,
+      "typingMaxAnimationFrameGapReductionPercent": 63,
+      "updateTotalP50Ms": {
+        "baseline": 40,
+        "optimized": 16
+      },
+      "updateTotalP95Ms": {
+        "baseline": 42,
+        "optimized": 19
+      },
+      "autosave": "At the input-only optimization stage, both variants saved successfully but autosave frame gaps did not improve. The later rawBinaryAutosaveProfile below records the separate binary-transport fix and its one-run-per-transport comparison."
+    },
+    "interpretation": [
+      "The self-built editor rendering and text-model getText spans remained small; the main baseline cost was the document callback/storage update path.",
+      "The optimized path reduced full-document UTF-16 validation to under the timer’s 1ms display resolution and avoided most same-file byte projection comparison work.",
+      "The optimized status-bar character counter used 1096 chunk tasks in the measured run; each task measured P50/P95/max 1/1/2ms, within its 3ms task budget.",
+      "The valid baseline sample was the retry after one attempt lost visibility at event 39; the lost attempt was excluded. The optimized sample completed on its first attempt."
+    ],
+    "harnesses": {
+      "baselineRoot": "/private/tmp/lodestory-txt-profile-baseline",
+      "optimizedRoot": "/private/tmp/lodestory-txt-profile-optimized",
+      "windowTitle": "TXT 编辑停顿验证",
+      "repeatableCommands": [
+        "node /private/tmp/lodestory-txt-profile-baseline/run-e2e.mjs --profile --skip-build",
+        "node /private/tmp/lodestory-txt-profile-optimized/run-e2e.mjs --profile --skip-build"
+      ],
+      "builds": "Both TypeScript/Vite/native preflight builds passed before GUI profiling; each app used a separate embedded static frontend, native binary, project directory and app-data directory."
+    },
+    "autosaveEncodeProfile": {
+      "runDate": "2026-10-27",
+      "status": "success",
+      "method": "one synthetic DOM textarea input through the mounted Tauri editor/workspace/storage/native chain; not hardware keyboard input",
+      "foreground": {
+        "valid": true,
+        "before": {
+          "documentHasFocus": true,
+          "nativeWindowFocused": true,
+          "visibilityState": "visible"
+        },
+        "after": {
+          "documentHasFocus": true,
+          "nativeWindowFocused": true,
+          "visibilityState": "visible"
+        },
+        "checks": 15,
+        "allChecksPassed": true
+      },
+      "source": {
+        "bytes": 18776845,
+        "utf16CodeUnits": 6832815,
+        "originalSha256BeforeAndAfter": "b9d215ca65f35d5cba75c3d27237cdafa748b45d3834afc15babf65315485628",
+        "originalUnchanged": true
+      },
+      "edit": {
+        "contentLengthAfter": 6832816,
+        "dispatchSyncMs": 26,
+        "insertedCodeUnits": 1
+      },
+      "save": {
+        "totalUntilSavedMs": 1626,
+        "maxAnimationFrameGapMs": 332,
+        "maxAnimationFrameGapDuringSaveMs": 332,
+        "state": "saved",
+        "native": {
+          "base64SaveAttempts": 1,
+          "commandMs": 275,
+          "decodeMs": 252,
+          "fileStoreMs": 22
+        }
+      },
+      "measuredSpansMs": {
+        "saveByteEncodingAndCaptureTotal": 19,
+        "byteViewCaptureTotalAcrossNewAndExpectedBuffers": 7,
+        "nativeToBase64TotalAcrossNewAndExpectedBuffers": 10,
+        "desktopCommandSynchronousStartup": 301,
+        "commandPromiseAwaitAfterSynchronousStartup": 565,
+        "maxObservedJsonStringifyCall": 168
+      },
+      "interpretation": "The synchronous desktopCommand startup measured 301ms and one JSON.stringify call measured 168ms, while encoding both buffers took 19ms and the native base64 handler took 275ms (252ms decode, 22ms file store). The probe did not preserve per-call JSON.stringify marker details, so the 168ms call cannot be conclusively identified as the save payload serialization; measure it again with the raw-binary bridge comparison before attributing that exact call. The save interval included the existing autosave debounce.",
+      "temporaryHarness": "/private/tmp/lodestory-txt-profile-optimized"
+    },
+    "rawBinaryAutosaveProfile": {
+      "runDate": "2026-10-27",
+      "status": "success",
+      "method": "one synthetic DOM textarea input through the mounted Tauri editor/workspace/storage/native chain; not hardware keyboard input",
+      "foreground": {
+        "valid": true,
+        "before": {
+          "documentHasFocus": true,
+          "nativeWindowFocused": true,
+          "visibilityState": "visible"
+        },
+        "after": {
+          "documentHasFocus": true,
+          "nativeWindowFocused": true,
+          "visibilityState": "visible"
+        },
+        "checks": 11,
+        "allChecksPassed": true
+      },
+      "source": {
+        "bytes": 18776845,
+        "utf16CodeUnits": 6832815,
+        "originalSha256BeforeAndAfter": "b9d215ca65f35d5cba75c3d27237cdafa748b45d3834afc15babf65315485628",
+        "originalUnchanged": true
+      },
+      "edit": {
+        "contentLengthAfter": 6832816,
+        "dispatchSyncMs": 25,
+        "insertedCodeUnits": 1,
+        "insertedTextOffsetUtf16": 3416407,
+        "isolatedSavedContentMatchesSourceWithSingleInsertion": true
+      },
+      "save": {
+        "totalUntilSavedMs": 842,
+        "state": "saved",
+        "saveError": null,
+        "maxAnimationFrameGapMs": 41,
+        "maxAnimationFrameGapDuringSaveMs": 41,
+        "animationFrames": {
+          "firstFrameMs": 29,
+          "maxGapDuringSaveMs": 41,
+          "maxGapMs": 41,
+          "samples": 48
+        },
+        "native": {
+          "binarySaveAttempts": 1,
+          "canonicalSaveAttempts": 1,
+          "txtSaveAttempts": 1,
+          "commandMs": 31,
+          "parseFrameMs": 0,
+          "fileStoreMs": 22
+        }
+      },
+      "measuredSpansMs": {
+        "binaryPack": 14,
+        "binaryPackInnerTotal": 12,
+        "metadataJson": 1,
+        "copyEditedBytes": 6,
+        "copyExpectedBytes": 5,
+        "invokeSynchronousStartup": 17,
+        "invokePromiseAwaitAfterStartup": 63,
+        "maxObservedJsonStringifyCall": 0
+      },
+      "jsonStringify": {
+        "calls": 27,
+        "maxMs": 0
+      },
+      "comparisonWithPreviousBase64Sample": {
+        "sameSourceAndSameOneEditAutosaveHarness": true,
+        "base64": {
+          "invokeSyncMs": 301,
+          "invokeAwaitMs": 565,
+          "nativeCommandMs": 275,
+          "nativeDecodeMs": 252,
+          "saveUntilSavedMs": 1626,
+          "maxAnimationFrameGapMs": 332
+        },
+        "raw": {
+          "invokeSyncMs": 17,
+          "invokeAwaitMs": 63,
+          "nativeCommandMs": 31,
+          "nativeFrameParseMs": 0,
+          "saveUntilSavedMs": 842,
+          "maxAnimationFrameGapMs": 41
+        },
+        "sampleCountPerTransport": 1,
+        "interpretationBoundary": "Single runs show the synchronous invoke and native frame work shrink substantially with the raw body. This is a focused confirmation, not a percentile benchmark; the overall save timer includes the autosave debounce."
+      },
+      "temporaryHarness": "/private/tmp/lodestory-txt-profile-optimized"
+    },
+    "binarySaveFunctionalE2E": {
+      "runDate": "2026-10-27",
+      "status": "success",
+      "kind": "Real Tauri desktop functional E2E using the current frontend raw-byte save bridge and native Request body command; not a performance benchmark.",
+      "source": {
+        "path": "/Users/yinzhenpu/projects/Lodestory/测试项目/小说原文/斗破苍穹（原始文件）.txt",
+        "sha256Before": "51f2da26c8b70dacab487c58b052c1c92b7b16af515697b782c8c05a83c418e1",
+        "sha256After": "51f2da26c8b70dacab487c58b052c1c92b7b16af515697b782c8c05a83c418e1",
+        "originalUnchanged": true
+      },
+      "checks": {
+        "largeTxtOpenedAndUnchangedCloseIssuedNoWrites": true,
+        "bomCrlf": {
+          "passed": true,
+          "hasBom": true,
+          "hasCRLF": true,
+          "exactAfterAutosaveAndReopen": true
+        },
+        "pendingCompositionSaveAndClose": {
+          "passed": true,
+          "closePathExact": true,
+          "saveNativeAttempts": 3,
+          "savePathExact": true
+        },
+        "largeNovelStartMiddleEndEdits": {
+          "markersPresent": true,
+          "autoSaveCommands": 1,
+          "readbackExact": true,
+          "reopenExact": true,
+          "changedOffsets": [
+            0,
+            3416410,
+            6832821
+          ],
+          "editedRawSha256": "a276fe7c2d13b7961d3f4ee098f9530105f8101051de940b22d970bd3f8f3ce8"
+        },
+        "txtToLodeConversion": {
+          "createCommands": 1,
+          "sourceStillOpen": true,
+          "sourceUnchanged": true,
+          "outputBytes": 92,
+          "outputOperations": 1
+        }
+      },
+      "nativeWriteCounts": {
+        "saveAttempts": 4,
+        "txtSaveAttempts": 4,
+        "binarySaveAttempts": 4,
+        "base64SaveAttempts": 0,
+        "binarySaveCommandMs": 53,
+        "binarySaveFrameParseMs": 0,
+        "binarySaveStoreMs": 44,
+        "lodeCreateAttempts": 1
+      },
+      "isolatedProjectSha256AfterExpectedEdits": "a276fe7c2d13b7961d3f4ee098f9530105f8101051de940b22d970bd3f8f3ce8",
+      "timingBoundary": "This run verifies functionality only. Its open/typing timings are excluded from performance comparisons because it was not run as a controlled foreground benchmark.",
+      "temporaryHarness": "/private/tmp/lodestory-txt-profile-optimized"
+    }
+  }
+}

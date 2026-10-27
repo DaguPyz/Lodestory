@@ -275,8 +275,9 @@ function pauseLargeNormalization(f) {
   let closed = 0;
   bytes.copyBytesAsync = input => original(input, {schedulerFactory() {
     let paused = false;
+    let clock = 0;
     return {
-      now: () => 0,
+      now: () => clock++,
       yieldTask() {
         if (!paused) { paused = true; entered.resolve(); return release.promise; }
         return Promise.resolve();

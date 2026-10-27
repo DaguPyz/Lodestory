@@ -77,9 +77,6 @@ function TypeNavigation({resource, contextMenus, active, onOpenTypes, onOpenAsse
             aria-pressed={snapshot.selectedTypeId === type.id} disabled={!active} onClick={() => openTemplate(type.id)}>
             <strong className="asset-type-name" title={type.name}>{type.name}</strong>
             <span className="asset-type-count" aria-hidden="true">{objectCount}</span>
-            <span className="asset-type-state" aria-hidden="true">
-              {snapshot.selectedTypeId === type.id && <Icon name="check" size="small" />}
-            </span>
           </button>
           </MenuRegion>
         </li>;
@@ -89,9 +86,6 @@ function TypeNavigation({resource, contextMenus, active, onOpenTypes, onOpenAsse
         aria-pressed={snapshot.selectedTypeId === null} onClick={() => openTemplate(null)}>
         <strong className="asset-type-name" title="未分类对象">未分类对象</strong>
         <span className="asset-type-count" aria-hidden="true">{unclassifiedCount}</span>
-        <span className="asset-type-state" aria-hidden="true">
-          {snapshot.selectedTypeId === null && <Icon name="check" size="small" />}
-        </span>
       </button></li>}
     </ul>
   </div>

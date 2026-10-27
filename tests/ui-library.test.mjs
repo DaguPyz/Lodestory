@@ -184,16 +184,21 @@ test("UI styles use registered host tokens without embedding a second palette", 
   })) assert.ok(geometry.includes(`${name}: ${value};`), `${name} has the new shared value`);
 });
 
-test("toggle Buttons reserve a check slot, while IconButtons remain centered", async () => {
+test("selected controls have no check marker and mixed text Buttons retain a dash", async () => {
   const stylesheet = await readFile(new URL(import.meta.resolve("@lodestory/ui/styles.css")), "utf8");
+  const selectSource = await readFile(new URL("../packages/ui/src/Select.tsx", import.meta.url), "utf8");
 
-  assert.match(stylesheet, /\.button:where\(\[aria-pressed\], \[aria-selected\]\)\s*\{[^}]*padding-inline-end:/s,
-    "text buttons reserve marker space for both selected and unselected toggle states");
-  assert.match(stylesheet, /\.button:where\(\[aria-pressed\], \[aria-selected\]\)::after\s*\{[^}]*background:\s*currentColor/s,
-    "the text button marker follows the active state foreground");
-  assert.match(stylesheet, /clip-path:\s*polygon\(/, "the selected marker is a CSS check, not a whole-control frame");
-  assert.match(stylesheet, /\.button:where\(\[aria-pressed="mixed"\]\)::after\s*\{[^}]*height:\s*2px;[^}]*clip-path:\s*none/s,
+  assert.match(stylesheet, /\.button:where\(\[aria-pressed\]\)\s*\{[^}]*padding-inline-end:/s,
+    "text buttons reserve marker space while their aria-pressed state can be mixed");
+  assert.doesNotMatch(stylesheet, /\.button:where\(\[aria-pressed="true"\], \[aria-pressed="mixed"\], \[aria-selected="true"\]\)::after/,
+    "ordinary selected text buttons do not show a check marker");
+  assert.doesNotMatch(stylesheet, /clip-path:\s*polygon\(/, "selected controls do not draw a check with a pseudo-element");
+  assert.match(stylesheet, /\.button:where\(\[aria-pressed="mixed"\]\)::after\s*\{[^}]*height:\s*2px;/s,
     "the mixed marker is a short solid dash");
+  assert.doesNotMatch(selectSource, /BaseSelect\.ItemIndicator|ui-select-indicator|Icon name="check"/,
+    "selected Select options have no tick icon");
+  assert.match(stylesheet, /\.ui-select-option:where\(\[data-selected\]\)\s*\{[^}]*color:\s*var\(--ui-state-selected-foreground\);\s*background:\s*var\(--ui-surface-selected\)/s,
+    "selected Select options remain identifiable by their state colors");
   assert.doesNotMatch(stylesheet, /\.icon-button:where\(\[aria-pressed\], \[aria-selected\]\)/,
     "IconButton does not reserve marker padding or a gap");
   assert.doesNotMatch(stylesheet, /\.icon-button[^}]*::after|\.icon-button[^}]*\}\s*::after/s,

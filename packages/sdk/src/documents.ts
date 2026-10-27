@@ -44,6 +44,15 @@ export type DocumentWorkspace = {
   select(id: string): boolean;
   /** 更新项目存储拥有的共享内容缓冲，由项目存储安排自动保存。 */
   update(id: string, content: string): boolean;
+  /**
+   * Register the current synchronous text reader for an already-open document.
+   * Before switching, saving, closing, deleting without discard confirmation,
+   * or leaving the workspace, the workspace reads it into the shared file buffer.
+   * A newer registration replaces the old one; unregistering only removes the
+   * registration created by that call. Readers must throw if the text cannot be
+   * read safely, which blocks the corresponding operation.
+   */
+  registerContentReader?(documentId: string, reader: (currentContent: string) => string): () => void;
   /** 先保存再关闭，保存失败时保留并选择该文档。 */
   close(id: string): Promise<boolean>;
   /** 按传入顺序逐个关闭调用时的文档；失败或会话不可操作时停止，保留剩余文档。不包含之后新开的文档。 */

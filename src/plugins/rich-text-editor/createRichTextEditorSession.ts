@@ -94,7 +94,7 @@ export function createRichTextEditorSession(
           await driver.create();
           if (!alive) return;
           editorContent = driver.getContent();
-          acceptedContent = propContent;
+          // The driver was seeded with initial.content. Props may have changed while it loaded.
           syncContent();
           driver.setReadOnly(state.readOnly || !state.active);
           ready = true;

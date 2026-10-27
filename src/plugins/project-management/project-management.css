@@ -78,16 +78,6 @@
   white-space: nowrap;
 }
 
-.file-tree-entry-state {
-  display: inline-flex;
-  flex: 0 0 var(--ui-icon-small);
-  align-items: center;
-  justify-content: center;
-  width: var(--ui-icon-small);
-  height: var(--ui-icon-small);
-  color: inherit;
-}
-
 .file-tree-entry:hover:not(:disabled) {
   color: var(--ui-state-hover-foreground);
   background: var(--ui-surface-hover);
@@ -132,5 +122,4 @@
   .file-tree-entry[aria-current="page"]:not(:disabled),
   .file-tree-entry[aria-current="page"]:is(:hover, :active):not(:disabled) { color: HighlightText; background: Highlight; }
   .file-tree-entry[aria-current="page"]:focus-visible { outline-color: HighlightText; }
-  .file-tree-entry[aria-current="page"] .file-tree-entry-state { color: inherit; }
 }

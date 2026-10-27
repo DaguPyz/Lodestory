@@ -1,0 +1,132 @@
+{
+  "schema": "lodestory.plain-text-browser-validation.v1",
+  "testedAt": "2026-10-27",
+  "result": {
+    "command": "node --test tests/plain-text-browser.test.mjs",
+    "browser": "Google Chrome headless, isolated temporary profile",
+    "status": "passed",
+    "testCasesPassed": 20,
+    "testCasesFailed": 0,
+    "lastRunDurationMs": 3090.037834
+  },
+  "fixture": {
+    "kind": "deterministically generated in-browser synthetic text; the user's novel file is not included in this browser run",
+    "utf16CodeUnits": 6832273,
+    "sourceRows": 198037,
+    "sourceRowsWithTerminalEmptyLines": 198039,
+    "crlfSeparators": 198038,
+    "standaloneLfSeparators": 0,
+    "standaloneCrSeparators": 0,
+    "hasBom": true,
+    "terminalLineBreaks": 2,
+    "specialRows": {
+      "50": "hit hitword Hit",
+      "51": "tag-10 tag-20 tag-30x",
+      "187654": "UNIQUE_TARGET_TOKEN"
+    }
+  },
+  "viewport": {
+    "deviceMetricsCssPixels": {
+      "width": 1280,
+      "height": 900,
+      "deviceScaleFactor": 1
+    },
+    "editorHeightCssPixels": 640,
+    "boundedRenderedLineAssertion": "fewer than 500 .plain-text-line elements"
+  },
+  "measurements": {
+    "editorReadyMs": 84,
+    "editorReadyTimingBoundary": "From after synthetic source generation to EditorHandle onReady; includes React/editor mount and initial visible-row setup, excludes text file reading, decoding, and source generation.",
+    "singleCharacterEdits": {
+      "count": 50,
+      "elapsedMs": 199.1,
+      "firstOnChangeCallbackMs": 5.1,
+      "lastOnChangeCallbackMs": 190.8,
+      "maxObservedAnimationFrameGapMs": 16.8,
+      "animationFrameIntervals": 12,
+      "timingBoundary": "Browser performance.now() from immediately before 50 sequential CDP Input.insertText calls until all 50 complete-document onChange callbacks have run; excludes the Node-side wall-clock CDP round-trip budget."
+    },
+    "longSingleLine": {
+      "asciiPrefixCodeUnits": 220000,
+      "logicalLines": 1,
+      "assertion": "Only fewer than 500 wrapped visual rows are mounted; Backspace and Undo preserve each tested grapheme."
+    }
+  },
+  "coverage": [
+    "full-source initialization with exact BOM, CRLF and trailing blank-line retention",
+    "bounded DOM line rendering",
+    "complete host onChange echo after input and paste",
+    "50 sequential single-character input edits and animation-frame gap observation",
+    "CDP-synthesized committed Chinese IME input",
+    "pending IME flush before Cmd/Ctrl+S, pointer-down outside the editor, and read-only transition",
+    "each tested pending IME composition is removed by one Undo; read-only rejects later edits while preserving earlier composition",
+    "copy and cut over virtualized source selections, including reverse direction",
+    "whole-document find and replace",
+    "screen click caret placement and pointer drag auto-scroll across virtual rows",
+    "Home, End, arrow, Shift+Arrow, platform word movement, select-all, and reverse selection",
+    "find-panel case-sensitive and whole-word replace-all with mixed CRLF/LF/CR source separators and Undo",
+    "find-panel regular-expression capture replacement and Undo",
+    "single-line 220k text and Backspace/Undo of ZWJ family emoji, combining accent, flag pair, and skin-tone modifier",
+    "Shift-Tab at the first source offset",
+    "read-only and inactive-document input rejection",
+    "external replacement resets stale history",
+    "flushContent accepts an external host snapshot before React renders and still commits newer pending native input",
+    "native LF insertion into CRLF text places the caret after the complete separator; the next character does not split the pair",
+    "Enter, literal Tab, Shift-Tab and Backspace plain-text behavior",
+    "unmount releases editor DOM and ready handle",
+    "canvas-context failure and ResizeObserver-constructor failure leave no partial root, driver registration, or document listeners"
+  ],
+  "limitations": [
+    "This is one synthetic-source headless-Chrome run, not a repeated performance distribution.",
+    "The 84 ms ready measurement excludes file I/O and UTF-8 decoding; it is not an end-to-end desktop open time.",
+    "CDP IME operations synthesize composition events; they do not verify a physical Chinese keyboard or operating-system input method.",
+    "The browser test verifies the complete onChange source callback, not native project storage, autosave, close/reopen, or conflict handling.",
+    "Copy and cut use synthetic ClipboardEvent/DataTransfer objects; pointer clicks and drags use CDP mouse input.",
+    "The exact original novel file remains for the separately planned desktop validation."
+  ],
+  "latestAttempt": {
+    "command": "node --test tests/plain-text-browser.test.mjs",
+    "execution": "Chrome headless with explicit escalated sandbox permission",
+    "status": "passed",
+    "durationMs": 3318.3,
+    "testsPassed": 20,
+    "testsFailed": 0,
+    "editorReadyMs": 92,
+    "singleCharacterEdits": {
+      "count": 50,
+      "elapsedMs": 203.3,
+      "firstOnChangeCallbackMs": 3.2,
+      "lastOnChangeCallbackMs": 198.4,
+      "maxObservedAnimationFrameGapMs": 16.7,
+      "animationFrameIntervals": 11
+    },
+    "cacheDir": "isolated under the temporary browser profile"
+  },
+  "harness": {
+    "viteCacheDir": "isolated under each temporary browser profile",
+    "startupAndReadinessDiagnostics": [
+      "Chrome process exit/signal and stderr",
+      "uncaught browser exceptions",
+      "console.error",
+      "HTTP responses >= 400",
+      "failed script loads"
+    ]
+  },
+  "concurrentAttempt": {
+    "command": "node --test tests/plain-text-browser.test.mjs tests/large-plain-text-browser.test.mjs",
+    "status": "both-browser-tests-failed-before-page-load",
+    "execution": "default sandbox",
+    "testsReached": 0,
+    "observations": [
+      "The new test reported Chrome SIGABRT before DevToolsActivePort or page load.",
+      "The existing large-plain-text browser test timed out waiting for DevToolsActivePort."
+    ],
+    "interpretation": "Inconclusive for cache isolation because both failures occurred before Vite/page navigation."
+  },
+  "defaultSandboxAttempt": {
+    "command": "node --test tests/plain-text-browser.test.mjs",
+    "status": "Chrome-startup-failed-before-page-load",
+    "failure": "Chrome exited with SIGABRT before creating DevToolsActivePort; stderr was empty.",
+    "interpretation": "This default-sandbox attempt did not test the page or Vite cache isolation."
+  }
+}

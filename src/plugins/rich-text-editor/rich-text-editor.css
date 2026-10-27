@@ -15,6 +15,53 @@
   min-height: 20rem;
 }
 
+.large-plain-text-editor .cm-editor {
+  height: max(20rem, calc(100dvh - 12rem));
+  color: var(--ui-text-document);
+  background: transparent;
+  font: inherit;
+}
+
+.rich-text-editor .large-plain-text-editor .cm-scroller {
+  overflow: auto;
+  font: inherit;
+  line-height: var(--ui-line-height-document);
+  overscroll-behavior: contain;
+}
+
+.large-plain-text-editor .cm-content {
+  padding: var(--ui-space-3) 0;
+  caret-color: var(--ui-caret-foreground);
+  overflow-wrap: anywhere;
+}
+
+.large-plain-text-editor .cm-line { padding: 0; }
+.rich-text-editor .large-plain-text-editor .cm-editor.cm-focused { outline: none; }
+.rich-text-editor .large-plain-text-editor .cm-content ::selection {
+  color: var(--ui-selection-foreground);
+  background: var(--ui-text-selection-bg);
+}
+.rich-text-editor .large-plain-text-editor .cm-selectionBackground { background: var(--ui-text-selection-bg); }
+.rich-text-editor .large-plain-text-editor .cm-cursor { border-left-color: var(--ui-caret-foreground); }
+.rich-text-editor .large-plain-text-editor .cm-editor .cm-panels {
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-panel);
+  border-color: var(--ui-border-divider);
+}
+.rich-text-editor .large-plain-text-editor .cm-editor .cm-search input {
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-control);
+  border: 1px solid var(--ui-border-default);
+}
+.rich-text-editor .large-plain-text-editor .cm-editor .cm-button {
+  color: var(--ui-text-primary);
+  background: transparent;
+  border: 1px solid var(--ui-border-default);
+  border-radius: var(--ui-radius-control);
+  text-transform: none;
+}
+.rich-text-editor .large-plain-text-editor .cm-editor .cm-button:hover { background: var(--ui-surface-hover); }
+
 .rich-text-editor-mount .ql-container {
   min-height: 20rem;
   border: 0;

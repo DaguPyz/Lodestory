@@ -2,7 +2,7 @@
   "ui.initialPage": "welcome",
   "bodyEditor.defaultEditors": {
     "markdown": "milkdown",
-    "plain-text": "quill",
+    "plain-text": "plain-text",
     "rich-delta": "quill"
   }
 }

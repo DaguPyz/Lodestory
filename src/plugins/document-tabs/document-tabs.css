@@ -95,16 +95,6 @@
   white-space: nowrap;
 }
 
-.document-tab-state {
-  display: inline-flex;
-  flex: 0 0 var(--ui-icon-small);
-  align-items: center;
-  justify-content: center;
-  width: var(--ui-icon-small);
-  height: var(--ui-icon-small);
-  color: inherit;
-}
-
 .document-tab-select:hover {
   color: var(--ui-state-hover-foreground);
   background: var(--ui-surface-hover);
@@ -141,7 +131,6 @@
   .document-tab-select[aria-current="page"]:not(:disabled),
   .document-tab-select[aria-current="page"]:is(:hover, :active):not(:disabled) { color: HighlightText; background: Highlight; }
   .document-tab-select[aria-current="page"]:focus-visible { outline-color: HighlightText; }
-  .document-tab-select[aria-current="page"] .document-tab-state { color: inherit; }
   .document-tab[data-active="true"] .icon-button:not(:disabled) { color: HighlightText; background: Highlight; }
   .document-tab[data-active="true"] .icon-button:focus-visible { outline-color: HighlightText; }
 }

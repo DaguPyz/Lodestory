@@ -10,6 +10,7 @@ export function BodyEditor({active}: {active: boolean}) {
   const {workspace} = editor;
   const root = useRef<HTMLDivElement>(null);
   const handles = useRef(new Map<string, EditorHandle>());
+  const contentReaders = useRef(new Map<string, () => void>());
   const mounted = useRef(true);
   const focusFrames = useRef(new Set<number>());
   const focusState = useRef({active, busy: editor.busy, activeId: workspace.activeId});
@@ -21,14 +22,21 @@ export function BodyEditor({active}: {active: boolean}) {
       mounted.current = false;
       for (const frame of focusFrames.current) cancelAnimationFrame(frame);
       focusFrames.current.clear();
+      for (const remove of contentReaders.current.values()) remove();
+      contentReaders.current.clear();
       handles.current.clear();
     };
   }, []);
 
   const onEditorReady = useCallback((documentId: string, handle: EditorHandle | null) => {
     if (!mounted.current) return;
+    contentReaders.current.get(documentId)?.();
+    contentReaders.current.delete(documentId);
     if (handle && isOpen()) {
       handles.current.set(documentId, handle);
+      if (handle.flushContent && workspace.registerContentReader) {
+        contentReaders.current.set(documentId, workspace.registerContentReader(documentId, content => handle.flushContent!(content)));
+      }
       const state = focusState.current;
       if (state.active && !state.busy && state.activeId === documentId) {
         const frame = requestAnimationFrame(() => {
@@ -48,7 +56,7 @@ export function BodyEditor({active}: {active: boolean}) {
     function isOpen() {
       return workspace.getSnapshot().documents.some(document => document.id === documentId);
     }
-  }, [workspace.getSnapshot]);
+  }, [workspace.getSnapshot, workspace.registerContentReader]);
 
   useEffect(() => {
     if (!active || editor.busy) return;
@@ -81,10 +89,11 @@ export function BodyEditor({active}: {active: boolean}) {
         const documentActive = visible && active;
         const format = getEditorFormat(document.fileName);
         const definition = format ? editor.resolveEditor(format) : undefined;
+        const conversions = format ? editor.resolveConversions(format) : [];
         return <Manuscript key={document.id} document={document}
           visible={visible} active={documentActive}
           readOnly={disabled || !visible || workspace.deletingPath === document.path}
-          format={format} definition={definition} onEditorReady={onEditorReady}
+          format={format} definition={definition} conversions={conversions} onEditorReady={onEditorReady}
           onChange={content => {
             const latest = workspace.getSnapshot();
             const focus = focusState.current;

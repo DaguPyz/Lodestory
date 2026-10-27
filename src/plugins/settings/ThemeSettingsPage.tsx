@@ -3,6 +3,7 @@ import { Button, Icon, Select } from "@lodestory/ui";
 import type { ResolvedTheme, ThemePreference, ThemeService } from "@lodestory/sdk/theme";
 import type { ConfigService } from "@lodestory/sdk/config";
 import { MotionSettings } from "./MotionSettings";
+import "./theme-settings.css";
 
 function ThemePreview({ theme }: { theme: ResolvedTheme }) {
   return (
@@ -84,7 +85,7 @@ export function ThemeSettingsPage({ service, config, active, onBack }: ThemeSett
                       <ThemePreview theme={option} />
                       <span className="theme-option-body">
                         <span className="theme-option-heading">
-                          <span className="theme-radio" aria-hidden="true">{selected && <Icon name="check" size="small" />}</span>
+                          <span className="theme-radio" aria-hidden="true" />
                           <span className="theme-option-name" id={`theme-name-${option.id}`}>{option.name}</span>
                         </span>
                         <span className="theme-option-description" id={`theme-caption-${option.id}`}>{option.type === "dark" ? "深色外观" : "浅色外观"}</span>
@@ -107,7 +108,7 @@ export function ThemeSettingsPage({ service, config, active, onBack }: ThemeSett
                   </span>
                   <span className="theme-option-body">
                     <span className="theme-option-heading">
-                      <span className="theme-radio" aria-hidden="true">{preference.mode === "system" && <Icon name="check" size="small" />}</span>
+                      <span className="theme-radio" aria-hidden="true" />
                       <span className="theme-option-name" id="theme-name-system">跟随系统</span>
                     </span>
                     <span className="theme-option-description" id="theme-caption-system">{systemLight && systemDark ? "随操作系统的外观自动切换。" : "需要已启用的深色和浅色主题。"}</span>

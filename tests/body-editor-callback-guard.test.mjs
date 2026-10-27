@@ -2,6 +2,28 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {createMainFixture} from "./helpers/mainStartupFixture.mjs";
 
+test("content flush handles reject reads from replaced or invalidated editors", () => {
+  const {createEditorCallbackGuard} = createMainFixture().loadModule("plugins/body-editor/editorCallbackGuard.ts");
+  const token = Symbol("editor");
+  let current = token;
+  let exposed;
+  let reads = 0;
+  const guard = createEditorCallbackGuard(token, candidate => candidate === current, {
+    onChange() {}, onError() {}, onSaveAs() {}, onReady(handle) { exposed = handle; },
+  });
+  guard.onReady({focus() {}, flushContent() { reads++; return "待提交的正文"; }});
+  const first = exposed;
+  assert.equal(first.flushContent(), "待提交的正文");
+  guard.onReady({focus() {}, flushContent() { reads++; return "新的正文"; }});
+  assert.throws(() => first.flushContent(), /no longer active/);
+  const second = exposed;
+  assert.equal(second.flushContent(), "新的正文");
+  current = Symbol("replacement");
+  assert.throws(() => second.flushContent(), /no longer active/);
+  guard.invalidate();
+  assert.equal(reads, 2, "stale handles never reach the underlying input buffer");
+});
+
 test("a replaced editor instance cannot publish changes, focus handles, or errors", () => {
   const fixture = createMainFixture();
   const {createEditorCallbackGuard} = fixture.loadModule("plugins/body-editor/editorCallbackGuard.ts");

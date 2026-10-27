@@ -6,10 +6,17 @@ import ts from "typescript";
 
 const compile = source => ts.transpileModule(source, {compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS}}).outputText;
 const compiled = compile(await readFile(new URL("../src/plugins/project-storage/FileSession.ts", import.meta.url), "utf8"));
+const byteViewExports = {};
+vm.runInNewContext(compile(await readFile(new URL("../src/plugins/project-storage/byteView.ts", import.meta.url), "utf8")), {
+  exports: byteViewExports, Array, Object, Number, WeakMap, ArrayBuffer, Uint8Array,
+});
 const byteExports = {};
-vm.runInNewContext(compile(await readFile(new URL("../src/plugins/project-storage/bytes.ts", import.meta.url), "utf8")), {exports: byteExports, Array, Object, Number});
+vm.runInNewContext(compile(await readFile(new URL("../src/plugins/project-storage/bytes.ts", import.meta.url), "utf8")), {
+  exports: byteExports, Array, Object, Number, Uint8Array, ArrayBuffer,
+  require(name) { if (name === "./byteView") return byteViewExports; throw new Error(`Unexpected import ${name}`); },
+});
 const base = [0, 128, 255];
-function fixture(write, changed = () => {}) {
+function fixture(write, changed = () => {}, {bytes = base, preferByteView = false} = {}) {
   const timers = new Map();
   let timerId = 0;
   const exports = {};
@@ -17,12 +24,13 @@ function fixture(write, changed = () => {}) {
     require(name) {
       if (name === "./storageApi") return {storageErrorMessage: cause => cause.message};
       if (name === "./bytes") return byteExports;
+      if (name === "./byteView") return byteViewExports;
       throw new Error(`Unexpected import ${name}`);
     },
     setTimeout(callback) { timers.set(++timerId, callback); return timerId; },
     clearTimeout(id) { timers.delete(id); },
   });
-  const session = new exports.FileSession({path: "assets/raw.bin", fileName: "raw.bin", bytes: base}, write, changed);
+  const session = new exports.FileSession({path: "assets/raw.bin", fileName: "raw.bin", bytes}, write, changed, preferByteView);
   return {session, timers, flushTimer() { const callbacks = [...timers.values()]; timers.clear(); callbacks.forEach(callback => callback()); }};
 }
 function deferred() { let resolve; const promise = new Promise(done => { resolve = done; }); return {promise, resolve}; }

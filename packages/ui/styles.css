@@ -29,8 +29,8 @@
   --cmp-button-height: var(--ui-control-height);
   --cmp-button-padding: var(--ui-control-padding-inline);
   --cmp-button-radius: var(--ui-radius-control);
-  --cmp-selection-marker-size: 0.5rem;
-  --cmp-selection-marker-gap: var(--ui-space-1);
+  --cmp-mixed-marker-size: 0.5rem;
+  --cmp-mixed-marker-gap: var(--ui-space-1);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -117,33 +117,21 @@
   border-color: transparent;
 }
 
-/* Reserve a stable marker slot for the whole lifetime of a semantic toggle. */
-.button:where([aria-pressed], [aria-selected]) {
-  padding-inline-end: calc(var(--cmp-button-padding) + var(--cmp-selection-marker-size) + var(--cmp-selection-marker-gap));
+/* Keep a stable slot for the mixed state; ordinary selected states have no tick. */
+.button:where([aria-pressed]) {
+  padding-inline-end: calc(var(--cmp-button-padding) + var(--cmp-mixed-marker-size) + var(--cmp-mixed-marker-gap));
 }
 
-.button:where([aria-pressed], [aria-selected])::after {
+.button:where([aria-pressed="mixed"])::after {
   content: "";
   position: absolute;
   inset-block-start: 50%;
   inset-inline-end: var(--cmp-button-padding);
-  width: var(--cmp-selection-marker-size);
-  height: var(--cmp-selection-marker-size);
+  width: var(--cmp-mixed-marker-size);
+  height: 2px;
   background: currentColor;
-  clip-path: polygon(40% 60%, 18% 38%, 4% 52%, 41% 90%, 98% 19%, 83% 7%);
-  opacity: 0;
   pointer-events: none;
   transform: translateY(-50%);
-}
-
-.button:where([aria-pressed="true"], [aria-pressed="mixed"], [aria-selected="true"])::after {
-  opacity: 1;
-}
-
-.button:where([aria-pressed="mixed"])::after {
-  width: var(--cmp-selection-marker-size);
-  height: 2px;
-  clip-path: none;
 }
 
 :is(.button, .icon-button):where([aria-pressed="true"], [aria-pressed="mixed"], [aria-selected="true"]):where([data-selection-active="false"]) {
@@ -490,7 +478,7 @@
 }
 .ui-select-trigger:where(:disabled, [data-disabled]) { outline: none; }
 .ui-select-value { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ui-select-chevron, .ui-select-indicator { display: inline-flex; flex-shrink: 0; }
+.ui-select-chevron { display: inline-flex; flex-shrink: 0; }
 .ui-select-positioner { z-index: 50; outline: none; }
 .ui-select-popup {
   width: max-content;
@@ -552,8 +540,6 @@
   outline: none;
 }
 .ui-select-option-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
-.ui-select-indicator { width: var(--ui-icon-small); visibility: hidden; }
-.ui-select-option:where([data-selected]) .ui-select-indicator { visibility: visible; }
 .ui-select-option:where(:hover, [data-highlighted]) { color: var(--ui-state-hover-foreground); background: var(--ui-surface-hover); }
 .ui-select-option:where(:active) { color: var(--ui-state-pressed-foreground); background: var(--ui-surface-pressed); }
 .ui-select-option:where([data-selected]) { color: var(--ui-state-selected-foreground); background: var(--ui-surface-selected); }
@@ -703,7 +689,7 @@
     background: Highlight;
   }
 
-  .button:where([aria-pressed], [aria-selected])::after {
+  .button:where([aria-pressed="mixed"])::after {
     forced-color-adjust: none;
     background: currentColor;
   }

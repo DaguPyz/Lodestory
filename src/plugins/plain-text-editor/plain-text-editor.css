@@ -1,0 +1,147 @@
+/* A TXT document owns its viewport, so the manuscript never adds a second scrollbar. */
+.editor-document:has(.plain-text-editor) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.editor-document[hidden]:has(.plain-text-editor) { display: none; }
+.editor-document:has(.plain-text-editor) > .manuscript {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  width: 100%;
+  max-width: none;
+  min-height: 0;
+  padding: 0;
+}
+.plain-text-editor {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  color: var(--ui-text-document);
+  font-family: var(--ui-font-document);
+  font-size: var(--ui-font-size-document);
+  line-height: var(--ui-line-height-document);
+}
+.plain-text-viewport {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overflow-anchor: none;
+  overscroll-behavior: contain;
+  cursor: text;
+  user-select: none;
+}
+.plain-text-content {
+  position: relative;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: var(--ui-content-padding);
+  font: inherit;
+  font-kerning: none;
+  font-variant-ligatures: none;
+}
+.plain-text-lines {
+  position: absolute;
+  top: 0;
+  pointer-events: none;
+}
+.plain-text-line {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  white-space: pre;
+  tab-size: 4;
+}
+.plain-text-selected {
+  color: var(--ui-state-selected-foreground);
+  background: var(--ui-surface-selected);
+}
+.plain-text-selected-break { display: inline-block; min-width: .4em; }
+.plain-text-caret {
+  position: absolute;
+  width: 1px;
+  background: currentColor;
+  pointer-events: none;
+  animation: plain-text-caret-breathe 1.2s ease-in-out infinite;
+}
+.plain-text-caret[hidden] { display: none; }
+@keyframes plain-text-caret-breathe {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .2; }
+}
+:root[data-ui-motion="reduce"] .plain-text-caret { animation: none; }
+@media (prefers-reduced-motion: reduce) {
+  .plain-text-caret { animation: none; }
+}
+.plain-text-input {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  width: 2px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  resize: none;
+  overflow: hidden;
+  color: transparent;
+  background: transparent;
+  caret-color: transparent;
+  font: inherit;
+  white-space: pre;
+  outline: none;
+}
+.plain-text-input:focus-visible { outline: none; }
+.plain-text-input::selection { color: transparent; background: transparent; }
+.plain-text-search {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3) var(--ui-space-5);
+  border-bottom: 1px solid var(--ui-border-divider);
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-panel);
+  font-family: var(--ui-font-interface);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+.plain-text-search[hidden] { display: none; }
+.plain-text-search input:not([type="checkbox"]) {
+  min-width: 6rem;
+  max-width: 14rem;
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border: 1px solid var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-control);
+  font: inherit;
+}
+.plain-text-search button {
+  padding: var(--ui-space-2) var(--ui-space-3);
+  border: 1px solid var(--ui-border-control);
+  border-radius: var(--ui-radius-control);
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-control);
+  font: inherit;
+  cursor: pointer;
+}
+.plain-text-search button:hover:not(:disabled) { color: var(--ui-state-hover-foreground); background: var(--ui-surface-hover); }
+.plain-text-search button:active:not(:disabled) { color: var(--ui-state-pressed-foreground); background: var(--ui-surface-pressed); }
+.plain-text-search button:disabled { color: var(--ui-state-disabled-foreground); background: var(--ui-state-disabled-background); cursor: default; }
+.plain-text-search label { display: inline-flex; align-items: center; gap: var(--ui-space-1); white-space: nowrap; }
+.plain-text-search :is(input, button):focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: var(--ui-focus-offset);
+}
+@media (forced-colors: active) {
+  .plain-text-selected { color: HighlightText; background: Highlight; forced-color-adjust: none; }
+  .plain-text-caret { background: CanvasText; }
+}

@@ -16,7 +16,11 @@ fn list_installed_font_families() -> Result<Vec<String>, String> {
 
 fn normalize_families(mut families: Vec<String>) -> Vec<String> {
     families.retain(|family| !family.trim().is_empty());
-    families.sort_by(|left, right| left.to_lowercase().cmp(&right.to_lowercase()).then(left.cmp(right)));
+    families.sort_by(|left, right| {
+        left.to_lowercase()
+            .cmp(&right.to_lowercase())
+            .then(left.cmp(right))
+    });
     families.dedup();
     families
 }
@@ -28,7 +32,12 @@ mod tests {
     #[test]
     fn system_family_names_are_trimmed_of_blank_entries_sorted_and_deduplicated() {
         assert_eq!(
-            normalize_families(vec!["Arial".into(), "".into(), "Arial".into(), "Noto Sans".into()]),
+            normalize_families(vec![
+                "Arial".into(),
+                "".into(),
+                "Arial".into(),
+                "Noto Sans".into()
+            ]),
             vec!["Arial", "Noto Sans"],
         );
     }

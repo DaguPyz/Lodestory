@@ -32,11 +32,15 @@ export function createEditorCallbackGuard(
     if (currentHandle === handle && exposedHandle) return exposedHandle;
     currentHandle = handle;
     const getActions = handle.getContextMenuActions;
-    exposedHandle = getActions ? {
+    exposedHandle = getActions || handle.flushContent ? {
       focus() {
         if (isValid() && currentHandle === handle) handle.focus();
       },
-      getContextMenuActions() {
+      ...(handle.flushContent ? {flushContent(currentContent?: string) {
+        if (!isValid() || currentHandle !== handle) throw new Error("This editor instance is no longer active.");
+        return handle.flushContent!(currentContent);
+      }} : {}),
+      ...(getActions ? {getContextMenuActions() {
         if (!isValid() || currentHandle !== handle) return [];
         return getActions.call(handle).map(action => ({
           ...action,
@@ -45,7 +49,7 @@ export function createEditorCallbackGuard(
             return action.run();
           },
         }));
-      },
+      }} : {}),
     } : handle;
     return exposedHandle;
   }

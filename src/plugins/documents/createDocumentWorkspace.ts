@@ -19,6 +19,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
     const closing = new Map<string, Promise<boolean>>();
     const openPaths: string[] = [];
     const membershipTokens = new Map<string, object>();
+    const contentReaders = new Map<string, {token: symbol; reader: (currentContent: string) => string}>();
     const cached = new Map<string, CachedDocument>();
     const canMutate = options.canMutate ?? (() => true);
     let activeId: string | null = null;
@@ -84,6 +85,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
             const id = encodeURIComponent(path);
             openPaths.splice(index, 1);
             membershipTokens.delete(id);
+            contentReaders.delete(id);
             cached.delete(id);
         }
         if (previousActive && !openPaths.some(path => encodeURIComponent(path) === previousActive)) {
@@ -130,6 +132,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
         for (const document of documents) {
             const before = previousById.get(document.id);
             if (document.saveState === "error" && before?.saveState !== "error") {
+                if (!flushBeforeActivation(document.id)) break;
                 selection += 1;
                 activeId = document.id;
                 openingPath = null;
@@ -150,11 +153,13 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
         }
     }
 
-    function activate(id: string, requestReveal = true) {
+    function activate(id: string, requestReveal = true, outgoingFlushed = false) {
+        if (!outgoingFlushed && !flushBeforeActivation(id)) return false;
         activeId = id;
         openingPath = null;
         publish();
         if (requestReveal) reveal(id);
+        return true;
     }
 
     // Store calls begin synchronously after local locks are installed, before publishing can make the workbench busy.
@@ -202,17 +207,69 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
         return /\.(?:md|markdown|txt|lode)$/i.test(name) ? name : `${name}.md`;
     }
 
-    function install(file: DocumentTextFile) {
+    function install(file: DocumentTextFile, publishChanges = true) {
         if (!openPaths.includes(file.path)) {
             openPaths.push(file.path);
             membershipTokens.set(encodeURIComponent(file.path), {});
         }
         const document = documentFor(file);
-        publish();
+        if (publishChanges) publish();
         return document;
     }
 
+    /** Synchronously copies the mounted editor's latest text into the existing shared buffer. */
+    function flushContentReader(id: string): boolean {
+        const registered = contentReaders.get(id);
+        if (!registered) return true;
+        const document = snapshot.documents.find(item => item.id === id);
+        const file = document && files.getSnapshot().files.find(item => item.path === document.path);
+        if (!document || !file) {
+            localError = "文档已关闭，无法读取最新正文。";
+            return false;
+        }
+        let content: string;
+        try {
+            content = registered.reader(file.content);
+        } catch (cause) {
+            localError = operationError(cause);
+            return false;
+        }
+        if (typeof content !== "string") {
+            localError = "无法读取最新正文：正文读取器未返回文本。";
+            return false;
+        }
+        const latest = files.getSnapshot().files.find(item => item.path === document.path);
+        if (content !== latest?.content && !files.update(document.path, content)) {
+            localError = files.getSnapshot().error ?? "无法更新文档正文缓冲。";
+            return false;
+        }
+        localError = null;
+        return true;
+    }
+
+    function flushOpenContentReaders(): boolean {
+        for (const path of [...openPaths]) {
+            if (!flushContentReader(encodeURIComponent(path))) return false;
+        }
+        return true;
+    }
+
+    function flushBeforeActivation(id: string): boolean {
+        while (activeId && activeId !== id) {
+            const currentId = activeId;
+            if (!flushContentReader(currentId)) {
+                publish();
+                return false;
+            }
+            // Updating the shared buffer may publish a save-state transition and change the
+            // active tab; flush that tab too before switching away from it.
+            if (activeId === currentId) return true;
+        }
+        return true;
+    }
+
     async function saveOpenDocuments() {
+        if (!flushOpenContentReaders()) return false;
         for (const path of [...openPaths]) {
             const id = encodeURIComponent(path);
             if (!files.getSnapshot().files.some(file => file.path === path)) continue;
@@ -257,8 +314,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
             const sequence = ++selection;
             localError = null;
             if (openPaths.includes(path)) {
-                activate(id);
-                return Promise.resolve(true);
+                return Promise.resolve(activate(id));
             }
             return run(() => invokeStore(() => files.open(path)).then(file => {
                 if (!file) {
@@ -267,9 +323,9 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
                     return false;
                 }
                 if (disposed || sequence !== selection) return false;
-                install(file);
-                activate(id);
-                return !disposed;
+                if (!flushBeforeActivation(id)) return false;
+                install(file, false);
+                return !disposed && activate(id, true, true);
             }).catch(cause => {
                 if (!disposed && sequence === selection) {
                     localError = operationError(cause);
@@ -355,6 +411,10 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
                 || !/\.(md|markdown|txt|lode)$/i.test(fileName)) {
                 return Promise.reject(new Error("另存文件名或内容无效。"));
             }
+            if (!flushContentReader(documentId)) {
+                publish();
+                return Promise.reject(new Error(localError ?? "无法读取最新正文。"));
+            }
             const parentPath = source.path.includes("/") ? source.path.slice(0, source.path.lastIndexOf("/")) : "";
             if (!validPath(parentPath, true)) return Promise.reject(new Error("源文档目录无效。"));
             const targetPath = parentPath ? `${parentPath}/${fileName}` : fileName;
@@ -383,9 +443,9 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
         },
         select(id: string) {
             if (blocked() || closing.has(id) || !snapshot.documents.some(document => document.id === id)) return false;
+            if (!flushBeforeActivation(id)) return false;
             selection += 1;
-            activate(id);
-            return true;
+            return activate(id, true, true);
         },
         update(id: string, content: string) {
             if (blocked() || closing.has(id) || typeof content !== "string") return false;
@@ -394,6 +454,17 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
             const updated = files.update(document.path, content);
             if (updated) publish();
             return updated;
+        },
+        registerContentReader(documentId: string, reader: (currentContent: string) => string) {
+            if (disposed || !snapshot.documents.some(document => document.id === documentId)) {
+                throw new Error("只能为已打开的文档注册正文读取器。");
+            }
+            if (typeof reader !== "function") throw new TypeError("正文读取器必须是函数。");
+            const token = Symbol(documentId);
+            contentReaders.set(documentId, {token, reader});
+            return () => {
+                if (contentReaders.get(documentId)?.token === token) contentReaders.delete(documentId);
+            };
         },
         deleteDocument(path: string, options: { discardChanges?: boolean } = {}) {
             if (blocked() || deletingPath !== null || creating) return Promise.resolve(false);
@@ -405,6 +476,10 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
             if (openingPath === path) return Promise.resolve(false);
             const id = encodeURIComponent(path);
             if (closing.has(id) || (options.discardChanges !== undefined && typeof options.discardChanges !== "boolean")) return Promise.resolve(false);
+            if (options.discardChanges !== true && !flushContentReader(id)) {
+                publish();
+                return Promise.resolve(false);
+            }
             const before = [...openPaths];
             return run(() => invokeStore(() => files.delete(path, options)).then(deleted => {
                 if (!deleted) {
@@ -421,6 +496,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
                 if (stillOpen) {
                     openPaths.splice(openPaths.indexOf(path), 1);
                     membershipTokens.delete(id);
+                    contentReaders.delete(id);
                     cached.delete(id);
                 }
                 if (wasActive) {
@@ -453,6 +529,10 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
             if (!document) return Promise.resolve(true);
             const token = membershipTokens.get(id);
             if (!token) return Promise.resolve(false);
+            if (!flushContentReader(id)) {
+                publish();
+                return Promise.resolve(false);
+            }
             let finish!: (value: boolean) => void;
             let fail!: (cause: unknown) => void;
             const promise = new Promise<boolean>((resolve, reject) => {
@@ -471,6 +551,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
                 const index = openPaths.indexOf(document.path);
                 openPaths.splice(index, 1);
                 membershipTokens.delete(id);
+                contentReaders.delete(id);
                 cached.delete(id);
                 if (activeId === id) activeId = openPaths[Math.max(0, index - 1)] ? encodeURIComponent(openPaths[Math.max(0, index - 1)]) : null;
                 publish();
@@ -505,15 +586,21 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
         save(id: string) {
             if (disposed) return Promise.resolve(false);
             const document = snapshot.documents.find(item => item.id === id);
-            if (document && deletingPath !== document.path) return run(() => invokeStore(() => files.save(document.path)).then(saved => {
-                if (!saved && !disposed) {
-                    localError = files.getSnapshot().files.find(file => file.path === document.path)?.saveError ?? files.getSnapshot().error;
-                    if (activeId !== id) activate(id);
+            if (document && deletingPath !== document.path) {
+                if (!flushContentReader(id)) {
+                    publish();
+                    return Promise.resolve(false);
                 }
-                return saved;
-            }), () => {
-                localError = null;
-            });
+                return run(() => invokeStore(() => files.save(document.path)).then(saved => {
+                    if (!saved && !disposed) {
+                        localError = files.getSnapshot().files.find(file => file.path === document.path)?.saveError ?? files.getSnapshot().error;
+                        if (activeId !== id) activate(id);
+                    }
+                    return saved;
+                }), () => {
+                    localError = null;
+                });
+            }
             return Promise.resolve(false);
         },
         saveAll() {
@@ -536,6 +623,10 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
         async beforeLeave() {
             if (disposed) return true;
             if (checkingLeave) return false;
+            if (!flushOpenContentReaders()) {
+                publish();
+                return false;
+            }
             checkingLeave = true;
             publish();
             try {
@@ -554,6 +645,9 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
                 complete = done;
                 fail = reject;
             });
+            const contentFlushed = flushOpenContentReaders();
+            const readerError = localError;
+            contentReaders.clear();
             disposed = true;
             selection += 1;
             snapshot = Object.freeze({
@@ -567,10 +661,14 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
                 operationFailure = cause;
             }).then(async () => {
                 let saved = false;
-                try {
-                    saved = await saveOpenDocuments();
-                } catch (cause) {
-                    operationFailure ??= cause;
+                if (contentFlushed) {
+                    try {
+                        saved = await saveOpenDocuments();
+                    } catch (cause) {
+                        operationFailure ??= cause;
+                    }
+                } else {
+                    operationFailure ??= new Error(readerError ?? "无法读取最新正文。");
                 }
                 unsubscribeFiles();
                 if (operationFailure !== undefined || !saved) {
@@ -583,7 +681,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
                         documents: Object.freeze(recoverable),
                         activeId: recoverable.some(document => document.id === activeId) ? activeId : null,
                         openingPath: null, creating: false, deletingPath: null, blocked: true,
-                        error: files.getSnapshot().error ?? "停止时有文档未能保存，草稿已保留。"
+                        error: files.getSnapshot().error ?? readerError ?? "停止时有文档未能保存，草稿已保留。"
                     });
                     const failure = new Error("Documents could not be saved while stopping the workspace.");
                     Object.defineProperty(failure, "snapshot", {value: snapshot});

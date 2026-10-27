@@ -29,6 +29,26 @@ test("writing status counts extracted plain text and shows a placeholder when ex
   assert.match(hiddenDocument, /100%/);
 });
 
+test("writing status character counting matches the former Unicode and whitespace semantics", () => {
+  const fixture = createMainFixture();
+  const {countDocumentCharacters} = fixture.loadModule("plugins/writing-status/countDocumentCharacters.ts");
+  const whitespace = "\t\n\v\f\r \u00a0\u1680\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a\u2028\u2029\u202f\u205f\u3000\ufeff";
+  const examples = [
+    "",
+    "A\n猫😀",
+    "\ud83d\ude00x\ud83d\udc31",
+    "\ud83d \ude00",
+    "\ud83d\n\ud83d \ude00",
+    "\ud800x\udc00",
+    "\u0085\u200b\u180e",
+    `A${whitespace}猫😀\nZ`,
+  ];
+  for (const value of examples) {
+    assert.equal(countDocumentCharacters(value), Array.from(value.replace(/\s/g, "")).length, JSON.stringify(value));
+  }
+  assert.equal(countDocumentCharacters("猫😀 \n".repeat(50_000)), 100_000);
+});
+
 test("writing status follows the public body main visibility and preserves the percentage display", () => {
   const fixture = createMainFixture();
   const {workbenchKey} = fixture.requireSdk("@lodestory/sdk/workbench");

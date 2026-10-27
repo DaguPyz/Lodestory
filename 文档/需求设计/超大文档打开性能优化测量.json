@@ -1,0 +1,2814 @@
+{
+  "标题": "超大文档打开性能优化测量",
+  "更新日期": "2026-10-26",
+  "状态": "实现、构建及回归完成；保留有效前台测量，拒收后台重测",
+  "基线": {
+    "commit": "8c061b4c6a2f417dc3e2020e1ce2960dea0356c6",
+    "说明": "已用 git rev-parse 核对；对应时间线文件处理优化及缓存提交。"
+  },
+  "测量文档": {
+    "项目内实际文件": "测试项目/小说原文/斗破苍穹（原始文件）.txt",
+    "素材副本": "素材/斗破苍穹.txt",
+    "大小字节": 18776845,
+    "SHA256": "b9d215ca65f35d5cba75c3d27237cdafa748b45d3834afc15babf65315485628",
+    "核验": "两个本地文件大小和 SHA-256 完全一致，与原始测量报告相符；UTF-8 源文件无 BOM，末尾有 LF。"
+  },
+  "native测量程序": {
+    "文件": "src-tauri/target/debug/lodestory-desktop-perf-v5",
+    "大小字节": 29544696,
+    "SHA256": "1249550755d3a5ed470e9a57e3fd3a6bb62f0f99586a6f79d6cbde06859fa460",
+    "核验": "对本地 v5 可执行文件重新计算 SHA-256；整项目中间测量启动脚本 run.mjs 明确使用此路径。"
+  },
+  "测量结果": {
+    "优化前Quill隔离诊断": {
+      "范围": "真实 Tauri WKWebView 中的生产 Quill 纯文本编辑阶段；通过 loopback 加载真实小说，不包含项目存储和原生文件桥接。",
+      "文件字节": 18776845,
+      "JavaScript UTF16字符数": 6832815,
+      "文稿计数字符数": 6049677,
+      "换行数": 198036,
+      "过程": [
+        {
+          "规模": "1000 行，31997 字符",
+          "setTextMs": 22,
+          "paintMs": 65,
+          "DOM节点": 1496
+        },
+        {
+          "规模": "10000 行，315537 字符",
+          "setTextMs": 396,
+          "paintMs": 86,
+          "DOM节点": 14963
+        },
+        {
+          "规模": "198037 行，6832815 个 JavaScript UTF-16 字符",
+          "开始时间相对页面": 1134,
+          "观察结果": "setText 开始后一直没有返回；整个隔离诊断在 45009ms watchdog 后以 SIGTERM 结束。"
+        }
+      ],
+      "结论边界": "观察到的是 watchdog 超时，不是完整 setText 耗时；不能声称大文档恰好耗时 45 秒，也没有大文档完成后的 DOM 数。",
+      "原始报告": [
+        "/private/tmp/lodestory-large-doc-7650c044/analysis.json",
+        "/private/tmp/lodestory-large-doc-7650c044/progress.jsonl",
+        "/private/tmp/lodestory-large-doc-7650c044/run-status.json"
+      ]
+    },
+    "优化后CodeMirror隔离编辑器": {
+      "范围": "真实 Tauri WKWebView 渲染生产 RichTextEditor React 组件和 CodeMirror 大文本 driver；经 loopback 加载完整原文。只测编辑器初始化和状态栏计数，不包含打开项目、项目文件桥接或保存。",
+      "轮次": [
+        {
+          "轮次": 1,
+          "ready后两帧毫秒": 124,
+          "计数字符数": 6049677,
+          "计数毫秒": 40,
+          "CodeMirror行DOM数": 34,
+          "最大前台帧间隔毫秒": 46
+        },
+        {
+          "轮次": 2,
+          "ready后两帧毫秒": 67,
+          "计数字符数": 6049677,
+          "计数毫秒": 34,
+          "CodeMirror行DOM数": 34,
+          "最大前台帧间隔毫秒": 35
+        },
+        {
+          "轮次": 3,
+          "ready后两帧毫秒": 70,
+          "计数字符数": 6049677,
+          "计数毫秒": 37,
+          "CodeMirror行DOM数": 34,
+          "最大前台帧间隔毫秒": 37
+        }
+      ],
+      "校验": {
+        "模型UTF16字符数": 6634779,
+        "LF归一化全文一致": true,
+        "末尾LF保留": true,
+        "初始化触发onChange次数": 0,
+        "原文含BOM": false,
+        "原文BOM状态未变": true
+      },
+      "原始报告": "/private/tmp/lodestory-codemirror-editor-bench/report.json"
+    },
+    "整应用中间测量": {
+      "范围": "生产 React 应用、真实 Tauri 原生项目存储和 18.8 MB 原文；测量首次打开，不编辑项目。",
+      "状态": "中间结果，documents 插件仍在实现分块解码，不能作为最终耗时。",
+      "打开项目毫秒": 786,
+      "点击文档到标签页可见毫秒": 11209,
+      "点击文档到编辑器可用毫秒": 11492,
+      "可用时模型UTF16字符数": 6634779,
+      "模型行数": 198037,
+      "可见行数": 34,
+      "编辑器DOM节点": 55,
+      "最大前台帧间隔毫秒": 1610,
+      "大于50毫秒的帧间隔数": 18,
+      "原生存储操作": {
+        "read次数": 80,
+        "read累计毫秒": 58.87871,
+        "read最大毫秒": 12.9605,
+        "list_directory次数": 54,
+        "list_directory累计毫秒": 26.17621,
+        "open_project毫秒": 6.61125
+      },
+      "说明": "这组数据尚未包含 documents 分块解码；大部分等待发生在标签出现之前，标签出现到编辑器可用约283ms。",
+      "原始报告": [
+        "/private/tmp/lodestory-large-doc-app-hmwz05rt/report.json",
+        "/private/tmp/lodestory-large-doc-app-hmwz05rt/progress.jsonl",
+        "/private/tmp/lodestory-large-doc-app-hmwz05rt/run-status.json"
+      ],
+      "启动脚本": "/private/tmp/lodestory-large-doc-app-hmwz05rt/run.mjs"
+    },
+    "文件读取后字节复制和UTF8解码微测": {
+      "范围": "真实 ProjectFiles.read 一次后，在 WKWebView 中比较字节复制和 TextDecoder 解码；不是整项目或文档打开耗时。",
+      "项目文件": "小说原文/斗破苍穹（原始文件）.txt",
+      "项目文件字节": 18776845,
+      "ProjectFiles读取及归一化毫秒": 9300,
+      "Uint8Array复制毫秒": {
+        "from": 1409,
+        "for循环": 873,
+        "set": 821
+      },
+      "TextDecoder解码毫秒": {
+        "from副本": 33,
+        "for循环副本": 33,
+        "set副本": 31
+      },
+      "一致性": {
+        "字节副本相同": true,
+        "解码文本相同": true,
+        "文稿计数字符数": 6049677,
+        "UTF16字符数": 6832815,
+        "原文含BOM": false
+      },
+      "原始报告": "/private/tmp/lodestory-wk-byte-copy-bench/report.json"
+    },
+    "分块解码后的有效整应用样本": {
+      "范围": "生产前端，真实macOS Tauri/WKWebView/原生文件系统，点击完整原文到可输入；已含分批UTF8解码，单次全新进程样本，未清空OS文件缓存，应用启动不在计时内。",
+      "点击到可输入毫秒": 11413,
+      "点击到标签显示毫秒": 11300,
+      "标签到可输入毫秒": 113,
+      "最长前台帧间隔毫秒": 902,
+      "模型行数": 198037,
+      "模型字符数": 6634779,
+      "可见行DOM数": 34,
+      "模型UTF8SHA256": "dc96c16f4779b720b602853231aa5a14e4b241336f82a2fb6e556b6c48046d58",
+      "全文与LF规范化原文摘要一致": true,
+      "文稿计数字符数": 6049677,
+      "界面异常": [],
+      "可见且聚焦": true,
+      "边界": "首次读入仍约11.4秒；剩余工作主要在大字节缓冲读取及不可变规范化，仍测得902ms帧间隔，不承诺整份文件瞬时加载或所有编辑操作无停顿。",
+      "构建边界": "有效样本完成于增加过期任务提前停止检查之前；该检查的最终构建和版本/删除/停用回归通过，之后的前台重测因窗口后台化被拒收。"
+    }
+  },
+  "不能直接比较的范围": [
+    "Quill 隔离诊断测的是超大 setText 且未在 watchdog 前返回；CodeMirror 隔离测的是另一编辑器实现已 ready 的时间。",
+    "CodeMirror 隔离的 67–124ms 不包含项目打开、原生读取、字节跨桥传递或 documents 解码，不能当成整篇项目打开的耗时。",
+    "整应用中间测量11.492秒、最终分批解码后11.413秒均是完整文档点击到可输入，和隔离编辑器67–124ms范围不同；两次整应用均为单次样本，不据此声称整体耗时统计性下降。",
+    "微测的复制与解码耗时不覆盖完整打开链路，不能简单与编辑器初始化或整应用数据相加来推断最终耗时。"
+  ],
+  "待补": {},
+  "原始记录": {
+    "Quill隔离超时诊断": {
+      "scope": "Isolated Tauri WKWebView editor-stage diagnostic, same Quill 2.0.3 plain-text options and complete real source text via loopback; excludes project storage and file bridge.",
+      "projectReadOnly": true,
+      "timedOut": {
+        "code": null,
+        "signal": "SIGTERM",
+        "timedOut": true,
+        "elapsedMs": 45009,
+        "root": "/private/tmp/lodestory-large-doc-7650c044"
+      },
+      "steps": [
+        {
+          "atMs": 431,
+          "details": {
+            "count": 6049677,
+            "ms": 188
+          },
+          "hasFocus": true,
+          "phase": "count-complete",
+          "visibilityState": "visible"
+        },
+        {
+          "atMs": 450,
+          "details": {
+            "characters": 31997,
+            "constructMs": 10,
+            "lineCount": 1000
+          },
+          "hasFocus": true,
+          "phase": "setText-start",
+          "visibilityState": "visible"
+        },
+        {
+          "atMs": 487,
+          "details": {
+            "domNodes": 1496,
+            "lineCount": 1000,
+            "paragraphs": 1000,
+            "setTextMs": 22
+          },
+          "hasFocus": true,
+          "phase": "setText-returned",
+          "visibilityState": "visible"
+        },
+        {
+          "atMs": 570,
+          "details": {
+            "characters": 31997,
+            "constructMs": 10,
+            "getTextMs": 0,
+            "lineCount": 1000,
+            "outputCharacters": 30998,
+            "paintMs": 65,
+            "paragraphs": 1000,
+            "setTextMs": 22
+          },
+          "hasFocus": true,
+          "phase": "sample-complete",
+          "visibilityState": "visible"
+        },
+        {
+          "atMs": 605,
+          "details": {
+            "characters": 315537,
+            "constructMs": 2,
+            "lineCount": 10000
+          },
+          "hasFocus": true,
+          "phase": "setText-start",
+          "visibilityState": "visible"
+        },
+        {
+          "atMs": 1003,
+          "details": {
+            "domNodes": 14963,
+            "lineCount": 10000,
+            "paragraphs": 10000,
+            "setTextMs": 396
+          },
+          "hasFocus": true,
+          "phase": "setText-returned",
+          "visibilityState": "visible"
+        },
+        {
+          "atMs": 1091,
+          "details": {
+            "characters": 315537,
+            "constructMs": 2,
+            "getTextMs": 0,
+            "lineCount": 10000,
+            "outputCharacters": 305538,
+            "paintMs": 86,
+            "paragraphs": 10000,
+            "setTextMs": 396
+          },
+          "hasFocus": true,
+          "phase": "sample-complete",
+          "visibilityState": "visible"
+        },
+        {
+          "atMs": 1134,
+          "details": {
+            "characters": 6832815,
+            "constructMs": 1,
+            "lineCount": 198037
+          },
+          "hasFocus": true,
+          "phase": "setText-start",
+          "visibilityState": "visible"
+        }
+      ],
+      "finding": "Full-text setText began at page time 1134 ms and never returned before the entire isolated diagnostic was stopped at 45 seconds; no claim of an exact completed duration or full-text DOM count.",
+      "source": {
+        "bytes": 18776845,
+        "javascriptCharacters": 6832815,
+        "lineBreaks": 198036,
+        "displayedCharacterCount": 6049677,
+        "sha256": "b9d215ca65f35d5cba75c3d27237cdafa748b45d3834afc15babf65315485628"
+      }
+    },
+    "CodeMirror隔离初始化三轮": {
+      "frontend": {
+        "diagnosticOnly": true,
+        "renderer": "@codemirror/view EditorView.findFromDOM",
+        "reportSent": true,
+        "rounds": 3,
+        "samples": [
+          {
+            "bomPreserved": true,
+            "codeMirrorLineDomCount": 34,
+            "count": 6049677,
+            "countMs": 40,
+            "initializationOnChangeCount": 0,
+            "maxForegroundFrameGapMs": 46,
+            "modelCharacters": 6634779,
+            "normalizedFullContentMatches": true,
+            "renderToReadyPlusTwoFramesMs": 124,
+            "round": 1,
+            "terminalLfPreserved": true
+          },
+          {
+            "bomPreserved": true,
+            "codeMirrorLineDomCount": 34,
+            "count": 6049677,
+            "countMs": 34,
+            "initializationOnChangeCount": 0,
+            "maxForegroundFrameGapMs": 35,
+            "modelCharacters": 6634779,
+            "normalizedFullContentMatches": true,
+            "renderToReadyPlusTwoFramesMs": 67,
+            "round": 2,
+            "terminalLfPreserved": true
+          },
+          {
+            "bomPreserved": true,
+            "codeMirrorLineDomCount": 34,
+            "count": 6049677,
+            "countMs": 37,
+            "initializationOnChangeCount": 0,
+            "maxForegroundFrameGapMs": 37,
+            "modelCharacters": 6634779,
+            "normalizedFullContentMatches": true,
+            "renderToReadyPlusTwoFramesMs": 70,
+            "round": 3,
+            "terminalLfPreserved": true
+          }
+        ],
+        "scope": "Isolated real Tauri WKWebView rendering the production RichTextEditor React component with the CodeMirror large plain-text driver; real novel loaded via loopback /novel.txt. Measures editor initialization and status-bar count only, excludes native project opening, project storage, file bridge, and save latency.",
+        "source": {
+          "bytes": 18776845,
+          "characters": 6832815,
+          "endsWithLf": true,
+          "normalizedCharacters": 6634779,
+          "startsWithBom": false
+        },
+        "status": "success"
+      },
+      "nativeActions": {},
+      "nativeCommands": []
+    },
+    "整应用中间测量": {
+      "frontend": {
+        "events": [
+          {
+            "atMs": 1017,
+            "hasFocus": true,
+            "phase": "project-ready",
+            "projectOpenMs": 786,
+            "visibilityState": "visible"
+          },
+          {
+            "atMs": 1061,
+            "hasFocus": true,
+            "phase": "document-click",
+            "visibilityState": "visible"
+          },
+          {
+            "atMs": 12270,
+            "elapsedMs": 11209,
+            "hasFocus": true,
+            "phase": "document-tab-visible",
+            "visibilityState": "visible"
+          },
+          {
+            "atMs": 12557,
+            "characterStatus": "文稿 6,049,677 字100%",
+            "editorDomNodes": 55,
+            "errors": [],
+            "frameGapsOver50": [
+              361,
+              81,
+              51,
+              57,
+              107,
+              96,
+              257,
+              206,
+              190,
+              91,
+              111,
+              54,
+              104,
+              738,
+              88,
+              1610,
+              229,
+              53
+            ],
+            "frameMaxMs": 1610,
+            "hasFocus": true,
+            "loadedTabMs": 11209,
+            "modelCharacters": 6634779,
+            "modelLines": 198037,
+            "openToEditableMs": 11492,
+            "phase": "document-ready",
+            "visibilityState": "visible",
+            "visibleLines": 34
+          }
+        ],
+        "gaps": [
+          12,
+          11,
+          13,
+          23,
+          10,
+          21,
+          15,
+          15,
+          18,
+          19,
+          13,
+          19,
+          15,
+          17,
+          20,
+          16,
+          15,
+          19,
+          11,
+          27,
+          13,
+          12,
+          18,
+          14,
+          19,
+          20,
+          8,
+          29,
+          7,
+          40,
+          11,
+          6,
+          16,
+          16,
+          17,
+          9,
+          28,
+          4,
+          16,
+          16,
+          18,
+          15,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          361,
+          81,
+          8,
+          17,
+          16,
+          18,
+          16,
+          17,
+          16,
+          26,
+          10,
+          14,
+          17,
+          17,
+          16,
+          16,
+          18,
+          16,
+          30,
+          4,
+          39,
+          1,
+          29,
+          18,
+          13,
+          16,
+          17,
+          20,
+          13,
+          17,
+          17,
+          22,
+          11,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          24,
+          51,
+          8,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          57,
+          2,
+          8,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          107,
+          1,
+          8,
+          18,
+          16,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          18,
+          16,
+          17,
+          16,
+          17,
+          17,
+          96,
+          2,
+          2,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          16,
+          18,
+          16,
+          257,
+          3,
+          6,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          206,
+          11,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          16,
+          190,
+          1,
+          17,
+          16,
+          16,
+          15,
+          15,
+          15,
+          91,
+          11,
+          1,
+          16,
+          16,
+          46,
+          15,
+          1,
+          43,
+          9,
+          1,
+          16,
+          16,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          111,
+          1,
+          21,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          25,
+          8,
+          17,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          25,
+          9,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          16,
+          18,
+          54,
+          2,
+          10,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          15,
+          19,
+          16,
+          17,
+          16,
+          104,
+          1,
+          12,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          16,
+          18,
+          16,
+          17,
+          738,
+          5,
+          8,
+          16,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          26,
+          16,
+          88,
+          10,
+          2,
+          15,
+          16,
+          50,
+          1,
+          16,
+          45,
+          1,
+          14,
+          17,
+          16,
+          17,
+          17,
+          16,
+          26,
+          8,
+          16,
+          17,
+          16,
+          16,
+          18,
+          17,
+          36,
+          1,
+          13,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          29,
+          21,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          1610,
+          229,
+          53,
+          17,
+          20
+        ],
+        "info": {
+          "characterStatus": "文稿 6,049,677 字100%",
+          "editorDomNodes": 55,
+          "errors": [],
+          "frameGapsOver50": [
+            361,
+            81,
+            51,
+            57,
+            107,
+            96,
+            257,
+            206,
+            190,
+            91,
+            111,
+            54,
+            104,
+            738,
+            88,
+            1610,
+            229,
+            53
+          ],
+          "frameMaxMs": 1610,
+          "hasFocus": true,
+          "loadedTabMs": 11209,
+          "modelCharacters": 6634779,
+          "modelLines": 198037,
+          "openToEditableMs": 11492,
+          "tailVisible": [
+            "",
+            "",
+            ""
+          ],
+          "visibilityState": "visible",
+          "visibleLines": 34,
+          "visibleLinesAfterScroll": 53
+        },
+        "scope": "Production React app, real native storage and actual 18.8MB novel; initial open only, no project edits.",
+        "status": "success"
+      },
+      "nativeActions": {
+        "documents.list": {
+          "count": 1,
+          "maxMs": 0.344959,
+          "meanMs": 0.344959,
+          "totalMs": 0.344959
+        },
+        "store.list_directory": {
+          "count": 54,
+          "maxMs": 1.4051669999999998,
+          "meanMs": 0.48474462962962944,
+          "totalMs": 26.17620999999999
+        },
+        "store.read": {
+          "count": 80,
+          "maxMs": 12.9605,
+          "meanMs": 0.7359838750000002,
+          "totalMs": 58.87871000000001
+        }
+      },
+      "nativeCommands": [
+        {
+          "command": "list_recent_projects",
+          "durationMs": 0.509
+        },
+        {
+          "command": "open_project",
+          "durationMs": 6.61125
+        },
+        {
+          "command": "list_documents",
+          "durationMs": 0.37866700000000003
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.299709
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.6863750000000001
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.398167
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.43
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.23766600000000002
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.298541
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.49083299999999996
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.231125
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.323875
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.468875
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.5427080000000001
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.86225
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.31725
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.44475
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.474208
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.6186670000000001
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.811459
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.389
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.6351669999999999
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.404583
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.7162499999999999
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.727833
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.28687500000000005
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.236125
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.290083
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.5711660000000001
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.746958
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.476708
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.43033299999999997
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.47308300000000003
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.716417
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.542334
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.534625
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.5992919999999999
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.755417
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.010958
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.42975
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.721
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.316125
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.413416
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.9626250000000001
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.360875
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.448875
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.689125
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.655541
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.6604169999999999
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.879167
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.395125
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.343625
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 1.545833
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 1.708833
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 2.878916
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.369375
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.502542
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.234708
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.359167
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.447667
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.547167
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.6393329999999999
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.785625
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.99925
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.258292
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.7739999999999999
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.772667
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.923584
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 1.1669580000000002
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.343625
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.30091599999999996
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.576708
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.53825
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.605417
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.888208
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.43679199999999996
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.692333
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.5735830000000001
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.65225
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.776041
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.667541
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.6054590000000001
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.6705
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.842334
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.9350409999999999
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.444083
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.631625
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.519084
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.570708
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.607917
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.434292
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.391833
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.442625
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.6213329999999999
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.70475
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.35070799999999996
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.459708
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.32225
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.23025
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.318625
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.437708
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.625333
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.626625
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.623208
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.746125
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.320375
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.291792
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.44145799999999996
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.6042919999999999
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.7435
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.360709
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.204458
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.6975
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.521208
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.48012499999999997
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.349208
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.424416
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.494834
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.5836250000000001
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.6922919999999999
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.343875
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.3955
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.284625
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.417459
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.406833
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.34683400000000003
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.681333
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.550667
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.549708
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.6945
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.344333
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.509292
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.302459
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.340708
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.428292
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.5477080000000001
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 13.042625000000001
+        }
+      ]
+    },
+    "字节转换微测": {
+      "frontend": {
+        "correctness": {
+          "bomPreserved": false,
+          "byteCopiesEqual": true,
+          "decodedTextsEqual": true,
+          "documentCharacterCountForLoop": 6049677,
+          "documentCharacterCountFrom": 6049677,
+          "documentCharacterCountSetCopy": 6049677,
+          "firstDifference": -1,
+          "utf16LengthForLoop": 6832815,
+          "utf16LengthFrom": 6832815
+        },
+        "diagnosticOnly": true,
+        "measurement": "WKWebView byte-copy and UTF-8 decode microbenchmark after one real ProjectFiles.read",
+        "projectFileRead": {
+          "byteLength": 18776845,
+          "fileName": "斗破苍穹（原始文件）.txt",
+          "immutableIndexDescriptor": {
+            "configurable": false,
+            "enumerable": true,
+            "value": 13,
+            "writable": false
+          },
+          "nativeReadAndProjectFilesNormalizeMs": 9300,
+          "ordinaryArray": true,
+          "path": "小说原文/斗破苍穹（原始文件）.txt"
+        },
+        "projectWriteCommandsAttempted": 0,
+        "scope": "Byte conversion and TextDecoder timing only; this is not a full project/document open measurement.",
+        "status": "success",
+        "timingsMs": {
+          "textDecoderDecodeForLoopCopy": 33,
+          "textDecoderDecodeFromCopy": 33,
+          "textDecoderDecodeSetCopy": 31,
+          "uint8ArrayForLoop": 873,
+          "uint8ArrayFrom": 1409,
+          "uint8ArraySet": 821
+        }
+      },
+      "nativeActions": {
+        "store.read": {
+          "count": 1,
+          "maxMs": 6.129708,
+          "meanMs": 6.129708,
+          "totalMs": 6.129708
+        }
+      },
+      "nativeCommands": [
+        {
+          "command": "read_project_file",
+          "durationMs": 6.26575
+        }
+      ]
+    },
+    "最终整应用测量": {
+      "frontend": {
+        "events": [
+          {
+            "atMs": 994,
+            "hasFocus": true,
+            "phase": "project-ready",
+            "projectOpenMs": 780,
+            "visibilityState": "visible"
+          },
+          {
+            "atMs": 1027,
+            "hasFocus": true,
+            "phase": "document-click",
+            "visibilityState": "visible"
+          },
+          {
+            "atMs": 12326,
+            "elapsedMs": 11300,
+            "hasFocus": true,
+            "phase": "document-tab-visible",
+            "visibilityState": "visible"
+          },
+          {
+            "atMs": 12474,
+            "characterStatus": "文稿 6,049,677 字100%",
+            "editorDomNodes": 55,
+            "errors": [],
+            "frameGapsOver50": [
+              440,
+              59,
+              97,
+              93,
+              59,
+              95,
+              228,
+              107,
+              213,
+              902,
+              179,
+              197,
+              95,
+              53,
+              63,
+              56
+            ],
+            "frameMaxMs": 902,
+            "hasFocus": true,
+            "loadedTabMs": 11300,
+            "modelCharacters": 6634779,
+            "modelLines": 198037,
+            "modelUtf8Sha256": "dc96c16f4779b720b602853231aa5a14e4b241336f82a2fb6e556b6c48046d58",
+            "openToEditableMs": 11413,
+            "phase": "document-ready",
+            "visibilityState": "visible",
+            "visibleLines": 34
+          }
+        ],
+        "gaps": [
+          11,
+          17,
+          21,
+          13,
+          19,
+          16,
+          14,
+          18,
+          17,
+          19,
+          15,
+          16,
+          19,
+          16,
+          16,
+          17,
+          16,
+          19,
+          19,
+          18,
+          10,
+          15,
+          16,
+          17,
+          20,
+          20,
+          11,
+          18,
+          26,
+          15,
+          14,
+          10,
+          24,
+          11,
+          25,
+          13,
+          9,
+          14,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          440,
+          10,
+          17,
+          16,
+          17,
+          16,
+          18,
+          16,
+          23,
+          11,
+          16,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          26,
+          27,
+          1,
+          13,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          59,
+          1,
+          35,
+          5,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          18,
+          16,
+          17,
+          97,
+          3,
+          1,
+          93,
+          1,
+          4,
+          17,
+          17,
+          17,
+          16,
+          27,
+          7,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          59,
+          3,
+          15,
+          15,
+          15,
+          16,
+          16,
+          15,
+          26,
+          16,
+          15,
+          95,
+          1,
+          15,
+          16,
+          47,
+          15,
+          1,
+          27,
+          18,
+          12,
+          9,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          32,
+          1,
+          17,
+          17,
+          16,
+          228,
+          6,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          47,
+          2,
+          2,
+          16,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          17,
+          15,
+          18,
+          17,
+          16,
+          17,
+          17,
+          15,
+          18,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          107,
+          2,
+          8,
+          17,
+          15,
+          18,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          19,
+          14,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          16,
+          18,
+          16,
+          16,
+          18,
+          16,
+          213,
+          1,
+          3,
+          17,
+          16,
+          16,
+          17,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          16,
+          17,
+          17,
+          17,
+          16,
+          17,
+          17,
+          902,
+          5,
+          12,
+          15,
+          16,
+          16,
+          17,
+          17,
+          17,
+          17,
+          17,
+          27,
+          15,
+          16,
+          17,
+          16,
+          179,
+          4,
+          15,
+          15,
+          15,
+          16,
+          17,
+          16,
+          197,
+          1,
+          1,
+          95,
+          26,
+          1,
+          16,
+          53,
+          16,
+          47,
+          14,
+          1,
+          14,
+          15,
+          17,
+          17,
+          16,
+          16,
+          25,
+          9,
+          17,
+          17,
+          16,
+          17,
+          17,
+          16,
+          33,
+          1,
+          16,
+          16,
+          17,
+          17,
+          17,
+          17,
+          16,
+          17,
+          16,
+          17,
+          17,
+          16,
+          21,
+          14,
+          18,
+          18,
+          14,
+          18,
+          18,
+          14,
+          18,
+          14,
+          18,
+          19,
+          14,
+          19,
+          15,
+          19,
+          15,
+          18,
+          14,
+          19,
+          14,
+          19,
+          18,
+          14,
+          19,
+          14,
+          19,
+          14,
+          19,
+          14,
+          19,
+          14,
+          19,
+          14,
+          19,
+          15,
+          19,
+          14,
+          19,
+          14,
+          19,
+          15,
+          19,
+          14,
+          19,
+          15,
+          19,
+          15,
+          19,
+          15,
+          19,
+          15,
+          14,
+          20,
+          15,
+          19,
+          15,
+          15,
+          20,
+          14,
+          15,
+          20,
+          15,
+          20,
+          14,
+          15,
+          20,
+          15,
+          15,
+          20,
+          15,
+          15,
+          20,
+          16,
+          15,
+          20,
+          15,
+          16,
+          15,
+          21,
+          15,
+          15,
+          16,
+          63,
+          32,
+          56,
+          24
+        ],
+        "info": {
+          "characterStatus": "文稿 6,049,677 字100%",
+          "editorDomNodes": 55,
+          "errors": [],
+          "frameGapsOver50": [
+            440,
+            59,
+            97,
+            93,
+            59,
+            95,
+            228,
+            107,
+            213,
+            902,
+            179,
+            197,
+            95,
+            53,
+            63,
+            56
+          ],
+          "frameMaxMs": 902,
+          "hasFocus": true,
+          "loadedTabMs": 11300,
+          "modelCharacters": 6634779,
+          "modelLines": 198037,
+          "modelUtf8Sha256": "dc96c16f4779b720b602853231aa5a14e4b241336f82a2fb6e556b6c48046d58",
+          "openToEditableMs": 11413,
+          "tailVisible": [
+            "",
+            "",
+            ""
+          ],
+          "visibilityState": "visible",
+          "visibleLines": 34,
+          "visibleLinesAfterScroll": 53
+        },
+        "scope": "Production React app, real native storage and actual 18.8MB novel; initial open only, no project edits.",
+        "status": "success"
+      },
+      "nativeActions": {
+        "documents.list": {
+          "count": 1,
+          "maxMs": 0.5135,
+          "meanMs": 0.5135,
+          "totalMs": 0.5135
+        },
+        "store.list_directory": {
+          "count": 54,
+          "maxMs": 1.340916,
+          "meanMs": 0.5360424999999999,
+          "totalMs": 28.946294999999996
+        },
+        "store.read": {
+          "count": 80,
+          "maxMs": 5.865958,
+          "meanMs": 0.6795640749999999,
+          "totalMs": 54.365126
+        }
+      },
+      "nativeCommands": [
+        {
+          "command": "list_recent_projects",
+          "durationMs": 0.601292
+        },
+        {
+          "command": "open_project",
+          "durationMs": 6.625208
+        },
+        {
+          "command": "list_documents",
+          "durationMs": 0.5533750000000001
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.171584
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.657459
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.679042
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.220958
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.385167
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.438458
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.7074590000000001
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.2985
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.555417
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.6105830000000001
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.6651250000000001
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.305708
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.37720800000000004
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.49770900000000007
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.24545799999999998
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.278125
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.331
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.36824999999999997
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.280042
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.311209
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.390292
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.871
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.343792
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.608875
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.4275
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.526958
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.72375
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.314541
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.600458
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.441625
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.512209
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.485125
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.606833
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.593959
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.8490000000000001
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.154291
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.469791
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.965542
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.864875
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.503291
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.332458
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.5714589999999999
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.61325
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.965125
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.860208
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 1.061125
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.190167
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.469167
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.606083
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.738458
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.7779170000000001
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.942542
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.42054199999999997
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.559833
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.633
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.6966249999999999
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.898792
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.539042
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.917375
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 1.052666
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 1.053458
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.367208
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.5436660000000001
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.591542
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.576791
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.685083
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.8646250000000001
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.548834
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.63075
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.60825
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.6442089999999999
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.806625
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.650333
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.863292
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.8488330000000001
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 1.069541
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.159083
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.43204099999999995
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.702542
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.6398750000000001
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.853917
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.1135
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.653417
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.08175
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 1.3125
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 1.455958
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.653041
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.405917
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.601542
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.6655829999999999
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.733541
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.802042
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.462084
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.534291
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.313417
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.338625
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.332292
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.481125
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.394375
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.257625
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.651875
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 1.052166
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.244042
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.317541
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.331584
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.41354199999999997
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.402584
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.361958
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.5465
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.53925
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.563041
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.644541
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.334125
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.43425
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.219459
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.30729100000000004
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.488042
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.453834
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.549541
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.531209
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.48424999999999996
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.66025
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.330583
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.49466600000000005
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.388125
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.509167
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.731625
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.71425
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.532
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 1.435375
+        },
+        {
+          "command": "list_project_directory",
+          "durationMs": 0.929208
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.44133300000000003
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 0.6104580000000001
+        },
+        {
+          "command": "read_project_file",
+          "durationMs": 5.962042
+        }
+      ]
+    },
+    "被拒收的最终后台重测": {
+      "status": {
+        "code": null,
+        "signal": "SIGTERM",
+        "timedOut": true,
+        "elapsedMs": 115021,
+        "root": "/private/tmp/lodestory-large-doc-app-release-check"
+      },
+      "progress": [
+        {
+          "atMs": 1078,
+          "hasFocus": true,
+          "phase": "document-click",
+          "visibilityState": "visible"
+        },
+        {
+          "atMs": 49645,
+          "elapsedMs": 48568,
+          "hasFocus": false,
+          "phase": "document-tab-visible",
+          "visibilityState": "hidden"
+        }
+      ],
+      "includedInPerformanceResults": false,
+      "reason": "窗口在加载中变为hidden且失焦；rAF等待未完成，watchdog关闭。不能把后台调度时间计入前台打开耗时。"
+    }
+  },
+  "最终源码SHA256": {
+    "src/plugins/rich-text-editor/RichTextEditor.tsx": "452bbd1b23f21227f2e4e56901e14222901f07e04da514c61d5ed57087b53fa6",
+    "src/plugins/rich-text-editor/largePlainTextDriver.ts": "904b28ed79509141bc8691c46181c376486602ccd0d84949e16c931be98b375f",
+    "src/plugins/rich-text-editor/virtualPlainText.ts": "f24d40d330b920e1bd0393bee2f42b870d6ab0e2eec6e56b2bcc78483345fb12",
+    "src/plugins/rich-text-editor/createRichTextEditorSession.ts": "68ffb421324b2999096705bb74e424f3f1d5ca17f061ceb09c5d6a09cfe30167",
+    "src/plugins/documents/documentFiles.ts": "507d60a14c6485a5922a6ef231588bea4dd0611ee0d653688fe1fae019e42231",
+    "src/plugins/documents/decodeDocumentBytes.ts": "44179ca6c9dfe90210cf0304865ad697b9c9ad89d65a9a8d89e39b29c0fc68cf",
+    "src/plugins/writing-status/EditorStatusBar.tsx": "443620385d2506e6a2d6a0764a7b75872f045280f8ebcbe649c66dba05f1882c",
+    "src/plugins/writing-status/countDocumentCharacters.ts": "9f82134137f26812eb822be8d1398d6b0cb3004584433623c8a7311ec36f13d5",
+    "src/plugins/rich-text-editor/rich-text-editor.css": "e370769997c5601bc4bd88c33b210a10675425bd69792d08e6f85a218801918a",
+    "package.json": "ea49743b3822c2b24725a61c86cbcc8f2b5be670874a6b3417a2c2e454b9bc20",
+    "pnpm-lock.yaml": "31eba7823d4f2167a3f70033f9ae22a8b10553e1a1757e6fc0e66397ae5acbf9"
+  },
+  "最终构建": {
+    "sha256": "a936db762f0b14a187254281ec0cf19fa5d744226e0ddfb518e051ae5c1b6653",
+    "files": 188,
+    "哈希方法": "按POSIX相对路径排序，对路径、NUL、内容、NUL顺序计算。",
+    "兼容性补充": "有效前台样本之后补充了过期任务提前停止、普通换行/字面Tab/逐字符退格兼容；这些路径均通过最终模型、浏览器和构建验证，未用后台重测替代前台性能样本。"
+  },
+  "写入保护": {
+    "项目成功写入次数": 0,
+    "native拒绝写入": true,
+    "说明": "原生命令为只读探针；真实浏览器验证编辑行为，持久化及保存失败恢复另用现有共享存储模拟文件系统回归，未声称在原项目执行编辑写入。"
+  },
+  "验证": {
+    "build": "passed",
+    "diffCheck": "passed",
+    "focusedModelsPassed": 44,
+    "largeEditorBrowserChecksPassed": 9,
+    "fullSuite": {
+      "tests": 623,
+      "passed": 603,
+      "failed": 15,
+      "skipped": 5
+    },
+    "newFailures": 0,
+    "baselineFailureFixed": "编辑器异步创建期间收到的新内容现在正确应用；原有16项失败减少到15项，其余名称和位置一致。",
+    "skipReason": "环境缺少Playwright的5项既有检查；大文本Chrome/CDP测试实际运行并通过。",
+    "persistence": "至少1MiB带BOM/CRLF文本：初始不改写字节，编辑完整内容、保存失败保留草稿、离开拦截、重试、释放并重新打开后一致。",
+    "limits": "真实桌面探针禁止项目写入；保存和失败恢复通过共享存储测试文件系统验证，不声称修改了原小说文件。",
+    "plainTextKeyboardCompatibility": "保持原纯文本 Enter 不自动缩进、Tab 插入字面制表符、Shift-Tab 删除前一个制表符、Backspace 逐字符删除，真实Chrome通过。"
+  },
+  "有效整应用样本构建JS及CSS等资源": {
+    "sha256": "56490ee2ae069ddc1c9dc83bf0743a893d703b44f9939d7204fcda8b1660aaab",
+    "files": 187,
+    "说明": "排除为测量而注入脚本的index.html，保留有效前台样本实际使用的资源摘要；与最终过期任务清理版本区分。"
+  }
+}

@@ -124,14 +124,13 @@ async function assertButtonPaint(locator, variant, flags, colors, message) {
   assert.equal(actual.foreground, expected.foreground, `${message}: foreground (${expected.paintName})`);
   assert.equal(actual.background, expected.background, `${message}: background (${expected.paintName})`);
 
-  if (expected.indicator && variant !== 'icon') {
-    assert.notEqual(actual.indicatorContent, 'none', `${message}: selected indicator exists`);
-    assert.equal(actual.indicatorOpacity, '1', `${message}: selection marker is visible`);
-    assert.equal(actual.indicator, expected.indicator, `${message}: selected indicator follows the state foreground`);
-    assert.equal(actual.indicatorBorder, '0px', `${message}: selection is not a colored border`);
-    if (!flags.mixed) assert.match(actual.indicatorShape, /^polygon\(/, `${message}: selection uses a check`);
+  if (flags.mixed && variant !== 'icon') {
+    assert.notEqual(actual.indicatorContent, 'none', `${message}: mixed marker exists`);
+    assert.equal(actual.indicatorOpacity, '1', `${message}: mixed marker is visible`);
+    assert.equal(actual.indicator, expected.indicator, `${message}: mixed marker follows the state foreground`);
+    assert.equal(actual.indicatorBorder, '0px', `${message}: mixed state uses no colored border`);
   } else {
-    assert.ok(actual.indicatorContent === 'none' || actual.indicatorOpacity === '0', `${message}: unselected marker is hidden`);
+    assert.ok(actual.indicatorContent === 'none' || actual.indicatorOpacity === '0', `${message}: selected state has no check marker`);
   }
   if (expected.disabledBorder) {
     assert.equal(actual.border, expected.disabledBorder, `${message}: disabled border`);
@@ -294,12 +293,21 @@ async function assertSelectionGeometry(page) {
       const text = [...element.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
       const range = document.createRange();
       range.selectNodeContents(text);
-      return {width: box.width, height: box.height, textStart: range.getBoundingClientRect().x - box.x};
+      const marker = getComputedStyle(element, '::after');
+      return {width: box.width, height: box.height, textStart: range.getBoundingClientRect().x - box.x,
+        markerContent: marker.content, markerOpacity: marker.opacity, markerHeight: marker.height};
     }, state));
   }
   await toggle.evaluate(element => element.setAttribute('aria-pressed', 'true'));
   assert.deepEqual(geometry[1], geometry[0], 'selecting a text option does not move its label or resize it');
-  assert.deepEqual(geometry[2], geometry[0], 'mixed selection keeps the same label position and size');
+  assert.deepEqual(
+    (({width, height, textStart}) => ({width, height, textStart}))(geometry[2]),
+    (({width, height, textStart}) => ({width, height, textStart}))(geometry[0]),
+    'mixed selection keeps the same label position and size',
+  );
+  assert.ok(geometry[1].markerContent === 'none' || geometry[1].markerOpacity === '0',
+    'selected text buttons do not show a check');
+  assert.equal(geometry[2].markerHeight, '2px', 'mixed text buttons retain their dash');
 }
 
 async function assertSearchFieldStates(page, colors) {
@@ -582,10 +590,12 @@ test('UI components follow registry state paints across themes in a real browser
     const highContrastStyle = await selectedForHighContrast.evaluate(element => ({
       border: getComputedStyle(element).borderTopColor,
       foreground: getComputedStyle(element).color,
-      indicator: getComputedStyle(element, '::after').backgroundColor,
+      indicatorOpacity: getComputedStyle(element, '::after').opacity,
+      indicatorContent: getComputedStyle(element, '::after').content,
     }));
     assert.equal(highContrastStyle.border, forcedColors.buttonText, 'forced-colors preserves a visible control border');
-    assert.equal(highContrastStyle.indicator, highContrastStyle.foreground, 'forced-colors preserves the check in its foreground');
+    assert.ok(highContrastStyle.indicatorContent === 'none' || highContrastStyle.indicatorOpacity === '0',
+      'forced-colors does not add a check to a selected button');
 
     await page.emulateMedia({forcedColors: 'none', reducedMotion: 'reduce'});
     const reducedMotion = await page.evaluate(() => ({

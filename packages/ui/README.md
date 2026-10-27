@@ -53,13 +53,13 @@ Lodestory 已在 `src/styles.css` 接入该入口，插件无需重复导入。�
 | --- | --- |
 | 主操作 / 危险操作 | 各自 `action.*` / `danger.*` 的前景与默认、悬停、按下背景 |
 | 普通悬停 / 按下 | `state.hover*` / `state.pressed*` 前景背景一起变化 |
-| 选中 / 选中悬停 / 选中按下 / 失焦选中 | 对应 `state.selected*` / `state.inactiveSelected*` 组合；文本 Button 选中态用该状态前景绘制对勾，混合态绘制短横；IconButton 保持图标居中 |
-| 禁用 / 禁用选中 | 对应 `state.disabled*` / `state.disabledSelected*`，边界为 `state.disabledBorder`；文本 Button 禁用选中保留对勾，IconButton 保持图标居中 |
+| 选中 / 选中悬停 / 选中按下 / 失焦选中 | 对应 `state.selected*` / `state.inactiveSelected*` 组合；选中态通过前景与背景颜色区分，不叠加勾号；混合态可用短横表示；IconButton 保持图标居中 |
+| 禁用 / 禁用选中 | 对应 `state.disabled*` / `state.disabledSelected*`，边界为 `state.disabledBorder`；禁用选中态不叠加勾号，IconButton 保持图标居中 |
 | 焦点 | 有边框的输入控件在原边界内侧绘制 2px 焦点线，与边框合并且不改变尺寸；按钮和无边框控件使用独立外环，与填充间隔由共享 `--ui-focus-offset` 提供 |
 | 搜索框校验错误 | `aria-invalid` 为 `true`、`grammar`、`spelling` 时使用 `status.dangerBorder`；聚焦时仍以该色显示一条 2px 边界，禁用时抑制错误边界与焦点提示 |
 | 输入与文字选区 | 普通输入光标使用 `caret.foreground`；交互背景上的光标使用该状态前景；选区同时使用 `selection.foreground/background` |
 
-按钮通过原生 `aria-pressed`（包括 `mixed`）或适用角色下的 `aria-selected` 表达选中；文本 Button 只要属性存在（包括值为 `false`），组件就会预留固定标记槽，避免选中切换改变控件尺寸或挤动内容。文本 Button 的选中和混合标记分别为对勾和短横，并继承对应状态前景色；IconButton 只呈现同态前景与中性选中背景，不额外显示标记或预留边距。选择状态仍由使用方拥有。`selectionActive={false}` 表示所属选择上下文失焦，不等同于按钮自身没有键盘焦点。优先级为：禁用选中 → 禁用 → 选中按下 → 选中悬停 → 失焦选中 → 选中 → 操作用途的按下、悬停、默认态。
+按钮通过原生 `aria-pressed`（包括 `mixed`）或适用角色下的 `aria-selected` 表达选中；文本 Button 仅对 `aria-pressed` 预留固定混合态标记槽，避免状态切换改变控件尺寸。普通选中态不显示勾号；混合态显示短横并继承对应状态前景色。IconButton 只呈现同态前景与中性选中背景，不额外显示标记或预留边距。Select 下拉项同样只用选中前景和背景颜色区分。选择状态仍由使用方拥有。`selectionActive={false}` 表示所属选择上下文失焦，不等同于按钮自身没有键盘焦点。优先级为：禁用选中 → 禁用 → 选中按下 → 选中悬停 → 失焦选中 → 选中 → 操作用途的按下、悬停、默认态。
 
 TextField、Textarea、SearchField 和 `variant="field"` 的 Select 常态及悬停／按下／展开时都保持 `border.default`。只读字段维持常态边界，仍可聚焦与选择文字；`variant="title"`、`variant="toolbar"` 的 Select 保持无边框语义。常规悬停只改变表面与同态前景，不改变边框或阴影。文本输入控件聚焦时，在原边界内侧显示 2px 焦点线，与原边框合成一条，不留外侧间距、不改变尺寸；该焦点线邻接字段自身中性填充，使用 `focus.ring`。SearchField 由外层边界承载焦点，内部输入框不重复绘制。无效且聚焦时保留 `status.dangerBorder`，用加粗的同一条边界表示焦点，并保留错误文字或图标；禁用控件不显示焦点。按钮和无边框控件沿用独立外侧焦点环；此类焦点环按 `focusSurface` 描述的外侧邻接表面选择角色。高对比模式使用系统焦点色；强制色模式下，无效边界可以用虚线保留错误差异。
 
@@ -113,7 +113,7 @@ import { Select } from "@lodestory/ui";
 
 Base UI 在包内负责列表定位、键盘导航、按字符查找、Escape 关闭和焦点恢复。展开面板通过 Portal 避免被表单或编辑器裁切，复制触发器所属的 `data-ui-density`，颜色始终继承根元素主题变量。长选项自动换行，长列表内部滚动；触发器宽度由外层容器决定。面板在碰撞定位后的最终位置以 150ms 淡入淡出；减少动效时直接到达终态。选项高度使用菜单密度变量，区别于触发器的控件高度。组件不开放 `className` / `style`，宿主不应覆盖其状态颜色。
 
-`disabled` 阻止交互并收起已打开的面板；单个选项的 `disabled` 阻止选值，但仍可被键盘聚焦以获知内容。`readOnly` 允许展开查看，阻止更改。选中、悬停、按下、禁用及其组合均使用项目成套前景／背景角色，勾选标记与对应变体的焦点线补充颜色含义；`aria-invalid` 提供错误边界，禁用时使用禁用边界。通过关联的 `<label>` 或 `aria-label` / `aria-labelledby` 提供名称。
+`disabled` 阻止交互并收起已打开的面板；单个选项的 `disabled` 阻止选值，但仍可被键盘聚焦以获知内容。`readOnly` 允许展开查看，阻止更改。选中、悬停、按下、禁用及其组合均使用项目成套前景／背景角色，对应变体的焦点线独立于选中背景；`aria-invalid` 提供错误边界，禁用时使用禁用边界。通过关联的 `<label>` 或 `aria-label` / `aria-labelledby` 提供名称。
 
 `name` / `form` 支持原生 FormData 提交；`required` 与原生控件一样将空字符串视为缺值，根目录若是有效业务值则不要将该字段声明为必填。`ref` 指向触发按钮；`onOpenChange` 用于观察展开状态；`finalFocus` 可指定关闭后接收焦点的元素，编辑器可指向正文。`swatch` 只展示业务内容的颜色样本（例如文字颜色），不改变控件的主题配色。
 

@@ -59,7 +59,7 @@ test("rich text editor instances register independently and revoke only their ow
   assert.ok(editorA);
   assert.ok(editorB);
   assert.deepEqual(Array.from(pluginB.requires), [bodyEditorKey]);
-  assert.deepEqual(Array.from(editorB.formats), ["plain-text", "rich-delta"]);
+  assert.deepEqual(Array.from(editorB.formats), ["rich-delta"]);
   assert.equal(typeof editorB.load, "function");
   assert.equal(typeof editorB.getText, "function");
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "quill" || specifier.startsWith("quill/")), false,
@@ -67,8 +67,13 @@ test("rich text editor instances register independently and revoke only their ow
 
   const delta = format.createRichDeltaFromPlainText("第一行\n第二行\n");
   assert.equal(editorB.getText(delta, "rich-delta"), "第一行\n第二行\n");
-  assert.equal(editorB.getText("literal JSON-looking text", "plain-text"), "literal JSON-looking text");
   assert.throws(() => editorB.getText("{", "rich-delta"), /Quill 无法读取/);
+  assert.deepEqual(Array.from(editorB.conversions, conversion => ({
+    id: conversion.id, label: conversion.label, from: conversion.from, extension: conversion.extension,
+  })), [{id: "convert-to-rich-text", label: "转换为富文本文档", from: "plain-text", extension: "lode"}]);
+  assert.equal(format.getRichEditorText("plain text", "plain-text"), "plain text",
+    "the shared text-extraction helper remains available independently of TXT editor registration");
+  assert.equal(typeof editorB.conversions[0].convert, "function");
 
   const loaded = await editorB.load();
   const props = {

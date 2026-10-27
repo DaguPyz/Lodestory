@@ -24,6 +24,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const catalogPluginIds = [];
   const bodyEditorModels = new Map();
   const bodyEditorResolvers = new Map();
+  const bodyEditorConversionResolvers = new Map();
   const projectManagementModels = new Map();
   const workbenchToolbarModels = new Map();
   const appPluginsCalls = [];
@@ -216,11 +217,12 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       return React.createElement("navigation-layout", { pageId, active, items, onNavigate, children });
     },
     EditorPage: function EditorPage() {},
-    BodyEditorContentProvider: function BodyEditorContentProvider({ workbench, models, resolveEditor, children }) {
+    BodyEditorContentProvider: function BodyEditorContentProvider({ workbench, models, resolveEditor, resolveConversions, children }) {
       const session = workbench.getSnapshot().session;
       if (session) {
         bodyEditorModels.set(session.id, models.get(session.id));
         if (resolveEditor) bodyEditorResolvers.set(session.id, resolveEditor);
+        if (resolveConversions) bodyEditorConversionResolvers.set(session.id, resolveConversions);
       }
       return children;
     },
@@ -398,13 +400,17 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         }
         if (specifier === "@tauri-apps/api/core") return {
           isTauri: () => tauri,
-          async invoke(command, args) {
-            tauriCalls.push({ command, args });
-            if (invokeHandler) return invokeHandler(command, args);
+          async invoke(command, args, options) {
+            tauriCalls.push({ command, args, ...(options === undefined ? {} : {options}) });
+            if (invokeHandler) return invokeHandler(command, args, options);
             if (command === "list_project_directory") return {exists: false, entries: [], issues: []};
             if (command === "list_documents") return [];
             if (command === "create_project_file") return {path: args.path, fileName: args.path.split("/").at(-1), bytes: args.bytes};
             if (command === "read_project_file") return {path: args.path, fileName: args.path.split("/").at(-1), bytes: []};
+            if (command === "read_project_file_base64") return {path: args.path, fileName: args.path.split("/").at(-1), bytesBase64: "", byteLength: 0};
+            if (command === "create_project_file_base64") return {path: args.path, fileName: args.path.split("/").at(-1), bytesBase64: args.bytesBase64,
+              byteLength: Buffer.from(args.bytesBase64, "base64").length};
+            if (command === "save_project_file_binary" || command === "save_project_file_base64" || command === "delete_project_file_base64") return undefined;
             if (command === "save_project_file" || command === "delete_project_file" || command === "create_project_directory") return undefined;
             throw new Error(`Unexpected Tauri command '${command}'.`);
           },
@@ -559,6 +565,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     getService(key) { return createdCores.at(-1)?.get(key); },
     bodyEditorModels,
     bodyEditorResolvers,
+    bodyEditorConversionResolvers,
     projectManagementModels,
     workbenchToolbarModels,
     async requestWindowClose() {

@@ -3,13 +3,23 @@ import {createServiceKey} from "./ServiceKey.js";
 export type ProjectSaveState = "saved" | "pending" | "saving" | "error";
 /** Frozen byte values (0–255); snapshots cannot be mutated through a typed-array view. */
 export type ProjectFileBytes = readonly number[];
-export type ProjectFileData = ProjectFileBytes | Uint8Array;
+/** Compact immutable bytes. Reads copy into caller-owned memory; no mutable storage view escapes. */
+export type ProjectByteView = Readonly<{
+    byteLength: number;
+    copyTo(target: Uint8Array, targetOffset?: number, sourceOffset?: number, length?: number): void;
+    equals(data: ProjectFileData): boolean;
+}>;
+export type ProjectFileData = ProjectFileBytes | Uint8Array | ProjectByteView;
+/** Opt-in representation; existing callers retain the frozen-array behavior. */
+export type ProjectFileAccessOptions = Readonly<{preferByteView?: boolean}>;
 
 /** One canonical byte buffer per project-relative path. No encoding or content format is implied. */
 export type ProjectFile = Readonly<{
     path: string;
     fileName: string;
     bytes: ProjectFileBytes;
+    /** Available for opt-in compact reads/writes; bytes remains a compatible, lazily materialized frozen array. */
+    byteView?: ProjectByteView;
     dirty: boolean;
     saveState: ProjectSaveState;
     saveError: string | null;
@@ -32,6 +42,7 @@ export type ProjectDirectoryListing = Readonly<{
     issues: readonly Readonly<{ path: string; message: string }>[];
 }>;
 export type ProjectFileCreateOptions = Readonly<{
+    preferByteView?: boolean;
     /** Explicit filesystem choice by the caller; no directory layout is inferred by storage. */
     createParents?: boolean;
     /** Recover an uncertain create only when the existing bytes are identical. Never replace other bytes. */
@@ -41,12 +52,14 @@ export type ProjectFileCreateOptions = Readonly<{
 export type ProjectFiles = {
     getSnapshot(): ProjectFileSnapshot;
     subscribe(listener: () => void): () => void;
+    /** Optionally capture caller bytes as an immutable compact view without registering a file or scheduling a save. */
+    captureBytes?(data: ProjectFileData): ProjectByteView;
     /** Refresh clean bytes from disk; preserve dirty or saving bytes. */
-    read(path: string): Promise<ProjectFile | null>;
+    read(path: string, options?: ProjectFileAccessOptions): Promise<ProjectFile | null>;
     /** Persist a new file at this exact path before publishing success. */
     create(path: string, bytes: ProjectFileData, options?: ProjectFileCreateOptions): Promise<ProjectFile | null>;
     /** Edit a buffer previously read/created and schedule autosave. Use save/saveState to observe persistence. */
-    write(path: string, bytes: ProjectFileData): boolean;
+    write(path: string, bytes: ProjectFileData, options?: ProjectFileAccessOptions): boolean;
     /** Flush the shared buffer. Explicit saves may finish during a project transition. */
     save(path: string): Promise<boolean>;
     saveAll(): Promise<boolean>;

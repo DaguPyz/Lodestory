@@ -52,6 +52,7 @@ export function createBodyEditorPlugin(): Plugin {
         wrap: children => children,
       });
       const resolveEditor = (format: EditorFormat) => editorRegistry.resolve(format);
+      const resolveConversions = (format: EditorFormat) => editorRegistry.getConversions(format);
       removeContents.push(context.on(documentRevealRequested, request => {
         const session = workbench.getSnapshot().session;
         if (!session || session.id !== request.sessionId) return;
@@ -80,7 +81,7 @@ export function createBodyEditorPlugin(): Plugin {
       ];
       for (const content of contents) {
         removeContents.push(layout.registerContent({...content, render: props =>
-          <BodyEditorContentProvider workbench={workbench} models={models} resolveEditor={resolveEditor}>
+          <BodyEditorContentProvider workbench={workbench} models={models} resolveEditor={resolveEditor} resolveConversions={resolveConversions}>
             {content.render(props)}
           </BodyEditorContentProvider>}));
       }

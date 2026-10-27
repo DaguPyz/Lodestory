@@ -106,20 +106,18 @@ test('page motion preserves editing state, coordinates menus and supports reduce
   await page.keyboard.press('Tab');
   await currentNavigation.focus();
   const compactSelection = await currentNavigation.evaluate(element => ({
-    marker: getComputedStyle(element.querySelector('.navigation-item-state')).display,
-    markerWidth: element.querySelector('.navigation-item-state').getBoundingClientRect().width,
+    hasMarker: !!element.querySelector('.navigation-item-state'),
+    paddingStart: getComputedStyle(element).paddingInlineStart,
+    paddingEnd: getComputedStyle(element).paddingInlineEnd,
     selectionBorder: getComputedStyle(element, '::after').borderTopWidth,
     focusWidth: getComputedStyle(element).outlineWidth,
     focusOffset: getComputedStyle(element).outlineOffset,
-    markerColor: getComputedStyle(element.querySelector('.navigation-item-state')).color,
-    foreground: getComputedStyle(element).color,
   }));
-  assert.equal(compactSelection.marker, 'none', 'icon-only compact navigation does not squeeze in a check');
-  assert.equal(compactSelection.markerWidth, 0, 'icon-only navigation reserves no check slot');
+  assert.equal(compactSelection.hasMarker, false, 'selected navigation has no check marker');
+  assert.equal(compactSelection.paddingStart, compactSelection.paddingEnd, 'navigation has no empty marker slot');
   assert.equal(compactSelection.selectionBorder, '0px', 'selection has no colored frame');
   assert.equal(compactSelection.focusWidth, '2px', 'keyboard focus remains visible');
   assert.equal(compactSelection.focusOffset, '1px');
-  assert.equal(compactSelection.markerColor, compactSelection.foreground, 'selection check inherits its state foreground');
   await capture('welcome-light-narrow');
   await page.setViewportSize({width: 1440, height: 900});
   await page.getByRole('button', {name: '设置', exact: true}).click();
@@ -166,7 +164,7 @@ test('page motion preserves editing state, coordinates menus and supports reduce
     return result;
   });
   assert.deepEqual(longFolder, {whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', clipped: true, fits: true},
-    'long folder names remain a clipped single line after adding file selection checks');
+    'long folder names remain a clipped single line in the tree');
   await editor.fill('故事的大纲。视觉更新验收');
   const editorHandle = await editor.elementHandle();
   await page.evaluate(() => {

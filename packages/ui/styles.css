@@ -523,7 +523,7 @@
   overscroll-behavior: contain;
   padding: var(--ui-space-2);
   scrollbar-width: thin;
-  scrollbar-color: var(--ui-border-control) var(--ui-surface-overlay);
+  scrollbar-color: var(--ui-border-decoration) transparent;
   outline: none;
 }
 .ui-select-option {

@@ -12,6 +12,7 @@ export function useDocumentWorkspace(workspace: DocumentWorkspace) {
     open: workspace.open,
     create: workspace.create,
     close: workspace.close,
+    renamePath: workspace.renamePath,
     select: workspace.select,
     update: workspace.update,
     registerContentReader: workspace.registerContentReader,

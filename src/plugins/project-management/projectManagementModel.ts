@@ -22,6 +22,13 @@ export type ProjectManagementSnapshot = Readonly<{
     deleteError: string | null;
     deleting: boolean;
     deletingPath: string | null;
+    renamePath: string | null;
+    renameName: string;
+    renameSuffix: string;
+    renameDirectory: boolean;
+    renameError: string | null;
+    renaming: boolean;
+    lastRename: Readonly<{fromPath: string; toPath: string; directory: boolean}> | null;
     blocked: boolean;
     activeDocumentPath: string | null;
     openingPath: string | null;
@@ -40,6 +47,9 @@ export type ProjectManagementModel = {
     requestDelete(path: string): boolean;
     confirmDelete(): Promise<void>;
     closeDeleteDialog(): boolean;
+    requestRename(path: string): boolean;
+    rename(name: string): Promise<void>;
+    closeRenameDialog(): boolean;
     reconcileDocument(documentId: string): void;
     dispose(): void;
 };
@@ -62,6 +72,15 @@ function findEntry(entries: readonly ProjectTreeEntry[], path: string): ProjectT
 }
 
 const parentOf = (path: string) => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+
+function extensionOf(name: string) {
+    const dot = name.lastIndexOf(".");
+    return dot > 0 ? name.slice(dot) : "";
+}
+
+function renamePrefix(path: string, fromPath: string, toPath: string) {
+    return path === fromPath || path.startsWith(`${fromPath}/`) ? `${toPath}${path.slice(fromPath.length)}` : path;
+}
 
 function documentName(name: string, extension: DocumentExtension | null) {
     return extension ? `${name.replace(/\.(?:md|markdown|txt|lode)$/i, "")}.${extension}` : name;
@@ -89,6 +108,13 @@ export function createProjectManagementModel(
     let deletePath: string | null = null;
     let deleteError: string | null = null;
     let deleting = false;
+    let renamePath: string | null = null;
+    let renameName = "";
+    let renameSuffix = "";
+    let renameDirectory = false;
+    let renameError: string | null = null;
+    let renaming = false;
+    let lastRename: ProjectManagementSnapshot["lastRename"] = null;
     let disposed = false;
     let readSequence = 0;
     let currentRefresh: Promise<void> | undefined;
@@ -112,6 +138,7 @@ export function createProjectManagementModel(
             sessionId: session.id, projectName: session.project.name, entries, loading, error, selectedFolder,
             dialogOpen, createError, createKind, createExtension, creating: documentState.creating, blocked: blocked(),
             deletePath, deleteError, deleting, deletingPath: documentState.deletingPath ?? null,
+            renamePath, renameName, renameSuffix, renameDirectory, renameError, renaming, lastRename,
             activeDocumentPath: documentState.documents.find(document => document.id === documentState.activeId)?.path ?? null,
             openingPath: documentState.openingPath,
         });
@@ -146,7 +173,7 @@ export function createProjectManagementModel(
     }
 
     function requestCreation(parentPath: string, kind: CreateEntryKind, extension: DocumentExtension | null) {
-        if (blocked() || documentState.creating || documentState.deletingPath || deleting || deletePath || dialogOpen || !isDirectory(parentPath)) return false;
+        if (blocked() || documentState.creating || documentState.deletingPath || deleting || deletePath || renamePath || dialogOpen || !isDirectory(parentPath)) return false;
         selectedFolder = parentPath;
         createKind = kind;
         createExtension = extension;
@@ -271,7 +298,7 @@ export function createProjectManagementModel(
         },
         requestDelete(path) {
             const entry = findEntry(entries, path);
-            if (blocked() || documentState.creating || documentState.deletingPath || deleting || dialogOpen || deletePath || !entry || entry.children) return false;
+            if (blocked() || documentState.creating || documentState.deletingPath || deleting || renaming || renamePath || dialogOpen || deletePath || !entry || entry.children) return false;
             deletePath = path;
             deleteError = null;
             workspace.clearError();
@@ -311,6 +338,87 @@ export function createProjectManagementModel(
             publish();
             return true;
         },
+        requestRename(path) {
+            const entry = findEntry(entries, path);
+            if (blocked() || documentState.creating || documentState.deletingPath || documentState.openingPath
+                || deleting || deletePath || dialogOpen || renaming || renamePath || !entry) return false;
+            renamePath = path;
+            renameDirectory = !!entry.children;
+            renameSuffix = renameDirectory ? "" : extensionOf(entry.name);
+            renameName = entry.name.slice(0, entry.name.length - renameSuffix.length);
+            renameError = null;
+            lastRename = null;
+            workspace.clearError();
+            publish();
+            return true;
+        },
+        async rename(value) {
+            if (blocked() || renaming || !renamePath) return;
+            const fromPath = renamePath;
+            const entry = findEntry(entries, fromPath);
+            if (!entry) {
+                renameError = "此文件或文件夹已不存在，请刷新后重试。";
+                publish();
+                return;
+            }
+            const name = value.trim();
+            if (!name || name === "." || name === ".." || /[\\/]/.test(name) || name.length > 255) {
+                renameError = "名称不能为空，且不能包含路径分隔符。";
+                publish();
+                return;
+            }
+            const directory = !!entry.children;
+            const suffix = directory ? "" : extensionOf(entry.name);
+            const targetName = `${name}${suffix}`;
+            if (targetName.length > 255) {
+                renameError = "名称过长，请缩短后重试。";
+                publish();
+                return;
+            }
+            const toPath = [parentOf(fromPath), targetName].filter(Boolean).join("/");
+            if (toPath === fromPath) {
+                renamePath = null;
+                renameName = "";
+                renameSuffix = "";
+                renameError = null;
+                publish();
+                return;
+            }
+            renaming = true;
+            renameError = null;
+            workspace.clearError();
+            publish();
+            try {
+                const renamed = await workspace.renamePath(fromPath, toPath);
+                if (disposed) return;
+                if (!renamed) {
+                    renameError = workspace.getSnapshot().error ?? "重命名失败，请重试。";
+                    return;
+                }
+                selectedFolder = renamePrefix(selectedFolder, fromPath, toPath);
+                lastRename = Object.freeze({fromPath, toPath, directory});
+                renamePath = null;
+                renameName = "";
+                renameSuffix = "";
+                if (!currentRefresh) void model.refresh();
+                while (!disposed && currentRefresh) await currentRefresh;
+            } catch (cause) {
+                if (!disposed) renameError = projectFilesErrorMessage(cause);
+            } finally {
+                renaming = false;
+                publish();
+            }
+        },
+        closeRenameDialog() {
+            if (renaming || !renamePath) return false;
+            renamePath = null;
+            renameName = "";
+            renameSuffix = "";
+            renameError = null;
+            workspace.clearError();
+            publish();
+            return true;
+        },
         reconcileDocument(documentId) {
             if (disposed) return;
             const state = workspace.getSnapshot();
@@ -329,7 +437,7 @@ export function createProjectManagementModel(
             removeWorkbench();
             listeners.clear();
             missingPaths.clear();
-            snapshot = Object.freeze({...snapshot, dialogOpen: false, deletePath: null, blocked: true});
+            snapshot = Object.freeze({...snapshot, dialogOpen: false, deletePath: null, renamePath: null, renaming: false, blocked: true});
         },
     };
 
@@ -353,6 +461,7 @@ export function createProjectManagementModel(
             if (state.session?.id !== session.id || !state.active) {
                 dialogOpen = false;
                 if (!deleting) deletePath = null;
+                if (!renaming) renamePath = null;
             }
             publish();
         });

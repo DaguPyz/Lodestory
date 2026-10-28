@@ -22,6 +22,8 @@ export type DocumentSnapshot = Readonly<{
   creating: boolean;
   /** A project-relative path being deleted; only one deletion may run at a time. */
   deletingPath: string | null;
+  /** A project-relative path being renamed; edits and tab transitions are locked while pending. */
+  renamingPath: string | null;
   blocked: boolean;
   /** 操作错误；单个文档的保存错误位于其 saveError。 */
   error: string | null;
@@ -37,6 +39,8 @@ export type DocumentWorkspace = {
   create(parentPath: string, name: string): Promise<OpenDocument | null>;
   /** 在现有目录下创建单层子目录；不覆盖或递归创建。 */
   createDirectory(parentPath: string, name: string): Promise<string | null>;
+  /** Rename a project-relative file or directory; open descendant documents keep their tabs and selection. */
+  renamePath(fromPath: string, toPath: string): Promise<boolean>;
   /** 将当前文档内容另存为同目录的新文档，并在成功后打开新文档。 */
   saveAs(documentId: string, fileName: string, content: string): Promise<void>;
   /** 删除项目内的受支持文档；有未保存更改时须显式确认丢弃。 */

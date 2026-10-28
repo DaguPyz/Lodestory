@@ -49,6 +49,7 @@ pub fn run() {
             project_file_commands::delete_project_file_base64,
             project_file_commands::list_project_directory,
             project_file_commands::create_project_directory,
+            project_file_commands::rename_project_path,
             system_fonts::list_system_font_families,
         ])
         .run(tauri::generate_context!())

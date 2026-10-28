@@ -35,6 +35,8 @@ export type ProjectDirectoryEntry = Readonly<{
     kind: "file" | "directory" | "symlink" | "other";
     size: number | null;
 }>;
+/** A committed project-relative move. Notifications are synchronous and informational; they cannot cancel or roll back the filesystem operation. */
+export type ProjectPathRename = Readonly<{fromPath: string; toPath: string}>;
 export type ProjectDirectoryListing = Readonly<{
     /** A missing directory has exists=false; access and read errors remain errors. */
     exists: boolean;
@@ -66,6 +68,10 @@ export type ProjectFiles = {
     delete(path: string, options?: { discardChanges?: boolean }): Promise<boolean>;
     list(path: string): Promise<ProjectDirectoryListing | null>;
     createDirectory(path: string, options?: { recursive?: boolean }): Promise<boolean>;
+    /** Rename a file or directory within the project after flushing affected buffers. Existing destinations are never replaced. */
+    renamePath(fromPath: string, toPath: string): Promise<boolean>;
+    /** Called synchronously after disk rename succeeds and before the file snapshot is remapped. Listeners cannot veto or roll back the rename. */
+    subscribePathChanges(listener: (change: ProjectPathRename) => void): () => void;
     clearError(): void;
 };
 

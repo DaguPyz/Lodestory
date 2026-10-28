@@ -325,6 +325,93 @@ impl ProjectFiles {
         }
     }
 
+    pub fn rename_path(
+        &self,
+        project: &Path,
+        from_relative: &str,
+        to_relative: &str,
+    ) -> Result<(), ProjectError> {
+        let _guard = self.lock()?;
+        let root = project_root(project)?;
+        let from_segments = parse_relative(from_relative, false)?;
+        let to_segments = parse_relative(to_relative, false)?;
+        let from = from_segments.join("/");
+        let to = to_segments.join("/");
+        if from == to {
+            return Ok(());
+        }
+        if to.starts_with(&format!("{from}/")) {
+            return Err(ProjectError::new(
+                "invalid_project_file_path",
+                "不能将目录重命名到自身内部。",
+            ));
+        }
+
+        let (source_name, source_parents) =
+            from_segments.split_last().expect("validated nonempty path");
+        let source_parent = ensure_directory(&root, source_parents, false)?;
+        let source = source_parent.join(source_name);
+        let source_metadata = fs::symlink_metadata(&source).map_err(|error| {
+            failure(
+                "project_path_rename_failed",
+                "无法访问待重命名路径",
+                &source,
+                error,
+            )
+        })?;
+        if source_metadata.file_type().is_symlink() {
+            return Err(symlink_error(&source));
+        }
+        if !source_metadata.is_file() && !source_metadata.is_dir() {
+            return Err(ProjectError::new(
+                "invalid_project_file_path",
+                format!("只支持重命名普通文件或文件夹：{}。", from),
+            ));
+        }
+
+        let (target_name, target_parents) =
+            to_segments.split_last().expect("validated nonempty path");
+        let target_parent = ensure_directory(&root, target_parents, false)?;
+        let target = target_parent.join(target_name);
+        match fs::symlink_metadata(&target) {
+            Ok(_)
+                if case_only_alias(&source, &target, &source_parent, source_name, target_name)? =>
+            {
+                return rename_case_only(&source, &target);
+            }
+            Ok(_) => {
+                return Err(ProjectError::new(
+                    "project_path_exists",
+                    format!("目标位置已存在，未覆盖：{}。", to),
+                ));
+            }
+            Err(error) if error.kind() == ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(failure(
+                    "project_path_rename_failed",
+                    "检查重命名目标失败",
+                    &target,
+                    error,
+                ));
+            }
+        }
+        rename_without_replacement(&source, &target).map_err(|error| {
+            if error.kind() == ErrorKind::AlreadyExists {
+                ProjectError::new(
+                    "project_path_exists",
+                    format!("目标位置已存在，未覆盖：{}。", to),
+                )
+            } else {
+                failure(
+                    "project_path_rename_failed",
+                    "重命名项目路径失败",
+                    &source,
+                    error,
+                )
+            }
+        })
+    }
+
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, ()>, ProjectError> {
         self.access.lock().map_err(|_| {
             ProjectError::new(
@@ -333,6 +420,121 @@ impl ProjectFiles {
             )
         })
     }
+}
+
+fn case_only_alias(
+    source: &Path,
+    target: &Path,
+    source_parent: &Path,
+    source_name: &str,
+    target_name: &str,
+) -> Result<bool, ProjectError> {
+    if target.parent() != Some(source_parent)
+        || source_name == target_name
+        || !source_name.eq_ignore_ascii_case(target_name)
+        || !same_file::is_same_file(source, target).unwrap_or(false)
+    {
+        return Ok(false);
+    }
+    is_case_insensitive_directory(source_parent).map_err(|error| {
+        failure(
+            "project_path_rename_failed",
+            "检查文件系统大小写规则失败",
+            source_parent,
+            error,
+        )
+    })
+}
+
+fn is_case_insensitive_directory(parent: &Path) -> std::io::Result<bool> {
+    let probe = tempfile::Builder::new()
+        .prefix(".lodestory-case-probe-")
+        .tempfile_in(parent)?;
+    let name = probe
+        .path()
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| {
+            std::io::Error::new(ErrorKind::InvalidData, "temporary name is not UTF-8")
+        })?;
+    let case_variant = parent.join(name.to_ascii_uppercase());
+    Ok(fs::symlink_metadata(case_variant).is_ok())
+}
+
+fn rename_case_only(source: &Path, target: &Path) -> Result<(), ProjectError> {
+    let parent = source.parent().expect("source has a parent");
+    let staging = tempfile::Builder::new()
+        .prefix(".lodestory-rename-stage-")
+        .tempfile_in(parent)
+        .map_err(|error| {
+            failure(
+                "project_path_rename_failed",
+                "创建大小写重命名暂存路径失败",
+                source,
+                error,
+            )
+        })?;
+    let staging_path = staging.path().to_path_buf();
+    drop(staging);
+
+    rename_without_replacement(source, &staging_path).map_err(|error| {
+        failure(
+            "project_path_rename_failed",
+            "移动大小写重命名暂存文件失败",
+            source,
+            error,
+        )
+    })?;
+
+    match rename_without_replacement(&staging_path, target) {
+        Ok(()) => Ok(()),
+        Err(error) => match rename_without_replacement(&staging_path, source) {
+            Ok(()) if error.kind() == ErrorKind::AlreadyExists => Err(ProjectError::new(
+                "project_path_exists",
+                format!("目标位置已存在，未覆盖：{}。", target.display()),
+            )),
+            Ok(()) => Err(failure(
+                "project_path_rename_failed",
+                "大小写重命名失败，原文件名已恢复",
+                source,
+                error,
+            )),
+            Err(rollback) => Err(ProjectError::new(
+                "project_path_rename_rollback_failed",
+                format!(
+                    "大小写重命名失败，文件保留在暂存路径 {}；恢复原名也失败：{}。",
+                    staging_path.display(),
+                    rollback
+                ),
+            )),
+        },
+    }
+}
+
+#[cfg(any(target_os = "linux", target_os = "macos"))]
+fn rename_without_replacement(source: &Path, target: &Path) -> std::io::Result<()> {
+    rustix::fs::renameat_with(
+        rustix::fs::CWD,
+        source,
+        rustix::fs::CWD,
+        target,
+        rustix::fs::RenameFlags::NOREPLACE,
+    )
+    .map_err(std::io::Error::from)
+}
+
+#[cfg(windows)]
+fn rename_without_replacement(source: &Path, target: &Path) -> std::io::Result<()> {
+    // std::fs::rename on Windows fails when the destination already exists.
+    fs::rename(source, target)
+}
+
+#[cfg(not(any(target_os = "linux", target_os = "macos", windows)))]
+fn rename_without_replacement(_source: &Path, _target: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        ErrorKind::Unsupported,
+        "原子无覆盖重命名在此平台不可用。",
+    ))
 }
 
 fn collect_directory_entries(
@@ -921,6 +1123,139 @@ mod tests {
                 .unwrap_err()
                 .code,
             "project_directory_exists"
+        );
+    }
+
+    #[test]
+    fn rename_moves_files_and_directories_without_replacing_existing_paths() {
+        let project = tempdir().unwrap();
+        let store = ProjectFiles::default();
+        store
+            .create(
+                project.path(),
+                "drafts/chapter.txt",
+                b"chapter",
+                true,
+                false,
+            )
+            .unwrap();
+        store
+            .create(project.path(), "drafts/notes/idea.md", b"idea", true, false)
+            .unwrap();
+
+        store
+            .rename_path(project.path(), "drafts/chapter.txt", "chapter.md")
+            .unwrap();
+        assert_eq!(
+            fs::read(project.path().join("chapter.md")).unwrap(),
+            b"chapter"
+        );
+        assert!(!project.path().join("drafts/chapter.txt").exists());
+
+        store
+            .rename_path(project.path(), "drafts", "archive")
+            .unwrap();
+        assert_eq!(
+            fs::read(project.path().join("archive/notes/idea.md")).unwrap(),
+            b"idea"
+        );
+        assert!(!project.path().join("drafts").exists());
+
+        fs::write(project.path().join("occupied.txt"), b"keep me").unwrap();
+        assert_eq!(
+            store
+                .rename_path(project.path(), "chapter.md", "occupied.txt")
+                .unwrap_err()
+                .code,
+            "project_path_exists"
+        );
+        assert_eq!(
+            fs::read(project.path().join("occupied.txt")).unwrap(),
+            b"keep me"
+        );
+        assert_eq!(
+            fs::read(project.path().join("chapter.md")).unwrap(),
+            b"chapter"
+        );
+        assert_eq!(
+            store
+                .rename_path(project.path(), "archive", "archive/inside")
+                .unwrap_err()
+                .code,
+            "invalid_project_file_path"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rename_rejects_symlinks_and_missing_paths() {
+        use std::os::unix::fs::symlink;
+        let project = tempdir().unwrap();
+        let outside = tempdir().unwrap();
+        let store = ProjectFiles::default();
+        fs::write(outside.path().join("secret.txt"), b"private").unwrap();
+        symlink(
+            outside.path().join("secret.txt"),
+            project.path().join("alias.txt"),
+        )
+        .unwrap();
+
+        assert_eq!(
+            store
+                .rename_path(project.path(), "alias.txt", "moved.txt")
+                .unwrap_err()
+                .code,
+            "invalid_project_file_path"
+        );
+        assert_eq!(
+            store
+                .rename_path(project.path(), "missing.txt", "moved.txt")
+                .unwrap_err()
+                .code,
+            "project_path_rename_failed"
+        );
+        assert_eq!(
+            fs::read(outside.path().join("secret.txt")).unwrap(),
+            b"private"
+        );
+    }
+
+    #[test]
+    fn rename_supports_case_only_changes_without_creating_another_entry() {
+        let project = tempdir().unwrap();
+        let store = ProjectFiles::default();
+        store
+            .create(project.path(), "draft.txt", b"draft", false, false)
+            .unwrap();
+        store
+            .create(project.path(), "folder/item.txt", b"item", true, false)
+            .unwrap();
+
+        store
+            .rename_path(project.path(), "draft.txt", "Draft.txt")
+            .unwrap();
+        store
+            .rename_path(project.path(), "folder", "Folder")
+            .unwrap();
+
+        assert_eq!(
+            fs::read(project.path().join("Draft.txt")).unwrap(),
+            b"draft"
+        );
+        assert_eq!(
+            fs::read(project.path().join("Folder/item.txt")).unwrap(),
+            b"item"
+        );
+        let entries = fs::read_dir(project.path())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name().to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert!(entries.contains(&"Draft.txt".to_owned()));
+        assert!(entries.contains(&"Folder".to_owned()));
+        assert_eq!(
+            entries.len(),
+            2,
+            "case-only changes leave no staging artifacts"
         );
     }
 }

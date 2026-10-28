@@ -126,6 +126,94 @@ test("directory listings distinguish missing directories and preserve arbitrary 
   await controller.dispose();
 });
 
+test("renaming a directory flushes and remaps every open descendant before publishing the new snapshot", async () => {
+  const entered = deferred();
+  const release = deferred();
+  const f = byteStorageFixture({async onInvoke(command, args) {
+    if (command === "save_project_file" && args.path === "folder/a.txt") {
+      entered.resolve();
+      await release.promise;
+    }
+  }});
+  f.directories.add("/book/folder");
+  f.disk.set("/book/folder/a.txt", [1]);
+  f.directories.add("/book/folder/nested");
+  f.disk.set("/book/folder/nested/b.txt", [2]);
+  const controller = f.files();
+  const files = controller.service;
+  await files.read("folder/a.txt");
+  await files.read("folder/nested/b.txt");
+  files.write("folder/a.txt", [9]);
+  const order = [];
+  let changeDetails;
+  let snapshotAtPathChange;
+  files.subscribePathChanges(change => {
+    order.push("path");
+    changeDetails = [change.fromPath, change.toPath];
+    snapshotAtPathChange = Array.from(files.getSnapshot().files, file => file.path).sort();
+  });
+  files.subscribe(() => {
+    if (files.getSnapshot().files.some(file => file.path === "renamed/nested/b.txt")) order.push("snapshot");
+  });
+
+  const renaming = files.renamePath("folder", "renamed");
+  await entered.promise;
+  assert.equal(files.write("folder/a.txt", [8]), false, "writes under the source prefix are locked during the flush");
+  assert.equal(await files.list(""), null, "directory reads cannot observe a partial move");
+  release.resolve();
+  assert.equal(await renaming, true);
+  assert.deepEqual(changeDetails, ["folder", "renamed"]);
+  assert.deepEqual(snapshotAtPathChange, ["folder/a.txt", "folder/nested/b.txt"],
+    "path listeners run before the storage snapshot is remapped");
+  assert.deepEqual(order, ["path", "snapshot"]);
+  assert.deepEqual(f.disk.get("/book/renamed/a.txt"), [9]);
+  assert.deepEqual(f.disk.get("/book/renamed/nested/b.txt"), [2]);
+  assert.equal(f.disk.has("/book/folder/a.txt"), false);
+  assert.deepEqual(Array.from(files.getSnapshot().files, file => [file.path, file.fileName]).sort((a, b) => a[0].localeCompare(b[0])), [
+    ["renamed/a.txt", "a.txt"], ["renamed/nested/b.txt", "b.txt"],
+  ]);
+  files.write("renamed/a.txt", [7]);
+  assert.equal(await files.save("renamed/a.txt"), true, "the remapped session saves to the new path");
+  assert.deepEqual(f.disk.get("/book/renamed/a.txt"), [7]);
+  await controller.dispose();
+});
+
+test("failed rename leaves dirty buffers and emits no path-change notification", async () => {
+  const f = byteStorageFixture({onInvoke(command) {
+    if (command === "save_project_file") throw new Error("磁盘不可写");
+  }});
+  f.disk.set("/book/chapter.txt", [1]);
+  const controller = f.files();
+  const files = controller.service;
+  await files.read("chapter.txt");
+  files.write("chapter.txt", [2]);
+  const changes = [];
+  files.subscribePathChanges(change => changes.push(change));
+
+  assert.equal(await files.renamePath("chapter.txt", "renamed.txt"), false);
+  assert.match(files.getSnapshot().error, /磁盘不可写/);
+  assert.deepEqual(changes, []);
+  assert.deepEqual(Array.from(files.getSnapshot().files, file => [file.path, Array.from(file.bytes), file.dirty]), [["chapter.txt", [2], true]]);
+  assert.deepEqual(f.disk.get("/book/chapter.txt"), [1]);
+  assert.equal(f.disk.has("/book/renamed.txt"), false);
+  await controller.dispose().catch(() => {});
+});
+
+test("rename rejects existing destinations without replacing their bytes", async () => {
+  const f = byteStorageFixture();
+  f.disk.set("/book/chapter.txt", [1]);
+  f.disk.set("/book/target.txt", [8]);
+  const controller = f.files();
+  const changes = [];
+  controller.service.subscribePathChanges(change => changes.push(change));
+
+  assert.equal(await controller.service.renamePath("chapter.txt", "target.txt"), false);
+  assert.deepEqual(changes, []);
+  assert.deepEqual(f.disk.get("/book/chapter.txt"), [1]);
+  assert.deepEqual(f.disk.get("/book/target.txt"), [8]);
+  await controller.dispose();
+});
+
 test("the workbench waits for an accepted document creation before releasing project storage", async () => {
   const release = deferred();
   const {f, disk} = byteStorageFixture({async onInvoke(command) { if (command === "create_project_file") await release.promise; }});

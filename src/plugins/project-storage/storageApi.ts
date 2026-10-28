@@ -46,6 +46,9 @@ export function listDirectory(projectPath: string, path: string): Promise<Projec
 export function createDirectory(projectPath: string, path: string, recursive: boolean): Promise<void> {
   return desktopCommand("create_project_directory", {projectPath, path, recursive});
 }
+export function renamePath(projectPath: string, fromPath: string, toPath: string): Promise<void> {
+  return desktopCommand("rename_project_path", {projectPath, fromPath, toPath});
+}
 export function storageErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === "object" && error !== null && "message" in error && typeof error.message === "string") return error.message;

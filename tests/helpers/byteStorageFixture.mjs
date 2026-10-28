@@ -72,6 +72,21 @@ export function byteStorageFixture({onInvoke} = {}) {
       }
       return;
     }
+    if (command === "rename_project_path") {
+      const from = key(root, args.fromPath);
+      const to = key(root, args.toPath);
+      if (!disk.has(from) && !directories.has(from)) throw new Error("源文件或目录不存在");
+      if (disk.has(to) || directories.has(to)) throw new Error("目标已存在，未覆盖");
+      if (!directories.has(key(root, parent(args.toPath)))) throw new Error("目标父目录不存在");
+      const remap = path => path === from ? to : `${to}${path.slice(from.length)}`;
+      for (const [path, bytes] of [...disk]) {
+        if (path === from || path.startsWith(`${from}/`)) { disk.delete(path); disk.set(remap(path), bytes); }
+      }
+      for (const path of [...directories]) {
+        if (path === from || path.startsWith(`${from}/`)) { directories.delete(path); directories.add(remap(path)); }
+      }
+      return;
+    }
     if (command === "list_project_directory") {
       if (disk.has(fileKey)) throw new Error("目标不是目录");
       const exists = directories.has(fileKey);

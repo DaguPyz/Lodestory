@@ -285,6 +285,19 @@ pub async fn create_project_directory(
     .await
 }
 
+#[tauri::command]
+pub async fn rename_project_path(
+    app: AppHandle,
+    project_path: String,
+    from_path: String,
+    to_path: String,
+) -> Result<(), ProjectError> {
+    with_project_files(app, move |store| {
+        store.rename_path(Path::new(&project_path), &from_path, &to_path)
+    })
+    .await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -230,7 +230,7 @@
       if (scenario === "project-loading-gate") window.__releaseProjectTree = releaseProjectTree;
       mockIPC(async (command, args) => {
         if (command.startsWith("plugin:")) return command === "plugin:window|theme" ? (query.get("theme") === "Light" ? "Light" : "Dark") : 1;
-        if (["list_documents", "read_project_file", "read_project_file_base64", "create_project_file", "save_project_file", "delete_project_file", "list_project_directory", "create_project_directory"].includes(command)) {
+        if (["list_documents", "read_project_file", "read_project_file_base64", "create_project_file", "save_project_file", "delete_project_file", "list_project_directory", "create_project_directory", "rename_project_path"].includes(command)) {
           const state = projectFiles(args.projectPath);
           const path = args.path ?? "";
           const inTimeline = path === timelineDirectory || path.startsWith(`${timelineDirectory}/`);
@@ -277,6 +277,25 @@
               if (state.directories.has(path) || state.files.has(path)) throw {message: "目录或文件已存在。"};
               if (!state.directories.has(parentOf(path))) throw {message: "父目录不存在。"};
               state.directories.add(path);
+            }
+            return;
+          }
+          if (command === "rename_project_path") {
+            const {fromPath, toPath} = args;
+            if (!state.files.has(fromPath) && !state.directories.has(fromPath)) throw {message: "源文件或文件夹不存在。"};
+            if (state.files.has(toPath) || state.directories.has(toPath)) throw {message: "目标已存在，未覆盖。"};
+            const rename = candidate => `${toPath}${candidate.slice(fromPath.length)}`;
+            for (const [candidate, bytes] of [...state.files]) {
+              if (candidate === fromPath || candidate.startsWith(`${fromPath}/`)) {
+                state.files.delete(candidate);
+                state.files.set(rename(candidate), bytes);
+              }
+            }
+            for (const candidate of [...state.directories]) {
+              if (candidate === fromPath || candidate.startsWith(`${fromPath}/`)) {
+                state.directories.delete(candidate);
+                state.directories.add(rename(candidate));
+              }
             }
             return;
           }

@@ -302,7 +302,9 @@ const removeParticipant = workbench.registerParticipant({
 });
 ```
 
-`ProjectStorageService.getFiles(sessionId)` 返回稳定的 `ProjectFiles`，提供 `read`、`create`、`write`、`save`、`saveAll`、`delete`、`list`、`createDirectory`、`clearError` 和可选的 `captureBytes`。同一会话同一路径共享一个缓冲、保存队列、冲突检查和 700 毫秒自动保存。`read(path)` 使用完整相对路径；`create(path, bytes, options)` 使用调用方给定的完整路径和字节；目录是否递归创建及相同内容重试由显式选项决定。项目存储不解码 UTF-8、不解释 JSON，也不根据扩展名推断格式。
+`ProjectStorageService.getFiles(sessionId)` 返回稳定的 `ProjectFiles`，提供 `read`、`create`、`write`、`save`、`saveAll`、`delete`、`list`、`createDirectory`、`renamePath`、`subscribePathChanges`、`clearError` 和可选的 `captureBytes`。同一会话同一路径共享一个缓冲、保存队列、冲突检查和 700 毫秒自动保存。`read(path)` 使用完整相对路径；`create(path, bytes, options)` 使用调用方给定的完整路径和字节；目录是否递归创建及相同内容重试由显式选项决定。项目存储不解码 UTF-8、不解释 JSON，也不根据扩展名推断格式。
+
+`renamePath(fromPath, toPath)` 可以重命名任意项目内普通文件或目录；目标必须不存在。存储会先锁住两条路径及其祖先/后代操作，等待已接受的读取结束，并保存源路径下全部缓冲；保存或磁盘改名失败时保留旧路径和字节。成功后先同步发出 `{fromPath, toPath}` 路径变更通知，再一次性发布全部已打开文件的新路径。路径变更通知只用于同步其他插件持有的路径引用，不可取消或回滚改名；监听器异常会记录，不能中断已落盘操作。需要保留未保存正文的消费者必须在调用改名前先刷新正文编辑器并保存。
 
 默认 `ProjectFile.bytes` 仍是只读冻结字节数组。调用方可在 `read`、`write` 的访问选项或 `create` 选项中显式设置 `preferByteView: true`，启用紧凑的 `ProjectByteView`；紧凑模式下快照提供 `byteView`，而兼容用的 `bytes` 数组只在被读取时才物化。`ProjectByteView` 暴露 `byteLength`、写入调用方 `Uint8Array` 的 `copyTo` 和逐字节比较用的 `equals`，不暴露内部可变缓冲区。该选项不改变字节内容，也不会自动迁移未选择它的调用方；当前 TXT 文档适配器选择此路径，Markdown、富文本和普通数组调用仍沿用原有表示。
 
@@ -310,7 +312,7 @@ const removeParticipant = workbench.registerParticipant({
 
 桌面端的紧凑读取、创建和删除仍用 base64 内容命令传输字节。紧凑保存使用单个原始二进制 IPC 帧：UTF-8 JSON 元数据后依次放置新文件字节和保存前的精确字节基线，各自长度由元数据标明；宿主据此按原始字节执行现有路径检查和冲突保护。使用只读数组的旧保存调用继续走原有数组命令。传输方式不改变文件字节、单路径共享缓冲、保存队列或 700 毫秒自动保存；项目存储不负责选择 UTF-8 或其他文件编码。
 
-统一字节命令是 `read_project_file`、`create_project_file`、`save_project_file`、`delete_project_file`、`list_project_directory` 和 `create_project_directory`。宿主处理相对路径、符号链接和 expected-bytes 冲突保护，不知道文本或业务格式。documents 自己将正文数据解码为字符串；timeline 自己定义 UTF-8 与 `.lodestory/outline-design/timelines/<uuid>.json` 目录和 JSON 格式。存储契约只提供路径文件操作。
+统一字节命令是 `read_project_file`、`create_project_file`、`save_project_file`、`delete_project_file`、`list_project_directory`、`create_project_directory` 和 `rename_project_path`。宿主处理相对路径、符号链接和 expected-bytes 冲突保护，不知道文本或业务格式。documents 自己将正文数据解码为字符串；timeline 自己定义 UTF-8 与 `.lodestory/outline-design/timelines/<uuid>.json` 目录和 JSON 格式。存储契约只提供路径文件操作。
 
 统一字节服务接入不会搬动或转码既有项目文件。旧文档文本读写命令已移除，正文和大纲消费者使用上述统一字节命令；`list_documents` 仅供工程文件树查询。配置与主题偏好仍保存在 `localStorage`，最近项目索引仍保存在应用配置目录；它们不由项目存储迁移。离开项目时，项目存储统一保存已接受的字节缓冲修改；保存失败会阻止离开并保留当前会话。
 

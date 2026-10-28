@@ -45,6 +45,7 @@ function createFixture({listDocuments = async () => [], desktop = true} = {}) {
   const listCalls = [];
   const openCalls = [];
   const createCalls = [];
+  const renameCalls = [];
   const workbenchListeners = new Set();
   const workspaceListeners = new Set();
   const session = {id: "session-a", project: {id: "project-a", name: "第一本", path: "/projects/first"}};
@@ -52,7 +53,7 @@ function createFixture({listDocuments = async () => [], desktop = true} = {}) {
   let workspaceSnapshot = {
     documents: [], activeId: null, openingPath: null, creating: false, deletingPath: null, blocked: false, error: null,
   };
-  const controls = {open: undefined, create: undefined};
+  const controls = {open: undefined, create: undefined, rename: undefined};
 
   function publishWorkspace(next) {
     workspaceSnapshot = Object.freeze({...workspaceSnapshot, ...next});
@@ -78,6 +79,11 @@ function createFixture({listDocuments = async () => [], desktop = true} = {}) {
       return document;
     },
     async createDirectory() { throw new Error("Unexpected directory creation in this fixture"); },
+    async renamePath(fromPath, toPath) {
+      renameCalls.push([fromPath, toPath]);
+      if (controls.rename) return controls.rename(fromPath, toPath);
+      return false;
+    },
     async deleteDocument() { throw new Error("Unexpected document deletion in this fixture"); },
     clearError() { publishWorkspace({error: null}); },
   };
@@ -137,6 +143,7 @@ function createFixture({listDocuments = async () => [], desktop = true} = {}) {
     listCalls,
     model,
     openCalls,
+    renameCalls,
     publishWorkspace,
     session,
     setWorkbench(next) {
@@ -280,6 +287,112 @@ test("a failed create keeps the dialog and error for retry, then closes after su
   assert.deepEqual(f.createCalls, [["", "retry.md"], ["", "retry.md"]]);
   assert.equal(reads, 2, "the project tree is refreshed after the retry succeeds");
   assert.deepEqual(entryPaths(f.model.getSnapshot().entries), ["retry.md"]);
+  f.model.dispose();
+});
+
+test("renaming a file preserves its extension and refreshes the project tree", async () => {
+  let listed = entries(["draft.md"]);
+  const f = createFixture({listDocuments: async () => listed});
+  await f.model.ready();
+  f.controls.rename = async (_from, to) => { listed = entries([to]); return true; };
+
+  assert.equal(f.model.requestRename("draft.md"), true);
+  assert.equal(f.model.getSnapshot().renameName, "draft");
+  assert.equal(f.model.getSnapshot().renameSuffix, ".md");
+  await f.model.rename("final");
+
+  assert.deepEqual(f.renameCalls, [["draft.md", "final.md"]]);
+  assert.deepEqual(entryPaths(f.model.getSnapshot().entries), ["final.md"]);
+  assert.equal(f.model.getSnapshot().renamePath, null);
+  assert.equal(f.model.getSnapshot().lastRename.directory, false);
+  f.model.dispose();
+});
+
+test("renaming a folder remaps selected and open-document paths", async () => {
+  let listed = entries(["draft/one.md", "draft/nested/two.txt"]);
+  const f = createFixture({listDocuments: async () => listed});
+  await f.model.ready();
+  await f.model.openDocument("draft/one.md");
+  f.controls.rename = async (from, to) => {
+    listed = entries(["final/one.md", "final/nested/two.txt"]);
+    const documents = f.workspaceSnapshot().documents.map(document => Object.freeze({
+      ...document, path: `${to}${document.path.slice(from.length)}`,
+      fileName: `${to}${document.path.slice(from.length)}`.split("/").at(-1),
+    }));
+    f.publishWorkspace({documents});
+    return true;
+  };
+
+  assert.equal(f.model.selectFolder("draft"), true);
+  assert.equal(f.model.requestRename("draft"), true);
+  assert.equal(f.model.getSnapshot().renameName, "draft");
+  await f.model.rename("final");
+
+  assert.deepEqual(f.renameCalls, [["draft", "final"]]);
+  assert.equal(f.model.getSnapshot().selectedFolder, "final");
+  assert.equal(f.model.getSnapshot().activeDocumentPath, "final/one.md");
+  assert.deepEqual(entryPaths(f.model.getSnapshot().entries), ["final", "final/one.md", "final/nested", "final/nested/two.txt"]);
+  assert.equal(f.model.getSnapshot().lastRename.fromPath, "draft");
+  assert.equal(f.model.getSnapshot().lastRename.toPath, "final");
+  assert.equal(f.model.getSnapshot().lastRename.directory, true);
+  f.model.dispose();
+});
+
+test("a rejected or invalid rename keeps the dialog open and old path intact", async () => {
+  const f = createFixture({listDocuments: async () => entries(["draft.md"])});
+  await f.model.ready();
+  assert.equal(f.model.requestRename("draft.md"), true);
+  await f.model.rename("../elsewhere");
+  assert.match(f.model.getSnapshot().renameError, /路径分隔符/);
+  assert.deepEqual(f.renameCalls, []);
+
+  f.controls.rename = async () => {
+    f.publishWorkspace({error: "目标已存在"});
+    return false;
+  };
+  await f.model.rename("final");
+  assert.equal(f.model.getSnapshot().renamePath, "draft.md");
+  assert.equal(f.model.getSnapshot().renameError, "目标已存在");
+  assert.deepEqual(entryPaths(f.model.getSnapshot().entries), ["draft.md"]);
+  assert.equal(f.model.closeRenameDialog(), true);
+  assert.equal(f.model.getSnapshot().renamePath, null);
+  f.model.dispose();
+});
+
+test("a tree refresh failure after a successful rename reports an error and keeps reload recovery available", async () => {
+  let reads = 0;
+  const f = createFixture({listDocuments: async () => {
+    reads += 1;
+    if (reads === 1) return entries(["draft.md"]);
+    throw new Error("目录刷新失败");
+  }});
+  await f.model.ready();
+  f.controls.rename = async () => true;
+  assert.equal(f.model.requestRename("draft.md"), true);
+  await f.model.rename("final");
+
+  assert.equal(f.model.getSnapshot().renamePath, null, "a committed disk rename closes its dialog");
+  assert.equal(f.model.getSnapshot().error, "目录刷新失败", "the stale tree is labeled and can be reloaded");
+  assert.equal(f.model.getSnapshot().lastRename.toPath, "final.md");
+  assert.deepEqual(entryPaths(f.model.getSnapshot().entries), ["draft.md"], "the old listing remains visible until a successful reload");
+  f.model.dispose();
+});
+
+test("a pending rename locks other tree operations and keeps its dialog until completion", async () => {
+  const pending = deferred();
+  const f = createFixture({listDocuments: async () => entries(["draft.md"])});
+  await f.model.ready();
+  f.controls.rename = () => pending.promise;
+  assert.equal(f.model.requestRename("draft.md"), true);
+  const operation = f.model.rename("final");
+
+  assert.equal(f.model.getSnapshot().renaming, true);
+  assert.equal(f.model.closeRenameDialog(), false);
+  assert.equal(f.model.requestCreate(""), false);
+  assert.equal(f.model.requestDelete("draft.md"), false);
+  pending.resolve(true);
+  await operation;
+  assert.equal(f.model.getSnapshot().renaming, false);
   f.model.dispose();
 });
 

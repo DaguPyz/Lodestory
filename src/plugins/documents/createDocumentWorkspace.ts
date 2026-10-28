@@ -20,12 +20,16 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
     const openPaths: string[] = [];
     const membershipTokens = new Map<string, object>();
     const contentReaders = new Map<string, {token: symbol; reader: (currentContent: string) => string}>();
+    const renameDocumentAliases = new Map<string, string>();
     const cached = new Map<string, CachedDocument>();
     const canMutate = options.canMutate ?? (() => true);
     let activeId: string | null = null;
     let openingPath: string | null = null;
     let creating = false;
     let deletingPath: string | null = null;
+    let renamingPath: string | null = null;
+    let renameIntent: {fromPath: string; toPath: string; applied: boolean; contents: Map<string, string>} | null = null;
+    const pendingContentRecovery = new Map<string, string>();
     let localError: string | null = null;
     let selection = 0;
     let checkingLeave = false;
@@ -33,7 +37,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
     let disposal: Promise<void> | undefined;
     let removedActiveId: string | null = null;
     let snapshot: DocumentSnapshot = Object.freeze({
-        documents: Object.freeze([]), activeId, openingPath, creating, deletingPath,
+        documents: Object.freeze([]), activeId, openingPath, creating, deletingPath, renamingPath,
         blocked: !canMutate() || files.getSnapshot().blocked, error: null,
     });
 
@@ -41,7 +45,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
     const operationError = (cause: unknown) => errorMessage(cause);
 
     function blocked() {
-        return disposed || checkingLeave || !canMutate() || files.getSnapshot().blocked;
+        return disposed || checkingLeave || renamingPath !== null || !canMutate() || files.getSnapshot().blocked;
     }
 
     function invokeStore<T>(start: () => Promise<T>): Promise<T> {
@@ -66,9 +70,10 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
     function documentFor(file: DocumentTextFile): OpenDocument {
         const id = encodeURIComponent(file.path);
         const previous = cached.get(id);
-        if (previous?.file === file) return previous.document;
+        const content = pendingContentRecovery.get(file.path) ?? file.content;
+        if (previous?.file === file && previous.document.content === content) return previous.document;
         const document = Object.freeze({
-            id, path: file.path, fileName: file.fileName, content: file.content,
+            id, path: file.path, fileName: file.fileName, content,
             saveState: file.saveState, saveError: file.saveError,
         });
         cached.set(id, {file, document});
@@ -77,6 +82,34 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
 
     function pruneMissingFiles() {
         const available = new Set(files.getSnapshot().files.map(file => file.path));
+        if (renameIntent && !renameIntent.applied) {
+            const {fromPath, toPath} = renameIntent;
+            const rewrite = (path: string) => path === fromPath ? toPath
+                : path.startsWith(`${fromPath}/`) ? `${toPath}${path.slice(fromPath.length)}` : null;
+            const affected = openPaths.flatMap(path => {
+                const nextPath = rewrite(path);
+                return nextPath ? [{path, nextPath}] : [];
+            });
+            if (affected.length && affected.every(({path, nextPath}) => !available.has(path) && available.has(nextPath))) {
+                const previousActive = activeId;
+                for (const {path, nextPath} of affected) {
+                    const oldId = encodeURIComponent(path);
+                    const nextId = encodeURIComponent(nextPath);
+                    openPaths[openPaths.indexOf(path)] = nextPath;
+                    membershipTokens.delete(oldId);
+                    membershipTokens.set(nextId, {});
+                    renameDocumentAliases.set(oldId, nextId);
+                    const reader = contentReaders.get(oldId);
+                    contentReaders.delete(oldId);
+                    if (reader) contentReaders.set(nextId, reader);
+                    cached.delete(oldId);
+                    cached.delete(nextId);
+                    if (previousActive === oldId) activeId = nextId;
+                }
+                selection += 1;
+                renameIntent.applied = true;
+            }
+        }
         const previousPaths = [...openPaths];
         const previousActive = activeId;
         for (let index = openPaths.length - 1; index >= 0; index -= 1) {
@@ -112,6 +145,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
         const nextError = currentError();
         if (snapshot.documents === documents && snapshot.activeId === activeId && snapshot.openingPath === openingPath
             && snapshot.creating === creating && snapshot.deletingPath === deletingPath
+            && snapshot.renamingPath === renamingPath
             && snapshot.blocked === isBlocked && snapshot.error === nextError) return;
         const previousById = new Map(previous.map(document => [document.id, document]));
         snapshot = Object.freeze({
@@ -120,6 +154,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
             openingPath,
             creating,
             deletingPath,
+            renamingPath,
             blocked: isBlocked,
             error: nextError
         });
@@ -239,11 +274,31 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
             return false;
         }
         const latest = files.getSnapshot().files.find(item => item.path === document.path);
-        if (content !== latest?.content && !files.update(document.path, content)) {
-            localError = files.getSnapshot().error ?? "无法更新文档正文缓冲。";
+        if (content !== latest?.content) {
+            if (!files.update(document.path, content)) {
+                pendingContentRecovery.set(document.path, content);
+                cached.delete(id);
+                localError = files.getSnapshot().error ?? "文档正文已暂存，尚未写入共享文件缓冲。";
+            } else {
+                const hadRecovery = pendingContentRecovery.has(document.path);
+                pendingContentRecovery.delete(document.path);
+                cached.delete(id);
+                if (hadRecovery) publish();
+            }
+        } else if (!pendingContentRecovery.has(document.path)) localError = null;
+        return true;
+    }
+
+    function flushPendingContent(path: string): boolean {
+        const content = pendingContentRecovery.get(path);
+        if (content === undefined) return true;
+        if (!files.update(path, content)) {
+            cached.delete(encodeURIComponent(path));
+            localError = files.getSnapshot().error ?? "文档正文已暂存，尚未写入共享文件缓冲。";
             return false;
         }
-        localError = null;
+        pendingContentRecovery.delete(path);
+        cached.delete(encodeURIComponent(path));
         return true;
     }
 
@@ -253,6 +308,66 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
         }
         return true;
     }
+
+    function flushOpenContentReadersFor(paths: readonly string[]): boolean {
+        for (const path of paths) {
+            if (!flushContentReader(encodeURIComponent(path))) return false;
+        }
+        return true;
+    }
+
+    function captureRenameReaderContent(fromPath: string, toPath: string) {
+        if (!renameIntent || renameIntent.fromPath !== fromPath || renameIntent.toPath !== toPath) return;
+        const rewrite = (path: string) => path === fromPath ? toPath
+            : path.startsWith(`${fromPath}/`) ? `${toPath}${path.slice(fromPath.length)}` : null;
+        const currentFiles = new Map(files.getSnapshot().files.map(file => [file.path, file]));
+        for (const path of openPaths) {
+            const nextPath = rewrite(path);
+            const document = snapshot.documents.find(item => item.path === path);
+            const file = currentFiles.get(path);
+            const reader = document && contentReaders.get(document.id);
+            if (!nextPath || !reader || !file) continue;
+            try {
+                const content = reader.reader(file.content);
+                if (typeof content === "string") renameIntent.contents.set(path, content);
+            } catch (cause) {
+                localError = operationError(cause);
+            }
+        }
+    }
+
+    async function persistRenameReaderContent(fromPath: string, toPath: string, renamed: boolean) {
+        const intent = renameIntent;
+        if (!intent || intent.fromPath !== fromPath || intent.toPath !== toPath) return;
+        const rewrite = (path: string) => path === fromPath ? toPath
+            : path.startsWith(`${fromPath}/`) ? `${toPath}${path.slice(fromPath.length)}` : path;
+        for (const [oldPath, captured] of intent.contents) {
+            const path = renamed ? rewrite(oldPath) : oldPath;
+            const newId = encodeURIComponent(path);
+            const reader = contentReaders.get(newId);
+            const file = files.getSnapshot().files.find(item => item.path === path);
+            let content = captured;
+            if (reader && file) {
+                try { content = reader.reader(file.content); }
+                catch { /* Keep the synchronously captured value. */ }
+            }
+            if (!files.update(path, content)) {
+                pendingContentRecovery.set(path, content);
+                cached.delete(encodeURIComponent(path));
+                localError = files.getSnapshot().error ?? "重命名期间的编辑尚未写入文件缓冲。";
+                continue;
+            }
+            pendingContentRecovery.delete(path);
+            if (!await files.save(path)) {
+                localError = files.getSnapshot().files.find(item => item.path === path)?.saveError
+                    ?? files.getSnapshot().error ?? "重命名期间的新编辑尚未保存。";
+            }
+        }
+    }
+
+    const unsubscribePathChanges = files.subscribePathChanges?.(({fromPath, toPath}) => {
+        captureRenameReaderContent(fromPath, toPath);
+    }) ?? (() => {});
 
     function flushBeforeActivation(id: string): boolean {
         while (activeId && activeId !== id) {
@@ -273,6 +388,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
         for (const path of [...openPaths]) {
             const id = encodeURIComponent(path);
             if (!files.getSnapshot().files.some(file => file.path === path)) continue;
+            if (!flushPendingContent(path)) return false;
             let saved = false;
             let failure: unknown;
             try {
@@ -400,6 +516,74 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
                 localError = null;
             });
         },
+        renamePath(fromPath: string, toPath: string) {
+            if (blocked() || creating || deletingPath !== null || renamingPath !== null
+                || !validPath(fromPath) || !validPath(toPath) || fromPath === toPath) return Promise.resolve(false);
+            const sourceParent = fromPath.includes("/") ? fromPath.slice(0, fromPath.lastIndexOf("/")) : "";
+            const targetParent = toPath.includes("/") ? toPath.slice(0, toPath.lastIndexOf("/")) : "";
+            if (sourceParent !== targetParent || toPath.startsWith(`${fromPath}/`)) {
+                localError = "只能在原目录内重命名文件或文件夹。";
+                publish();
+                return Promise.resolve(false);
+            }
+
+            const immediateAffected = openPaths.filter(path => path === fromPath || path.startsWith(`${fromPath}/`));
+            if (!flushOpenContentReadersFor(immediateAffected)) {
+                publish();
+                return Promise.resolve(false);
+            }
+            const pendingBeforeRename = [...pending];
+            return run(() => invokeStore(async () => {
+                try {
+                    // Set the UI lock before waiting for existing opens/saves, then recalculate
+                    // affected tabs because an open operation may have completed while draining.
+                    await Promise.allSettled(pendingBeforeRename);
+                    if (disposed || checkingLeave || !canMutate() || files.getSnapshot().blocked) return false;
+                    const rewrite = (path: string) => path === fromPath ? toPath
+                        : path.startsWith(`${fromPath}/`) ? `${toPath}${path.slice(fromPath.length)}` : null;
+                    const pathsToSave = openPaths.filter(path => rewrite(path) !== null);
+                    for (const path of pathsToSave) {
+                        if (path !== fromPath) continue;
+                        const oldExtension = /\.[^./]+$/.exec(path)?.[0]?.toLocaleLowerCase();
+                        const newExtension = /\.[^./]+$/.exec(toPath)?.[0]?.toLocaleLowerCase();
+                        if (oldExtension !== newExtension) {
+                            localError = "重命名已打开的文档时不能更改文件扩展名。";
+                            return false;
+                        }
+                    }
+                    if (!flushOpenContentReadersFor(pathsToSave)) return false;
+                    // Re-read after React has observed the lock; any edits that still arrive
+                    // while the native rename is pending are journaled by update() below.
+                    await Promise.resolve();
+                    if (!flushOpenContentReadersFor(pathsToSave)) return false;
+                    for (const path of pathsToSave) {
+                        if (!flushPendingContent(path)) return false;
+                        if (await files.save(path)) continue;
+                        localError = files.getSnapshot().files.find(file => file.path === path)?.saveError
+                            ?? files.getSnapshot().error ?? "重命名前无法保存已打开的文档。";
+                        return false;
+                    }
+                    const renamed = await files.renamePath(fromPath, toPath);
+                    await persistRenameReaderContent(fromPath, toPath, renamed);
+                    if (!renamed) localError = files.getSnapshot().error ?? "重命名失败。";
+                    else if (!localError) localError = null;
+                    return renamed;
+                } catch (cause) {
+                    localError = operationError(cause);
+                    return false;
+                }
+            }).finally(() => {
+                renamingPath = null;
+                renameIntent = null;
+                renameDocumentAliases.clear();
+                publish();
+            }), () => {
+                renamingPath = fromPath;
+                renameDocumentAliases.clear();
+                renameIntent = {fromPath, toPath, applied: false, contents: new Map()};
+                localError = null;
+            });
+        },
         saveAs(documentId: string, fileName: string, content: string) {
             if (blocked() || creating) return Promise.reject(new Error("当前不能另存文档。"));
             const source = snapshot.documents.find(document => document.id === documentId);
@@ -448,12 +632,36 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
             return activate(id, true, true);
         },
         update(id: string, content: string) {
-            if (blocked() || closing.has(id) || typeof content !== "string") return false;
-            const document = snapshot.documents.find(item => item.id === id);
+            if (closing.has(id) || typeof content !== "string") return false;
+            const canonicalId = renameDocumentAliases.get(id) ?? id;
+            const document = snapshot.documents.find(item => item.id === canonicalId);
             if (!document || deletingPath === document.path) return false;
+            if (renamingPath !== null) {
+                if (!renameIntent) return false;
+                const oldRoot = renameIntent.fromPath;
+                const newRoot = renameIntent.toPath;
+                const sourcePath = document.path === oldRoot || document.path.startsWith(`${oldRoot}/`);
+                const targetPath = document.path === newRoot || document.path.startsWith(`${newRoot}/`);
+                if (sourcePath || targetPath) {
+                    renameIntent.contents.set(document.path, content);
+                    return true;
+                }
+                const updatedDuringRename = files.update(document.path, content);
+                if (updatedDuringRename) publish();
+                return updatedDuringRename;
+            }
+            if (blocked()) return false;
             const updated = files.update(document.path, content);
-            if (updated) publish();
-            return updated;
+            if (updated) {
+                pendingContentRecovery.delete(document.path);
+                publish();
+                return true;
+            }
+            pendingContentRecovery.set(document.path, content);
+            cached.delete(document.id);
+            localError = files.getSnapshot().error ?? "文档正文已暂存，尚未写入共享文件缓冲。";
+            publish();
+            return true;
         },
         registerContentReader(documentId: string, reader: (currentContent: string) => string) {
             if (disposed || !snapshot.documents.some(document => document.id === documentId)) {
@@ -477,6 +685,10 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
             const id = encodeURIComponent(path);
             if (closing.has(id) || (options.discardChanges !== undefined && typeof options.discardChanges !== "boolean")) return Promise.resolve(false);
             if (options.discardChanges !== true && !flushContentReader(id)) {
+                publish();
+                return Promise.resolve(false);
+            }
+            if (options.discardChanges !== true && !flushPendingContent(path)) {
                 publish();
                 return Promise.resolve(false);
             }
@@ -530,6 +742,10 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
             const token = membershipTokens.get(id);
             if (!token) return Promise.resolve(false);
             if (!flushContentReader(id)) {
+                publish();
+                return Promise.resolve(false);
+            }
+            if (!flushPendingContent(document.path)) {
                 publish();
                 return Promise.resolve(false);
             }
@@ -588,6 +804,10 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
             const document = snapshot.documents.find(item => item.id === id);
             if (document && deletingPath !== document.path) {
                 if (!flushContentReader(id)) {
+                    publish();
+                    return Promise.resolve(false);
+                }
+                if (!flushPendingContent(document.path)) {
                     publish();
                     return Promise.resolve(false);
                 }
@@ -652,7 +872,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
             selection += 1;
             snapshot = Object.freeze({
                 documents: Object.freeze([]), activeId: null, openingPath: null,
-                creating: false, deletingPath: null, blocked: true, error: null
+                creating: false, deletingPath: null, renamingPath: null, blocked: true, error: null
             });
             notify();
             listeners.clear();
@@ -671,6 +891,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
                     operationFailure ??= new Error(readerError ?? "无法读取最新正文。");
                 }
                 unsubscribeFiles();
+                unsubscribePathChanges();
                 if (operationFailure !== undefined || !saved) {
                     const available = new Map(files.getSnapshot().files.map(file => [file.path, file]));
                     const recoverable = openPaths.flatMap(path => {
@@ -680,7 +901,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
                     snapshot = Object.freeze({
                         documents: Object.freeze(recoverable),
                         activeId: recoverable.some(document => document.id === activeId) ? activeId : null,
-                        openingPath: null, creating: false, deletingPath: null, blocked: true,
+                        openingPath: null, creating: false, deletingPath: null, renamingPath: null, blocked: true,
                         error: files.getSnapshot().error ?? readerError ?? "停止时有文档未能保存，草稿已保留。"
                     });
                     const failure = new Error("Documents could not be saved while stopping the workspace.");

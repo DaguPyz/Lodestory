@@ -17,8 +17,8 @@ export class FileSession {
   private deleting = false;
   private writeGeneration = 0;
   private acceptedWriteGeneration = 0;
-  private readonly path: string;
-  private readonly fileName: string;
+  private path: string;
+  private fileName: string;
 
   constructor(record: FileRecord, private persistBytes: WriteBytes, private changed: () => void, preferByteView = false) {
     this.path = record.path;
@@ -39,6 +39,15 @@ export class FileSession {
   get persistedData(): ProjectFileData { return this.savedData; }
   get isByteViewMode(): boolean { return isOwnedProjectByteView(this.currentData); }
   get isDirty(): boolean { return !projectFileDataEquals(this.currentData, this.savedData); }
+
+  /** Update the canonical project path after the native rename has committed. */
+  relocate(path: string) {
+    if (this.isDirty || this.pending || this.deleting) throw new Error("未保存的项目文件不能更新路径。");
+    this.path = path;
+    this.fileName = path.split("/").pop()!;
+    this.clearTimer();
+    this.value = this.createFile(this.currentData, false, "saved", null);
+  }
 
   /** An explicit opt-in can promote an already open session without changing its bytes or baseline. */
   useByteView() {

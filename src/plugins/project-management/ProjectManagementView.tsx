@@ -3,6 +3,7 @@ import type {WorkbenchService} from "@lodestory/sdk/workbench";
 import type {ProjectManagementModel} from "./projectManagementModel";
 import {NewDocumentDialog} from "./NewDocumentDialog";
 import {DeleteDocumentDialog} from "./DeleteDocumentDialog";
+import {RenameEntryDialog} from "./RenameEntryDialog";
 import {ProjectTree} from "./ProjectTree";
 import "./project-management.css";
 
@@ -31,13 +32,15 @@ function ProjectFilesForSession({workbench, model, active}: {
     loading={snapshot.loading}
     error={snapshot.error}
     active={canInteract}
-    newDisabled={!canInteract || snapshot.creating || snapshot.loading || snapshot.dialogOpen || !!snapshot.deletePath || snapshot.deleting || !!snapshot.deletingPath}
+    newDisabled={!canInteract || snapshot.creating || snapshot.loading || snapshot.dialogOpen || !!snapshot.deletePath || snapshot.deleting || !!snapshot.deletingPath || !!snapshot.renamePath || snapshot.renaming}
     deletingPath={snapshot.deletingPath}
+    lastRename={snapshot.lastRename}
     onOpenDocument={path => model.openDocument(path)}
     onSelectFolder={path => { model.selectFolder(path); }}
     onNewDocument={(parentPath, extension) => { model.requestCreate(parentPath, extension); }}
     onNewDirectory={parentPath => { model.requestCreateDirectory(parentPath); }}
     onDeleteDocument={path => { model.requestDelete(path); }}
+    onRename={path => { model.requestRename(path); }}
     onReload={() => { void model.refresh(); }}
   />;
 }
@@ -62,6 +65,16 @@ function ProjectDialogsForSession({workbench, model}: {workbench: WorkbenchServi
 
   if (!workbenchState.active) return null;
   return <>
+    <RenameEntryDialog
+      open={snapshot.renamePath !== null}
+      name={snapshot.renameName}
+      suffix={snapshot.renameSuffix}
+      directory={snapshot.renameDirectory}
+      busy={workbenchState.busy || snapshot.blocked || snapshot.renaming}
+      error={snapshot.renameError}
+      onClose={() => { model.closeRenameDialog(); }}
+      onRename={name => model.rename(name)}
+    />
     <DeleteDocumentDialog
       open={snapshot.deletePath !== null}
       path={snapshot.deletePath ?? closingDeletePath ?? ""}

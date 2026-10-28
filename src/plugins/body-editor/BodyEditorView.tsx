@@ -92,13 +92,14 @@ export function BodyEditor({active}: {active: boolean}) {
         const conversions = format ? editor.resolveConversions(format) : [];
         return <Manuscript key={document.id} document={document}
           visible={visible} active={documentActive}
-          readOnly={disabled || !visible || workspace.deletingPath === document.path}
+          readOnly={disabled || workspace.blocked || !visible || workspace.deletingPath === document.path}
           format={format} definition={definition} conversions={conversions} onEditorReady={onEditorReady}
           onChange={content => {
             const latest = workspace.getSnapshot();
             const focus = focusState.current;
-            if (focus.active && !focus.busy && latest.activeId === document.id
-              && latest.documents.some(open => open.id === document.id)) {
+            const acceptingRenameInput = latest.renamingPath !== null;
+            if (focus.active && !focus.busy && (acceptingRenameInput || (!latest.blocked && latest.activeId === document.id))
+              && (acceptingRenameInput || latest.documents.some(open => open.id === document.id))) {
               workspace.update(document.id, content);
             }
           }}

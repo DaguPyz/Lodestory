@@ -13,11 +13,13 @@ type ProjectTreeProps = {
   active: boolean;
   newDisabled: boolean;
   deletingPath: string | null;
+  lastRename: Readonly<{fromPath: string; toPath: string; directory: boolean}> | null;
   onOpenDocument: (path: string) => unknown | Promise<unknown>;
   onSelectFolder: (path: string) => void;
   onNewDocument: (parentPath?: string, extension?: DocumentExtension) => void;
   onNewDirectory: (parentPath?: string) => void;
   onDeleteDocument: (path: string) => void;
+  onRename: (path: string) => void;
   onReload: () => void;
 };
 
@@ -39,6 +41,7 @@ function creationItems(contextPath: string, disabled: boolean,
 
 function TreeNode({
   node, depth, activeDocumentPath, openingPath, expanded, onToggleFolder, onOpenDocument, onNewDocument, onNewDirectory, onDeleteDocument, newDisabled, loading, deletingPath,
+  onRename,
 }: {
   node: ProjectTreeEntry;
   depth: number;
@@ -53,6 +56,7 @@ function TreeNode({
   newDisabled: boolean;
   loading: boolean;
   deletingPath: string | null;
+  onRename: ProjectTreeProps["onRename"];
 }) {
   const indentation = { "--cmp-tree-depth": depth } as CSSProperties;
 
@@ -61,6 +65,9 @@ function TreeNode({
       <li>
         <ContextMenuRegion context={node.path} label={`${node.name}目录操作`} items={[
           ...creationItems(node.path, newDisabled, onNewDocument, onNewDirectory),
+          {type: "separator", id: "folder-actions-separator"},
+          {id: "rename-folder", label: "重命名文件夹", visible: path => !!path, disabled: newDisabled || loading || !!openingPath,
+            restoreFocus: false, onSelect: path => { if (!newDisabled && !loading && !openingPath && node.path === path) onRename(path); }},
           { id: "toggle", label: expanded.has(node.path) ? "折叠" : "展开", disabled: loading,
             onSelect: (path) => { if (!loading && node.path === path) onToggleFolder(path); } },
         ]}>
@@ -78,7 +85,7 @@ function TreeNode({
               key={child.path} node={child} depth={depth + 1} expanded={expanded} onToggleFolder={onToggleFolder}
               activeDocumentPath={activeDocumentPath} openingPath={openingPath} onOpenDocument={onOpenDocument}
               onNewDocument={onNewDocument} onNewDirectory={onNewDirectory} onDeleteDocument={onDeleteDocument}
-              newDisabled={newDisabled} loading={loading} deletingPath={deletingPath}
+              onRename={onRename} newDisabled={newDisabled} loading={loading} deletingPath={deletingPath}
             />
           )) : <li className="file-tree-empty" style={{ "--cmp-tree-depth": depth + 1 } as CSSProperties}>暂无文档</li>}
         </ul>}
@@ -95,6 +102,9 @@ function TreeNode({
         { id: "open", label: "打开文档", icon: <Icon name="file" />, disabled: loading || deleting || openingPath === node.path, restoreFocus: false,
           onSelect: (path) => { if (!loading && !deleting && openingPath !== path && node.path === path) return onOpenDocument(path); } },
         ...creationItems(node.path, newDisabled || deleting || loading, onNewDocument, onNewDirectory, parentPath),
+        {id: "rename-file", label: "重命名文件", disabled: newDisabled || deleting || loading || !!openingPath,
+          restoreFocus: false, onSelect: path => { if (!newDisabled && !deleting && !loading && !openingPath && node.path === path) onRename(path); }},
+        {type: "separator", id: "file-actions-separator"},
         {id: "delete-document", label: "删除文档", disabled: newDisabled || deleting || loading || openingPath === node.path, restoreFocus: false,
           onSelect: path => { if (!newDisabled && !loading && !deleting && openingPath !== path && node.path === path) onDeleteDocument(path); }},
       ]}>
@@ -118,7 +128,7 @@ function TreeNode({
 }
 
 export function ProjectTree({ projectName, entries, activeDocumentPath, openingPath, loading, error, active, newDisabled, deletingPath,
-  onOpenDocument, onSelectFolder, onNewDocument, onNewDirectory, onDeleteDocument, onReload }: ProjectTreeProps) {
+  lastRename, onOpenDocument, onSelectFolder, onNewDocument, onNewDirectory, onDeleteDocument, onRename, onReload }: ProjectTreeProps) {
   const [expanded, setExpanded] = useState(() => new Set([""]));
   const canInteract = active && !loading;
 
@@ -128,6 +138,13 @@ export function ProjectTree({ projectName, entries, activeDocumentPath, openingP
     const parents = ["", ...parts.slice(0, -1).map((_part, index) => parts.slice(0, index + 1).join("/"))];
     setExpanded((previous) => new Set([...previous, ...parents]));
   }, [activeDocumentPath]);
+
+  useEffect(() => {
+    if (!lastRename?.directory) return;
+    setExpanded(previous => new Set([...previous].map(path =>
+      path === lastRename.fromPath || path.startsWith(`${lastRename.fromPath}/`)
+        ? `${lastRename.toPath}${path.slice(lastRename.fromPath.length)}` : path)));
+  }, [lastRename]);
 
   function toggleFolder(path: string) {
     if (!canInteract) return;
@@ -172,7 +189,7 @@ export function ProjectTree({ projectName, entries, activeDocumentPath, openingP
               activeDocumentPath={activeDocumentPath} openingPath={openingPath}
               onOpenDocument={(path) => { if (canInteract) return onOpenDocument(path); }}
               onNewDocument={(path, extension) => { if (canInteract && !newDisabled) onNewDocument(path, extension); }}
-              onNewDirectory={newDirectory} onDeleteDocument={onDeleteDocument}
+              onNewDirectory={newDirectory} onDeleteDocument={onDeleteDocument} onRename={onRename}
               newDisabled={newDisabled || !canInteract} loading={!canInteract} deletingPath={deletingPath}
             />
           </ul>}

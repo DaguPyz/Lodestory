@@ -2108,6 +2108,7 @@ dependencies = [
  "chrono",
  "dunce",
  "font-kit",
+ "rustix",
  "same-file",
  "serde",
  "serde_json",

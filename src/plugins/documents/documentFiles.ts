@@ -1,4 +1,4 @@
-import type {ProjectByteView, ProjectFile, ProjectFiles} from "@lodestory/sdk/project-storage";
+import type {ProjectByteView, ProjectFile, ProjectFiles, ProjectPathRename} from "@lodestory/sdk/project-storage";
 import {decodeDocumentBytes} from "./decodeDocumentBytes";
 
 /** Text-only view used inside documents. The shared storage service remains byte-oriented. */
@@ -15,9 +15,11 @@ export type DocumentTextSnapshot = Readonly<{
 export type DocumentTextFiles = {
   getSnapshot(): DocumentTextSnapshot;
   subscribe(listener: () => void): () => void;
+  subscribePathChanges?(listener: (change: ProjectPathRename) => void): () => void;
   open(path: string): Promise<DocumentTextFile | null>;
   create(parentPath: string, name: string, content?: string): Promise<DocumentTextFile | null>;
   createDirectory(parentPath: string, name: string): Promise<string | null>;
+  renamePath(fromPath: string, toPath: string): Promise<boolean>;
   update(path: string, content: string): boolean;
   save(path: string): Promise<boolean>;
   delete(path: string, options?: {discardChanges?: boolean}): Promise<boolean>;
@@ -128,10 +130,12 @@ function textFile(source: ProjectFile, content: string): DocumentTextFile {
 /** Adapts only paths explicitly opened or created by documents; unrelated binary files are ignored. */
 export function createDocumentFiles(source: ProjectFiles): DocumentTextFiles {
   const listeners = new Set<() => void>();
+  const pathChangeListeners = new Set<(change: ProjectPathRename) => void>();
   const ownedPaths = new Set<string>();
   const decoded = new Map<string, CachedTextFile>();
   const pendingDecodes = new Map<string, PendingDecode>();
   const pendingTextProjections = new Map<string, PendingTextProjection>();
+  const requestedRenames = new Set<Readonly<{fromPath: string; toPath: string}>>();
   const issues = new Map<string, string>();
   let error: string | null = null;
   let disposed = false;
@@ -195,10 +199,40 @@ export function createDocumentFiles(source: ProjectFiles): DocumentTextFiles {
       try { listener(); } catch (cause) { console.error("Document file subscriber failed.", {error: cause}); }
     }
   }
+  function rewritePath(path: string, fromPath: string, toPath: string) {
+    return path === fromPath ? toPath : path.startsWith(`${fromPath}/`) ? `${toPath}${path.slice(fromPath.length)}` : null;
+  }
+  function applyRename(fromPath: string, toPath: string, byPath: ReadonlyMap<string, ProjectFile>) {
+    const moves = [...ownedPaths].flatMap(path => {
+      const nextPath = rewritePath(path, fromPath, toPath);
+      return nextPath && byPath.has(nextPath) ? [{path, nextPath}] : [];
+    });
+    for (const {path} of moves) ownedPaths.delete(path);
+    for (const {path, nextPath} of moves) {
+      ownedPaths.add(nextPath);
+      const file = byPath.get(nextPath)!;
+      const cached = decoded.get(path);
+      decoded.delete(path);
+      if (cached) {
+        const text = cached.content === null ? null : textFile(file, cached.content);
+        decoded.set(nextPath, {byteIdentity: identityOf(file), content: cached.content, source: file, ...(text ? {file: text} : {})});
+      }
+      const issue = issues.get(path);
+      issues.delete(path);
+      if (issue) issues.set(nextPath, issue);
+      pendingTextProjections.delete(path);
+      pendingDecodes.delete(path);
+    }
+  }
   function refresh() {
     if (disposed) return;
     const sourceSnapshot = source.getSnapshot();
     const byPath = new Map(sourceSnapshot.files.map(file => [file.path, file]));
+    for (const rename of requestedRenames) {
+      const oldExists = [...byPath.keys()].some(path => path === rename.fromPath || path.startsWith(`${rename.fromPath}/`));
+      const newExists = [...byPath.keys()].some(path => path === rename.toPath || path.startsWith(`${rename.toPath}/`));
+      if (!oldExists && newExists) applyRename(rename.fromPath, rename.toPath, byPath);
+    }
     const nextFiles: DocumentTextFile[] = [];
     for (const path of ownedPaths) {
       const file = byPath.get(path);
@@ -289,6 +323,12 @@ export function createDocumentFiles(source: ProjectFiles): DocumentTextFiles {
   }
 
   let unsubscribe = () => {};
+  const unsubscribePathChanges = source.subscribePathChanges?.(change => {
+    for (const listener of [...pathChangeListeners]) {
+      if (!pathChangeListeners.has(listener)) continue;
+      try { listener(change); } catch (cause) { console.error("Document path-change subscriber failed.", {error: cause}); }
+    }
+  }) ?? (() => {});
   const adapter: DocumentTextFiles = Object.freeze({
     getSnapshot() {
       const blocked = source.getSnapshot().blocked;
@@ -298,6 +338,11 @@ export function createDocumentFiles(source: ProjectFiles): DocumentTextFiles {
       if (disposed) return () => {};
       listeners.add(listener);
       return () => { listeners.delete(listener); };
+    },
+    subscribePathChanges(listener: (change: ProjectPathRename) => void) {
+      if (disposed) return () => {};
+      pathChangeListeners.add(listener);
+      return () => { pathChangeListeners.delete(listener); };
     },
     open(path: string) {
       error = null;
@@ -346,6 +391,18 @@ export function createDocumentFiles(source: ProjectFiles): DocumentTextFiles {
         captureError(cause instanceof Error ? cause.message : "无法创建目录。");
         return null;
       });
+    },
+    renamePath(fromPath: string, toPath: string) {
+      if (disposed) return Promise.resolve(false);
+      const rename = Object.freeze({fromPath, toPath});
+      requestedRenames.add(rename);
+      return invoke(() => source.renamePath(fromPath, toPath)).then(renamed => {
+        if (renamed) refresh();
+        return renamed;
+      }).catch(cause => {
+        captureError(cause instanceof Error ? cause.message : "重命名失败。");
+        return false;
+      }).finally(() => requestedRenames.delete(rename));
     },
     update(path: string, content: string) {
       if (!ownedPaths.has(path) || typeof content !== "string") return false;
@@ -409,6 +466,8 @@ export function createDocumentFiles(source: ProjectFiles): DocumentTextFiles {
       disposed = true;
       try { unsubscribe(); }
       finally {
+        unsubscribePathChanges();
+        pathChangeListeners.clear();
         listeners.clear();
         clearCaches();
       }

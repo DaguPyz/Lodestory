@@ -350,7 +350,9 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       return { ...data, __esModule: true, default: data };
     }
     const compiled = ts.transpileModule(source, {
-      fileName: path,
+      // TypeScript preserves ESM syntax for .mjs even when CommonJS is requested.
+      // The fixture executes all local modules in a CommonJS VM.
+      fileName: path.endsWith(".mjs") ? `${path.slice(0, -4)}.js` : path,
       compilerOptions: {
         target: ts.ScriptTarget.ES2022,
         module: ts.ModuleKind.CommonJS,

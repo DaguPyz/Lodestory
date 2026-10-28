@@ -41,6 +41,9 @@ type TimelineSessionResources = {
   snapshot: TimelineListSnapshot;
   unsubscribe: () => void;
   selectedId: string | null;
+  openGeneration: number;
+  openedId: string | null;
+  openListeners: Set<() => void>;
 };
 
 /** Owns timeline metadata, project-session models, canvas viewports, and axis settings. */
@@ -172,6 +175,9 @@ export function createTimelinePlugin(): Plugin {
             snapshot: model.getSnapshot(),
             unsubscribe: () => {},
             selectedId: null,
+            openGeneration: 0,
+            openedId: null,
+            openListeners: new Set(),
           };
           const canMutate = () => {
             if (!alive || sessions.get(session.id) !== resource) return false;
@@ -222,6 +228,7 @@ export function createTimelinePlugin(): Plugin {
             for (const events of resource.events.values()) events.dispose();
             resource.summaries.clear();
             resource.listeners.clear();
+            resource.openListeners.clear();
             model.dispose();
             if (sessions.get(session.id) === resource) sessions.delete(session.id);
             throw error;
@@ -273,6 +280,7 @@ export function createTimelinePlugin(): Plugin {
                           try { model.dispose(); }
                           finally {
                             resource.listeners.clear();
+                            resource.openListeners.clear();
                             if (sessions.get(session.id) === resource) sessions.delete(session.id);
                           }
                         }
@@ -296,9 +304,16 @@ export function createTimelinePlugin(): Plugin {
           if (!alive || !resource || !model || !snapshot || current.session?.id !== sessionId
             || !current.active || current.busy || snapshot.busy || snapshot.createDraft
             || !snapshot.entries.some(entry => entry.id === timelineId) || resource.editing.size > 0) return false;
+          const opening = resource.openedId !== timelineId || snapshot.selectedId !== timelineId
+            || !layout.getSnapshot().shownIds.includes(MAIN_CONTENT_ID);
           model.select(timelineId);
           createViewport(resource, timelineId);
           layout.show(MAIN_CONTENT_ID);
+          if (opening) {
+            resource.openedId = timelineId;
+            resource.openGeneration++;
+            for (const listener of [...resource.openListeners]) listener();
+          }
           return true;
         },
       };
@@ -347,6 +362,11 @@ function TimelineMain({workbench, canvas, contextMenus, assetCatalog, sessions, 
   const subscribe = resource?.publicModel.subscribe ?? emptySubscribe;
   const getSnapshot = resource?.publicModel.getSnapshot ?? emptySnapshot;
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+  const openGeneration = useSyncExternalStore(
+    listener => { resource?.openListeners.add(listener); return () => resource?.openListeners.delete(listener); },
+    () => resource?.openGeneration ?? 0,
+    () => 0,
+  );
   const entry = snapshot.entries.find(item => item.id === snapshot.selectedId);
   const viewport = entry ? resource?.viewports.get(entry.id) : undefined;
   const axis = entry ? resource?.axes.get(entry.id) : undefined;
@@ -357,6 +377,7 @@ function TimelineMain({workbench, canvas, contextMenus, assetCatalog, sessions, 
     return <div className="timeline-canvas-empty" role="status">选择或新建一条时间线以打开画布。</div>;
   }
   return <TimelineCanvas canvas={canvas} contextMenus={contextMenus} assetCatalog={assetCatalog.getCatalog(session.id)} viewport={viewport} active={current} title={entry.title} axis={axis} events={events}
+    openToken={openGeneration ? `${session.id}:${openGeneration}` : null}
     onEditingChange={editing => onEditingChange(session.id, entry.id, editing)}/>;
 }
 

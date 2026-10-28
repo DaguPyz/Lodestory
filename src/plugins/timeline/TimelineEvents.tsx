@@ -1,11 +1,12 @@
-import {memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
+import {memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type RefObject} from "react";
 import type {CanvasViewportSnapshot} from "@lodestory/sdk/canvas";
 import type {ContextMenuService} from "@lodestory/sdk/context-menu";
 import type {AssetCatalog} from "@lodestory/sdk/asset-catalog";
 import {Button, Dialog, DialogActions, Icon, TextField, Textarea} from "@lodestory/ui";
 import type {TimelineAxisSettings} from "./timelineAxisStore";
 import type {TimelineEvent, TimelineEventStore} from "./timelineEventStore";
-import {getTimelineEventsGeometry, TIMELINE_TURNING_CAPTION_FONT_SIZE} from "./timelineEventsGeometry";
+import {getTimelineEventsGeometry, TIMELINE_TURNING_CAPTION_FONT_SIZE, type TimelineEventsGeometry} from "./timelineEventsGeometry";
+import {getTimelineStemSegments, type TimelineStemSegment} from "./timelineStemSegments";
 import {formatTimelineAxisValue, timelineValueAtOffset, TIMELINE_AXIS_BASE_PIXEL_INTERVAL, type TimelineLabelBounds} from "./timelineAxisGeometry";
 import {EventAssetPicker} from "./EventAssetPicker";
 import "./timeline-events.css";
@@ -83,22 +84,26 @@ const AxisAnchors = memo(function AxisAnchors({events, step, zoom, originWorldX,
   active: boolean;
   onEdit(event: TimelineEvent): void;
 }) {
-  return <>{events.map(event => {
-    const x = ((event.offset / step) * TIMELINE_AXIS_BASE_PIXEL_INTERVAL - originWorldX) * zoom;
-    return <AxisAnchor key={event.id} event={event} x={x} active={active} onEdit={onEdit} />;
+  const count = Math.min(24, events.length);
+  return <>{Array.from({length: count}, (_, index) => {
+    const group = events.slice(Math.floor(index * events.length / count), Math.floor((index + 1) * events.length / count));
+    return <g key={group[0].id} data-growth-anchor={group[0].id}>{group.map(event => {
+      const x = ((event.offset / step) * TIMELINE_AXIS_BASE_PIXEL_INTERVAL - originWorldX) * zoom;
+      return <AxisAnchor key={event.id} event={event} x={x} active={active} onEdit={onEdit} />;
+    })}</g>;
   })}</>;
 });
 
-function EventAxisMarkers({eventById, settings, geometry, centerX, zoom, active, onEdit}: {
+function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX, zoom, active, onEdit}: {
   eventById: ReadonlyMap<string, TimelineEvent>;
   settings: TimelineAxisSettings;
   geometry: ReturnType<typeof getTimelineEventsGeometry>;
+  stemSegments: readonly TimelineStemSegment[];
   centerX: number;
   zoom: number;
   active: boolean;
   onEdit(event: TimelineEvent): void;
 }) {
-  const stemMaskId = useId();
   // Only membership/data/zoom changes rebuild the anchors; view movement does not.
   const markerIds = geometry.events.map(point => point.id).join(",");
   const markerEvents = useMemo(() => markerIds ? markerIds.split(",").flatMap(id => {
@@ -109,34 +114,27 @@ function EventAxisMarkers({eventById, settings, geometry, centerX, zoom, active,
   // existing anchors whenever one event enters/leaves the viewport.
   const originWorldX = Math.floor(centerX / 4096) * 4096;
   const stems = [[], []] as [string[], string[]];
-  for (const point of geometry.events) {
-    // The viewport clips the same straight leaders; keep their original endpoints so
-    // labels and turning captions retain the exact same relationship to the axis.
-    stems[Number(point.important)].push(`M${point.x} ${point.axisY}V${point.endpointY}`);
+  for (const segment of stemSegments) {
+    stems[Number(segment.important)].push(`M${segment.x} ${segment.y1}V${segment.y2}`);
   }
   return <svg className="timeline-events-svg" aria-hidden="false" width={geometry.width} height={geometry.height}
     viewBox={`0 0 ${geometry.width} ${geometry.height}`}>
-    <defs>
-      <mask id={stemMaskId} maskUnits="userSpaceOnUse" x="0" y="0" width={geometry.width} height={geometry.height}>
-        <rect width={geometry.width} height={geometry.height} fill="white" />
-        {geometry.labelBounds.map((bounds, index) => <rect key={index}
-          x={bounds.left - 4} y={bounds.top - 4} width={bounds.width + 8} height={bounds.height + 8} fill="black" />)}
-      </mask>
-    </defs>
-    <g mask={`url(#${stemMaskId})`} aria-hidden="true">
+    <g className="timeline-event-stems" aria-hidden="true">
       {stems[0].length > 0 && <path className="timeline-event-stem" d={stems[0].join("")} />}
       {stems[1].length > 0 && <path className="timeline-event-stem timeline-event-stem-important" d={stems[1].join("")} />}
     </g>
-    <g transform={`translate(${geometry.width / 2 + (originWorldX - centerX) * zoom} ${geometry.axisY})`}>
-      <AxisAnchors events={markerEvents} step={settings.step} zoom={zoom} originWorldX={originWorldX}
-        active={active} onEdit={onEdit} />
+    <g className="timeline-event-axis-anchors">
+      <g transform={`translate(${geometry.width / 2 + (originWorldX - centerX) * zoom} ${geometry.axisY})`}>
+        <AxisAnchors events={markerEvents} step={settings.step} zoom={zoom} originWorldX={originWorldX}
+          active={active} onEdit={onEdit} />
+      </g>
     </g>
-    {geometry.events.map(point => {
+    <g className="timeline-event-details">{geometry.events.map(point => {
       if (!point.endpointVisible && !point.turningCaptionVisible) return null;
       const event = eventById.get(point.id);
       if (!event) return null;
       const originEvent = event.offset === 0;
-      return <g key={event.id}>
+      return <g key={event.id} data-growth-event={event.id}>
         {point.turningCaptionVisible && point.turningCaption && <g className="timeline-event-axis-marker"
           aria-hidden="true" data-canvas-interactive transform={`translate(${point.x} ${point.axisY})`}
           onClick={() => { if (active) onEdit(event); }}>
@@ -159,7 +157,7 @@ function EventAxisMarkers({eventById, settings, geometry, centerX, zoom, active,
           <EndpointGlyph />
         </g>}
       </g>;
-    })}
+    })}</g>
   </svg>;
 }
 
@@ -184,6 +182,7 @@ function EventLabels({eventById, settings, geometry, onEdit}: {
       const event = eventById.get(point.id);
       if (!event) return null;
       return <div key={event.id}
+        data-growth-event={event.id}
         className={`timeline-event-label timeline-event-label-${point.placement}${event.important ? " timeline-event-label-important" : ""}${point.labelAlign === "right" ? " timeline-event-label-align-right" : ""}`}
         style={{transform: `translate(${point.labelLeft}px, ${point.labelTop}px)`, width: point.labelWidth}}
         aria-hidden="true" data-canvas-interactive
@@ -194,7 +193,7 @@ function EventLabels({eventById, settings, geometry, onEdit}: {
   </div>;
 }
 
-export function TimelineEvents({contextMenus, assetCatalog, store, settings, view, size, axisLabelBounds, active, onEditingChange}: {
+export function TimelineEvents({contextMenus, assetCatalog, store, settings, view, size, axisLabelBounds, active, growthGeometryRef, growthStemsRef, onEditingChange}: {
   contextMenus: ContextMenuService;
   assetCatalog: AssetCatalog | null;
   store: TimelineEventStore;
@@ -203,6 +202,8 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
   size: Size;
   axisLabelBounds: readonly TimelineLabelBounds[];
   active: boolean;
+  growthGeometryRef?: RefObject<TimelineEventsGeometry | null>;
+  growthStemsRef?: RefObject<readonly TimelineStemSegment[] | null>;
   onEditingChange?: (editing: boolean) => void;
 }) {
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
@@ -440,6 +441,15 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
   const geometry = useMemo(() => getTimelineEventsGeometry({events: snapshot.events, origin: settings.origin, step: settings.step,
     center: view.center, zoom: view.zoom, width: size.width, height: size.height, axisLabelBounds}),
   [snapshot.events, settings.origin, settings.step, view.center.x, view.center.y, view.zoom, size.width, size.height, axisLabelBounds]);
+  const stemSegments = useMemo(() => getTimelineStemSegments(geometry), [geometry]);
+  useLayoutEffect(() => {
+    if (growthGeometryRef) growthGeometryRef.current = geometry;
+    if (growthStemsRef) growthStemsRef.current = stemSegments;
+    return () => {
+      if (growthGeometryRef?.current === geometry) growthGeometryRef.current = null;
+      if (growthStemsRef?.current === stemSegments) growthStemsRef.current = null;
+    };
+  }, [growthGeometryRef, growthStemsRef, geometry, stemSegments]);
   const invalidOffset = Boolean(draft?.offset.trim()) && !Number.isFinite(Number(draft?.offset));
   const offset = Number(draft?.offset ?? "");
   const validTitle = Boolean(draft?.title.trim()) && [...(draft?.title.trim() ?? "")].length <= 60;
@@ -462,7 +472,7 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     <div ref={menuSurface} className="timeline-events-overlay" style={overlayStyle} data-active={active}
       tabIndex={active ? 0 : -1} aria-label="时间线事件画布">
       {snapshot.loaded && geometry.width > 0 && geometry.height > 0 && <>
-        <EventAxisMarkers eventById={eventById} settings={settings} geometry={geometry} centerX={view.center.x} zoom={view.zoom} active={active}
+        <EventAxisMarkers eventById={eventById} settings={settings} geometry={geometry} stemSegments={stemSegments} centerX={view.center.x} zoom={view.zoom} active={active}
           onEdit={beginEdit} />
         <EventLabels eventById={eventById} settings={settings} geometry={geometry}
           onEdit={beginEdit} />

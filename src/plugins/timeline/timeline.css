@@ -44,7 +44,19 @@
   stroke: var(--ui-border-control);
 }
 
-.timeline-axis-line { stroke-width: 1px; }
+.timeline-axis-line {
+  --timeline-axis-growth-duration: 400ms;
+  --timeline-axis-tick-stage-duration: 700ms;
+  --timeline-axis-label-stage-duration: 500ms;
+  --timeline-axis-mark-duration: 250ms;
+  --timeline-branch-growth-duration: 1600ms;
+  --timeline-branch-reveal-duration: 400ms;
+  --timeline-event-appear-duration: 200ms;
+  --timeline-text-appear-duration: 400ms;
+  stroke-width: 1px;
+  transform-box: fill-box;
+  transform-origin: left center;
+}
 .timeline-axis-tick { stroke-width: 1px; }
 .timeline-axis-tick-origin { stroke: var(--ui-accent-indicator); stroke-width: 1.5px; }
 .timeline-axis-arrow { fill: var(--ui-border-control); }

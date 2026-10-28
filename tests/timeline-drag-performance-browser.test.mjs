@@ -217,6 +217,127 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
     "The real timeline canvas did not finish its initial render.");
     await waitForFrame();
 
+    await t.test("grows the axis, ticks, labels, then branches in order with bounded animation work", async () => {
+      await fixture("setAnimationEvents", true);
+      await waitForFrame();
+      const lineAnimations = () => evaluate("document.querySelector('.timeline-axis-line').getAnimations().length");
+      await fixture("open", "first");
+      await waitFor(async () => await lineAnimations() === 1, "The axis growth animation did not start.");
+      const animation = await evaluate(`(() => {
+        const line = document.querySelector('.timeline-axis-line');
+        const growth = line.getAnimations()[0];
+        growth.pause(); growth.currentTime = 0;
+        const start = getComputedStyle(line).transform;
+        growth.currentTime = 200;
+        const tickClip = document.querySelector('.timeline-axis-svg clipPath[id$="-ticks"] rect');
+        const tickClips = [...document.querySelectorAll('.timeline-axis-svg clipPath[id$="-ticks"] rect')];
+        const ticksGrowth = tickClip.getAnimations()[0];
+        ticksGrowth.pause(); ticksGrowth.currentTime = 0;
+        const ticksStart = getComputedStyle(tickClip).transform;
+        ticksGrowth.currentTime = 525;
+        const labelClip = document.querySelector('.timeline-axis-svg clipPath[id$="-labels"] rect');
+        const labelClips = [...document.querySelectorAll('.timeline-axis-svg clipPath[id$="-labels"] rect')];
+        const labelGrowth = labelClip.getAnimations()[0];
+        labelGrowth.pause(); labelGrowth.currentTime = 1100;
+        const labelsStart = getComputedStyle(labelClip).transform;
+        labelGrowth.currentTime = 1225;
+        const segments = [...document.querySelectorAll('.timeline-event-stems-growth line')];
+        const first = segments[0];
+        const last = segments.at(-1);
+        const branch = first.getAnimations()[0];
+        const lastBranch = last.getAnimations()[0];
+        branch.pause(); branch.currentTime = branch.effect.getTiming().delay;
+        const branchStart = getComputedStyle(first).strokeDashoffset;
+        branch.currentTime += branch.effect.getTiming().duration / 2;
+        const detail = document.querySelector('.timeline-event-details [data-growth-event]');
+        const appearance = detail.getAnimations()[0];
+        appearance.pause();
+        appearance.currentTime = appearance.effect.getTiming().delay;
+        const detailStart = getComputedStyle(detail).opacity;
+        appearance.currentTime += 100;
+        const description = document.querySelector('.timeline-event-summary');
+        const titleAnimation = description.closest('.timeline-event-label').getAnimations()[0];
+        const descriptionAnimation = description.getAnimations()[0];
+        titleAnimation.pause(); descriptionAnimation.pause();
+        descriptionAnimation.currentTime = titleAnimation.effect.getTiming().delay + 200;
+        const descriptionBeforeTitle = getComputedStyle(description).opacity;
+        descriptionAnimation.currentTime = descriptionAnimation.effect.getTiming().delay + 200;
+        return {duration: growth.effect.getTiming().duration, start, middle: getComputedStyle(line).transform,
+          ticksStart, ticksMiddle: getComputedStyle(tickClip).transform, ticksTiming: ticksGrowth.effect.getTiming(),
+          ticksOrigin: getComputedStyle(tickClip).transformOrigin,
+          labelsStart, labelsMiddle: getComputedStyle(labelClip).transform, labelsTiming: labelGrowth.effect.getTiming(),
+          lastTickTiming: tickClips.at(-1).getAnimations()[0].effect.getTiming(),
+          lastLabelTiming: labelClips.at(-1).getAnimations()[0].effect.getTiming(),
+          axisClipCount: tickClips.length + labelClips.length,
+          branchStart, branchMiddle: getComputedStyle(first).strokeDashoffset,
+          branchTiming: branch.effect.getTiming(), lastDelay: lastBranch.effect.getTiming().delay,
+          above: segments.some(item => Number(item.getAttribute('y2')) < Number(item.getAttribute('y1'))),
+          below: segments.some(item => Number(item.getAttribute('y2')) > Number(item.getAttribute('y1'))),
+          eventMasks: document.querySelectorAll('.timeline-events-svg mask, .timeline-events-svg clipPath').length,
+          detailStart, detailMiddle: getComputedStyle(detail).opacity, detailTiming: appearance.effect.getTiming(),
+          titleTiming: titleAnimation.effect.getTiming(), descriptionTiming: descriptionAnimation.effect.getTiming(),
+          descriptionBeforeTitle, descriptionMiddle: getComputedStyle(description).opacity,
+          segments: segments.length, otherAnimations: document.querySelector('.timeline-events-overlay').getAnimations({subtree: true}).length};
+      })()`);
+      assert.equal(animation.duration, 400);
+      assert.notEqual(animation.start, animation.middle);
+      assert.equal(animation.ticksTiming.delay, 400, "ticks start after the main axis");
+      assert.equal(animation.ticksTiming.duration, 250);
+      assert.equal(animation.lastTickTiming.delay + animation.lastTickTiming.duration, 1100, "all ticks complete before labels begin");
+      assert.match(animation.ticksOrigin, /378px/, "ticks grow from their lower edge upwards");
+      assert.notEqual(animation.ticksStart, animation.ticksMiddle, "ticks grow vertically");
+      assert.equal(animation.labelsTiming.delay, 1100, "labels start after all ticks");
+      assert.equal(animation.lastLabelTiming.delay + animation.lastLabelTiming.duration, 1600, "all labels complete before branches begin");
+      assert.ok(animation.axisClipCount <= 48, "axis animation work stays bounded");
+      assert.notEqual(animation.labelsStart, animation.labelsMiddle, "labels are revealed after the ticks");
+      assert.ok(animation.segments > 0 && animation.segments <= 128, "branch animations remain bounded");
+      assert.equal(animation.eventMasks, 0, "event leaders use no SVG mask or animated clip");
+      assert.ok(animation.otherAnimations <= 280, "event animations are bounded");
+      assert.ok(animation.branchTiming.delay >= 1600, "branches start after the labels finish");
+      assert.ok(animation.lastDelay > animation.branchTiming.delay, "branches grow from left to right");
+      assert.ok(animation.above && animation.below, "leaders grow in both directions away from the axis");
+      assert.notEqual(animation.branchStart, animation.branchMiddle, "each branch segment is drawn progressively");
+      assert.equal(animation.detailTiming.duration, 200, "endpoints fade in");
+      assert.equal(animation.titleTiming.duration, 400, "titles fade in more slowly");
+      assert.equal(animation.descriptionTiming.duration, 400, "descriptions fade in more slowly");
+      assert.ok(animation.detailTiming.delay >= 2000, "details appear after their branch begins growing");
+      assert.equal(Number(animation.detailStart), 0);
+      assert.ok(Number(animation.detailMiddle) > 0 && Number(animation.detailMiddle) < 1, "node appearance has an intermediate opacity");
+      assert.equal(animation.descriptionTiming.delay, animation.titleTiming.delay + animation.titleTiming.duration,
+        "description waits until its title has appeared");
+      assert.equal(Number(animation.descriptionBeforeTitle), 0);
+      assert.ok(Number(animation.descriptionMiddle) > 0 && Number(animation.descriptionMiddle) < 1,
+        "description fades in after the title");
+      await evaluate("document.querySelector('.timeline-canvas-frame').dispatchEvent(new PointerEvent('pointerdown', {bubbles: true}))");
+      assert.equal(await lineAnimations(), 0);
+      assert.equal(await evaluate("document.querySelector('.timeline-axis-svg clipPath')"), null, "interrupting removes the tick clip");
+      assert.equal(await evaluate("Boolean(document.querySelector('.timeline-event-stems-growth'))"), false, "interrupting removes temporary leaders");
+      assert.equal(await evaluate("getComputedStyle(document.querySelector('.timeline-event-stems')).visibility"), "visible", "the completed leaders remain visible");
+      assert.equal(await evaluate("document.querySelector('.timeline-events-overlay').getAnimations({subtree:true}).length"), 0);
+      await fixture("open", "first");
+      await waitForFrame();
+      assert.equal(await lineAnimations(), 0, "rendering the same open does not replay growth");
+
+      await fixture("open", "second");
+      await waitFor(async () => await lineAnimations() === 1, "A new open did not start growth.");
+      await evaluate("document.documentElement.dataset.uiMotion = 'reduce'");
+      await waitFor(async () => await lineAnimations() === 0, "Reducing motion did not stop growth.");
+      await fixture("open", "third");
+      await waitForFrame();
+      assert.equal(await lineAnimations(), 0, "application reduced motion skips growth");
+      await evaluate("delete document.documentElement.dataset.uiMotion");
+      await cdp("Emulation.setEmulatedMedia", {features: [{name: "prefers-reduced-motion", value: "reduce"}]});
+      await fixture("open", "fourth");
+      await waitForFrame();
+      assert.equal(await lineAnimations(), 0, "system reduced motion skips growth");
+      await cdp("Emulation.setEmulatedMedia", {features: []});
+      await fixture("setAnimationEvents", false);
+      await waitForFrame();
+      await fixture("open", "dense-fallback");
+      await waitForFrame();
+      assert.equal(await lineAnimations(), 0, "extremely dense leaders fall back to a static view");
+    });
+
     await t.test("keeps offscreen labels out of the DOM while retaining visible axis anchors", async () => {
       const result = await evaluate(`(() => {
         const frame = document.querySelector('.timeline-canvas-frame').getBoundingClientRect();
@@ -264,7 +385,7 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
             normalStrokeWidth: getComputedStyle(svg.querySelector('.timeline-axis-line')).strokeWidth,
             labels: [...svg.querySelectorAll('.timeline-axis-label')].map(label => {
               const bounds = label.getBoundingClientRect();
-              const tick = label.parentElement.querySelector('line').getBoundingClientRect();
+              const tick = svg.querySelector('.timeline-axis-tick[data-axis-tick-key="' + label.parentElement.dataset.axisTickKey + '"]').getBoundingClientRect();
               return {value: Number(label.textContent), fontSize: getComputedStyle(label).fontSize,
                 x: bounds.left + bounds.width / 2 - frame.left, y: tick.top - frame.top,
                 tickX: tick.left - frame.left};

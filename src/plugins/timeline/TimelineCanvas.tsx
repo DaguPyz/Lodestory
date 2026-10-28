@@ -1,4 +1,4 @@
-import {useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
+import {useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
 import type {CanvasService, CanvasViewport} from "@lodestory/sdk/canvas";
 import type {ContextMenuService} from "@lodestory/sdk/context-menu";
 import type {AssetCatalog} from "@lodestory/sdk/asset-catalog";
@@ -6,10 +6,13 @@ import {Button, Dialog, DialogActions, TextField} from "@lodestory/ui";
 import type {TimelineAxisStore, TimelineAxisSettings} from "./timelineAxisStore";
 import type {TimelineEventStore} from "./timelineEventStore";
 import {TimelineEvents} from "./TimelineEvents";
+import type {TimelineEventsGeometry} from "./timelineEventsGeometry";
+import {getStemSegmentTiming, type TimelineStemSegment} from "./timelineStemSegments";
 import {formatTimelineAxisValue, getTimelineAxisGeometry, TIMELINE_AXIS_LABEL_LAYOUT, type TimelineAxisTick} from "./timelineAxisGeometry";
 
 type Draft = {origin: string; step: string; unit: string};
 type Size = {width: number; height: number};
+
 
 function draftFromSettings(settings: TimelineAxisSettings): Draft {
   return {origin: String(settings.origin), step: String(settings.step), unit: settings.unit};
@@ -25,26 +28,29 @@ function draftIsDirty(draft: Draft | null, settings: TimelineAxisSettings): bool
 
 function AxisTicks({ticks, axisY, worldHalfWidth, zoom}: {ticks: readonly TimelineAxisTick[]; axisY: number; worldHalfWidth: number; zoom: number}) {
   const layout = TIMELINE_AXIS_LABEL_LAYOUT;
-  return <g className="timeline-axis-ticks">
+  return <><g className="timeline-axis-ticks">
     {ticks.map(tick => {
       const x = (tick.x + worldHalfWidth) * zoom;
-      return <g key={tick.key}>
-        <line className={tick.origin ? "timeline-axis-tick timeline-axis-tick-origin" : "timeline-axis-tick"}
-          x1={x} x2={x} y1={axisY} y2={axisY + (tick.origin ? 16 : tick.major ? 14 : 8)}/>
-        {tick.labelVisible && <>
+      return <line key={tick.key} data-axis-tick-key={tick.key}
+        className={tick.origin ? "timeline-axis-tick timeline-axis-tick-origin" : "timeline-axis-tick"}
+        x1={x} x2={x} y1={axisY} y2={axisY + (tick.origin ? 16 : tick.major ? 14 : 8)}/>;
+    })}
+  </g><g className="timeline-axis-labels">
+    {ticks.filter(tick => tick.labelVisible).map(tick => {
+      const x = (tick.x + worldHalfWidth) * zoom;
+      return <g key={tick.key} data-axis-tick-key={tick.key}>
           <text className={tick.origin ? "timeline-axis-label timeline-axis-label-origin" : "timeline-axis-label"}
             x={x} y={axisY + layout.valueTop} fontSize={layout.valueFontSize} textAnchor="middle" dominantBaseline="hanging">
             {formatTimelineAxisValue(tick.value)}
           </text>
           {tick.origin && <text className="timeline-axis-origin-caption" x={x} y={axisY + layout.originTop}
             fontSize={layout.originFontSize} textAnchor="middle" dominantBaseline="hanging">故事起点</text>}
-        </>}
       </g>;
     })}
-  </g>;
+  </g></>;
 }
 
-export function TimelineCanvas({canvas, contextMenus, assetCatalog, viewport, active, title, axis, events, onEditingChange}: {
+export function TimelineCanvas({canvas, contextMenus, assetCatalog, viewport, active, title, axis, events, openToken = null, onEditingChange}: {
   canvas: CanvasService;
   contextMenus: ContextMenuService;
   assetCatalog: AssetCatalog | null;
@@ -53,11 +59,19 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, viewport, ac
   title: string;
   axis: TimelineAxisStore;
   events: TimelineEventStore;
+  openToken?: string | null;
   onEditingChange?: (editing: boolean) => void;
 }) {
   const snapshot = useSyncExternalStore(axis.subscribe, axis.getSnapshot, axis.getSnapshot);
+  const eventSnapshot = useSyncExternalStore(events.subscribe, events.getSnapshot, events.getSnapshot);
   const view = useSyncExternalStore(viewport.subscribe, viewport.getSnapshot, viewport.getSnapshot);
   const frame = useRef<HTMLDivElement>(null);
+  const growthGeometry = useRef<TimelineEventsGeometry | null>(null);
+  const growthStems = useRef<readonly TimelineStemSegment[] | null>(null);
+  const growthClipId = `timeline-growth-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
+  const axisLine = useRef<SVGLineElement>(null);
+  const handledOpen = useRef<string | null>(null);
+  const stopGrowth = useRef<(() => void) | null>(null);
   const originInput = useRef<HTMLInputElement>(null);
   const onEditingChangeRef = useRef(onEditingChange);
   const editingOwnerRef = useRef<((editing: boolean) => void) | null>(null);
@@ -234,6 +248,207 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, viewport, ac
   const worldHalfWidth = geometry.worldWidth / 2;
   const axisScreenY = size.height / 2 + geometry.axisY * view.zoom;
   const axisVisible = axisScreenY >= 0 && axisScreenY <= size.height;
+  const axisReady = snapshot.loaded && geometry.width > 0 && geometry.height > 0;
+  const eventsReady = eventSnapshot.loaded || (!eventSnapshot.loading && Boolean(eventSnapshot.error));
+
+  useLayoutEffect(() => {
+    if (!openToken || !active || !axisReady || !eventsReady || handledOpen.current === openToken) return;
+    handledOpen.current = openToken;
+    const line = axisLine.current;
+    const motion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (!axisVisible || !line || motion.matches || document.documentElement.dataset.uiMotion === "reduce"
+      || typeof line.animate !== "function") return;
+    const style = getComputedStyle(line);
+    const duration = Number.parseFloat(style.getPropertyValue("--timeline-axis-growth-duration"));
+    const tickStageDuration = Number.parseFloat(style.getPropertyValue("--timeline-axis-tick-stage-duration"));
+    const labelStageDuration = Number.parseFloat(style.getPropertyValue("--timeline-axis-label-stage-duration"));
+    const axisMarkDuration = Number.parseFloat(style.getPropertyValue("--timeline-axis-mark-duration"));
+    const branchDuration = Number.parseFloat(style.getPropertyValue("--timeline-branch-growth-duration"));
+    const branchRevealDuration = Number.parseFloat(style.getPropertyValue("--timeline-branch-reveal-duration"));
+    const eventAppearDuration = Number.parseFloat(style.getPropertyValue("--timeline-event-appear-duration"));
+    const textAppearDuration = Number.parseFloat(style.getPropertyValue("--timeline-text-appear-duration"));
+    if (![duration, tickStageDuration, labelStageDuration, axisMarkDuration, branchDuration, branchRevealDuration, eventAppearDuration, textAppearDuration].every(value => Number.isFinite(value) && value > 0)) return;
+    const labels = frame.current?.querySelector<HTMLDivElement>(".timeline-event-labels");
+    const descriptions = labels?.querySelectorAll<HTMLSpanElement>(".timeline-event-summary") ?? [];
+    // Extremely dense views fall back to the complete static state instead of
+    // starting an unbounded number of independent text animations.
+    if (descriptions.length > 64 || (growthStems.current?.length ?? 0) > 128) return;
+
+    const axisAnimation = line.animate([{transform: "scaleX(0)"}, {transform: "scaleX(1)"}], {
+      duration, easing: "cubic-bezier(.2, 0, 0, 1)",
+    });
+    const animations = [axisAnimation];
+    const axisClips: SVGClipPathElement[] = [];
+    const axisGroups: SVGGElement[] = [];
+    const axisDefs = line.ownerSVGElement?.querySelector("defs");
+    const nodeDelay = duration + tickStageDuration + labelStageDuration;
+    if (axisDefs && line.ownerSVGElement) {
+      const svgNamespace = "http://www.w3.org/2000/svg";
+      const axisSvg = line.ownerSVGElement;
+      function revealAxisColumns(selector: string, id: string, xs: number[], top: number, bottom: number,
+        delay: number, stageDuration: number) {
+        const target = axisSvg.querySelector<SVGGElement>(selector);
+        if (!target || !xs.length) return;
+        const axisClip = document.createElementNS(svgNamespace, "clipPath");
+        axisClip.id = `${growthClipId}-${id}`;
+        axisClip.setAttribute("clipPathUnits", "userSpaceOnUse");
+        axisDefs!.append(axisClip);
+        axisClips.push(axisClip);
+        axisGroups.push(target);
+        target.setAttribute("clip-path", `url(#${axisClip.id})`);
+        const count = Math.min(24, xs.length);
+        const columns = Array.from({length: count}, (_, index) => xs
+          .slice(Math.floor(index * xs.length / count), Math.floor((index + 1) * xs.length / count)));
+        const revealDuration = Math.min(axisMarkDuration, stageDuration);
+        const spread = stageDuration - revealDuration;
+        columns.forEach((column, index) => {
+          const previous = columns[index - 1];
+          const next = columns[index + 1];
+          const left = previous ? (previous[previous.length - 1] + column[0]) / 2 : -32;
+          const right = next ? (column[column.length - 1] + next[0]) / 2 : geometry.width + 32;
+          const rect = document.createElementNS(svgNamespace, "rect");
+          rect.setAttribute("x", String(left)); rect.setAttribute("y", String(top));
+          rect.setAttribute("width", String(right - left)); rect.setAttribute("height", String(bottom - top));
+          rect.style.transformOrigin = `0px ${bottom}px`;
+          axisClip.append(rect);
+          animations.push(rect.animate([{transform: "scaleY(0)"}, {transform: "scaleY(1)"}], {
+            delay: delay + (count > 1 ? spread * index / (count - 1) : 0),
+            duration: revealDuration, easing: "cubic-bezier(0, .55, .45, 1)", fill: "backwards",
+          }));
+        });
+      }
+      const xOf = (tick: TimelineAxisTick) => (tick.x + worldHalfWidth) * view.zoom;
+      revealAxisColumns(".timeline-axis-ticks", "ticks", geometry.ticks.map(xOf), axisScreenY - 2, axisScreenY + 18,
+        duration, tickStageDuration);
+      revealAxisColumns(".timeline-axis-labels", "labels", geometry.ticks.filter(tick => tick.labelVisible).map(xOf),
+        axisScreenY + TIMELINE_AXIS_LABEL_LAYOUT.valueTop - 2,
+        axisScreenY + TIMELINE_AXIS_LABEL_LAYOUT.originTop + TIMELINE_AXIS_LABEL_LAYOUT.originHeight + 2,
+        duration + tickStageDuration, labelStageDuration);
+    }
+    const eventsSvg = frame.current?.querySelector<SVGSVGElement>(".timeline-events-svg");
+    const stems = eventsSvg?.querySelector<SVGGElement>(".timeline-event-stems");
+    const anchors = eventsSvg?.querySelector<SVGGElement>(".timeline-event-axis-anchors");
+    const points = growthGeometry.current?.events ?? [];
+    const stemSegments = growthStems.current ?? [];
+    let animatedStems: SVGGElement | undefined;
+    const previousStemVisibility = stems?.style.visibility ?? "";
+    if (eventSnapshot.loaded && points.length && eventsSvg && labels && stems) {
+      // Group nearby columns only when necessary, keeping the reveal bounded.
+      const columns: typeof points[number][][] = [];
+      for (const point of points) {
+        const last = columns[columns.length - 1];
+        if (last && Math.abs(last[0].x - point.x) < 0.01) last.push(point);
+        else columns.push([point]);
+      }
+      const groupCount = Math.min(24, columns.length);
+      const groups = Array.from({length: groupCount}, (_, index) => columns
+        .slice(Math.floor(index * columns.length / groupCount), Math.floor((index + 1) * columns.length / groupCount)).flat());
+      const revealDuration = Math.min(branchRevealDuration, branchDuration);
+      const spread = branchDuration - revealDuration;
+      const groupById = new Map<string, number>();
+      for (let index = 0; index < groups.length; index++) {
+        for (const point of groups[index]) groupById.set(point.id, index);
+      }
+      const groupDelay = (index: number) => nodeDelay + (groups.length > 1 ? spread * index / (groups.length - 1) : 0);
+      animatedStems = document.createElementNS("http://www.w3.org/2000/svg", "g");
+      animatedStems.classList.add("timeline-event-stems-growth");
+      animatedStems.setAttribute("aria-hidden", "true");
+      eventsSvg.insertBefore(animatedStems, anchors ?? null);
+      stems.style.visibility = "hidden";
+      for (const segment of stemSegments) {
+        const index = groupById.get(segment.id);
+        if (index === undefined) continue;
+        const piece = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        piece.classList.add("timeline-event-stem");
+        if (segment.important) piece.classList.add("timeline-event-stem-important");
+        piece.setAttribute("x1", String(segment.x)); piece.setAttribute("x2", String(segment.x));
+        piece.setAttribute("y1", String(segment.y1)); piece.setAttribute("y2", String(segment.y2));
+        piece.setAttribute("pathLength", "1");
+        piece.setAttribute("stroke-dasharray", "1 1");
+        piece.setAttribute("data-growth-event", segment.id);
+        animatedStems.append(piece);
+        const timing = getStemSegmentTiming(segment.start, segment.end);
+        animations.push(piece.animate([{strokeDashoffset: "1"}, {strokeDashoffset: "0"}], {
+          delay: groupDelay(index) + revealDuration * timing.start,
+          duration: Math.max(0.01, revealDuration * (timing.end - timing.start)), easing: timing.easing, fill: "backwards",
+        }));
+      }
+      for (const group of anchors?.querySelectorAll<SVGGElement>("[data-growth-anchor]") ?? []) {
+        const index = groupById.get(group.dataset.growthAnchor ?? "");
+        if (index === undefined) continue;
+        animations.push(group.animate([{opacity: 0}, {opacity: 1}], {
+          delay: groupDelay(index), duration: eventAppearDuration,
+          easing: "cubic-bezier(.2, 0, 0, 1)", fill: "backwards",
+        }));
+      }
+      const details = [...eventsSvg.querySelectorAll<SVGGElement>(".timeline-event-details [data-growth-event]"),
+        ...labels.querySelectorAll<HTMLDivElement>("[data-growth-event]")];
+      if (details.length <= 128) {
+        for (const element of details) {
+          const index = groupById.get(element.dataset.growthEvent ?? "");
+          if (index === undefined) continue;
+          animations.push(element.animate([{opacity: 0}, {opacity: 1}], {
+            delay: nodeDelay + revealDuration + (groups.length > 1 ? spread * index / (groups.length - 1) : 0),
+            duration: element instanceof HTMLDivElement ? textAppearDuration : eventAppearDuration,
+            easing: "cubic-bezier(.2, 0, 0, 1)", fill: "backwards",
+          }));
+        }
+      } else {
+        // Avoid creating hundreds of detail animations in unusually dense views.
+        const detailGroup = eventsSvg.querySelector<SVGGElement>(".timeline-event-details");
+        for (const element of [labels, detailGroup]) {
+          if (element) animations.push(element.animate([{opacity: 0}, {opacity: 1}], {
+            delay: nodeDelay + branchDuration, duration: element === labels ? textAppearDuration : eventAppearDuration,
+            easing: "cubic-bezier(.2, 0, 0, 1)", fill: "backwards",
+          }));
+        }
+      }
+      for (const description of descriptions) {
+        const label = description.closest<HTMLDivElement>("[data-growth-event]");
+        const index = groupById.get(label?.dataset.growthEvent ?? "");
+        if (index === undefined) continue;
+        const titleDelay = details.length <= 128
+          ? nodeDelay + revealDuration + (groups.length > 1 ? spread * index / (groups.length - 1) : 0)
+          : nodeDelay + branchDuration;
+        animations.push(description.animate([{opacity: 0}, {opacity: 1}], {
+          delay: titleDelay + textAppearDuration, duration: textAppearDuration,
+          easing: "cubic-bezier(.2, 0, 0, 1)", fill: "backwards",
+        }));
+      }
+    }
+    const stopForReducedMotion = () => {
+      if (motion.matches || document.documentElement.dataset.uiMotion === "reduce") stop();
+    };
+    const observer = new MutationObserver(stopForReducedMotion);
+    const stop = () => {
+      for (const animation of animations) {
+        if (animation.playState !== "finished" && animation.playState !== "idle") animation.cancel();
+      }
+      for (const group of axisGroups) group.removeAttribute("clip-path");
+      for (const axisClip of axisClips) axisClip.remove();
+      if (stems) stems.style.visibility = previousStemVisibility;
+      animatedStems?.remove();
+      motion.removeEventListener("change", stopForReducedMotion);
+      observer.disconnect();
+      if (stopGrowth.current === stop) stopGrowth.current = null;
+    };
+    stopGrowth.current = stop;
+    motion.addEventListener("change", stopForReducedMotion);
+    observer.observe(document.documentElement, {attributes: true, attributeFilter: ["data-ui-motion"]});
+    const last = animations.reduce((latest, animation) => {
+      const timing = animation.effect?.getTiming();
+      const latestTiming = latest.effect?.getTiming();
+      return Number(timing?.delay ?? 0) + Number(timing?.duration ?? 0)
+        > Number(latestTiming?.delay ?? 0) + Number(latestTiming?.duration ?? 0) ? animation : latest;
+    });
+    last.onfinish = stop;
+    return stop;
+  }, [openToken, active, axisReady, axisVisible, eventsReady, geometry.width, geometry.height, axisScreenY, eventSnapshot.events, growthClipId]);
+
+  function finishGrowth() {
+    handledOpen.current = openToken;
+    stopGrowth.current?.();
+  }
   // Keep the SVG's intrinsic size and fonts in screen pixels. This cancels the
   // surface's world transform before SVG painting, instead of magnifying tiny text.
   const axisOverlayStyle = {
@@ -252,7 +467,8 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, viewport, ac
     && [...trimmedUnit].length <= 20 && !/[\u0000-\u001f\u007f-\u009f]/u.test(trimmedUnit);
   const Surface = canvas.Surface;
 
-  return <div className="timeline-canvas-frame" ref={frame}>
+  return <div className="timeline-canvas-frame" ref={frame} onPointerDownCapture={finishGrowth} onWheelCapture={finishGrowth}
+    onKeyDownCapture={finishGrowth} onFocusCapture={finishGrowth}>
     <Surface viewport={viewport} active={active && !editing && !eventEditing} label={`${title}时间轴`} grid="none">
       {snapshot.loaded && geometry.width > 0 && geometry.height > 0 && <div className="timeline-axis-overlay" style={axisOverlayStyle}>
         <svg className="timeline-axis-svg" role="img"
@@ -260,14 +476,17 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, viewport, ac
           width={geometry.width} height={geometry.height}
           viewBox={`0 0 ${geometry.width} ${geometry.height}`}>
           <title>{`${title}时间轴：原点 ${formatTimelineAxisValue(snapshot.settings.origin)} ${snapshot.settings.unit}`}</title>
+          <defs />
           {axisVisible && <g className="timeline-axis">
-            <line className="timeline-axis-line" x1="0" x2={geometry.width - 12} y1={axisScreenY} y2={axisScreenY}/>
+            <line ref={axisLine} className="timeline-axis-line" x1="0" x2={geometry.width - 12} y1={axisScreenY} y2={axisScreenY}/>
             <AxisTicks ticks={geometry.ticks} axisY={axisScreenY} worldHalfWidth={worldHalfWidth} zoom={view.zoom}/>
             <path className="timeline-axis-arrow" d={`M ${geometry.width - 12} ${axisScreenY - 4} L ${geometry.width - 2} ${axisScreenY} L ${geometry.width - 12} ${axisScreenY + 4} Z`}/>
           </g>}
         </svg>
       </div>}
       {snapshot.loaded && <TimelineEvents contextMenus={contextMenus} assetCatalog={assetCatalog} store={events} settings={snapshot.settings} view={view} size={size}
+        growthGeometryRef={growthGeometry}
+        growthStemsRef={growthStems}
         axisLabelBounds={geometry.labelBounds}
         active={active && snapshot.loaded && !snapshot.loading && !snapshot.blocked && !editing}
         onEditingChange={setIsEventEditing}/>}

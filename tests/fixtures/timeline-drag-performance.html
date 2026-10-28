@@ -42,6 +42,7 @@
       };
       sparseEvents[9999] = targetEvent;
       let events = [...denseEvents, ...sparseEvents];
+      const allEvents = events;
       let saves = 0;
       const eventListeners = new Set();
       let eventSnapshot = {events, loaded: true, loading: false, saving: false, dirty: false,
@@ -85,12 +86,13 @@
       const root = createRoot(document.querySelector("#root"));
       let viewport = createCanvasViewport();
       let active = true;
+      let openToken = null;
       let mounted = true;
       const oldViewports = [];
       function render() {
         root.render(mounted ? React.createElement("div", {className: "fixture-host"},
           React.createElement(TimelineCanvas, {canvas, contextMenus, assetCatalog: null, viewport,
-            active, title: "性能回归", axis: axisStore, events: eventStore})) : null);
+            active, title: "性能回归", axis: axisStore, events: eventStore, openToken})) : null);
       }
       render();
 
@@ -108,6 +110,11 @@
           viewport.panBy(-center.x * zoom, -center.y * zoom);
         },
         setActive(next) { active = next; render(); },
+        open(next) { openToken = next; render(); },
+        setAnimationEvents(enabled) {
+          events = enabled ? denseEvents.filter((_, index) => index % 25 === 0) : allEvents;
+          publishEvents();
+        },
         replaceViewport() {
           const oldViewport = viewport;
           oldViewports.push(oldViewport);

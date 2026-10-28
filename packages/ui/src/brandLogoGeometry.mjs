@@ -1,0 +1,6 @@
+// The shared outline used by the UI mark and generated desktop icons.
+export const BLUE_PATH = "M57 0H143Q149 0 152 5L171 39Q174 44 169 44H31Q26 44 29 39L48 5Q51 0 57 0Z";
+export const BODY_PATH = "M34 54H166L200 127C162 166 130 214 109 263H91C70 214 38 166 0 127Z";
+export const VOID_PATH = "M95 54H105V103.5A24.5 24.5 0 0 1 105 151.5V263H95V151.5A24.5 24.5 0 0 1 95 103.5Z";
+export const BRAND_BLUE = "#0d51e8";
+export const BRAND_INK = "#202124";

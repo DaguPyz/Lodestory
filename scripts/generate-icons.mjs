@@ -1,68 +1,31 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { deflateSync } from "node:zlib";
+import { Resvg } from "@resvg/resvg-js";
+import { BLUE_PATH, BODY_PATH, VOID_PATH, BRAND_BLUE, BRAND_INK } from "../packages/ui/src/brandLogoGeometry.mjs";
 
+// The desktop tile uses the same outline as the in-app mark, on a light tile
+// so the approved dark ink stays legible in the operating system's dock.
 const directory = "src-tauri/icons";
 mkdirSync(directory, { recursive: true });
-
-const crcTable = Array.from({ length: 256 }, (_, index) => {
-  let value = index;
-  for (let bit = 0; bit < 8; bit++) {
-    value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
-  }
-  return value >>> 0;
-});
-
-function chunk(type, data) {
-  const label = Buffer.from(type);
-  const size = Buffer.alloc(4);
-  size.writeUInt32BE(data.length);
-  let crc = 0xffffffff;
-  for (const byte of Buffer.concat([label, data])) {
-    crc = crcTable[(crc ^ byte) & 255] ^ (crc >>> 8);
-  }
-  const checksum = Buffer.alloc(4);
-  checksum.writeUInt32BE((crc ^ 0xffffffff) >>> 0);
-  return Buffer.concat([size, label, data, checksum]);
-}
+mkdirSync("assets/brand", { recursive: true });
+writeFileSync("assets/brand/lodestory-mark.svg", `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 263">
+  <path d="${BLUE_PATH}" fill="${BRAND_BLUE}"/>
+  <path d="${BODY_PATH} ${VOID_PATH}" fill="${BRAND_INK}" fill-rule="evenodd"/>
+</svg>\n`);
 
 function png(size) {
-  const pixels = Buffer.alloc(size * (size * 4 + 1));
-  const radius = size * 0.19;
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const nearestX = Math.max(radius, Math.min(size - radius, x + 0.5));
-      const nearestY = Math.max(radius, Math.min(size - radius, y + 0.5));
-      const inSquare = Math.hypot(x + 0.5 - nearestX, y + 0.5 - nearestY) <= radius;
-      const inLetter = x >= size * 0.32 && x < size * 0.43 && y >= size * 0.25 && y < size * 0.64
-        || x >= size * 0.32 && x < size * 0.68 && y >= size * 0.55 && y < size * 0.66;
-      const offset = y * (size * 4 + 1) + 1 + x * 4;
-      pixels[offset] = inLetter ? 255 : 42;
-      pixels[offset + 1] = inLetter ? 255 : 79;
-      pixels[offset + 2] = inLetter ? 255 : 190;
-      pixels[offset + 3] = inSquare ? 255 : 0;
-    }
-  }
-  const header = Buffer.alloc(13);
-  header.writeUInt32BE(size, 0);
-  header.writeUInt32BE(size, 4);
-  header[8] = 8;
-  header[9] = 6;
-  return Buffer.concat([
-    Buffer.from("89504e470d0a1a0a", "hex"),
-    chunk("IHDR", header),
-    chunk("IDAT", deflateSync(pixels)),
-    chunk("IEND", Buffer.alloc(0))
-  ]);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+    <rect x="0" y="0" width="512" height="512" rx="97" fill="#f7f6f3"/>
+    <g transform="translate(122 79) scale(1.34)">
+      <path d="${BLUE_PATH}" fill="${BRAND_BLUE}"/>
+      <path d="${BODY_PATH} ${VOID_PATH}" fill="${BRAND_INK}" fill-rule="evenodd"/>
+    </g>
+  </svg>`;
+  return Buffer.from(new Resvg(svg, { fitTo: { mode: "width", value: size } }).render().asPng());
 }
 
 const images = new Map([16, 32, 48, 128, 256, 512].map((size) => [size, png(size)]));
-for (const [name, size] of [
-  ["32x32.png", 32],
-  ["128x128.png", 128],
-  ["128x128@2x.png", 256],
-  ["icon.png", 512]
-]) {
+for (const [name, size] of [["32x32.png", 32], ["128x128.png", 128], ["128x128@2x.png", 256], ["icon.png", 512]]) {
   writeFileSync(join(directory, name), images.get(size));
 }
 

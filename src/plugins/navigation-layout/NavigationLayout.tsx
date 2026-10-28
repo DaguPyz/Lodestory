@@ -1,6 +1,6 @@
 import {useEffect, useState, type ReactNode} from "react";
 import type {NavigationGroup} from "@lodestory/sdk/navigation-layout";
-import {Icon} from "@lodestory/ui";
+import {BrandLogo} from "@lodestory/ui";
 import "../../styles.css";
 import "./navigation-layout.css";
 
@@ -55,7 +55,7 @@ export function NavigationLayout({pageId, active, items, onNavigate, children}: 
   return <div className="navigation-layout" data-ui-density="spacious">
       <aside className="navigation-panel" aria-label="应用导航">
         <div className="brand">
-          <Icon name="book" size="brand" />
+          <BrandLogo size="brand" />
           <div className="brand-copy">
             <span className="brand-name">Lodestory</span>
             <span className="brand-caption">小说创作工作空间</span>

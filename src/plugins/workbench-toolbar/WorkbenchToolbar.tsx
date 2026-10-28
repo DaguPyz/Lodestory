@@ -2,7 +2,7 @@ import {useEffect, useId, useRef, useState, useSyncExternalStore} from "react";
 import {Menu} from "@base-ui/react/menu";
 import type {LayoutService} from "@lodestory/sdk/layout";
 import type {WorkbenchService} from "@lodestory/sdk/workbench";
-import {Button, IconButton, Icon} from "@lodestory/ui";
+import {BrandLogo, Button, IconButton, Icon} from "@lodestory/ui";
 import {useContextMenus} from "../context-menu";
 import type {WorkbenchToolbarModel} from "./workbenchToolbarModel";
 import {workbenchToolbarId} from "./workbenchToolbarIds";
@@ -123,7 +123,7 @@ function ToolbarView({model, layout, projectName, enabled}: {
 
   return <div className="workbench-toolbar" role="toolbar" aria-label="工作台工具栏" ref={toolbar}>
     <div className="toolbar-project-actions">
-      <div className="toolbar-brand" aria-label="Lodestory"><Icon name="book" size="large"/><span>Lodestory</span></div>
+      <div className="toolbar-brand" aria-label="Lodestory"><BrandLogo size="large"/><span>Lodestory</span></div>
       <Menu.Root modal={false} disabled={!enabled} open={projectOpen}
         onOpenChange={(nextOpen, details) => menuOpenChanged(projectOwner, nextOpen, details)}
         onOpenChangeComplete={isOpen => menuCloseCompleted(projectOwner, isOpen)}>

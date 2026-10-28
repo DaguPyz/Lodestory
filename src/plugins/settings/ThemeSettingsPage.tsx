@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore, type CSSProperties } from "react";
-import { Button, Icon, Select } from "@lodestory/ui";
+import { BrandLogo, Button, Icon, Select } from "@lodestory/ui";
 import type { ResolvedTheme, ThemePreference, ThemeService } from "@lodestory/sdk/theme";
 import type { ConfigService } from "@lodestory/sdk/config";
 import { MotionSettings } from "./MotionSettings";
@@ -9,7 +9,7 @@ function ThemePreview({ theme }: { theme: ResolvedTheme }) {
   return (
     <span className="theme-preview" data-ui-theme={theme.type} data-ui-theme-id={theme.id} style={theme.cssVariables as CSSProperties} aria-hidden="true">
       <span className="theme-preview-sidebar">
-        <Icon name="book" size="small" />
+        <BrandLogo size="small" />
         <span className="theme-preview-navigation"><Icon name="folder" size="small" /></span>
         <span className="theme-preview-settings"><Icon name="settings" size="small" /></span>
       </span>

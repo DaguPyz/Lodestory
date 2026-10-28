@@ -8,6 +8,7 @@
     "dev:sdk": "pnpm --filter @lodestory/sdk dev",
     "dev:ui": "pnpm --filter @lodestory/ui dev",
     "dev:desktop": "tauri dev",
+    "generate:icons": "node scripts/generate-icons.mjs",
     "generate:theme": "node scripts/generate-theme-assets.mjs",
     "generate:theme-docs": "node scripts/generate-theme-docs.mjs",
     "check:theme-standard": "node scripts/verify-theme-standard.mjs",
@@ -32,6 +33,7 @@
     "react-dom": "^19.1.0"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@tauri-apps/cli": "^2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",

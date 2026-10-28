@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2022",
+    "allowJs": true,
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "jsx": "react-jsx",
@@ -15,5 +16,5 @@
     "verbatimModuleSyntax": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.mjs"]
 }

@@ -339,6 +339,7 @@ test("page plugins revoke their route contributions and the UI root unmounts onl
   assert.equal(core.isMounted("documents"), false);
   await core.unmount("canvas");
   await core.unmount("project-storage");
+  await core.unmount("project-search");
   await core.unmount("workbench");
   assert.equal(core.isMounted("workbench"), false);
   assert.deepEqual(Array.from(ui.getSnapshot().pages), []);

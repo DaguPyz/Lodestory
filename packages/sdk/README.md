@@ -16,12 +16,15 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/asset-catalog`：按工作台会话读取只读资产目录快照，以及共享单例 `assetCatalogKey`。
 - `@lodestory/sdk/workbench`：项目与工作台会话、参与者生命周期、快照和服务类型，以及共享单例 `workbenchKey`。
 - `@lodestory/sdk/project-storage`：项目字节文件缓冲与存储服务类型，以及共享单例 `projectStorageKey`。
+- `@lodestory/sdk/project-search`：按会话登记搜索来源、查询与打开结果的契约，以及共享 `projectSearchKey` 和 `projectSearchRequested` 事件。
 - `@lodestory/sdk/documents`：打开文档与文档工作区类型，以及 `documentsKey` 和新建/显示请求事件。
 - `@lodestory/sdk/body-editor`：正文格式、编辑器定义与宿主传入的编辑器属性、正文 main 内容 ID；`EditorHandle` 可按需贡献通用上下文菜单操作，格式插件可通过 `EditorDefinition.conversions` 声明转换，由正文宿主统一提供另存为入口。插件可通过 `EditorDefinition.replaces` 声明按格式替代的旧编辑器映射，由注册表兼容读取已有配置。
 - `@lodestory/sdk/context-menu`：共享菜单项类型、菜单区域属性类型，以及 context-menu 插件提供的 `contextMenuKey` 和 `ContextMenuService`。
 - `@lodestory/sdk/theme`：主题定义、仅含 ID 的选择配置、选择策略、管理服务和快照类型，以及共享单例 `themeKey`。
 
 正文格式插件可通过 `EditorHandle.getContextMenuActions()` 动态返回当前操作快照。每项操作由编辑器插件拥有，包含稳定的 `id`、`label`、可选 `disabled` 和 `run()`；正文宿主负责展示并在执行时复核编辑器生命周期与编辑状态。未提供该方法的编辑器无需贡献菜单操作。
+
+搜索来源由业务插件按工作台会话登记并在会话结束时撤销。来源提供当前记录、加载／错误状态、变更订阅和打开操作；`id` 在来源内唯一，`kind` 用于结果分组，`title`、`detail` 和 `text` 提供可搜索内容。索引服务不拥有原始数据，也不通过打开结果绕过来源的业务检查。`projectSearchRequested` 只请求展示搜索界面，并不会自动执行搜索或打开资源。当前实现及边界见[项目搜索插件](../../src/plugins/project-search/README.md)。
 
 存在原生输入合成状态的编辑器可提供 `EditorHandle.flushContent(currentContent?)`，同步提交已经发生的输入并返回完整持久化内容。传入的 `currentContent` 是宿主最新缓冲；格式实现应先接纳尚未通过 React 属性送达的外部替换，避免旧界面覆盖新内容。正文宿主会将该句柄通过文档工作区的可选 `registerContentReader(documentId, reader)` 接口登记；保存、切换和离开前由文档插件调用读取器并更新既有共享缓冲。读取错误会阻止对应操作，句柄失效后不能继续读取。登记返回的撤销函数只撤销自身批次，旧实例不能移除新实例的读取器。
 

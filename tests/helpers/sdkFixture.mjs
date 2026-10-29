@@ -15,6 +15,7 @@ const publicEntries = {
   "@lodestory/sdk/context-menu": ["context-menu.ts"],
   "@lodestory/sdk/documents": ["documents.ts"],
   "@lodestory/sdk/project-storage": ["project-storage.ts"],
+  "@lodestory/sdk/project-search": ["project-search.ts"],
   "@lodestory/sdk": ["index.ts"],
   "@lodestory/sdk/workbench": ["workbench.ts"],
   "@lodestory/sdk/layout": ["layout.ts"],

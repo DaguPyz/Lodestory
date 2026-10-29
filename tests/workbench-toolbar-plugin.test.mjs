@@ -224,7 +224,7 @@ test("workbench actions use the existing close-project and UI navigation APIs", 
   model.dispose();
 });
 
-test("toolbar UI exposes project actions, layout toggles, focus, and disabled search", async () => {
+test("toolbar UI exposes project actions, layout toggles, focus, and search", async () => {
   const menuParts = {
     Root: Symbol("Menu.Root"),
     Trigger: Symbol("Menu.Trigger"),
@@ -304,7 +304,7 @@ test("toolbar UI exposes project actions, layout toggles, focus, and disabled se
   const menuItem = (label) => items.find(value => textContent(value) === label);
   assert.ok(collect(tree, value => value.props?.className === "toolbar-brand").length);
   assert.ok(triggers.some(value => textContent(value).includes(activeSession.project.name)));
-  assert.equal(button("搜索项目").props.disabled, true);
+  assert.equal(button("搜索项目").props.disabled, false);
   assert.ok(button("设置"), "the common settings entry is available");
   assert.ok(button("工程文件"), "navigation contents receive their own toolbar toggles");
   assert.ok(button("收起测试辅助内容"), "auxiliary contents receive their own toolbar toggles");

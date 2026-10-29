@@ -1,0 +1,37 @@
+.ui-dialog:has(> .project-search) {
+  display: flex;
+  flex-direction: column;
+  height: min(38rem, calc(100dvh - 2 * var(--ui-space-7)));
+  overflow: hidden;
+}
+.project-search { display: flex; flex: 1; flex-direction: column; gap: var(--ui-space-4); min-height: 0; margin-top: var(--ui-space-6); }
+.project-search > .search-field, .project-search-filters, .project-search > .ui-dialog-actions { flex-shrink: 0; }
+.project-search > .ui-dialog-actions { margin-top: 0; }
+.project-search-filters { display: flex; flex-wrap: wrap; gap: var(--ui-space-2); }
+.project-search-status, .project-search-empty, .project-search-issues { color: var(--ui-text-secondary); font-size: var(--ui-font-size-label); line-height: var(--ui-line-height-label); }
+.project-search-issues p + p { margin-top: var(--ui-space-2); }
+.project-search-error { color: var(--ui-status-danger-foreground); font-size: var(--ui-font-size-label); }
+.project-search-results { flex: 1 1 0; min-height: 0; overflow: auto; }
+.project-search-results > :is(.project-search-status, .project-search-issues, .project-search-error) { margin: var(--ui-space-3); }
+.project-search-group + .project-search-group { margin-top: var(--ui-space-5); }
+.project-search-group h2 { padding: var(--ui-space-2) var(--ui-space-3); color: var(--ui-text-muted); font-size: var(--ui-font-size-caption); font-weight: 600; }
+.project-search-group ul { margin: 0; padding: 0; list-style: none; }
+.project-search-group button { display: flex; flex-direction: column; align-items: flex-start; gap: var(--ui-space-1); width: 100%; padding: var(--ui-space-3); color: var(--ui-text-primary); background: transparent; border: 0; border-radius: var(--ui-radius-row); text-align: left; }
+.project-search-group button:hover:not(:disabled) { background: var(--ui-surface-hover); }
+.project-search-group button:active:not(:disabled) { background: var(--ui-surface-pressed); }
+.project-search-title { font-size: var(--ui-font-size-label); font-weight: 600; overflow-wrap: anywhere; }
+.project-search-detail { color: var(--ui-text-secondary); font-size: var(--ui-font-size-caption); overflow-wrap: anywhere; }
+.project-search-match {
+  padding-inline: 1px;
+  color: var(--ui-highlight-foreground);
+  background: var(--ui-highlight-background);
+  border: 1px solid var(--ui-highlight-foreground);
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.project-search-empty { padding: var(--ui-space-5) var(--ui-space-3); }
+
+@media (forced-colors: active) {
+  .project-search-match { color: HighlightText; background: Highlight; border-color: Highlight; forced-color-adjust: none; }
+}

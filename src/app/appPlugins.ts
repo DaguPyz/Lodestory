@@ -25,6 +25,7 @@ import {createWritingStatusPlugin} from "../plugins/writing-status/writingStatus
 import {createWorkbenchToolbarPlugin} from "../plugins/workbench-toolbar/workbenchToolbarPlugin";
 import {createConfigPlugin} from "../plugins/config/configPlugin";
 import {createSettingsPlugin} from "../plugins/settings/settingsPlugin";
+import {createProjectSearchPlugin} from "../plugins/project-search/projectSearchPlugin";
 
 /** 应用选择哪些插件；启动和渲染流程不根据具体插件添加分支。 */
 export function createAppPlugins(): readonly Plugin[] {
@@ -39,6 +40,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createNavigationLayoutPlugin(),
         createDefaultLayoutPlugin(),
         createWorkbenchPlugin(),
+        createProjectSearchPlugin(),
         createProjectStoragePlugin(),
         createDocumentsPlugin(),
         createProjectManagementPlugin(),

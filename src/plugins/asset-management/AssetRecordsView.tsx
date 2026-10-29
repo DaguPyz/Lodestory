@@ -8,6 +8,7 @@ import {AssetValueFields} from "./AssetValueFields";
 import {observeAssetCardMasonry} from "./assetCardMasonry";
 import {AssetColorPicker} from "./AssetColorPicker";
 import {assetCardColorStyle, isAssetColor} from "./assetCardColor";
+import {displayedValue} from "./assetDisplayValue";
 import type {AssetFieldDefinition, AssetPropertyValue, AssetRecord} from "./assetSchemaStore";
 
 type AssetDraft = {
@@ -27,19 +28,6 @@ type DeleteTarget =
 function orderedFields(fields: readonly AssetFieldDefinition[], kind: "type" | "asset", id: string | null) {
   return fields.filter(field => field.status === "active" && field.owner.kind === kind && field.owner.id === id)
     .slice().sort((a, b) => a.order - b.order);
-}
-
-function displayedValue(field: AssetFieldDefinition, asset: AssetRecord, assets: readonly AssetRecord[]): string {
-  const value = asset.values[field.id];
-  if (value === null || value === undefined || value === "" || (Array.isArray(value) && value.length === 0)) return "未填写";
-  if (field.valueType === "singleSelect" || field.valueType === "multiSelect") {
-    const ids = Array.isArray(value) ? value.filter((item): item is string => typeof item === "string")
-      : typeof value === "string" ? [value] : [];
-    return ids.map(id => field.config.options?.find(option => option.id === id)?.title ?? "已失效的选项").join("、");
-  }
-  if (field.valueType === "reference") return typeof value === "string"
-    ? assets.find(item => item.id === value)?.name ?? "关联对象不可用" : "关联对象不可用";
-  return String(value);
 }
 
 function clonePropertyValue(value: AssetPropertyValue): AssetPropertyValue {

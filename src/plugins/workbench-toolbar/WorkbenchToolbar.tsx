@@ -16,19 +16,20 @@ type ToolbarServices = {
 
 type MenuCloseReason = "dismiss" | "switch" | "action" | "lifecycle";
 
-export function WorkbenchToolbar({workbench, layout, models, active}: ToolbarServices & {active: boolean}) {
+export function WorkbenchToolbar({workbench, layout, models, onSearch, active}: ToolbarServices & {active: boolean; onSearch(sessionId: string): void}) {
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
   const session = state.session;
   const model = session && models.get(session.id);
   return session && model ? <ToolbarView key={session.id} model={model} layout={layout}
-    projectName={session.project.name} enabled={active && state.active && !state.busy}/> : null;
+    projectName={session.project.name} onSearch={() => onSearch(session.id)} enabled={active && state.active && !state.busy}/> : null;
 }
 
-function ToolbarView({model, layout, projectName, enabled}: {
+function ToolbarView({model, layout, projectName, enabled, onSearch}: {
   model: WorkbenchToolbarModel;
   layout: LayoutService;
   projectName: string;
   enabled: boolean;
+  onSearch(): void;
 }) {
   const {focusMode} = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const snapshot = useSyncExternalStore(layout.subscribe, layout.getSnapshot, layout.getSnapshot);
@@ -143,7 +144,7 @@ function ToolbarView({model, layout, projectName, enabled}: {
         </Menu.Portal>
       </Menu.Root>
       <div className="toolbar-common-actions">
-        <IconButton label="搜索项目" disabled><Icon name="search"/></IconButton>
+        <IconButton label="搜索项目" disabled={!enabled} onClick={onSearch}><Icon name="search"/></IconButton>
         <IconButton label="设置" disabled={!enabled} onClick={() => perform(model.openSettings)}><Icon name="settings"/></IconButton>
       </div>
     </div>

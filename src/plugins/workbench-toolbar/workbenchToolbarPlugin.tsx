@@ -2,6 +2,7 @@ import type {Plugin} from "@lodestory/sdk";
 import {workbenchKey} from "@lodestory/sdk/workbench";
 import {uiKey} from "@lodestory/sdk/ui";
 import {layoutKey} from "@lodestory/sdk/layout";
+import {projectSearchRequested} from "@lodestory/sdk/project-search";
 import {WorkbenchToolbar, ToolbarRecovery} from "./WorkbenchToolbar";
 import {workbenchToolbarId} from "./workbenchToolbarIds";
 import {createWorkbenchToolbarModel, type WorkbenchToolbarModel} from "./workbenchToolbarModel";
@@ -37,7 +38,8 @@ export function createWorkbenchToolbarPlugin(): Plugin {
         id: workbenchToolbarId,
         title: "工作台工具栏",
         role: "actions",
-        render: ({active}) => <WorkbenchToolbar workbench={workbench} layout={layout} models={models} active={active}/>,
+        render: ({active}) => <WorkbenchToolbar workbench={workbench} layout={layout} models={models} active={active}
+          onSearch={sessionId => { void context.emit(projectSearchRequested, {sessionId}).catch(error => console.error("Could not open project search.", error)); }}/>,
       }));
       removeViews.push(ui.addWrapper({
         id: "workbench-toolbar.recovery",

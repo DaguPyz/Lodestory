@@ -9,6 +9,7 @@ function setup({wrapperError, invokeHandler} = {}) {
   const {documentsKey, documentCreateRequested, documentRevealRequested} = sdk("@lodestory/sdk/documents");
   const {layoutKey} = sdk("@lodestory/sdk/layout");
   const {uiKey} = sdk("@lodestory/sdk/ui");
+  const {projectSearchKey} = sdk("@lodestory/sdk/project-search");
   const session = {id: "project-session", project: {id: "project", name: "项目", path: "/projects/current"}};
   let workbenchSnapshot = {session, active: true, busy: false};
   const workbenchListeners = new Set();
@@ -72,6 +73,7 @@ function setup({wrapperError, invokeHandler} = {}) {
       if (key === documentsKey) return documents;
       if (key === layoutKey) return layout;
       if (key === uiKey) return ui;
+      if (key === projectSearchKey) return {registerSource() { return () => {}; }};
       throw new Error(`Unexpected service '${key.id}'.`);
     },
     on(key, listener) {
@@ -129,7 +131,8 @@ test("project management registers its own navigation and a dialog wrapper indep
   const {documentsKey} = f.fixture.requireSdk("@lodestory/sdk/documents");
   const {layoutKey} = f.fixture.requireSdk("@lodestory/sdk/layout");
   const {uiKey} = f.fixture.requireSdk("@lodestory/sdk/ui");
-  assert.deepEqual(Array.from(f.plugin.requires, key => key.id), [workbenchKey.id, documentsKey.id, layoutKey.id, uiKey.id]);
+  const {projectSearchKey} = f.fixture.requireSdk("@lodestory/sdk/project-search");
+  assert.deepEqual(Array.from(f.plugin.requires, key => key.id), [workbenchKey.id, documentsKey.id, layoutKey.id, uiKey.id, projectSearchKey.id]);
   assert.deepEqual(Array.from(f.plugin.provides), []);
   f.plugin.activate(f.context);
   assert.equal(f.contributions.length, 1);

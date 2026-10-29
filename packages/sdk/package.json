@@ -74,6 +74,10 @@
     "./context-menu": {
       "types": "./dist/context-menu.d.ts",
       "import": "./dist/context-menu.js"
+    },
+    "./project-search": {
+      "types": "./dist/project-search.d.ts",
+      "import": "./dist/project-search.js"
     }
   },
   "scripts": {

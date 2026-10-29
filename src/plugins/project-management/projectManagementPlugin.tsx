@@ -3,6 +3,7 @@ import {documentsKey, documentCreateRequested, documentRevealRequested} from "@l
 import {layoutKey} from "@lodestory/sdk/layout";
 import {uiKey} from "@lodestory/sdk/ui";
 import {workbenchKey} from "@lodestory/sdk/workbench";
+import {projectSearchKey, type ProjectSearchRecord} from "@lodestory/sdk/project-search";
 import {createProjectManagementModel, type ProjectManagementModel} from "./projectManagementModel";
 import {ProjectFiles, ProjectDialogs} from "./ProjectManagementView";
 import "./project-management.css";
@@ -11,12 +12,13 @@ import "./project-management.css";
 export function createProjectManagementPlugin(): Plugin {
     let cleanup: (() => Promise<void>) | undefined;
     return {
-        id: "project-management", requires: [workbenchKey, documentsKey, layoutKey, uiKey], provides: [],
+        id: "project-management", requires: [workbenchKey, documentsKey, layoutKey, uiKey, projectSearchKey], provides: [],
         activate(context) {
             const workbench = context.get(workbenchKey);
             const documents = context.get(documentsKey);
             const layout = context.get(layoutKey);
             const ui = context.get(uiKey);
+            const search = context.get(projectSearchKey);
             const models = new Map<string, ProjectManagementModel>();
             const removers: (() => void)[] = [];
             let removeParticipant: (() => Promise<void>) | undefined;
@@ -61,9 +63,38 @@ export function createProjectManagementPlugin(): Plugin {
                         throw error;
                     }
                     models.set(session.id, model);
+                    let removeSearch: (() => void) | undefined;
+                    try {
+                        removeSearch = search.registerSource(session.id, "project-files", {
+                            title: "工程文件",
+                            getSnapshot() {
+                                const state = model.getSnapshot();
+                                const records: ProjectSearchRecord[] = [];
+                                function collect(entries: typeof state.entries) {
+                                    for (const entry of entries) {
+                                        if (entry.children) collect(entry.children);
+                                        else records.push({id: entry.path, kind: "文件", title: entry.name, detail: entry.path, text: ""});
+                                    }
+                                }
+                                collect(state.entries);
+                                return {records, loading: state.loading, error: state.error};
+                            },
+                            subscribe(listener) {
+                                let previous = model.getSnapshot();
+                                return model.subscribe(() => {
+                                    const next = model.getSnapshot();
+                                    if (next.entries !== previous.entries || next.loading !== previous.loading || next.error !== previous.error) listener();
+                                    previous = next;
+                                });
+                            },
+                            open: path => model.openDocument(path),
+                            refresh: () => model.refresh(),
+                        });
+                    } catch (error) { models.delete(session.id); model.dispose(); throw error; }
                     return {
                         dispose() {
                             try {
+                                removeSearch?.();
                                 model.dispose();
                             } finally {
                                 if (models.get(session.id) === model) models.delete(session.id);

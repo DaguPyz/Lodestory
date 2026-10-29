@@ -7,6 +7,7 @@ import {layoutKey} from "@lodestory/sdk/layout";
 import {workbenchKey, type WorkbenchService} from "@lodestory/sdk/workbench";
 import {projectStorageKey, type ProjectFiles} from "@lodestory/sdk/project-storage";
 import {timelineKey, type TimelineListEntry, type TimelineListModel, type TimelineListSnapshot, type TimelineService} from "@lodestory/sdk/timeline";
+import {projectSearchKey, type ProjectSearchRecord} from "@lodestory/sdk/project-search";
 import {createTimelineListFiles} from "./timelineListFiles";
 import {createTimelineListModel} from "./timelineListModel";
 import {createTimelineAxisStore, type TimelineAxisSettings, type TimelineAxisStore} from "./timelineAxisStore";
@@ -44,6 +45,7 @@ type TimelineSessionResources = {
   openGeneration: number;
   openedId: string | null;
   openListeners: Set<() => void>;
+  searchListeners: Set<() => void>;
 };
 
 /** Owns timeline metadata, project-session models, canvas viewports, and axis settings. */
@@ -55,7 +57,7 @@ export function createTimelinePlugin(): Plugin {
 
   return {
     id: "timeline",
-    requires: [layoutKey, workbenchKey, projectStorageKey, canvasKey, contextMenuKey, assetCatalogKey],
+    requires: [layoutKey, workbenchKey, projectStorageKey, canvasKey, contextMenuKey, assetCatalogKey, projectSearchKey],
     provides: [timelineKey],
     activate(context) {
       alive = true;
@@ -65,6 +67,7 @@ export function createTimelinePlugin(): Plugin {
       const canvas = context.get(canvasKey);
       const contextMenus = context.get(contextMenuKey);
       const assetCatalog = context.get(assetCatalogKey);
+      const search = context.get(projectSearchKey);
 
       function createAxis(files: ProjectFiles, resource: TimelineSessionResources, timelineId: string): TimelineAxisStore {
         let axis = resource.axes.get(timelineId);
@@ -92,7 +95,14 @@ export function createTimelinePlugin(): Plugin {
         if (!events) {
           events = createTimelineEventStore(files, timelineId);
           resource.events.set(timelineId, events);
-          resource.eventUnsubscribes.set(timelineId, events.subscribe(() => publishSession(resource)));
+          let previous = events.getSnapshot();
+          resource.eventUnsubscribes.set(timelineId, events.subscribe(() => {
+            publishSession(resource);
+            const next = events!.getSnapshot();
+            if (next.events !== previous.events || next.loading !== previous.loading || next.loaded !== previous.loaded || next.error !== previous.error)
+              for (const listener of [...resource.searchListeners]) listener();
+            previous = next;
+          }));
           void events.load().catch(() => false);
         }
         return events;
@@ -151,6 +161,7 @@ export function createTimelinePlugin(): Plugin {
           if (selectionChanged && !axis.getSnapshot().loaded && !axis.getSnapshot().loading) void axis.load().catch(() => false);
         }
         publishSession(resource);
+        for (const listener of [...resource.searchListeners]) listener();
       }
 
       removeParticipant = workbench.registerParticipant({
@@ -178,7 +189,9 @@ export function createTimelinePlugin(): Plugin {
             openGeneration: 0,
             openedId: null,
             openListeners: new Set(),
+            searchListeners: new Set(),
           };
+          let removeSearch: (() => void) | undefined;
           const canMutate = () => {
             if (!alive || sessions.get(session.id) !== resource) return false;
             const current = workbench.getSnapshot();
@@ -219,7 +232,37 @@ export function createTimelinePlugin(): Plugin {
             if (!alive) throw new Error("Timeline stopped while the project was loading.");
             // The public model becomes visible only after its initial read settles.
             sessions.set(session.id, resource);
+            removeSearch = search.registerSource(session.id, "timeline", {
+              title: "时间线",
+              getSnapshot() {
+                const state = model.getSnapshot();
+                const records: ProjectSearchRecord[] = [];
+                const issues = [...state.issues.map(issue => `${issue.name}：${issue.message}`)];
+                let loading = state.loading;
+                for (const entry of state.entries) {
+                  records.push({id: `timeline:${entry.id}`, kind: "时间线", title: entry.title, detail: entry.summary, text: ""});
+                  const events = resource.events.get(entry.id)?.getSnapshot();
+                  if (!events) { loading = true; continue; }
+                  if (events.loading || (!events.loaded && !events.error)) loading = true;
+                  if (events.error) issues.push(`${entry.title}：${events.error}`);
+                  for (const event of events.events) records.push({id: `event:${entry.id}/${event.id}`, kind: "事件",
+                    title: event.title, detail: [entry.title, event.summary].filter(Boolean).join(" · "), text: event.summary});
+                }
+                return {records, loading, error: state.error ?? (issues.length ? issues.join("；") : null)};
+              },
+              subscribe(listener) { resource.searchListeners.add(listener); return () => { resource.searchListeners.delete(listener); }; },
+              open(id) {
+                const timelineId = id.startsWith("timeline:") ? id.slice("timeline:".length)
+                  : id.startsWith("event:") ? id.slice("event:".length).split("/")[0] : "";
+                if (id.startsWith("event:")) {
+                  const eventId = id.slice("event:".length).split("/")[1];
+                  if (!resource.events.get(timelineId)?.getSnapshot().events.some(event => event.id === eventId)) return false;
+                }
+                return service.open(session.id, timelineId);
+              },
+            });
           } catch (error) {
+            removeSearch?.();
             resource.unsubscribe();
             for (const viewport of resource.viewports.values()) viewport.dispose();
             for (const unsubscribe of resource.axisUnsubscribes.values()) unsubscribe();
@@ -229,6 +272,7 @@ export function createTimelinePlugin(): Plugin {
             resource.summaries.clear();
             resource.listeners.clear();
             resource.openListeners.clear();
+            resource.searchListeners.clear();
             model.dispose();
             if (sessions.get(session.id) === resource) sessions.delete(session.id);
             throw error;
@@ -254,7 +298,7 @@ export function createTimelinePlugin(): Plugin {
                 && [...resource.events.values()].every(events => !events.getSnapshot().dirty);
             },
             dispose() {
-              try { resource.unsubscribe(); }
+              try { removeSearch?.(); resource.unsubscribe(); }
               finally {
                 try {
                   for (const viewport of resource.viewports.values()) viewport.dispose();
@@ -281,6 +325,7 @@ export function createTimelinePlugin(): Plugin {
                           finally {
                             resource.listeners.clear();
                             resource.openListeners.clear();
+                            resource.searchListeners.clear();
                             if (sessions.get(session.id) === resource) sessions.delete(session.id);
                           }
                         }

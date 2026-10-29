@@ -4,10 +4,12 @@ import {assetCatalogKey, type AssetCatalog} from "@lodestory/sdk/asset-catalog";
 import {layoutKey} from "@lodestory/sdk/layout";
 import {projectStorageKey, type ProjectFiles} from "@lodestory/sdk/project-storage";
 import {workbenchKey} from "@lodestory/sdk/workbench";
+import {projectSearchKey} from "@lodestory/sdk/project-search";
 import {Icon} from "@lodestory/ui";
 import {createAssetSchemaStore, type AssetSchemaStore} from "./assetSchemaStore";
 import {AssetTypeEditor, AssetTypeNavigation} from "./AssetManagementView";
 import {AssetRecordsEditor} from "./AssetRecordsView";
+import {displayedValue} from "./assetDisplayValue";
 import {createAssetCatalog} from "./assetCatalog";
 import "./asset-management.css";
 
@@ -33,7 +35,7 @@ export function createAssetManagementPlugin(): Plugin {
 
   return {
     id: "asset-management",
-    requires: [layoutKey, workbenchKey, projectStorageKey, contextMenuKey],
+    requires: [layoutKey, workbenchKey, projectStorageKey, contextMenuKey, projectSearchKey],
     provides: [assetCatalogKey],
     async activate(context) {
       alive = true;
@@ -41,6 +43,7 @@ export function createAssetManagementPlugin(): Plugin {
       const workbench = context.get(workbenchKey);
       const storage = context.get(projectStorageKey);
       const contextMenus = context.get(contextMenuKey);
+      const search = context.get(projectSearchKey);
       context.provide(assetCatalogKey, Object.freeze({
         getCatalog(sessionId: string) { return sessions.get(sessionId)?.catalog ?? null; },
       }));
@@ -89,13 +92,57 @@ export function createAssetManagementPlugin(): Plugin {
               catalog: catalogController.catalog,
               editing: new Set(),
             };
+            let removeSearch: (() => void) | undefined;
             try {
               const loaded = await store.load();
               if (!loaded) throw new Error(store.getSnapshot().error ?? "资产数据加载失败。");
               if (!alive) throw new Error("Asset management stopped while the project was loading.");
               // Views and capability consumers only receive a fully initialized resource.
               sessions.set(session.id, resource);
+              removeSearch = search.registerSource(session.id, "assets", {
+                title: "资产",
+                getSnapshot() {
+                  const state = store.getSnapshot();
+                  const assetsById = new Map(state.assets.map(asset => [asset.id, asset]));
+                  const fieldsByOwner = new Map<string, typeof state.fields[number][]>();
+                  for (const field of state.fields) {
+                    if (field.status !== "active") continue;
+                    const key = `${field.owner.kind}:${field.owner.id}`;
+                    const fields = fieldsByOwner.get(key) ?? [];
+                    fields.push(field);
+                    fieldsByOwner.set(key, fields);
+                  }
+                  return {loading: state.loading || !state.loaded, error: state.error,
+                    records: state.assets.map(asset => {
+                      const fields = [...(fieldsByOwner.get(`type:${asset.typeId}`) ?? []), ...(fieldsByOwner.get(`asset:${asset.id}`) ?? [])];
+                      const values = fields.filter(field => asset.values[field.id] != null && asset.values[field.id] !== ""
+                        && (!Array.isArray(asset.values[field.id]) || (asset.values[field.id] as readonly string[]).length > 0))
+                        .map(field => displayedValue(field, asset, state.assets, assetsById));
+                      return {id: asset.id, kind: "资产", title: asset.name, detail: asset.description, text: values.join("\n")};
+                    })};
+                },
+                subscribe(listener) {
+                  let previous = store.getSnapshot();
+                  return store.subscribe(() => {
+                    const next = store.getSnapshot();
+                    if (next.assets !== previous.assets || next.fields !== previous.fields || next.types !== previous.types
+                      || next.loading !== previous.loading || next.loaded !== previous.loaded || next.error !== previous.error) listener();
+                    previous = next;
+                  });
+                },
+                open(id) {
+                  const current = workbench.getSnapshot(), state = store.getSnapshot();
+                  const asset = state.assets.find(item => item.id === id);
+                  if (!alive || current.session?.id !== session.id || !current.active || current.busy || !asset
+                    || resource.editing.size > 0 || state.blocked || state.saving || state.dirty) return false;
+                  const typeId = state.types.some(type => type.id === asset.typeId && type.status === "active") ? asset.typeId : null;
+                  if (!store.selectType(typeId) || !store.selectAsset(id)) return false;
+                  layout.show(ASSETS_CONTENT_ID);
+                  return true;
+                },
+              });
             } catch (error) {
+              removeSearch?.();
               try { catalogController.dispose(); }
               finally {
                 try { store.dispose(); }
@@ -115,7 +162,7 @@ export function createAssetManagementPlugin(): Plugin {
                 return resource.editing.size === 0 && !store.getSnapshot().dirty;
               },
               dispose() {
-                try { catalogController.dispose(); }
+                try { removeSearch?.(); catalogController.dispose(); }
                 finally {
                   try { store.dispose(); }
                   finally {

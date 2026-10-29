@@ -1,6 +1,7 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import { createContext, useContext, useLayoutEffect, useState, type ComponentPropsWithoutRef, type ReactNode, type RefObject } from "react";
+import { createContext, useContext, useId, useLayoutEffect, useState, type ComponentPropsWithoutRef, type ReactNode, type RefObject } from "react";
 import { Button, type ButtonProps } from "./Button.js";
+import {useDialogPosition} from "./useDialogPosition.js";
 
 export type DialogProps = {
   open: boolean;
@@ -25,6 +26,8 @@ const DialogBusyContext = createContext(false);
 /** Controlled modal shell. The owning plugin retains all form and operation state. */
 export function Dialog({ open, onOpenChange, onOpenChangeComplete, title, size = "regular", description, children, busy = false, initialFocus, finalFocus }: DialogProps) {
   const [density, setDensity] = useState<Density>("comfortable");
+  const movement = useDialogPosition(open);
+  const movementHint = useId();
 
   useLayoutEffect(() => {
     if (!open || typeof document === "undefined") return;
@@ -35,6 +38,10 @@ export function Dialog({ open, onOpenChange, onOpenChangeComplete, title, size =
   return (
     <DialogBusyContext.Provider value={busy}>
       <BaseDialog.Root open={open} modal disablePointerDismissal={busy} onOpenChangeComplete={onOpenChangeComplete} onOpenChange={(nextOpen, details) => {
+        if (!nextOpen && details.reason === "escape-key" && movement.cancelDrag()) {
+          details.cancel();
+          return;
+        }
         if (!nextOpen && busy) {
           details.cancel();
           return;
@@ -43,11 +50,18 @@ export function Dialog({ open, onOpenChange, onOpenChangeComplete, title, size =
       }}>
         <BaseDialog.Portal>
           <BaseDialog.Backdrop className="ui-dialog-backdrop" />
-          <BaseDialog.Popup className="ui-dialog" data-ui-dialog-size={size} data-ui-density={density} aria-modal="true" aria-busy={busy || undefined} inert={!open}
+          <BaseDialog.Popup ref={movement.popupRef} className="ui-dialog" data-ui-dialog-size={size} data-ui-density={density} aria-modal="true" aria-busy={busy || undefined} inert={!open}
+            onKeyDownCapture={movement.onKeyDownCapture}
             initialFocus={initialFocus} finalFocus={finalFocus}>
-            <BaseDialog.Title className="ui-dialog-title">{title}</BaseDialog.Title>
-            {description != null && <BaseDialog.Description className="ui-dialog-description">{description}</BaseDialog.Description>}
-            {children}
+            <div ref={movement.headerRef} className="ui-dialog-header" role="group" tabIndex={-1}
+              aria-label={`移动弹框：${title}`} aria-describedby={movementHint} {...movement.headerProps}>
+              <BaseDialog.Title className="ui-dialog-title">{title}</BaseDialog.Title>
+              <span id={movementHint} className="ui-dialog-move-hint">拖动标题移动；方向键移动，Shift 加速，Home 居中，拖动时按 Escape 取消。</span>
+            </div>
+            <div className="ui-dialog-body">
+              {description != null && <BaseDialog.Description className="ui-dialog-description">{description}</BaseDialog.Description>}
+              {children}
+            </div>
           </BaseDialog.Popup>
         </BaseDialog.Portal>
       </BaseDialog.Root>

@@ -94,7 +94,9 @@ import { Button, Dialog, DialogActions, DialogClose } from "@lodestory/ui";
 
 宽度预设依次消费 `--ui-dialog-width-narrow`（480px）、`--ui-dialog-width`（560px）、`--ui-dialog-width-wide`（640px）和 `--ui-dialog-width-large`（800px）；任何预设仍受视口安全边距约束。组件默认使用 `regular`，旧调用无需增加属性。宽度是语义选项，Base UI 实例和定位细节不属于公共 API。
 
-弹框、遮罩与 Select 仅在透明度上过渡 150ms，不移动或缩放。初次已打开的弹框也会淡入。关闭、选值和焦点管理仍由 Base UI 生命周期完成，CSS 过渡不会延迟业务回调；连续开合会按最新状态中断过渡。
+每次打开时 Dialog 默认在视口内居中；标题栏可用鼠标或触控直接拖动，也可聚焦标题栏后用方向键移动 8px、按住 Shift 移动 24px，Home 或双击标题栏回到居中位置。弹框与视口边缘保持至少 16px；窗口变化或打开期间内容尺寸变化时保留当前位置，只在越界时修正，不因内容更新重新居中。标题栏固定不随正文滚动，正文区域独立滚动。拖动期间按 Escape 会撤销本次移动并保持弹框打开；未拖动时 Escape 仍按正常规则请求关闭。位置仅属于当前打开的组件实例，不持久化；关闭或卸载时清理观察器、监听和待执行帧回调。
+
+弹框、遮罩与 Select 的开合动画仅在透明度上过渡 150ms，不移动或缩放；用户直接拖动时位置即时跟随，不做缓动。初次已打开的弹框也会淡入。关闭、选值和焦点管理仍由 Base UI 生命周期完成，CSS 过渡不会延迟业务回调；连续开合会按最新状态中断过渡。
 
 时长与位移读取宿主共享的 `--ui-duration-fast`、`--ui-duration-normal`、`--ui-duration-dialog` 和 `--ui-motion-offset`；系统减少动效媒体偏好与根元素 `data-ui-motion="reduce"` 由宿主设置为 0ms／0px。焦点环保持即时。主题色不做插值，切换主题时前景、背景与边界同步替换。
 

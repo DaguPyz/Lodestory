@@ -595,14 +595,17 @@
 
 .ui-dialog {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   position: fixed;
   top: 50%;
   left: 50%;
   z-index: 31;
   width: min(var(--ui-dialog-width, 35rem), calc(100vw - 2 * var(--ui-space-7)));
-  max-height: calc(100dvh - 2 * var(--ui-space-7));
-  padding: var(--ui-dialog-padding, var(--ui-panel-padding));
-  overflow: auto;
+  max-width: var(--cmp-dialog-max-width, calc(100vw - 2 * var(--ui-space-7)));
+  max-height: min(calc(100dvh - 2 * var(--ui-space-7)), var(--cmp-dialog-max-height, 100dvh));
+  padding: 0;
+  overflow: hidden;
   color: var(--ui-text-primary);
   background: var(--ui-surface-overlay);
   border: 1px solid var(--ui-border-divider);
@@ -616,6 +619,45 @@
   transition-property: opacity;
   transition-duration: var(--ui-duration-dialog, 150ms);
   transition-timing-function: var(--ui-ease-enter);
+}
+
+.ui-dialog[data-positioned="true"] {
+  left: var(--cmp-dialog-x);
+  top: var(--cmp-dialog-y);
+  transform: none;
+}
+
+.ui-dialog-header {
+  position: relative;
+  flex: 0 0 auto;
+  min-width: 0;
+  padding: var(--ui-dialog-padding, var(--ui-panel-padding)) var(--ui-dialog-padding, var(--ui-panel-padding)) 0;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.ui-dialog[data-dragging="true"] .ui-dialog-header { cursor: grabbing; }
+.ui-dialog-header:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: calc(-1 * var(--ui-focus-width));
+}
+.ui-dialog-body {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  padding: 0 var(--ui-dialog-padding, var(--ui-panel-padding)) var(--ui-dialog-padding, var(--ui-panel-padding));
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.ui-dialog-move-hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .ui-dialog[data-ui-dialog-size="narrow"] { width: min(var(--ui-dialog-width-narrow, 30rem), calc(100vw - 2 * var(--ui-space-7))); }

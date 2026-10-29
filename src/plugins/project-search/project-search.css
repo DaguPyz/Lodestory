@@ -1,9 +1,15 @@
-.ui-dialog:has(> .project-search) {
+.ui-dialog:has(> .ui-dialog-body > .project-search) {
   display: flex;
   flex-direction: column;
   height: min(38rem, calc(100dvh - 2 * var(--ui-space-7)));
   overflow: hidden;
 }
+.ui-dialog-body:has(> .project-search) {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.ui-dialog-body:has(> .project-search) > .ui-dialog-description { flex-shrink: 0; }
 .project-search { display: flex; flex: 1; flex-direction: column; gap: var(--ui-space-4); min-height: 0; margin-top: var(--ui-space-6); }
 .project-search > .search-field, .project-search-filters, .project-search > .ui-dialog-actions { flex-shrink: 0; }
 .project-search > .ui-dialog-actions { margin-top: 0; }

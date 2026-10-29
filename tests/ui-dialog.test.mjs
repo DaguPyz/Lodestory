@@ -22,6 +22,9 @@ function loadDialogWithBaseUiStub() {
       return context;
     },
     useContext(context) { return context.value; },
+    useId() { return "dialog-movement-hint"; },
+    useRef(value) { return {current: value}; },
+    useCallback(callback) { return callback; },
     useLayoutEffect(effect) { effect(); },
     useState(value) { return [value, () => {}]; },
   };

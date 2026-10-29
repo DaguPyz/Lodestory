@@ -26,6 +26,8 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 
 搜索来源由业务插件按工作台会话登记并在会话结束时撤销。来源提供当前记录、加载／错误状态、变更订阅和打开操作；`id` 在来源内唯一，`kind` 用于结果分组，`title`、`detail` 和 `text` 提供可搜索内容。索引服务不拥有原始数据，也不通过打开结果绕过来源的业务检查。`projectSearchRequested` 只请求展示搜索界面，并不会自动执行搜索或打开资源。当前实现及边界见[项目搜索插件](../../src/plugins/project-search/README.md)。
 
+正文来源使用 `matchMode: "text-occurrences"` 返回独立命中位置，通过 `searchAsync` 分批获取结果；打开时将命中信息交还来源校验。文稿目录由工程管理插件提供；文档工作区提供优先读取当前编辑内容的 `readSearchText`，项目存储的 `readTransient` 不创建持久缓冲。格式编辑器可提供 `getSearchText` 提取可见文字，并通过编辑器句柄的 `revealSearchRange` 定位经校验的结果。调用方须处理取消、读取失败和格式不支持定位的情况。
+
 存在原生输入合成状态的编辑器可提供 `EditorHandle.flushContent(currentContent?)`，同步提交已经发生的输入并返回完整持久化内容。传入的 `currentContent` 是宿主最新缓冲；格式实现应先接纳尚未通过 React 属性送达的外部替换，避免旧界面覆盖新内容。正文宿主会将该句柄通过文档工作区的可选 `registerContentReader(documentId, reader)` 接口登记；保存、切换和离开前由文档插件调用读取器并更新既有共享缓冲。读取错误会阻止对应操作，句柄失效后不能继续读取。登记返回的撤销函数只撤销自身批次，旧实例不能移除新实例的读取器。
 
 ## 生命周期与 key

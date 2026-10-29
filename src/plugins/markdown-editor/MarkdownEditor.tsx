@@ -2,7 +2,7 @@ import {useEffect, useLayoutEffect, useRef, useState} from "react";
 import type {EditorProps} from "@lodestory/sdk/body-editor";
 import {Crepe} from "@milkdown/crepe";
 import {EditorStatus, editorViewCtx, editorViewOptionsCtx, parserCtx, serializerCtx} from "@milkdown/kit/core";
-import {Plugin} from "@milkdown/kit/prose/state";
+import {Plugin, TextSelection} from "@milkdown/kit/prose/state";
 import type {EditorView} from "@milkdown/kit/prose/view";
 import {uploadConfig} from "@milkdown/kit/plugin/upload";
 import {$prose} from "@milkdown/kit/utils";
@@ -146,6 +146,35 @@ function createMilkdownDriver(root: HTMLElement, content: string, onError: (reas
       crepe.setReadonly(value);
     },
     focus: () => crepe.editor.action(ctx => ctx.get(editorViewCtx).focus()),
+    revealSearchRange(target) {
+      return crepe.editor.action(ctx => {
+        const view = ctx.get(editorViewCtx);
+        let text = "";
+        const positions: number[] = [];
+        let hasBlock = false;
+        view.state.doc.descendants((node, position) => {
+          if (!node.isTextblock) return true;
+          if (hasBlock) { text += "\n"; positions.push(position); }
+          hasBlock = true;
+          node.descendants((child, offset) => {
+            if (child.isText && child.text) {
+              for (let index = 0; index < child.text.length; index++) positions.push(position + 1 + offset + index);
+              text += child.text;
+            } else if (child.type.name === "hardbreak") { text += "\n"; positions.push(position + 1 + offset); }
+          });
+          return false;
+        });
+        // The editor can append an empty paragraph after a table for typing.
+        if (text === `${target.text}\n`) { text = text.slice(0, -1); positions.pop(); }
+        if (text !== target.text) return false;
+        if (target.start < 0 || target.end <= target.start || target.end > text.length) return false;
+        const from = positions[target.start], to = positions[target.end - 1] + 1;
+        if (from === undefined || !Number.isFinite(to)) return false;
+        view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, from, to)).scrollIntoView());
+        view.focus();
+        return true;
+      });
+    },
     listen: listener => { notify = listener; },
   };
 }

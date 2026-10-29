@@ -32,13 +32,16 @@ export function createEditorCallbackGuard(
     if (currentHandle === handle && exposedHandle) return exposedHandle;
     currentHandle = handle;
     const getActions = handle.getContextMenuActions;
-    exposedHandle = getActions || handle.flushContent ? {
+    exposedHandle = getActions || handle.flushContent || handle.revealSearchRange ? {
       focus() {
         if (isValid() && currentHandle === handle) handle.focus();
       },
       ...(handle.flushContent ? {flushContent(currentContent?: string) {
         if (!isValid() || currentHandle !== handle) throw new Error("This editor instance is no longer active.");
         return handle.flushContent!(currentContent);
+      }} : {}),
+      ...(handle.revealSearchRange ? {revealSearchRange(target: Parameters<NonNullable<EditorHandle["revealSearchRange"]>>[0]) {
+        return isValid() && currentHandle === handle ? handle.revealSearchRange!(target) : false;
       }} : {}),
       ...(getActions ? {getContextMenuActions() {
         if (!isValid() || currentHandle !== handle) return [];

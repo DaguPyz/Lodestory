@@ -1,5 +1,5 @@
 import type {Plugin} from "@lodestory/sdk";
-import {documentsKey, documentCreateRequested, documentRevealRequested} from "@lodestory/sdk/documents";
+import {documentsKey, documentCreateRequested, documentRevealRequested, projectDocumentCatalogKey} from "@lodestory/sdk/documents";
 import {layoutKey} from "@lodestory/sdk/layout";
 import {uiKey} from "@lodestory/sdk/ui";
 import {workbenchKey} from "@lodestory/sdk/workbench";
@@ -12,7 +12,7 @@ import "./project-management.css";
 export function createProjectManagementPlugin(): Plugin {
     let cleanup: (() => Promise<void>) | undefined;
     return {
-        id: "project-management", requires: [workbenchKey, documentsKey, layoutKey, uiKey, projectSearchKey], provides: [],
+        id: "project-management", requires: [workbenchKey, documentsKey, layoutKey, uiKey, projectSearchKey], provides: [projectDocumentCatalogKey],
         activate(context) {
             const workbench = context.get(workbenchKey);
             const documents = context.get(documentsKey);
@@ -23,6 +23,7 @@ export function createProjectManagementPlugin(): Plugin {
             const removers: (() => void)[] = [];
             let removeParticipant: (() => Promise<void>) | undefined;
             let active = true;
+            context.provide(projectDocumentCatalogKey, {getCatalog: sessionId => active ? models.get(sessionId) ?? null : null});
             cleanup = async () => {
                 active = false;
                 const errors: unknown[] = [];

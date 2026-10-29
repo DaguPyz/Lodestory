@@ -270,6 +270,7 @@ test("outline navigation switches independently while preserving editor contents
   assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
     "body-editor.main", "document-tabs.tabs", "project-management.files",
   ]);
+  await f.createdCores.at(-1).unmount("document-search");
   await f.createdCores.at(-1).unmount("body-editor");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
     "document-tabs.tabs", "project-management.files",

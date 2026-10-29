@@ -1,4 +1,4 @@
-import type {EditorFormat, EditorHandle, EditorProps} from "@lodestory/sdk/body-editor";
+import type {EditorFormat, EditorHandle, EditorProps, EditorSearchRange} from "@lodestory/sdk/body-editor";
 
 export type RichTextEditorState = Readonly<{
   content: string;
@@ -14,6 +14,7 @@ export type RichTextEditorDriver = {
   replaceContent(content: string, format: EditorFormat): void;
   setReadOnly(value: boolean): void;
   focus(): void;
+  revealSearchRange?(target: EditorSearchRange): boolean;
   listen(listener: () => void): void;
 };
 
@@ -68,6 +69,10 @@ export function createRichTextEditorSession(
       if (!alive || !ready || !state.active) return;
       try { driver.focus(); }
       catch (error) { fail(error); }
+    },
+    revealSearchRange(target) {
+      if (!alive || !ready || !state.active || !driver.revealSearchRange) return false;
+      try { return driver.revealSearchRange(target); } catch { return false; }
     },
   });
 

@@ -46,6 +46,13 @@ export default function PlainTextEditor(props: EditorProps) {
       instance.setReadOnly(current.current.readOnly || !current.current.active);
       current.current.onReady({
         focus() { if (alive && current.current.active) instance?.focus(); },
+        revealSearchRange(target) {
+          if (!alive || !instance || !current.current.active || instance.getContent() !== target.text
+            || target.start < 0 || target.end <= target.start || target.end > target.text.length) return false;
+          instance.setSelection(target.start, target.end);
+          instance.focus();
+          return true;
+        },
         flushContent(currentContent?: string) {
           if (!alive || !instance) throw new Error("纯文本编辑器已关闭。");
           if (currentContent !== undefined && currentContent !== accepted.current) {

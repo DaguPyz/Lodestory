@@ -8,6 +8,14 @@ export function TextareaEditor({documentId, content, readOnly, active, onChange,
     focus() {
       input.current?.focus({preventScroll: true});
     },
+    revealSearchRange(target) {
+      const element = input.current;
+      if (!element || element.value !== target.text || target.start < 0 || target.end <= target.start || target.end > target.text.length) return false;
+      element.focus();
+      element.setSelectionRange(target.start, target.end);
+      element.scrollIntoView({block: "nearest"});
+      return true;
+    },
   }), []);
 
   useEffect(() => {

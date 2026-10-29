@@ -1,4 +1,4 @@
-import type {BodyEditorService, EditorConversion, EditorDefinition, EditorFormat, EditorReplacement} from "@lodestory/sdk/body-editor";
+import type {BodyEditorService, EditorConversion, EditorDefinition, EditorFormat, EditorReplacement, EditorSearchTarget} from "@lodestory/sdk/body-editor";
 
 type EditorModule = Awaited<ReturnType<EditorDefinition["load"]>>;
 type Entry = {
@@ -23,6 +23,7 @@ export function getEditorFormat(fileName: string): EditorFormat | undefined {
 export function createBodyEditorRegistry(
   defaults: Readonly<Partial<Record<EditorFormat, string>>>,
   beforeRemove: () => void,
+  revealSearchTarget: (sessionId: string, target: EditorSearchTarget) => boolean = () => false,
 ) {
   const associations = Object.freeze({...defaults});
   for (const [format, id] of Object.entries(associations)) {
@@ -119,6 +120,7 @@ export function createBodyEditorRegistry(
         id: definition.id,
         formats: Object.freeze([...definition.formats]),
         ...(definition.getText ? {getText: definition.getText} : {}),
+        ...(definition.getSearchText ? {getSearchText: definition.getSearchText} : {}),
         ...(definition.conversions ? {conversions: Object.freeze(definition.conversions.map(conversion => Object.freeze({...conversion})))} : {}),
         ...(definition.replaces ? {replaces: Object.freeze(definition.replaces.map(replacement => Object.freeze({...replacement})))} : {}),
         load: definition.load,
@@ -153,6 +155,21 @@ export function createBodyEditorRegistry(
         return undefined;
       }
     },
+    async getSearchText(fileName, content, signal) {
+      if (!alive || !started || signal?.aborted) return undefined;
+      const format = getEditorFormat(fileName);
+      if (!format) return undefined;
+      const entry = resolveEntry(format);
+      if (!entry) return undefined;
+      try {
+        const getText = entry.definition.getSearchText ?? entry.definition.getText;
+        if (!getText) return format === "rich-delta" ? undefined : content;
+        const text = await getText(content, format, signal);
+        if (!alive || signal?.aborted || entries.get(entry.source.id) !== entry) return undefined;
+        return typeof text === "string" ? text : undefined;
+      } catch { return undefined; }
+    },
+    revealSearchTarget,
     subscribe(listener) {
       checkActive();
       listeners.add(listener);

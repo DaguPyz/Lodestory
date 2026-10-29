@@ -16,6 +16,9 @@
 .project-search-group + .project-search-group { margin-top: var(--ui-space-5); }
 .project-search-group h2 { padding: var(--ui-space-2) var(--ui-space-3); color: var(--ui-text-muted); font-size: var(--ui-font-size-caption); font-weight: 600; }
 .project-search-group ul { margin: 0; padding: 0; list-style: none; }
+.project-search-document + .project-search-document { margin-top: var(--ui-space-3); }
+.project-search-document h3 { margin: 0; padding: var(--ui-space-3); font-size: var(--ui-font-size-label); font-weight: 600; overflow-wrap: anywhere; }
+.project-search-document h3 span { color: var(--ui-text-muted); font-size: var(--ui-font-size-caption); font-weight: 400; }
 .project-search-group button { display: flex; flex-direction: column; align-items: flex-start; gap: var(--ui-space-1); width: 100%; padding: var(--ui-space-3); color: var(--ui-text-primary); background: transparent; border: 0; border-radius: var(--ui-radius-row); text-align: left; }
 .project-search-group button:hover:not(:disabled) { background: var(--ui-surface-hover); }
 .project-search-group button:active:not(:disabled) { background: var(--ui-surface-pressed); }

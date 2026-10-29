@@ -51,6 +51,36 @@ test("project storage owns one shared byte buffer without encoding or file-forma
   await reopened.dispose();
 });
 
+test("transient reads do not install buffers and prefer edits made during the read", async () => {
+  const entered = deferred();
+  const release = deferred();
+  let hold = false;
+  const f = byteStorageFixture({async onInvoke(command) {
+    if (hold && command === "read_project_file") { entered.resolve(); await release.promise; }
+  }});
+  f.disk.set("/book/chapter.txt", [65, 66]);
+  const controller = f.files();
+  const files = controller.service;
+  const first = await files.readTransient("chapter.txt");
+  const original = new Uint8Array(first.byteLength);
+  first.copyTo(original);
+  assert.deepEqual([...original], [65, 66]);
+  assert.equal(files.getSnapshot().files.length, 0, "index reads do not register an editable buffer");
+
+  await files.read("chapter.txt");
+  hold = true;
+  const pending = files.readTransient("chapter.txt");
+  await entered.promise;
+  assert.equal(files.write("chapter.txt", [67, 68]), true);
+  release.resolve();
+  const latest = await pending;
+  const bytes = new Uint8Array(latest.byteLength);
+  latest.copyTo(bytes);
+  assert.deepEqual([...bytes], [67, 68], "a concurrent edit wins over the disk response");
+  assert.equal(files.getSnapshot().files[0].dirty, true);
+  await controller.dispose();
+});
+
 test("storage leave waits for accepted reads and writes while locking new mutations", async () => {
   const entered = deferred();
   const release = deferred();

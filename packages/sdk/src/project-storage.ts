@@ -58,6 +58,8 @@ export type ProjectFiles = {
     captureBytes?(data: ProjectFileData): ProjectByteView;
     /** Refresh clean bytes from disk; preserve dirty or saving bytes. */
     read(path: string, options?: ProjectFileAccessOptions): Promise<ProjectFile | null>;
+    /** Read immutable bytes without installing a file buffer; dirty buffers take precedence over disk. */
+    readTransient(path: string): Promise<ProjectByteView | null>;
     /** Persist a new file at this exact path before publishing success. */
     create(path: string, bytes: ProjectFileData, options?: ProjectFileCreateOptions): Promise<ProjectFile | null>;
     /** Edit a buffer previously read/created and schedule autosave. Use save/saveState to observe persistence. */

@@ -625,6 +625,15 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
                 localError = null;
             });
         },
+        async readSearchText(path: string, signal?: AbortSignal) {
+            if (disposed || signal?.aborted || !validPath(path)) return null;
+            const current = snapshot.documents.find(document => document.path === path);
+            if (current) return current.content;
+            const text = await files.readSearchText(path, signal);
+            if (disposed || signal?.aborted) return null;
+            // An editor may have opened or edited the path while the read was pending.
+            return snapshot.documents.find(document => document.path === path)?.content ?? text;
+        },
         select(id: string) {
             if (blocked() || closing.has(id) || !snapshot.documents.some(document => document.id === id)) return false;
             if (!flushBeforeActivation(id)) return false;

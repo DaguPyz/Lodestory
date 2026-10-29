@@ -23,6 +23,7 @@ function useBodyEditorModel(model: BodyEditorModel, workbench: WorkbenchService,
     busy: state.busy || workspace.blocked,
     newDisabled: !isTauri() || workspace.creating || workspace.blocked || state.busy || !state.active,
     requestNewDocument: model.requestNewDocument,
+    finishSearchTarget: model.finishSearchTarget,
   };
 }
 

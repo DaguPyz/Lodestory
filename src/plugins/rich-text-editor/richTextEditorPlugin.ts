@@ -30,6 +30,10 @@ export function createRichTextEditorPlugin(): Plugin {
           if (text === undefined) throw new Error("Quill 无法读取此文档的纯文本内容。");
           return text;
         },
+        async getSearchText(content, format, signal) {
+          if (format !== "rich-delta") throw new Error("Quill 无法搜索此文档格式。");
+          return (await import("./richSearchClient")).extractRichSearchText(content, signal);
+        },
         load: async () => {
           const module = await import("./RichTextEditor");
           const EditorWithSystemFonts: ComponentType<EditorProps> = props =>

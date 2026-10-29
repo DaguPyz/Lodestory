@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useRef} from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import { IconButton, Icon } from "@lodestory/ui";
 import type {EditorHandle} from "@lodestory/sdk/body-editor";
 import {getEditorFormat} from "./bodyEditorRegistry";
@@ -10,6 +10,7 @@ export function BodyEditor({active}: {active: boolean}) {
   const {workspace} = editor;
   const root = useRef<HTMLDivElement>(null);
   const handles = useRef(new Map<string, EditorHandle>());
+  const [readyVersion, setReadyVersion] = useState(0);
   const contentReaders = useRef(new Map<string, () => void>());
   const mounted = useRef(true);
   const focusFrames = useRef(new Set<number>());
@@ -52,11 +53,27 @@ export function BodyEditor({active}: {active: boolean}) {
     } else {
       handles.current.delete(documentId);
     }
+    setReadyVersion(value => value + 1);
 
     function isOpen() {
       return workspace.getSnapshot().documents.some(document => document.id === documentId);
     }
   }, [workspace.getSnapshot, workspace.registerContentReader]);
+
+  useEffect(() => {
+    const target = editor.searchTarget;
+    if (!target || !active || editor.busy) return;
+    if (workspace.activeId !== target.documentId) {
+      editor.finishSearchTarget(target, true);
+      return;
+    }
+    const handle = handles.current.get(target.documentId);
+    if (!handle) return;
+    const current = workspace.getSnapshot().documents.find(document => document.id === target.documentId);
+    let success = false;
+    try { success = current?.content === target.content && Boolean(handle.revealSearchRange?.(target.range)); }
+    finally { editor.finishSearchTarget(target, success); }
+  }, [active, editor.busy, editor.searchTarget, editor.finishSearchTarget, readyVersion, workspace.activeId, workspace.getSnapshot]);
 
   useEffect(() => {
     if (!active || editor.busy) return;
@@ -76,6 +93,7 @@ export function BodyEditor({active}: {active: boolean}) {
   const disabled = editor.busy || !active;
   return <div className="editor-content-main" ref={root} aria-busy={editor.busy}>
     <BodyEditorInteractions active={active}/>
+    {editor.searchError && <p className="editor-document-feedback" role="alert">{editor.searchError}</p>}
     {workspace.error && <div className="editor-document-feedback" role="alert">
       <p className="project-error">{workspace.error}</p>
       <IconButton label="关闭提示" disabled={disabled} onClick={workspace.clearError}><Icon name="close" size="small"/></IconButton>

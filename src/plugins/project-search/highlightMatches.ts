@@ -37,7 +37,7 @@ export function highlightMatches(text: string, query: string): readonly {text: s
     const start = starts[index], end = ends[index + term.length - 1];
     if (start !== undefined && end !== undefined) {
       const last = ranges[ranges.length - 1];
-      if (last && start <= last.end) last.end = Math.max(last.end, end);
+      if (last && start < last.end) last.end = Math.max(last.end, end);
       else ranges.push({start, end});
     }
     from = index + term.length;

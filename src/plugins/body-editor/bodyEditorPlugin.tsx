@@ -37,7 +37,7 @@ export function createBodyEditorPlugin(): Plugin {
         const remove = removeRegistryUiWrapper;
         removeRegistryUiWrapper = undefined;
         remove?.();
-      });
+      }, (sessionId, target) => models.get(sessionId)?.revealSearchTarget(target) ?? false);
       registry = editorRegistry;
       context.provide(bodyEditorKey, editorRegistry.service);
       removeDefaultEditor = editorRegistry.service.registerEditor({

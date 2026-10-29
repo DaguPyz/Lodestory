@@ -1,4 +1,4 @@
-import type {EditorHandle, EditorProps} from "@lodestory/sdk/body-editor";
+import type {EditorHandle, EditorProps, EditorSearchRange} from "@lodestory/sdk/body-editor";
 
 export type MarkdownEditorState = Readonly<{
   content: string;
@@ -13,6 +13,7 @@ export type MarkdownEditorDriver = {
   replaceMarkdown(content: string): void;
   setReadOnly(value: boolean): void;
   focus(): void;
+  revealSearchRange?(target: EditorSearchRange): boolean;
   listen(listener: (markdown: string) => void): void;
 };
 
@@ -62,6 +63,10 @@ export function createMarkdownEditorSession(
       if (!alive || !ready || !state.active) return;
       try { driver.focus(); }
       catch (error) { fail(error); }
+    },
+    revealSearchRange(target) {
+      if (!alive || !ready || !state.active || !driver.revealSearchRange) return false;
+      try { return driver.revealSearchRange(target); } catch { return false; }
     },
   };
 

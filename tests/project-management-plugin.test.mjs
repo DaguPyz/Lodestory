@@ -68,6 +68,7 @@ function setup({wrapperError, invokeHandler} = {}) {
     return () => { lifecycle.push("wrapper.remove"); wrappers.splice(wrappers.indexOf(value), 1); };
   }};
   const context = {
+    provide() {},
     get(key) {
       if (key === workbenchKey) return workbench;
       if (key === documentsKey) return documents;
@@ -133,7 +134,7 @@ test("project management registers its own navigation and a dialog wrapper indep
   const {uiKey} = f.fixture.requireSdk("@lodestory/sdk/ui");
   const {projectSearchKey} = f.fixture.requireSdk("@lodestory/sdk/project-search");
   assert.deepEqual(Array.from(f.plugin.requires, key => key.id), [workbenchKey.id, documentsKey.id, layoutKey.id, uiKey.id, projectSearchKey.id]);
-  assert.deepEqual(Array.from(f.plugin.provides), []);
+  assert.deepEqual(Array.from(f.plugin.provides, key => key.id), ["app/project-document-catalog"]);
   f.plugin.activate(f.context);
   assert.equal(f.contributions.length, 1);
   assert.deepEqual({id: f.contributions[0].id, role: f.contributions[0].role}, {id: "project-management.files", role: "navigation"});

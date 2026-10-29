@@ -326,6 +326,14 @@ function createQuillDriver(root: HTMLElement, initialContent: string, format: Ed
     focus() {
       quill?.focus();
     },
+    revealSearchRange(target) {
+      if (!quill || target.start < 0 || target.end <= target.start) return false;
+      const text = quill.getText();
+      if ((text.endsWith("\n") ? text.slice(0, -1) : text) !== target.text || target.end > target.text.length) return false;
+      quill.focus();
+      quill.setSelection(target.start, target.end - target.start, "api");
+      return true;
+    },
     listen(listener) {
       notify = listener;
     },

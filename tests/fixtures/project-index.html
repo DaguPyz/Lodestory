@@ -21,6 +21,7 @@
         let state = projects.get(projectPath);
         if (!state) {
           const files = new Map([["正文/已有章节.md", encode("这是已有文稿。")], ["故事大纲.txt", encode("故事的大纲。")]]);
+          if (scenario === "document-search") files.set("正文/已有章节.md", encode("# 标题\n\n第一行 **强调词** 和 [链接词](https://example.com)。\n第二行内容。\n\n- 列表甲\n- 列表乙\n\n| 左 | 右 |\n| --- | --- |\n| 表格词 | 其他 |"));
           if (scenario === "save-as-conflict") files.set("故事大纲.lode", encode(JSON.stringify({format: "quill-delta", version: 1, ops: [{insert: "已存在的富文本文档。\n"}]})));
           state = {files, directories: new Set(["", "正文", "资料"])};
           if (scenario?.startsWith("asset-template-workspace")) {

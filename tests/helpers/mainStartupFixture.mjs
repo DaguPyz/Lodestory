@@ -371,6 +371,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       document,
       window,
       BroadcastChannel: Channel,
+      AbortController,
       setTimeout,
       clearTimeout,
       Promise,

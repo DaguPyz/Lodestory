@@ -3,12 +3,15 @@ import type {DocumentWorkspace} from "@lodestory/sdk/documents";
 import type {LayoutService} from "@lodestory/sdk/layout";
 import type {WorkbenchService, WorkbenchSession} from "@lodestory/sdk/workbench";
 import {bodyEditorContentIds} from "./bodyEditorContentIds";
+import type {EditorSearchTarget} from "@lodestory/sdk/body-editor";
 
 export type BodyEditorSnapshot = Readonly<{
   projectName: string;
   projectPath: string;
   workspace: DocumentWorkspace;
   revealVersion: number;
+  searchTarget: EditorSearchTarget | null;
+  searchError: string | null;
 }>;
 
 export type BodyEditorModel = {
@@ -16,6 +19,8 @@ export type BodyEditorModel = {
   subscribe(listener: () => void): () => void;
   requestNewDocument(parentPath?: string): void;
   revealDocument(id: string): boolean;
+  revealSearchTarget(target: EditorSearchTarget): boolean;
+  finishSearchTarget(target: EditorSearchTarget, success: boolean): void;
   dispose(): void;
 };
 
@@ -33,6 +38,8 @@ export function createBodyEditorModel(
     projectPath: session.project.path,
     workspace,
     revealVersion: 0,
+    searchTarget: null,
+    searchError: null,
   });
   const listeners = new Set<() => void>();
   return {
@@ -60,6 +67,26 @@ export function createBodyEditorModel(
         try { listener(); } catch (error) { console.error("Body editor subscriber failed.", {error}); }
       }
       return true;
+    },
+    revealSearchTarget(target) {
+      if (disposed || workbench.getSnapshot().session?.id !== session.id) return false;
+      const state = workspace.getSnapshot();
+      const document = state.documents.find(item => item.id === target.documentId);
+      if (state.activeId !== target.documentId || !document || document.content !== target.content) return false;
+      layout.show(bodyEditorContentIds.main);
+      snapshot = Object.freeze({...snapshot, searchTarget: target, searchError: null});
+      for (const listener of [...listeners]) {
+        try { listener(); } catch (error) { console.error("Body editor subscriber failed.", {error}); }
+      }
+      return true;
+    },
+    finishSearchTarget(target, success) {
+      if (disposed || snapshot.searchTarget !== target) return;
+      snapshot = Object.freeze({...snapshot, searchTarget: null,
+        searchError: success ? null : "正文已变化或编辑器暂不支持定位，请重新搜索。"});
+      for (const listener of [...listeners]) {
+        try { listener(); } catch (error) { console.error("Body editor subscriber failed.", {error}); }
+      }
     },
     dispose() {
       disposed = true;

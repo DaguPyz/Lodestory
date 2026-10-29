@@ -154,6 +154,24 @@ export function createProjectFiles(projectPath: string, options: Options = {}) {
       void operation.finally(() => { if (opening.get(path) === operation) opening.delete(path); });
       return operation;
     },
+    readTransient(path: string) {
+      if (disposed || checkingLeave || !canLoad() || !validPath(path) || pathChanging(path)) return Promise.resolve(null);
+      const buffered = buffers.get(path);
+      if (buffered?.isDirty || buffered?.file.saveState === "saving") {
+        return Promise.resolve(createProjectByteView(buffered.file.byteView ?? buffered.file.bytes));
+      }
+      return run(async () => {
+        try {
+          const record = await validateRecord(await readFile(projectPath, path, {preferByteView: true}), path, true);
+          if (disposed || pathChanging(path)) return null;
+          const latest = buffers.get(path);
+          if (latest?.isDirty || latest?.file.saveState === "saving") {
+            return createProjectByteView(latest.file.byteView ?? latest.file.bytes);
+          }
+          return createProjectByteView(record.bytes);
+        } catch { return null; }
+      });
+    },
     create(path: string, data: ProjectFileData, options: ProjectFileCreateOptions = {}) {
       if (blocked()) return Promise.resolve(null);
       if (!options || typeof options !== "object"

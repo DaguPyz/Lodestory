@@ -35,6 +35,8 @@ export type DocumentWorkspace = {
   subscribe(listener: () => void): () => void;
   /** 已打开时复用；迟到的打开结果不得抢回更新的选择。 */
   open(path: string): Promise<boolean>;
+  /** Searchable committed text without opening a tab, flushing an editor, or creating a persistent file buffer. */
+  readSearchText(path: string, signal?: AbortSignal): Promise<string | null>;
   /** 创建后加入打开列表；返回实际文件名和路径，失败返回 null。 */
   create(parentPath: string, name: string): Promise<OpenDocument | null>;
   /** 在现有目录下创建单层子目录；不覆盖或递归创建。 */
@@ -70,6 +72,18 @@ export type DocumentsService = {
   /** 只读取已有会话；会话结束后返回 null，同一会话始终返回同一对象。 */
   getWorkspace(sessionId: string): DocumentWorkspace | null;
 };
+
+/** Read-only document tree owned by project management. */
+export type ProjectDocumentEntry = Readonly<{path: string; name: string; children?: readonly ProjectDocumentEntry[]}>;
+export type ProjectDocumentCatalog = Readonly<{
+  getSnapshot(): Readonly<{entries: readonly ProjectDocumentEntry[]; loading: boolean; error: string | null}>;
+  subscribe(listener: () => void): () => void;
+  refresh(): Promise<void>;
+}>;
+export type ProjectDocumentCatalogService = Readonly<{
+  getCatalog(sessionId: string): ProjectDocumentCatalog | null;
+}>;
+export const projectDocumentCatalogKey = createServiceKey<ProjectDocumentCatalogService>("app/project-document-catalog");
 
 export type DocumentCreateRequest = Readonly<{sessionId: string; parentPath?: string}>;
 export type DocumentRevealRequest = Readonly<{sessionId: string; documentId: string}>;

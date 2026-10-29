@@ -17,6 +17,7 @@ export type DocumentTextFiles = {
   subscribe(listener: () => void): () => void;
   subscribePathChanges?(listener: (change: ProjectPathRename) => void): () => void;
   open(path: string): Promise<DocumentTextFile | null>;
+  readSearchText(path: string, signal?: AbortSignal): Promise<string | null>;
   create(parentPath: string, name: string, content?: string): Promise<DocumentTextFile | null>;
   createDirectory(parentPath: string, name: string): Promise<string | null>;
   renamePath(fromPath: string, toPath: string): Promise<boolean>;
@@ -343,6 +344,14 @@ export function createDocumentFiles(source: ProjectFiles): DocumentTextFiles {
       if (disposed) return () => {};
       pathChangeListeners.add(listener);
       return () => { pathChangeListeners.delete(listener); };
+    },
+    async readSearchText(path: string, signal?: AbortSignal) {
+      if (disposed || signal?.aborted || typeof source.readTransient !== "function") return null;
+      try {
+        const bytes = await source.readTransient(path);
+        if (!bytes || disposed || signal?.aborted) return null;
+        return await decodeDocumentBytes(bytes, () => !disposed && !signal?.aborted);
+      } catch { return null; }
     },
     open(path: string) {
       error = null;

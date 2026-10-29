@@ -6,8 +6,15 @@ import ts from "typescript";
 
 const source = await readFile(new URL("../src/plugins/project-search/searchIndex.ts", import.meta.url), "utf8");
 const code = ts.transpileModule(source, {compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS}}).outputText;
+const highlightSource = await readFile(new URL("../src/plugins/project-search/highlightMatches.ts", import.meta.url), "utf8");
+const highlightCode = ts.transpileModule(highlightSource, {compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS}}).outputText;
+const highlight = {};
+vm.runInNewContext(highlightCode, {exports: highlight});
 const exports = {};
-vm.runInNewContext(code, {exports, setTimeout, clearTimeout, Object, Map, Set, Promise, Error, console});
+vm.runInNewContext(code, {exports, require: specifier => {
+  if (specifier === "./highlightMatches") return highlight;
+  throw new Error(`Unexpected import ${specifier}`);
+}, setTimeout, clearTimeout, Object, Map, Set, Promise, Error, console});
 const settle = () => new Promise(resolve => setTimeout(resolve, 30));
 function makeSource(initial) {
   let snapshot = {records: initial, loading: false, error: null};
@@ -77,5 +84,24 @@ test("a malformed source is reported without disturbing other sources or prior r
   assert.match(index.getSnapshot("a").issues[0], /重复/);
   assert.equal(index.search("a", "可用记录").length, 1);
   assert.equal(index.search("a", "另一个来源").length, 1);
+  index.dispose();
+});
+
+test("full-text search returns individual positions and is cancellable between chunks", async () => {
+  const index = exports.createSearchIndex();
+  const body = `${"甲".repeat(32767)}青云${"乙".repeat(33000)}青云`;
+  const first = makeSource([{id: "chapter", kind: "正文", title: "章节", detail: "章节.txt", text: body, matchMode: "text-occurrences"}]);
+  index.registerSource("a", "documents", first.source);
+  await settle();
+  const batches = [];
+  await index.searchAsync("a", "青云", "正文", new AbortController().signal, result => batches.push(result));
+  const matches = batches.at(-1);
+  assert.equal(matches.length, 2);
+  assert.deepEqual(Array.from(matches, result => result.match.start), [32767, 65769]);
+  assert.equal(matches[0].match.text, "青云");
+  const controller = new AbortController();
+  let notified = 0;
+  await index.searchAsync("a", "青云", "正文", controller.signal, () => { notified++; controller.abort(); });
+  assert.equal(notified, 1);
   index.dispose();
 });

@@ -21,9 +21,13 @@ export type EditorHandle = Readonly<{
     focus(): void;
     /** 同步提交原生输入并返回全文；传入宿主最新内容，以先接纳尚未渲染的外部替换。 */
     flushContent?(currentContent?: string): string;
+    /** Reveal a verified range in visible text without changing document content. */
+    revealSearchRange?(target: EditorSearchRange): boolean;
     /** 每次调用返回当前可用的菜单操作快照。 */
     getContextMenuActions?(): readonly EditorContextMenuAction[];
 }>;
+export type EditorSearchRange = Readonly<{text: string; start: number; end: number}>;
+export type EditorSearchTarget = Readonly<{documentId: string; content: string; range: EditorSearchRange}>;
 
 /** 正文编辑器宿主传给格式实现的文档内容与交互状态。 */
 export type EditorProps = Readonly<{
@@ -48,6 +52,8 @@ export type EditorDefinition = Readonly<{
     id: string;
     formats: readonly EditorFormat[];
     getText?(content: string, format: EditorFormat): string;
+    /** Visible text used for project search; defaults to getText when omitted. */
+    getSearchText?(content: string, format: EditorFormat, signal?: AbortSignal): string | Promise<string>;
     /** 可由宿主展示的内容转换；转换器属于声明目标格式的插件。 */
     conversions?: readonly EditorConversion[];
     /** 声明本实现替代的旧注册 ID 与格式；用于透明迁移已保存的编辑器映射。 */
@@ -71,6 +77,8 @@ export type BodyEditorService = {
     /** 登记一个编辑器；返回可重复调用的撤销函数。 */
     registerEditor(definition: EditorDefinition): () => void;
     getText(fileName: string, content: string): string | undefined;
+    getSearchText(fileName: string, content: string, signal?: AbortSignal): Promise<string | undefined>;
+    revealSearchTarget(sessionId: string, target: EditorSearchTarget): boolean;
     subscribe(listener: () => void): () => void;
 };
 

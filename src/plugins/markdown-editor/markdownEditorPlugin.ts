@@ -14,6 +14,7 @@ export function createMarkdownEditorPlugin(): Plugin {
       removeEditor = bodyEditor.registerEditor({
         id: "milkdown",
         formats: ["markdown"],
+        async getSearchText(content, _format, signal) { return (await import("./markdownSearchClient")).extractMarkdownSearchText(content, signal); },
         load: () => import("./MarkdownEditor"),
       });
     },

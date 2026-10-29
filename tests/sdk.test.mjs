@@ -67,7 +67,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.deepEqual(Object.keys(packageConfig), ["configKey"]);
   assert.deepEqual(Object.keys(packageContextMenu), ["contextMenuKey"]);
   assert.equal(packageContextMenu.contextMenuKey.id, "app/context-menu");
-  assert.deepEqual(Object.keys(packageDocuments).sort(), ["documentCreateRequested", "documentRevealRequested", "documentsKey"]);
+  assert.deepEqual(Object.keys(packageDocuments).sort(), ["documentCreateRequested", "documentRevealRequested", "documentsKey", "projectDocumentCatalogKey"]);
   assert.deepEqual(Object.keys(packageStorage), ["projectStorageKey"]);
   assert.deepEqual(Object.keys(packageSearch).sort(), ["projectSearchKey", "projectSearchRequested"]);
   assert.equal(packageStorage.projectStorageKey.id, "app/project-storage");

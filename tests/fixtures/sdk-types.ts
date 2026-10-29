@@ -74,6 +74,11 @@ const bodyEditorService: BodyEditorService = {
     void fileName;
     return content;
   },
+  async getSearchText(fileName, content) {
+    void fileName;
+    return content;
+  },
+  revealSearchTarget(sessionId, target) { void sessionId; void target; return false; },
   subscribe(listener) {
     void listener;
     return () => {};

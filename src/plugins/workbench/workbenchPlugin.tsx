@@ -11,6 +11,7 @@ import {flushSync} from "react-dom";
 import {appPages} from "../../app/pages";
 import "../../styles.css";
 import {WorkbenchPage} from "./WorkbenchPage";
+import {WorkbenchLoadingStatus} from "./WorkbenchLoadingStatus";
 import {createWorkbenchStore} from "./workbenchStore";
 
 /** 编辑页面的项目协调器；不导入文档、文件树或正文编辑实现。 */
@@ -29,6 +30,7 @@ export function createWorkbenchPlugin(): Plugin {
       let removeGuard: (() => void) | undefined;
       let removeWrapper: (() => void) | undefined;
       let removeCloseListener: (() => void) | undefined;
+      let removeStatus: (() => void) | undefined;
       let alive = true;
       const store = createWorkbenchStore(ui, {
         editorPage: appPages.editor, welcomePage: appPages.welcome,
@@ -38,13 +40,17 @@ export function createWorkbenchPlugin(): Plugin {
       cleanup = async () => {
         alive = false;
         const errors: unknown[] = [];
-        for (const remove of [removeCloseListener, removePage, removeGuard, removeWrapper]) {
+        for (const remove of [removeCloseListener, removePage, removeStatus, removeGuard, removeWrapper]) {
           try { remove?.(); } catch (error) { errors.push(error); }
         }
         try { await store.dispose(); } catch (error) { errors.push(error); }
         if (errors.length) throw Object.assign(new Error("Workbench failed to stop."), {errors});
       };
       context.provide(workbenchKey, store.service);
+      removeStatus = layout.registerContent({
+        id: "workbench.loading", title: "项目加载进度", role: "status", order: 100,
+        render: () => <WorkbenchLoadingStatus workbench={store.service}/>,
+      });
       removeGuard = ui.registerNavigationGuard({id: "workbench", prepare: store.prepareNavigation});
       removePage = ui.registerPage({
         id: appPages.editor,

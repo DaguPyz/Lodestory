@@ -51,6 +51,8 @@ export type EditorProps = Readonly<{
 export type EditorDefinition = Readonly<{
     id: string;
     formats: readonly EditorFormat[];
+    /** 默认由宿主滚动整份文稿；editor 表示获得有界高度，由编辑器管理正文滚动和固定工具栏。 */
+    scrollMode?: "document" | "editor";
     getText?(content: string, format: EditorFormat): string;
     /** Visible text used for project search; defaults to getText when omitted. */
     getSearchText?(content: string, format: EditorFormat, signal?: AbortSignal): string | Promise<string>;

@@ -93,6 +93,9 @@ export function createBodyEditorRegistry(
         throw new TypeError("Editor formats must be a non-empty list of distinct supported formats.");
       }
       if (typeof definition.load !== "function") throw new TypeError("Editor must have a load function.");
+      if (definition.scrollMode !== undefined && definition.scrollMode !== "document" && definition.scrollMode !== "editor") {
+        throw new TypeError("Editor scroll mode must be document or editor.");
+      }
       if (definition.conversions !== undefined && (!Array.isArray(definition.conversions)
         || definition.conversions.some(conversion => !conversion || typeof conversion !== "object"
           || typeof conversion.id !== "string" || !conversion.id.trim()
@@ -119,6 +122,7 @@ export function createBodyEditorRegistry(
       const source: Readonly<EditorDefinition> = Object.freeze({
         id: definition.id,
         formats: Object.freeze([...definition.formats]),
+        ...(definition.scrollMode !== undefined ? {scrollMode: definition.scrollMode} : {}),
         ...(definition.getText ? {getText: definition.getText} : {}),
         ...(definition.getSearchText ? {getSearchText: definition.getSearchText} : {}),
         ...(definition.conversions ? {conversions: Object.freeze(definition.conversions.map(conversion => Object.freeze({...conversion})))} : {}),

@@ -54,6 +54,20 @@ test("body editor registry validates registrations and routes only through expli
   registry.dispose();
 });
 
+test("editor scroll mode defaults to the document viewport and preserves explicit ownership", () => {
+  const registry = createRegistry({markdown: "document-scroll", "rich-delta": "editor-scroll"});
+  registry.service.registerEditor(definition("document-scroll", ["markdown"]));
+  registry.service.registerEditor({...definition("editor-scroll", ["rich-delta"]), scrollMode: "editor"});
+  assert.throws(() => registry.service.registerEditor({...definition("invalid-scroll", ["plain-text"]), scrollMode: "inside-editor"}), /scroll mode/i);
+  registry.start();
+
+  assert.equal(registry.resolve("markdown").scrollMode, undefined,
+    "omitting the optional setting preserves the existing document-scrolling behavior");
+  assert.equal(registry.resolve("rich-delta").scrollMode, "editor",
+    "the selected editor can own its internal scrolling viewport");
+  registry.dispose();
+});
+
 test("format plugins contribute conversions that the host can discover by source format", () => {
   const registry = createRegistry({"plain-text": "plain-text"});
   const conversion = {

@@ -24,6 +24,8 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 
 正文格式插件可通过 `EditorHandle.getContextMenuActions()` 动态返回当前操作快照。每项操作由编辑器插件拥有，包含稳定的 `id`、`label`、可选 `disabled` 和 `run()`；正文宿主负责展示并在执行时复核编辑器生命周期与编辑状态。未提供该方法的编辑器无需贡献菜单操作。
 
+编辑器可声明 `EditorDefinition.scrollMode: "editor"`，获得文稿区域内的有界高度，由自身安排固定工具栏和正文滚动容器；省略或使用 `"document"` 时沿用宿主整份文稿滚动。滚动状态属于当前文档的编辑器实例，切换文档时保留，关闭时随实例释放；该设置不改变内容读写与保存流程。
+
 搜索来源由业务插件按工作台会话登记并在会话结束时撤销。来源提供当前记录、加载／错误状态、变更订阅和打开操作；`id` 在来源内唯一，`kind` 用于结果分组，`title`、`detail` 和 `text` 提供可搜索内容。索引服务不拥有原始数据，也不通过打开结果绕过来源的业务检查。`projectSearchRequested` 只请求展示搜索界面，并不会自动执行搜索或打开资源。当前实现及边界见[项目搜索插件](../../src/plugins/project-search/README.md)。
 
 正文来源使用 `matchMode: "text-occurrences"` 返回独立命中位置，通过 `searchAsync` 分批获取结果；打开时将命中信息交还来源校验。文稿目录由工程管理插件提供；文档工作区提供优先读取当前编辑内容的 `readSearchText`，项目存储的 `readTransient` 不创建持久缓冲。格式编辑器可提供 `getSearchText` 提取可见文字，并通过编辑器句柄的 `revealSearchRange` 定位经校验的结果。调用方须处理取消、读取失败和格式不支持定位的情况。

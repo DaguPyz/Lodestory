@@ -157,7 +157,11 @@ test("outline navigation switches independently while preserving editor contents
   const workbenchKey = f.requireSdk("@lodestory/sdk/workbench").workbenchKey;
   const layout = f.getService(layoutKey);
   const workbench = f.getService(workbenchKey);
-  assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.role), ["main", "main", "main", "main", "tabs", "navigation", "navigation", "navigation", "actions", "status"]);
+  assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.role), ["main", "main", "main", "main", "tabs", "navigation", "navigation", "navigation", "actions", "status", "status"]);
+  const loadingStatus = layout.getSnapshot().contents.find(({id}) => id === "workbench.loading");
+  assert.ok(loadingStatus, "the workbench contributes project startup progress through the generic layout service");
+  assert.equal(loadingStatus.role, "status");
+  assert.equal(loadingStatus.order, 100, "startup progress follows the existing writing status contribution");
   assert.ok(layout.getSnapshot().contents.some(({id}) => id === "project-management.files"));
   const outline = layout.getSnapshot().contents.find(({id}) => id === "outline-design.navigation");
   assert.ok(outline, "the outline-design plugin contributes through the layout service");
@@ -192,7 +196,7 @@ test("outline navigation switches independently while preserving editor contents
   assert.equal(canvas.order, 10);
   assert.ok(!layout.getSnapshot().shownIds.includes(canvas.id), "the body editor remains the default main content");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, entry => entry.id).sort(), [
-    "asset-management.assets", "asset-management.navigation", "asset-management.types", "body-editor.main", "document-tabs.tabs", "outline-design.navigation", "project-management.files", "timeline.main", "workbench-toolbar.main", "writing-status.status",
+    "asset-management.assets", "asset-management.navigation", "asset-management.types", "body-editor.main", "document-tabs.tabs", "outline-design.navigation", "project-management.files", "timeline.main", "workbench-toolbar.main", "workbench.loading", "writing-status.status",
   ]);
   assert.ok(f.lifecycle.indexOf("activate:default-layout:complete") < f.lifecycle.indexOf("activate:body-editor:begin"));
   assert.ok(f.lifecycle.indexOf("activate:project-management:complete") < f.lifecycle.indexOf("activate:body-editor:begin"));
@@ -260,25 +264,28 @@ test("outline navigation switches independently while preserving editor contents
   assert.ok(layout.getSnapshot().contents.some(({id}) => id === "body-editor.main"), "unmounting asset-management leaves the editor registered");
   assert.equal(workbench.getSnapshot().session, null, "revoking the asset participant stops the view and releases project-session resources");
   await core.unmount("workbench-toolbar");
+  assert.ok(layout.getSnapshot().contents.some(({id}) => id === "workbench.loading"),
+    "unmounting the toolbar plugin leaves the workbench-owned loading contribution registered");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
-    "body-editor.main", "document-tabs.tabs", "project-management.files", "writing-status.status",
+    "body-editor.main", "document-tabs.tabs", "project-management.files", "workbench.loading", "writing-status.status",
   ]);
   await f.createdCores.at(-1).unmount("writing-status");
   await f.createdCores.at(-1).unmount("rich-text-editor");
   await f.createdCores.at(-1).unmount("markdown-editor");
   await f.createdCores.at(-1).unmount("plain-text-editor");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
-    "body-editor.main", "document-tabs.tabs", "project-management.files",
+    "body-editor.main", "document-tabs.tabs", "project-management.files", "workbench.loading",
   ]);
   await f.createdCores.at(-1).unmount("document-search");
   await f.createdCores.at(-1).unmount("body-editor");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
-    "document-tabs.tabs", "project-management.files",
+    "document-tabs.tabs", "project-management.files", "workbench.loading",
   ]);
   await f.createdCores.at(-1).unmount("project-management");
-  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id), ["document-tabs.tabs"]);
+  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), ["document-tabs.tabs", "workbench.loading"]);
   await f.createdCores.at(-1).unmount("document-tabs");
-  assert.equal(layout.getSnapshot().contents.length, 0);
+  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id), ["workbench.loading"],
+    "the workbench loading contribution remains until its owner is unmounted");
   assert.equal(f.logs.filter(entry => entry === "root.unmount").length, 1);
   await f.createdCores.at(-1).unmountAll();
   assert.throws(() => layout.getSnapshot(), /no longer active/);
@@ -325,9 +332,13 @@ test("another provider of layoutKey receives the editor contributions and is inj
     activate(context) { context.provide(layoutKey, service); },
   })});
   f.start(); await flushStartup();
-  assert.equal(contributions.length, 10);
+  assert.equal(contributions.length, 11);
+  const loadingStatus = contributions.find(({id}) => id === "workbench.loading");
+  assert.ok(loadingStatus, "the workbench uses the supplied layout provider for startup progress");
+  assert.equal(loadingStatus.role, "status");
+  assert.equal(loadingStatus.order, 100);
   assert.deepEqual(contributions.map(({id}) => id).sort(), [
-    "asset-management.assets", "asset-management.navigation", "asset-management.types", "body-editor.main", "document-tabs.tabs", "outline-design.navigation", "project-management.files", "timeline.main", "workbench-toolbar.main", "writing-status.status",
+    "asset-management.assets", "asset-management.navigation", "asset-management.types", "body-editor.main", "document-tabs.tabs", "outline-design.navigation", "project-management.files", "timeline.main", "workbench-toolbar.main", "workbench.loading", "writing-status.status",
   ]);
   const ui = f.getService(f.requireSdk("@lodestory/sdk/ui").uiKey);
   await ui.openPage("editor", {project: {id: "test", name: "test", path: "/test"}});
@@ -339,5 +350,6 @@ test("another provider of layoutKey receives the editor contributions and is inj
   assert.equal(workbenchPage.props.layout, service);
   assert.equal(workbenchPage.props.layout.View, service.View);
   await f.createdCores.at(-1).unmountAll();
-  assert.equal(new Set(removed).size, 10);
+  assert.equal(new Set(removed).size, 11);
+  assert.ok(removed.includes("workbench.loading"), "workbench teardown revokes the progress contribution from a replaceable layout");
 });

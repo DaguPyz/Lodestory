@@ -116,6 +116,7 @@ export function Manuscript({document, visible, active, readOnly = false, format,
       mode={editorActions.length || availableConversions.length ? "custom" : undefined} items={menuItems}>
     <section
       className="editor-document"
+      data-editor-scroll={definition?.scrollMode ?? "document"}
       id={"editor-document-" + document.id}
       hidden={!visible}
       aria-label={document.fileName}

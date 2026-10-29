@@ -18,6 +18,7 @@ export function createRichTextEditorPlugin(): Plugin {
       removeEditor = bodyEditor.registerEditor({
         id: "quill",
         formats: ["rich-delta"],
+        scrollMode: "editor",
         conversions: [{
           id: "convert-to-rich-text",
           label: "转换为富文本文档",

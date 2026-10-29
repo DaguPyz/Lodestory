@@ -26,6 +26,24 @@
   padding: var(--ui-content-padding);
 }
 
+/* Editors with fixed chrome own their body viewport within the available pane height. */
+.editor-document[data-editor-scroll="editor"] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.editor-document[data-editor-scroll="editor"] > .manuscript {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.editor-document[data-editor-scroll="editor"] > .manuscript > :is(.document-save-error, .editor-document-feedback) {
+  flex-shrink: 0;
+}
+
 .manuscript-body {
   color: var(--ui-text-document);
   font-family: var(--ui-font-document);

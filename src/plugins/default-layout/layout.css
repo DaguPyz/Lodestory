@@ -74,7 +74,14 @@
 .layout-tabs { display: flex; flex-direction: column; flex: 0 0 auto; min-width: 0; }
 .layout-tabs > .layout-content { flex: 0 0 auto; }
 .layout-content { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; }
-.layout-status { display: flex; flex-shrink: 0; flex-wrap: wrap; background: var(--ui-surface-chrome); }
+.layout-status {
+  display: flex; flex-shrink: 0; align-items: center; min-width: 0;
+  background: var(--ui-surface-chrome); border-top: 1px solid var(--ui-border-divider);
+}
+.layout-status > .layout-content { flex: 0 1 auto; justify-content: center; }
+.layout-status > .layout-content:first-child { flex: 1 1 0%; }
+.layout-status > .layout-content:empty,
+.layout-status:not(:has(> .layout-content:not([hidden]):not(:empty))) { display: none; }
 .layout-empty { margin: auto; padding: var(--ui-panel-padding); color: var(--ui-text-secondary); }
 .layout-navigation-width-probe {
   position: absolute; visibility: hidden; pointer-events: none;

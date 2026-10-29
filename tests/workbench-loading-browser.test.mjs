@@ -32,8 +32,14 @@ test("project opens its locked workspace before the file tree is ready and recov
     await page.getByRole("button", {name: "打开项目 测试故事", exact: true}).click();
     const layout = page.locator(".default-layout");
     await layout.waitFor();
-    const progress = page.getByRole("progressbar");
+    const progress = layout.locator('.layout-status progress[aria-label="工作台加载进度"]');
     await progress.waitFor();
+    assert.equal(await layout.locator(".layout-status .workbench-status-loading").count(), 1,
+      "project startup progress is rendered in the bottom status bar");
+    assert.equal(await page.locator(".workbench-loading").count(), 0,
+      "normal project startup does not create a floating progress card");
+    assert.match((await layout.locator(".layout-status").innerText()).replace(/\s+/g, " "), /正在加载.*\d+\s*\/\s*\d+/,
+      "the status bar shows the active task and its progress count");
     const toolbar = layout.locator(".layout-actions [role='toolbar']");
     await toolbar.waitFor();
     assert.equal(await toolbar.locator(".toolbar-brand").count(), 1,
@@ -58,6 +64,8 @@ test("project opens its locked workspace before the file tree is ready and recov
       || document.querySelector('.workbench-loading [role="alert"]'));
     const loadError = await page.locator('.workbench-loading [role="alert"]').allTextContents();
     assert.deepEqual(loadError, [], `startup should succeed after releasing the tree: ${loadError.join(" ")}`);
+    assert.equal(await page.locator(".workbench-status-loading").count(), 0,
+      "the status-bar progress item disappears once startup finishes");
     await page.locator(".file-tree").getByRole("button", {name: "故事大纲.txt", exact: true}).click();
     await page.locator('.document-tab-select[aria-current="page"]').waitFor();
     assert.equal(await layout.evaluate(element => !!element.closest("[inert]")), false);
@@ -80,6 +88,6 @@ test("project opens its locked workspace before the file tree is ready and recov
     await page.getByText("模拟项目文件树读取失败。", {exact: false}).waitFor();
     await page.getByRole("button", {name: "返回", exact: true}).click();
     await page.getByRole("button", {name: "打开项目 测试故事", exact: true}).waitFor();
-    assert.equal(await page.getByRole("progressbar").count(), 0);
+    assert.equal(await page.locator('.layout-status progress[aria-label="工作台加载进度"]').count(), 0);
   });
 });

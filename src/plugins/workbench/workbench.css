@@ -47,20 +47,57 @@
 
 .workbench-loading-copy > span { color: var(--ui-text-secondary); }
 
+.workbench-status-loading {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ui-space-3);
+  box-sizing: border-box;
+  width: clamp(14rem, 34vw, 26rem);
+  max-width: 100%;
+  min-width: 0;
+  min-height: var(--ui-statusbar-height);
+  padding: var(--ui-space-2) var(--ui-space-5);
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+.workbench-status-task {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workbench-status-count { flex: 0 0 auto; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* The layout is inert while loading. Announce progress outside that locked subtree. */
+.workbench-loading-announcement {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 .workbench-loading-progress {
   appearance: none;
-  flex: 0 0 7rem;
+  flex: 0 1 7rem;
   width: 7rem;
-  height: 6px;
+  min-width: 3rem;
+  height: 4px;
   overflow: hidden;
   border: 0;
   border-radius: 3px;
   background: var(--ui-border-default);
-  color: var(--ui-text-primary);
+  color: var(--ui-accent-indicator);
 }
 .workbench-loading-progress::-webkit-progress-bar { background: var(--ui-border-default); }
-.workbench-loading-progress::-webkit-progress-value { background: var(--ui-text-primary); }
-.workbench-loading-progress::-moz-progress-bar { background: var(--ui-text-primary); }
+.workbench-loading-progress::-webkit-progress-value { background: var(--ui-accent-indicator); }
+.workbench-loading-progress::-moz-progress-bar { background: var(--ui-accent-indicator); }
 
 @media (forced-colors: active) {
   .workbench-loading-progress { appearance: auto; }
@@ -83,5 +120,4 @@
   }
 
   .workbench-loading-copy { flex-basis: 10rem; }
-  .workbench-loading-progress { flex-basis: 100%; width: 100%; }
 }

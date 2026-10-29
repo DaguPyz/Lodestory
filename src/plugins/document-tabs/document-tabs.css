@@ -8,7 +8,6 @@
   position: relative;
   flex-shrink: 0;
   min-width: 0;
-  padding-top: var(--ui-space-3);
   background: var(--ui-surface-chrome);
   border-bottom: 1px solid var(--ui-border-divider);
 }
@@ -25,14 +24,15 @@
   display: flex;
 }
 
-/* Reserve the top track so showing it never moves the tabs or the manuscript. */
+/* Overlay the track so tabs sit flush above and hover never shifts the manuscript. */
 .document-tabs-scrollbar {
   position: absolute;
+  z-index: 1;
   top: 0;
   inset-inline: 0;
   display: flex;
   height: var(--ui-space-3);
-  padding: var(--ui-space-1);
+  padding: 0;
   opacity: 0;
   pointer-events: none;
 }
@@ -45,8 +45,9 @@
 
 .document-tabs-scrollbar-thumb {
   height: 100%;
-  padding-block: calc((var(--ui-space-3) - 2 * var(--ui-space-1) - 2px) / 2);
-  border-radius: var(--ui-space-3);
+  /* Paint at the top edge while keeping the full track height draggable. */
+  padding-block: 0 calc(var(--ui-space-3) - 2px);
+  border-radius: 0;
   background-color: var(--ui-border-decoration);
   background-clip: content-box;
 }

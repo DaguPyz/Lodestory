@@ -43,8 +43,10 @@ export function WorkbenchPage({workbench, layout, active}: {
     {snapshot.session && <div className="workbench-page-content" inert={busy} aria-busy={busy}>
       <View key={snapshot.session.id} active={active && !busy}/>
     </div>}
-    {loading && <aside className="workbench-loading" aria-live={failed ? "assertive" : "polite"}>
-      {failed ? <>
+    {loading && !failed && <span className="workbench-loading-announcement" role="status">
+      {loading.current ? `正在加载${loading.current}…` : "正在加载项目…"} 已完成 {loading.completed}/{loading.total} 项
+    </span>}
+    {failed && <aside className="workbench-loading" aria-live="assertive">
         <div className="workbench-loading-copy" role="alert">
           <strong>项目加载失败</strong>
           <span>{recoveryError ?? failed.message}</span>
@@ -57,14 +59,6 @@ export function WorkbenchPage({workbench, layout, active}: {
             {recoveryAction === "return" ? "正在返回…" : "返回"}
           </Button>
         </div>
-      </> : <>
-        <div className="workbench-loading-copy" role="status">
-          <strong>{loading.current ? `正在加载${loading.current}…` : "正在加载项目…"}</strong>
-          <span>已完成 {loading.completed}/{loading.total} 项</span>
-        </div>
-        <progress className="workbench-loading-progress" aria-label="工作台加载进度"
-          max={Math.max(1, loading.total)} value={loading.completed}/>
-      </>}
     </aside>}
   </div>;
 }

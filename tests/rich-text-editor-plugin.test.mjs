@@ -61,6 +61,7 @@ test("rich text editor instances register independently and revoke only their ow
   assert.ok(editorB);
   assert.deepEqual(Array.from(pluginB.requires), [bodyEditorKey]);
   assert.deepEqual(Array.from(editorB.formats), ["rich-delta"]);
+  assert.equal(editorB.scrollMode, "editor", "Quill owns the body viewport so its toolbar can remain fixed");
   assert.equal(typeof editorB.load, "function");
   assert.equal(typeof editorB.getText, "function");
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "quill" || specifier.startsWith("quill/")), false,

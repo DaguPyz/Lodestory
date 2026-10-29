@@ -1,6 +1,9 @@
 @import "quill/dist/quill.snow.css" layer(quill);
 
 .rich-text-editor {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-width: 0;
   min-height: 0;
   color: var(--ui-text-document);
@@ -11,24 +14,35 @@
 
 .rich-text-editor-root {
   container: rich-text-editor / inline-size;
+}
+
+.rich-text-editor-root,
+.rich-text-editor-mount {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
   min-width: 0;
-  min-height: 20rem;
+  min-height: 0;
 }
 
 .rich-text-editor-mount .ql-container {
-  min-height: 20rem;
+  flex: 1;
+  min-height: 0;
+  height: auto;
   border: 0;
   color: var(--ui-text-document);
   font: inherit;
 }
 
 .rich-text-editor-mount .ql-editor {
-  min-height: 20rem;
+  min-height: 0;
   padding: var(--ui-space-3) 0;
   color: var(--ui-text-document);
   font: inherit;
   line-height: var(--ui-line-height-document);
   overflow-wrap: anywhere;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .rich-text-editor-mount .ql-editor.ql-blank::before {
@@ -40,6 +54,7 @@
 
 .rich-text-editor-mount .ql-toolbar.ql-snow {
   display: flex;
+  flex-shrink: 0;
   flex-wrap: nowrap;
   align-items: stretch;
   gap: var(--ui-space-5);

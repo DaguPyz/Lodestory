@@ -13,7 +13,6 @@
   padding: var(--ui-space-2) var(--ui-space-5);
   color: var(--ui-text-secondary);
   background: var(--ui-surface-chrome);
-  border-top: 1px solid var(--ui-border-divider);
   font-size: var(--ui-font-size-caption);
   line-height: var(--ui-line-height-caption);
 }

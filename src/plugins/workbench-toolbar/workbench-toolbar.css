@@ -121,10 +121,6 @@
   .toolbar-brand > span { display: none; }
 }
 
-@container workbench-toolbar (max-width: 40rem) {
-  .toolbar-common-actions > .icon-button:disabled { display: none; }
-}
-
 @container workbench-toolbar (max-width: 26rem) {
   .toolbar-brand,
   [data-toolbar-focus-button] > span,

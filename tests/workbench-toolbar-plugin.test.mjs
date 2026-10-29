@@ -333,6 +333,63 @@ test("toolbar UI exposes project actions, layout toggles, focus, and search", as
   model.dispose();
 });
 
+test("toolbar stays visible but inert while a session model is still loading, then activates with the session", () => {
+  const menuParts = {Root: Symbol("Menu.Root"), Trigger: Symbol("Menu.Trigger"), Portal: Symbol("Menu.Portal"),
+    Positioner: Symbol("Menu.Positioner"), Popup: Symbol("Menu.Popup"), Item: Symbol("Menu.Item")};
+  const moduleMocks = {"@base-ui/react/menu": {Menu: menuParts}};
+  const fixture = createMainFixture({mockWorkbenchToolbar: false, moduleMocks});
+  moduleMocks["plugins/context-menu/ContextMenuProvider.tsx"] = {
+    useContextMenus: () => ({activate() {}, release() {}}),
+  };
+  const {WorkbenchToolbar} = fixture.loadModule("plugins/workbench-toolbar/WorkbenchToolbar.tsx");
+  const layout = createLayout();
+  const initialSession = session("loading");
+  const workbench = createWorkbench(initialSession, {active: true, busy: true});
+  const models = new Map();
+  const searches = [];
+  const render = () => expandReactTree(WorkbenchToolbar({
+    workbench: workbench.service, layout, models, active: true, onSearch: id => searches.push(id),
+  }));
+  const loadingTree = render();
+  const toolbar = collect(loadingTree, value => value.props?.className === "workbench-toolbar")[0];
+  assert.ok(toolbar, "the toolbar shell exists before the session participant creates its model");
+  assert.ok(collect(loadingTree, value => value.props?.className === "toolbar-brand").length);
+  const name = collect(loadingTree, value => value.props?.["data-toolbar-project-name"])[0];
+  assert.equal(textContent(name), initialSession.project.name);
+  const loadingButtons = collect(loadingTree, value => value.type === "button");
+  assert.ok(loadingButtons.length > 0);
+  assert.ok(loadingButtons.every(button => button.props.disabled), "all toolbar actions stay disabled while the participant model is missing");
+  const searchButton = loadingButtons.find(button => button.props["aria-label"] === "搜索项目");
+  searchButton.props.onClick();
+  assert.deepEqual(searches, [], "search cannot run before project startup finishes");
+
+  const oldSessionModel = makeModel(fixture, {session: initialSession, workbench, layout}).model;
+  models.set(initialSession.id, oldSessionModel);
+  const nextSession = session("next-loading");
+  workbench.set({session: nextSession, active: true, busy: true});
+  const switchedTree = render();
+  const switchedName = collect(switchedTree, value => value.props?.["data-toolbar-project-name"])[0];
+  assert.equal(textContent(switchedName), nextSession.project.name, "the visible label follows the candidate session");
+  assert.ok(collect(switchedTree, value => value.type === "button").every(button => button.props.disabled),
+    "a previous session's model cannot enable the toolbar during a project switch");
+
+  const currentSessionModel = makeModel(fixture, {session: nextSession, workbench, layout}).model;
+  models.set(nextSession.id, currentSessionModel);
+  workbench.set({session: nextSession, active: true, busy: false});
+  const readyTree = render();
+  const readyButtons = collect(readyTree, value => value.type === "button");
+  assert.ok(readyButtons.some(button => button.props["aria-label"] === "搜索项目" && !button.props.disabled),
+    "the current toolbar becomes usable when the workbench is ready");
+  readyButtons.find(button => button.props["aria-label"] === "搜索项目").props.onClick();
+  assert.deepEqual(searches, [nextSession.id]);
+  currentSessionModel.dispose();
+  oldSessionModel.dispose();
+
+  workbench.set({session: null, active: false, busy: false});
+  assert.equal(WorkbenchToolbar({workbench: workbench.service, layout, models, active: true, onSearch() {}}), null,
+    "the toolbar is absent when there is no project session");
+});
+
 test("toolbar plugin registers its actions content and independent recovery wrapper, and cleans partial activation", async () => {
   const fixture = createMainFixture();
   const {layoutKey} = fixture.requireSdk("@lodestory/sdk/layout");

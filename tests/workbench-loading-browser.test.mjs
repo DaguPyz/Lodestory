@@ -34,6 +34,14 @@ test("project opens its locked workspace before the file tree is ready and recov
     await layout.waitFor();
     const progress = page.getByRole("progressbar");
     await progress.waitFor();
+    const toolbar = layout.locator(".layout-actions [role='toolbar']");
+    await toolbar.waitFor();
+    assert.equal(await toolbar.locator(".toolbar-brand").count(), 1,
+      "the toolbar brand is visible before project participants finish loading");
+    assert.equal(await toolbar.locator("[data-toolbar-project-name]").textContent(), "测试故事",
+      "the project name is visible during startup");
+    assert.ok(await toolbar.locator("button").evaluateAll(buttons => buttons.length > 0 && buttons.every(button => button.disabled)),
+      "toolbar actions remain disabled until project startup finishes");
     if (process.env.LODESTORY_LOADING_SCREENSHOT) {
       await page.screenshot({path: process.env.LODESTORY_LOADING_SCREENSHOT});
     }

@@ -75,8 +75,11 @@
 .timeline-event-endpoint { color: var(--ui-text-secondary); }
 .timeline-event-endpoint-important { color: var(--ui-status-warning); }
 .timeline-event-endpoint-origin { color: var(--ui-accent-indicator); }
+.timeline-event-endpoint[data-custom-color="true"] { color: var(--timeline-event-color); }
 .timeline-event-endpoint { cursor: pointer; pointer-events: all; outline: none; }
 .timeline-event-endpoint-hit { fill: transparent; stroke: none; pointer-events: all; }
+.timeline-event-endpoint-contrast { display: none; fill: none; stroke: var(--ui-border-default); stroke-width: 3.5px; }
+.timeline-event-endpoint[data-custom-color="true"] .timeline-event-endpoint-contrast { display: block; }
 .timeline-event-endpoint-ring {
   fill: none;
   stroke: currentColor;
@@ -204,6 +207,10 @@
 .timeline-event-label-important .timeline-event-offset,
 .timeline-event-label-important .timeline-event-title-rule { color: var(--ui-status-warning); }
 .timeline-event-label-important .timeline-event-title-rule { background: var(--ui-status-warning); }
+.timeline-event-label[data-custom-color="true"] .timeline-event-title-rule {
+  background: var(--timeline-event-color);
+  outline: 1px solid var(--ui-border-decoration);
+}
 
 .timeline-events-feedback {
   position: absolute;
@@ -322,6 +329,32 @@
 .timeline-event-checkbox input:checked:disabled { background: var(--ui-state-disabled-selected-background); }
 .timeline-event-checkbox input:checked:disabled + .icon { color: var(--ui-state-disabled-selected-foreground); }
 
+.timeline-event-color-picker { min-width: 0; margin: 0; padding: 0; border: 0; }
+.timeline-event-color-picker legend { margin-bottom: var(--ui-space-3); padding: 0; font-size: var(--ui-font-size-label); }
+.timeline-event-color-options { display: flex; flex-wrap: wrap; gap: var(--ui-space-3); }
+.timeline-event-color-choice { position: relative; display: inline-flex; cursor: pointer; }
+.timeline-event-color-choice input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: inherit; }
+.timeline-event-color-choice > span {
+  display: inline-flex; align-items: center; justify-content: center; width: var(--ui-control-height); height: var(--ui-control-height);
+  border: 1px solid var(--ui-border-decoration); border-radius: var(--ui-radius-control);
+  background: var(--timeline-event-swatch, var(--ui-surface-control)); pointer-events: none;
+}
+.timeline-event-color-default > span { width: auto; padding-inline: var(--ui-space-3); color: var(--ui-text-primary); font-size: var(--ui-font-size-label); }
+.timeline-event-color-choice input:checked + span { outline: 2px solid var(--ui-focus-ring); outline-offset: 1px; }
+.timeline-event-color-choice input:focus-visible + span { outline: 2px solid var(--ui-focus-ring); outline-offset: 3px; }
+.timeline-event-color-picker:disabled .timeline-event-color-choice { opacity: 0.5; cursor: not-allowed; }
+.timeline-event-color-custom { display: flex; flex-wrap: wrap; align-items: center; gap: var(--ui-space-3); margin-block: var(--ui-space-4) var(--ui-space-3); }
+.timeline-event-color-custom > label { display: inline-flex; align-items: center; gap: var(--ui-space-3); font-size: var(--ui-font-size-label); }
+.timeline-event-color-custom > .ui-text-field { width: 9rem; min-width: 0; }
+.timeline-event-color-custom input[type="color"] {
+  width: var(--ui-control-height); height: var(--ui-control-height); padding: var(--ui-space-1);
+  border: 1px solid var(--ui-border-default); border-radius: var(--ui-radius-control); background: var(--ui-surface-control); cursor: pointer;
+}
+.timeline-event-color-custom input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+.timeline-event-color-custom input[type="color"]::-webkit-color-swatch { border: 0; border-radius: var(--ui-radius-row); }
+.timeline-event-color-custom input[type="color"]:focus-visible { outline: var(--ui-focus-width) solid var(--ui-focus-ring); outline-offset: var(--ui-focus-offset); }
+.timeline-event-color-picker > .timeline-event-field-help { margin: 0; }
+
 @container timeline-event-form (max-width: 26rem) {
   .timeline-event-position-row { grid-template-columns: minmax(0, 1fr); }
 }
@@ -401,10 +434,13 @@
   .timeline-event-axis-marker rect { fill: Canvas; stroke: CanvasText; }
   .timeline-event-turning-caption { fill: CanvasText; }
   .timeline-event-endpoint-ring { stroke: CanvasText; }
+  .timeline-event-endpoint[data-custom-color="true"] .timeline-event-endpoint-contrast { display: none; }
   .timeline-event-endpoint-dot { fill: CanvasText; }
   .timeline-event-label,
   .timeline-event-offset,
   .timeline-event-title,
   .timeline-event-summary { color: CanvasText; }
   .timeline-event-title-rule { background: CanvasText; }
+  .timeline-event-label[data-custom-color="true"] .timeline-event-title-rule { background: CanvasText; outline: none; }
+  .timeline-event-color-choice input:checked + span { outline-color: Highlight; }
 }

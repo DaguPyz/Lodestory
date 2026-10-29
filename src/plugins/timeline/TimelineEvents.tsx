@@ -1,10 +1,10 @@
-import {memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type FormEvent, type RefObject} from "react";
+import {memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type RefObject} from "react";
 import type {CanvasViewportSnapshot} from "@lodestory/sdk/canvas";
 import type {ContextMenuService} from "@lodestory/sdk/context-menu";
 import type {AssetCatalog} from "@lodestory/sdk/asset-catalog";
 import {Button, Dialog, DialogActions, Icon, TextField, Textarea} from "@lodestory/ui";
 import type {TimelineAxisSettings} from "./timelineAxisStore";
-import type {TimelineEvent, TimelineEventStore} from "./timelineEventStore";
+import {isTimelineEventColor, type TimelineEvent, type TimelineEventStore} from "./timelineEventStore";
 import {getTimelineEventsGeometry, TIMELINE_TURNING_CAPTION_FONT_SIZE, type TimelineEventsGeometry} from "./timelineEventsGeometry";
 import {getTimelineStemSegments, type TimelineStemSegment} from "./timelineStemSegments";
 import {formatTimelineAxisValue, timelineValueAtOffset, TIMELINE_AXIS_BASE_PIXEL_INTERVAL, type TimelineLabelBounds} from "./timelineAxisGeometry";
@@ -12,13 +12,20 @@ import {EventAssetPicker} from "./EventAssetPicker";
 import "./timeline-events.css";
 
 type Size = Readonly<{width: number; height: number}>;
-type Draft = {id: string | null; title: string; summary: string; offset: string; placement: "above" | "below"; important: boolean; assetIds: readonly string[]};
+type Draft = {id: string | null; title: string; summary: string; offset: string; placement: "above" | "below"; important: boolean; assetIds: readonly string[]; color: string};
 type Operation = {kind: "upsert"; draft: Draft} | {kind: "remove"; id: string};
+
+const EVENT_COLORS = [
+  {name: "红色", value: "#d96666"}, {name: "橙色", value: "#d58a51"},
+  {name: "黄色", value: "#c6a044"}, {name: "绿色", value: "#68a778"},
+  {name: "青色", value: "#59a8a5"}, {name: "蓝色", value: "#6b9bce"},
+  {name: "紫色", value: "#a489c9"}, {name: "粉色", value: "#ce83a2"},
+] as const;
 
 function draftFromEvent(event?: TimelineEvent): Draft {
   return event
-    ? {id: event.id, title: event.title, summary: event.summary, offset: String(event.offset), placement: event.placement, important: event.important, assetIds: [...event.assetIds]}
-    : {id: null, title: "", summary: "", offset: "0", placement: "above", important: false, assetIds: []};
+    ? {id: event.id, title: event.title, summary: event.summary, offset: String(event.offset), placement: event.placement, important: event.important, assetIds: [...event.assetIds], color: event.color ?? ""}
+    : {id: null, title: "", summary: "", offset: "0", placement: "above", important: false, assetIds: [], color: ""};
 }
 
 function signedAxisValue(value: number): string {
@@ -53,6 +60,7 @@ const AxisMarkerGlyph = memo(function AxisMarkerGlyph({important, origin}: {impo
 const EndpointGlyph = memo(function EndpointGlyph() {
   return <>
     <circle className="timeline-event-endpoint-hit" r="18" />
+    <circle className="timeline-event-endpoint-contrast" r="11" />
     <circle className="timeline-event-endpoint-ring" r="11" />
     <circle className="timeline-event-endpoint-dot" r="5" />
   </>;
@@ -144,6 +152,8 @@ function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX,
         </g>}
         {point.endpointVisible && <g className={["timeline-event-endpoint", originEvent ? "timeline-event-endpoint-origin" : "",
           event.important ? "timeline-event-endpoint-important" : ""].filter(Boolean).join(" ")}
+          style={event.color ? {"--timeline-event-color": event.color} as CSSProperties : undefined}
+          data-custom-color={event.color ? "true" : undefined}
           role="button" tabIndex={active ? 0 : -1}
           aria-label={eventAccessibleName(settings, event)} aria-disabled={!active}
           data-canvas-interactive transform={`translate(${point.x} ${point.endpointY})`}
@@ -184,7 +194,9 @@ function EventLabels({eventById, settings, geometry, onEdit}: {
       return <div key={event.id}
         data-growth-event={event.id}
         className={`timeline-event-label timeline-event-label-${point.placement}${event.important ? " timeline-event-label-important" : ""}${point.labelAlign === "right" ? " timeline-event-label-align-right" : ""}`}
-        style={{transform: `translate(${point.labelLeft}px, ${point.labelTop}px)`, width: point.labelWidth}}
+        style={{transform: `translate(${point.labelLeft}px, ${point.labelTop}px)`, width: point.labelWidth,
+          ...(event.color ? {"--timeline-event-color": event.color} : {})} as CSSProperties}
+        data-custom-color={event.color ? "true" : undefined}
         aria-hidden="true" data-canvas-interactive
         onClick={() => onEdit(event)}>
         <EventLabelText event={event} settings={settings} />
@@ -326,9 +338,10 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
       return {event: null, error: "距故事起点的数值需为有限数字，且绝对值不超过 1,000,000,000。"};
     }
     if (value.placement !== "above" && value.placement !== "below") return {event: null, error: "请选择节点在线轴上方或下方。"};
+    if (value.color && !isTimelineEventColor(value.color)) return {event: null, error: "颜色值需要使用 #RRGGBB 格式。"};
     const id = value.id;
     if (!id) return {event: null, error: "事件编号尚未准备好，请重新打开添加事件。"};
-    return {event: Object.freeze({id, title, summary, offset: Object.is(offset, -0) ? 0 : offset, placement: value.placement, important: value.important, assetIds: [...value.assetIds]}), error: null};
+    return {event: Object.freeze({id, title, summary, offset: Object.is(offset, -0) ? 0 : offset, placement: value.placement, important: value.important, assetIds: [...value.assetIds], ...(value.color ? {color: value.color.toLowerCase()} : {})}), error: null};
   }
 
   async function submitEvent(event: FormEvent<HTMLFormElement>) {
@@ -455,7 +468,8 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
   const validTitle = Boolean(draft?.title.trim()) && [...(draft?.title.trim() ?? "")].length <= 60;
   const validSummary = [...(draft?.summary ?? "")].length <= 200;
   const validOffset = Boolean(draft?.offset.trim()) && Number.isFinite(offset) && Math.abs(offset) <= 1_000_000_000;
-  const formValid = validTitle && validSummary && validOffset;
+  const validColor = !draft?.color || isTimelineEventColor(draft.color);
+  const formValid = validTitle && validSummary && validOffset && validColor;
   const scale = view.zoom > 0 ? 1 / view.zoom : 1;
   const overlayStyle = {
     width: size.width,
@@ -546,6 +560,28 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
           </span>
           <span>标记为关键转折</span>
         </label>
+        <fieldset className="timeline-event-color-picker" disabled={submitting || snapshot.saving}>
+          <legend>颜色标记 <span className="timeline-event-optional">选填</span></legend>
+          <div className="timeline-event-color-options">
+            <label className="timeline-event-color-choice timeline-event-color-default">
+              <input type="radio" name={`${formId}-color`} checked={!draft?.color} onChange={() => updateDraft({color: ""})}/>
+              <span>默认</span>
+            </label>
+            {EVENT_COLORS.map(color => <label className="timeline-event-color-choice" key={color.value} title={`${color.name} ${color.value.toUpperCase()}`}>
+              <input type="radio" name={`${formId}-color`} aria-label={color.name} checked={draft?.color.toLowerCase() === color.value}
+                onChange={() => updateDraft({color: color.value})}/>
+              <span style={{"--timeline-event-swatch": color.value} as CSSProperties}/>
+            </label>)}
+          </div>
+          <div className="timeline-event-color-custom">
+            <label>自定义 <input type="color" aria-label="自定义颜色" value={isTimelineEventColor(draft?.color) ? draft.color : "#6b9bce"}
+              onChange={event => updateDraft({color: event.currentTarget.value})}/></label>
+            <TextField aria-label="颜色值" aria-describedby={`${formId}-color-help`} aria-invalid={!validColor || undefined}
+              autoComplete="off" spellCheck={false} placeholder="#RRGGBB" maxLength={7} value={draft?.color ?? ""}
+              onChange={event => updateDraft({color: event.currentTarget.value})}/>
+          </div>
+          <p id={`${formId}-color-help`} className="timeline-event-field-help">用于标记事件端点和标题短线，输入 #RRGGBB；清空或选择默认可移除。</p>
+        </fieldset>
         {draft && <EventAssetPicker catalog={assetCatalog} selectedIds={draft.assetIds}
           disabled={submitting || snapshot.saving} onChange={assetIds => updateDraft({assetIds})} />}
         {(operationError || snapshot.error) && <p className="timeline-event-form-error" role="alert">{operationError ?? snapshot.error}</p>}

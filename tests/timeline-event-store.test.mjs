@@ -147,6 +147,25 @@ test("asset associations roundtrip, and legacy version 1 events upgrade only on 
   await controller.dispose();
 });
 
+test("event color roundtrips, can be cleared, and rejects invalid values without overwriting", async () => {
+  const f = byteStorageFixture();
+  const controller = f.files();
+  const store = storeFor(controller.service);
+  assert.equal(await store.load(), true);
+  assert.equal(await store.upsert(event({color: "#A1B2C3"})), true);
+  assert.equal(diskEvents(f).events[0].color, "#a1b2c3");
+  assert.equal(await store.upsert(event({color: "red"})), false);
+  assert.equal(diskEvents(f).events[0].color, "#a1b2c3");
+  store.dispose();
+  const reopened = storeFor(controller.service);
+  assert.equal(await reopened.load(), true);
+  assert.equal(reopened.getSnapshot().events[0].color, "#a1b2c3");
+  assert.equal(await reopened.upsert(event()), true);
+  assert.equal("color" in diskEvents(f).events[0], false);
+  reopened.dispose();
+  await controller.dispose();
+});
+
 test("event validation keeps existing events and reports invalid UUID, title, summary and offsets", async () => {
   const f = byteStorageFixture();
   const controller = f.files();

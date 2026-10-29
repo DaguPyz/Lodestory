@@ -10,6 +10,8 @@ export type TimelineEvent = Readonly<{
   offset: number;
   placement: "above" | "below";
   important: boolean;
+  /** Author-selected content color, independent of the UI theme. */
+  color?: string;
 }>;
 
 export type TimelineEventSnapshot = Readonly<{
@@ -50,6 +52,10 @@ function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_PATTERN.test(value);
 }
 
+export function isTimelineEventColor(value: unknown): value is string {
+  return typeof value === "string" && /^#[0-9a-f]{6}$/i.test(value);
+}
+
 function timelinePath(id: string): string {
   return `${DIRECTORY}/${id}.json`;
 }
@@ -73,10 +79,12 @@ function normalizeEvent(value: unknown, allowLegacyAssetIds = false): {event: Ti
     return {event: null, error: "时间线事件必须是对象。"};
   }
   const record = value as Record<string, unknown>;
+  const {color, ...baseFields} = record;
   const fieldsMatch = allowLegacyAssetIds
-    ? keysMatch(record, LEGACY_EVENT_FIELDS) || keysMatch(record, EVENT_FIELDS)
-    : keysMatch(record, EVENT_FIELDS);
+    ? keysMatch(baseFields, LEGACY_EVENT_FIELDS) || keysMatch(baseFields, EVENT_FIELDS)
+    : keysMatch(baseFields, EVENT_FIELDS);
   if (!fieldsMatch) return {event: null, error: "时间线事件字段不完整或包含未知字段。"};
+  if (color !== undefined && !isTimelineEventColor(color)) return {event: null, error: "事件颜色必须是 #RRGGBB 格式。"};
   if (!isUuid(record.id)) return {event: null, error: "事件编号必须是规范 UUID。"};
   if (typeof record.title !== "string") return {event: null, error: "事件标题必须是文本。"};
   const title = record.title.trim();
@@ -106,6 +114,7 @@ function normalizeEvent(value: unknown, allowLegacyAssetIds = false): {event: Ti
       offset: Object.is(record.offset, -0) ? 0 : record.offset,
       placement: record.placement,
       important: record.important,
+      ...(color === undefined ? {} : {color: color.toLowerCase()}),
     }),
     error: null,
   };
@@ -153,7 +162,7 @@ function sameEvents(left: readonly TimelineEvent[], right: readonly TimelineEven
   return left.length === right.length && left.every((event, index) => {
     const other = right[index];
     return event.id === other.id && event.title === other.title && event.summary === other.summary
-      && event.offset === other.offset && event.placement === other.placement && event.important === other.important
+      && event.offset === other.offset && event.placement === other.placement && event.important === other.important && event.color === other.color
       && event.assetIds.length === other.assetIds.length && event.assetIds.every((id, assetIndex) => id === other.assetIds[assetIndex]);
   });
 }

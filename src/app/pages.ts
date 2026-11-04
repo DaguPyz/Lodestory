@@ -4,7 +4,6 @@ import type {WorkbenchProject} from "@lodestory/sdk/workbench";
 export const appPages = {
     welcome: "welcome",
     editor: "editor",
-    settings: "settings",
 } as const;
 
 export type EditorPageParams = {

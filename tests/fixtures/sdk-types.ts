@@ -10,6 +10,7 @@ import {
 } from "@lodestory/sdk";
 import {layoutKey, type LayoutService, type LayoutContent} from "@lodestory/sdk/layout";
 import {navigationLayoutKey, type NavigationLayoutPage, type NavigationLayoutService} from "@lodestory/sdk/navigation-layout";
+import {settingsKey, type SettingsService} from "@lodestory/sdk/settings";
 import {windowShellKey, type WindowShellProps, type WindowShellService} from "@lodestory/sdk/window-shell";
 import { uiKey, type UiService } from "@lodestory/sdk/ui";
 import type { UiNavigationRequest } from "@lodestory/sdk/ui";
@@ -106,7 +107,7 @@ const listener: EventListener<DocumentChanged> = ({ documentId, revision }) => {
 declare const context: PluginContext;
 const plugin: Plugin = {
   id: "sdk-types",
-  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, navigationLayoutKey, windowShellKey, workbenchKey, configKey, projectStorageKey, documentsKey, bodyEditorKey, canvasKey, timelineKey],
+  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, navigationLayoutKey, settingsKey, windowShellKey, workbenchKey, configKey, projectStorageKey, documentsKey, bodyEditorKey, canvasKey, timelineKey],
   provides: [],
   activate(pluginContext) {
     const document = pluginContext.get(documentKey);
@@ -273,7 +274,7 @@ const plugin: Plugin = {
       id: "example.navigation",
       prepare(request: UiNavigationRequest) { return request.to.id !== "blocked"; },
     });
-    const pageChange: Promise<boolean> = ui.openPage("settings");
+    const pageChange: Promise<boolean> = ui.openPage("welcome");
     const back: Promise<boolean> = ui.back();
     const errorUi: ErrorUiService = pluginContext.get(errorUiKey);
     const theme: ThemeService = pluginContext.get(themeKey);
@@ -293,6 +294,15 @@ const plugin: Plugin = {
     void shown;
     void layout.View;
     const navigationLayout: NavigationLayoutService = pluginContext.get(navigationLayoutKey);
+    const settings: SettingsService = pluginContext.get(settingsKey);
+    const removeSection: () => void = settings.registerSection({id: "example.section", group: "示例", title: "示例", render: () => "设置内容"});
+    const settingsOpened: boolean = settings.open("example.section");
+    const removeNavigationAction: () => void = navigationLayout.registerAction({id: "example.action", navigation: {label: "打开"}, run: () => { settings.open(); }});
+    // @ts-expect-error Settings sections must provide a rendering function.
+    settings.registerSection({id: "bad", group: "示例", title: "错误"});
+    void settingsOpened;
+    removeNavigationAction();
+    removeSection();
     const windowShell: WindowShellService = pluginContext.get(windowShellKey);
     const shellProps: WindowShellProps = {children: "page content", showBrowserTitlebar: false};
     const WindowShell: WindowShellService["View"] = windowShell.View;

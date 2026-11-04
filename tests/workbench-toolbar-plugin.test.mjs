@@ -73,12 +73,12 @@ function createWorkbench(session, {active = true, busy = false} = {}) {
   };
 }
 
-function makeModel(fixture, {session, workbench, layout, ui} = {}) {
+function makeModel(fixture, {session, workbench, layout, settings} = {}) {
   const module = fixture.loadModule("plugins/workbench-toolbar/workbenchToolbarModel.ts");
-  const uiCalls = [];
-  const actualUi = ui ?? {openPage: async id => { uiCalls.push(id); return true; }};
-  const model = module.createWorkbenchToolbarModel(session, workbench.service, actualUi, layout);
-  return {model, uiCalls, actualUi};
+  const settingsCalls = [];
+  const actualSettings = settings ?? {open: () => { settingsCalls.push("open"); return true; }};
+  const model = module.createWorkbenchToolbarModel(session, workbench.service, actualSettings, layout);
+  return {model, settingsCalls, actualSettings};
 }
 
 const session = (id = "session-one") => Object.freeze({id, project: Object.freeze({id: `project-${id}`, name: id, path: `/projects/${id}`})});
@@ -181,7 +181,7 @@ test("busy, inactive, stale-session, and hidden-toolbar states block toolbar act
   const uiCalls = [];
   const {model} = makeModel(fixture, {
     session: activeSession, workbench, layout,
-    ui: {openPage: async id => { uiCalls.push(id); return true; }},
+    settings: {open: () => { uiCalls.push("open"); return true; }},
   });
 
   layout.hide(toolbarId);
@@ -210,7 +210,7 @@ test("busy, inactive, stale-session, and hidden-toolbar states block toolbar act
   model.dispose();
 });
 
-test("workbench actions use the existing close-project and UI navigation APIs", async () => {
+test("workbench actions use the close-project and settings APIs", async () => {
   const fixture = createMainFixture();
   const activeSession = session();
   const workbench = createWorkbench(activeSession);
@@ -218,10 +218,10 @@ test("workbench actions use the existing close-project and UI navigation APIs", 
   const uiCalls = [];
   const {model} = makeModel(fixture, {
     session: activeSession, workbench, layout,
-    ui: {openPage: async (id, ...args) => { uiCalls.push([id, ...args]); return true; }},
+    settings: {open: () => { uiCalls.push("open"); return true; }},
   });
   assert.equal(await model.openSettings(), true);
-  assert.deepEqual(uiCalls, [["settings"]]);
+  assert.deepEqual(uiCalls, ["open"]);
   assert.equal(await model.leaveProject(), true);
   assert.deepEqual(workbench.calls, ["closeProject"]);
   model.dispose();
@@ -270,7 +270,7 @@ test("toolbar UI exposes project actions, layout toggles, focus, and search", as
     session: activeSession,
     workbench,
     layout,
-    ui: {openPage: async id => { uiCalls.push(id); return true; }},
+    settings: {open: () => { uiCalls.push("open"); return true; }},
   });
   const {WorkbenchToolbar} = fixture.loadModule("plugins/workbench-toolbar/WorkbenchToolbar.tsx");
   const tree = expandReactTree(WorkbenchToolbar({shortcuts: shortcutService,
@@ -314,7 +314,7 @@ test("toolbar UI exposes project actions, layout toggles, focus, and search", as
   assert.ok(button("专注模式"), "focus mode is owned by the toolbar");
   assert.ok(triggers.some(value => value.props.render.props.label === "布局内容"), "the full layout directory remains available");
   assert.ok(menuItem("返回欢迎页"));
-  assert.ok(menuItem("外观设置"));
+  assert.ok(menuItem("设置"));
   const contentFileItem = menuItem("隐藏工程文件");
   assert.equal(contentFileItem.props.closeOnClick, false, "content visibility changes keep the menu open");
   contentFileItem.props.onClick();
@@ -331,7 +331,7 @@ test("toolbar UI exposes project actions, layout toggles, focus, and search", as
   button("设置").props.onClick();
   menuItem("返回欢迎页").props.onClick();
   await new Promise(resolve => setImmediate(resolve));
-  assert.deepEqual(uiCalls, ["settings"]);
+  assert.deepEqual(uiCalls, ["open"]);
   assert.deepEqual(workbench.calls, ["closeProject"]);
   model.dispose();
 });
@@ -415,13 +415,14 @@ test("toolbar plugin registers its actions content and independent recovery wrap
   };
   const plugin = fixture.loadModule("plugins/workbench-toolbar/workbenchToolbarPlugin.tsx").createWorkbenchToolbarPlugin();
   assert.equal(plugin.id, "workbench-toolbar");
-  assert.deepEqual(Array.from(plugin.requires, key => key.id), ["app/workbench", "app/ui", "app/layout", "app/shortcuts"]);
+  assert.deepEqual(Array.from(plugin.requires, key => key.id), ["app/workbench", "app/ui", "app/layout", "app/shortcuts", "app/settings"]);
   assert.deepEqual(Array.from(plugin.provides), []);
   assert.throws(() => plugin.activate({get(key) {
     if (key === workbenchKey) return workbench;
     if (key === uiKey) return ui;
     if (key === layoutKey) return layout;
     if (key.id === "app/shortcuts") return shortcutService;
+    if (key.id === "app/settings") return {open: () => true};
   }}), /wrapper registration failed/);
   assert.equal(registrations.length, 1);
   assert.equal(registrations[0].id, toolbarId);
@@ -453,6 +454,7 @@ test("the UI wrapper keeps a separate recovery component that calls the session 
     if (key === uiKey) return ui;
     if (key === layoutKey) return layout;
     if (key.id === "app/shortcuts") return shortcutService;
+    if (key.id === "app/settings") return {open: () => true};
   }});
   const participation = participant.start(activeSession);
   const toolbarElement = registered[0].render({active: true});
@@ -486,6 +488,7 @@ test("each workbench session owns a separate toolbar model and stale models cann
     if (key === uiKey) return {openPage: async () => true, addWrapper: () => () => {}};
     if (key === layoutKey) return layout;
     if (key.id === "app/shortcuts") return shortcutService;
+    if (key.id === "app/settings") return {open: () => true};
   }});
   const firstResources = participant.start(first);
   const modelFor = id => registered[0].render({active: true}).props.models.get(id);

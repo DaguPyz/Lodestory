@@ -1,7 +1,6 @@
 import type {LayoutContent, LayoutService, LayoutSnapshot} from "@lodestory/sdk/layout";
-import type {UiService} from "@lodestory/sdk/ui";
+import type {SettingsService} from "@lodestory/sdk/settings";
 import type {WorkbenchService, WorkbenchSession} from "@lodestory/sdk/workbench";
-import {appPages} from "../../app/pages";
 import {workbenchToolbarId} from "./workbenchToolbarIds";
 
 export type ToolbarSnapshot = Readonly<{
@@ -29,7 +28,7 @@ const visiblePanels = (snapshot: LayoutSnapshot) => new Set(snapshot.contents
 export function createWorkbenchToolbarModel(
   session: WorkbenchSession,
   workbench: WorkbenchService,
-  ui: UiService,
+  settings: SettingsService,
   layout: LayoutService,
 ): WorkbenchToolbarModel {
   let disposed = false;
@@ -129,7 +128,7 @@ export function createWorkbenchToolbarModel(
       return canInteract() ? workbench.closeProject() : false;
     },
     async openSettings() {
-      return canInteract() ? ui.openPage(appPages.settings) : false;
+      return canInteract() ? settings.open() : false;
     },
     dispose() {
       if (disposed) return;

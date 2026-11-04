@@ -154,6 +154,10 @@ test("Dialog busy state cancels dismissal and DialogClose forwards disabled, ref
     assert.equal(sizedPopup.props["data-ui-dialog-size"], size, `${size} remains a semantic Dialog preset`);
   }
 
+  const fillTree = Dialog({open: true, onOpenChange() {}, title: "分区内容", bodyLayout: "fill", children: null});
+  const fillPopup = fillTree.props.children.props.children.props.children[1];
+  assert.equal(fillPopup.props["data-ui-dialog-body-layout"], "fill", "managed body content opts into the generic fill layout");
+
   const explicitlyDisabled = DialogClose({ref, disabled: true, children: "不可用"});
   assert.equal(explicitlyDisabled.props.disabled, true, "an explicit disabled prop is preserved");
 });

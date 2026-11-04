@@ -98,7 +98,7 @@ test('page motion preserves editing state, coordinates menus and supports reduce
   await page.getByRole('button', {name: '设置', exact: true}).click();
   await capture('settings-dark');
   await page.locator('input[value="lodestory.builtin.light"]').check();
-  await page.getByRole('button', {name: '返回', exact: true}).click();
+  await page.getByRole('dialog', {name: '设置', exact: true}).getByRole('button', {name: '关闭', exact: true}).click();
   await capture('welcome-light');
   await page.setViewportSize({width: 720, height: 640});
   await noHorizontalOverflow();
@@ -122,7 +122,7 @@ test('page motion preserves editing state, coordinates menus and supports reduce
   await page.setViewportSize({width: 1440, height: 900});
   await page.getByRole('button', {name: '设置', exact: true}).click();
   await page.locator('input[value="lodestory.builtin.dark"]').check();
-  await page.getByRole('button', {name: '返回', exact: true}).click();
+  await page.getByRole('dialog', {name: '设置', exact: true}).getByRole('button', {name: '关闭', exact: true}).click();
 
   await page.getByRole('button', {name: '测试故事的更多操作', exact: true}).click();
   const menu = page.locator('.project-menu');
@@ -184,6 +184,7 @@ test('page motion preserves editing state, coordinates menus and supports reduce
   await page.locator('.toolbar-menu-popup').waitFor({state: 'detached'});
   await page.getByRole('button', {name: '设置', exact: true}).click();
   await page.locator('input[value="lodestory.builtin.light"]').check();
+  await page.getByRole('button', {name: '动效', exact: true}).click();
   await page.getByRole('combobox', {name: '动效偏好'}).click();
   await page.getByRole('option', {name: '减少动效', exact: true}).click();
   await page.waitForFunction(() => document.documentElement.dataset.uiMotion === 'reduce');
@@ -194,7 +195,7 @@ test('page motion preserves editing state, coordinates menus and supports reduce
     await noHorizontalOverflow();
   }
   await page.setViewportSize({width: 1440, height: 900});
-  await page.getByRole('button', {name: '返回', exact: true}).click();
+  await page.getByRole('dialog', {name: '设置', exact: true}).getByRole('button', {name: '关闭', exact: true}).click();
   assert.equal(await editorHandle.evaluate(e => e.isConnected && e === document.querySelector('.ql-editor')), true,
     'settings and theme changes preserve the same editor instance');
   assert.match(await editor.innerText(), /视觉更新验收/);
@@ -211,14 +212,15 @@ test('page motion preserves editing state, coordinates menus and supports reduce
   assert.equal(await editorHandle.evaluate(e => e.isConnected), true, 'panel toggles do not remount the editor');
 
   await page.getByRole('toolbar', {name: '工作台工具栏'}).getByRole('button', {name: '测试故事', exact: true}).click();
-  await page.getByRole('menuitem', {name: '外观设置', exact: true}).click();
+  await page.getByRole('menuitem', {name: '设置', exact: true}).click();
+  await page.getByRole('button', {name: '动效', exact: true}).click();
   await page.getByRole('combobox', {name: '动效偏好'}).click();
   await page.getByRole('option', {name: '跟随系统', exact: true}).click();
   await page.waitForFunction(() => !document.documentElement.hasAttribute('data-ui-motion'));
   await page.emulateMedia({reducedMotion: 'reduce'});
   assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--ui-duration-normal').trim()), '0ms',
     'system reduced motion also wins when the application follows the system');
-  await page.getByRole('button', {name: '返回', exact: true}).click();
+  await page.getByRole('dialog', {name: '设置', exact: true}).getByRole('button', {name: '关闭', exact: true}).click();
   await page.getByRole('button', {name: '布局内容', exact: true}).click();
   await page.waitForFunction(() => document.querySelector('.toolbar-menu-popup')?.contains(document.activeElement));
   await page.keyboard.press('Escape');

@@ -9,6 +9,7 @@ import * as packageUi from "@lodestory/sdk/ui";
 import * as packageError from "@lodestory/sdk/error";
 import * as packageLayout from "@lodestory/sdk/layout";
 import * as packageNavigationLayout from "@lodestory/sdk/navigation-layout";
+import * as packageSettings from "@lodestory/sdk/settings";
 import * as packageWindowShell from "@lodestory/sdk/window-shell";
 import * as packageTheme from "@lodestory/sdk/theme";
 import * as packageWorkbench from "@lodestory/sdk/workbench";
@@ -28,7 +29,7 @@ const packageManifest = JSON.parse(readFileSync(new URL("../packages/sdk/package
 
 test("SDK package exposes ESM root and all public capability entry points", () => {
   assert.equal(packageManifest.type, "module");
-  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./asset-catalog", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./layout", "./navigation-layout", "./project-search", "./project-storage", "./shortcuts", "./theme", "./timeline", "./ui", "./window-shell", "./workbench"]);
+  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./asset-catalog", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./layout", "./navigation-layout", "./project-search", "./project-storage", "./settings", "./shortcuts", "./theme", "./timeline", "./ui", "./window-shell", "./workbench"]);
 
   assert.equal(packageManifest.exports["./body-editor"].import, "./dist/body-editor.js");
   assert.equal(packageManifest.exports["./body-editor"].types, "./dist/body-editor.d.ts");
@@ -40,6 +41,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
     ["./ui", "ui"],
     ["./layout", "layout"],
     ["./navigation-layout", "navigation-layout"],
+    ["./settings", "settings"],
     ["./window-shell", "window-shell"],
     ["./theme", "theme"],
     ["./workbench", "workbench"],
@@ -64,6 +66,8 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.deepEqual(Object.keys(packageTheme).sort(), ["themeKey"]);
   assert.deepEqual(Object.keys(packageLayout), ["layoutKey"]);
   assert.deepEqual(Object.keys(packageNavigationLayout), ["navigationLayoutKey"]);
+  assert.deepEqual(Object.keys(packageSettings), ["settingsKey"]);
+  assert.equal(packageSettings.settingsKey.id, "app/settings");
   assert.deepEqual(Object.keys(packageWindowShell), ["windowShellKey"]);
   assert.deepEqual(Object.keys(packageWorkbench), ["workbenchKey"]);
   assert.deepEqual(Object.keys(packageConfig), ["configKey"]);

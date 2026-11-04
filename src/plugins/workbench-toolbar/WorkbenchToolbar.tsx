@@ -151,7 +151,7 @@ function ToolbarView({model, layout, projectName, enabled, onSearch, searchShort
               <Menu.Item nativeButton={true} render={<Button variant="ghost" data-toolbar-menu-item/>} disabled={!enabled}
                 onClick={() => perform(model?.leaveProject)}>返回欢迎页</Menu.Item>
               <Menu.Item nativeButton={true} render={<Button variant="ghost" data-toolbar-menu-item/>} disabled={!enabled}
-                onClick={() => perform(model?.openSettings)}>外观设置</Menu.Item>
+                onClick={() => perform(model?.openSettings)}>设置</Menu.Item>
             </Menu.Popup>
           </Menu.Positioner>
         </Menu.Portal>

@@ -190,7 +190,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   viewport.dispose();
   assert.ok(fixture.logs.indexOf("activate:config:complete") < fixture.logs.indexOf("activate:ui:begin"), "the config service must be available before UI activation");
   assert.ok(fixture.logs.indexOf("activate:workbench:complete") < fixture.logs.indexOf("activate:welcome:begin"), "the workbench page registers before the welcome page");
-  assert.equal(fixture.lifecycle.at(-1), "activate:settings:complete");
+  assert.ok(fixture.logs.indexOf("activate:settings:complete") < fixture.logs.indexOf("activate:workbench-toolbar:begin"));
   assert.ok(fixture.logs.indexOf("activate:settings:complete") < fixture.logs.indexOf("plugins-ready.emit"));
   assert.ok(fixture.logs.indexOf("plugins-ready.emit") < fixture.logs.indexOf("root.render"));
 
@@ -224,16 +224,20 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.ok(containsType(initialPageTree, fixture.components.WelcomePage), "the welcome plugin should render its page");
   assert.ok(findElement(themeProvider.props.children, fixture.components.ToolbarRecovery), "the toolbar recovery entry is mounted in the UI wrapper");
 
-  // Visiting each route proves that all three page plugins registered with the real UI service.
+  // The settings shell is a root contribution and does not replace the active page.
   assert.equal(await uiService.openPage("editor", { project: { id: "novel-1", name: "Novel", path: "/novel" } }), true);
   const workbench = fixture.getService(fixture.requireSdk("@lodestory/sdk/workbench").workbenchKey);
   await waitForWorkbenchReady(workbench);
-  assert.equal(await uiService.openPage("settings"), true);
+  const SettingsDialog = fixture.loadModule("plugins/settings/SettingsDialog.tsx").SettingsDialog;
+  const settingsDialog = findElement(themeProvider.props.children, SettingsDialog);
+  assert.ok(settingsDialog);
+  const settings = fixture.getService(fixture.requireSdk("@lodestory/sdk/settings").settingsKey);
+  assert.equal(settings.open(), true);
+  assert.equal(settingsDialog.props.store.getSnapshot().open, true);
   const visited = uiService.getSnapshot();
   assert.deepEqual(Array.from(visited.pages, ({id, active}) => ({id, active})), [
     {id: "welcome", active: false},
-    {id: "editor", active: false},
-    {id: "settings", active: true},
+    {id: "editor", active: true},
   ]);
   const visitedPageTree = fixture.UiPages(pagesElement.props);
   const renderedPages = visitedPageTree.props.children;
@@ -252,13 +256,6 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.equal(editorShell.type, fixture.components.PageShell);
   assert.equal(editorShell.props.showBrowserTitlebar, false);
   const editorPage = editorShell.props.children;
-  const settingsShell = renderedPage("settings");
-  assert.equal(settingsShell.type, fixture.components.PageShell);
-  const settingsLayout = settingsShell.props.children;
-  assert.equal(settingsLayout.type, fixture.components.NavigationLayout);
-  const settingsBoundary = settingsLayout.props.children;
-  assert.equal(settingsBoundary.type, fixture.components.ErrorBoundary);
-  const settingsPage = settingsBoundary.props.children;
   assert.equal(welcomePage.type, fixture.components.WelcomePage);
   assert.equal(welcomePage.props.active, false);
   assert.equal(typeof welcomePage.props.onOpenProject, "function");
@@ -268,10 +265,11 @@ test("the entry delegates UI composition and page registration to the plugin cat
   const layoutKey = fixture.requireSdk("@lodestory/sdk/layout").layoutKey;
   assert.equal(editorPage.props.workbench, fixture.getService(workbenchKey));
   assert.equal(editorPage.props.layout, fixture.getService(layoutKey));
-  assert.equal(editorPage.props.active, false);
-  assert.equal(settingsPage.type, fixture.components.ThemeSettingsPage);
-  assert.equal(settingsPage.props.active, true);
-  assert.equal(typeof settingsPage.props.onBack, "function");
+  assert.equal(editorPage.props.active, true);
+  const settingsSection = settingsDialog.props.store.getSnapshot().sections.find(section => section.id === "appearance.theme");
+  assert.equal(settingsSection.render().type, fixture.components.ThemeSettings);
+  assert.equal(settingsSection.render().props.service, fixture.getService(themeKey(fixture)));
+  settingsDialog.props.store.close();
 });
 
 test("the config service selects the configured welcome page after every page is registered", async () => {
@@ -337,9 +335,9 @@ test("changing the restart-only startup page config does not navigate the runnin
   const config = fixture.getService(fixture.requireSdk("@lodestory/sdk/config").configKey);
   const {uiInitialPageConfig} = fixture.requireSdk("@lodestory/sdk/ui");
 
-  await config.set(uiInitialPageConfig, "settings");
+  await config.set(uiInitialPageConfig, "editor");
 
-  assert.equal(config.getSnapshot(uiInitialPageConfig), "settings");
+  assert.equal(config.getSnapshot(uiInitialPageConfig), "editor");
   assert.equal(ui.getSnapshot().current.id, "welcome", "the new initial page is applied on the next startup only");
 });
 

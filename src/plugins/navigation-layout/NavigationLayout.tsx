@@ -10,6 +10,7 @@ export type RegisteredNavigationItem = {
   readonly icon?: ReactNode;
   readonly group: NavigationGroup;
   readonly order: number;
+  readonly kind: "page" | "action";
 };
 
 type NavigationLayoutProps = {
@@ -41,7 +42,7 @@ export function NavigationLayout({pageId, active, items, onNavigate, children}: 
       key={item.id}
       className={`navigation-item${item.icon ? "" : " navigation-item-text"}`}
       type="button"
-      aria-current={pageId === item.id ? "page" : undefined}
+      aria-current={item.kind === "page" && pageId === item.id ? "page" : undefined}
       aria-label={item.label}
       title={item.label}
       disabled={!active}
@@ -62,7 +63,7 @@ export function NavigationLayout({pageId, active, items, onNavigate, children}: 
           </div>
         </div>
         <nav className="navigation-items" aria-label="主导航">{renderItems("primary")}</nav>
-        {navigationFailed && <p className="navigation-error" role="alert">页面切换失败，请重试。</p>}
+        {navigationFailed && <p className="navigation-error" role="alert">操作未能完成，请重试。</p>}
         <nav className="navigation-items navigation-secondary" aria-label="辅助导航">{renderItems("secondary")}</nav>
       </aside>
       {children}

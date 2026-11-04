@@ -9,6 +9,7 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/shortcuts`：命令、默认按键、作用域及用户覆盖接口，共享 `shortcutsKey`、命令 ID 和作用域 ID；实现见[快捷键插件](../../src/plugins/shortcuts/README.md)。
 - `@lodestory/sdk/ui`：UI 服务类型与共享单例 `uiKey`。
 - `@lodestory/sdk/navigation-layout`：应用导航布局服务、页面与导航元数据类型，以及共享单例 `navigationLayoutKey`。
+- `@lodestory/sdk/settings`：设置分类贡献与打开弹框的契约，以及共享 `settingsKey`。
 - `@lodestory/sdk/window-shell`：窗口外壳属性与服务类型，以及共享单例 `windowShellKey`。
 - `@lodestory/sdk/error`：错误边界服务与共享单例 `errorUiKey`。
 - `@lodestory/sdk/layout`：内容用途、登记描述、布局视图、快照和服务类型，以及共享单例 `layoutKey`。
@@ -38,6 +39,8 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 快捷键消费者声明 `shortcutsKey` 依赖，通过 `registerCommand` 登记自己拥有的操作，通过 `registerBinding` 登记默认组合键；按钮和菜单通过 `execute` 复用业务入口。调用方保留并在停用时撤销登记，作用域的活动状态与 DOM 范围由所属插件提供。`execute` 的布尔值表示是否接收执行，不代表保存等业务操作成功；业务结果与错误仍由原服务管理。`getShortcut` 供界面显示实际生效的键，改绑通过 `setBinding/resetBinding`，不直接读写实现方的配置对象。
 
 UI 服务拥有当前窗口的交互浮层状态。交互接入插件通过 `uiInteractionKey` 暴露查询与独立 React 根的包装能力，把组件库的通用通知转为 UI 服务的登记与撤销。快捷键插件声明该能力并查询活动浮层，浮层内的导航和 Escape 由组件处理。
+
+设置插件通过 `settingsKey` 提供 `open(sectionId?)` 和 `registerSection`。功能插件在启动期声明依赖并登记自己的分类与渲染函数，停用前调用撤销函数；正在显示的分类会先从界面撤下。设置容器不拥有其他插件的配置值或业务实现，首版不承诺运行中安装或替换插件。
 
 宿主创建 `EngineCore` 并挂载插件时调用 `activate(context)`。插件在其中用 `provide` 注册声明过的能力，用 `get` 读取声明的依赖，用 `on` 订阅事件，也可用 `emit` 发布事件。卸载或激活失败时，宿主调用可选的 `deactivate()`，并撤销该插件的能力和订阅。
 
@@ -206,9 +209,9 @@ export const inkThemePlugin: Plugin = {
 
 ## 应用导航布局
 
-`navigation-layout` 插件通过共享单例 `navigationLayoutKey` 提供应用级导航布局（ID：`app/navigation-layout`）。它面向欢迎页和设置页这类应用页面，与工作台内部的 `layoutKey` 分开。`NavigationLayoutService.registerPage(page)` 接收 `NavigationLayoutPage`，即 `UiPage` 加 `navigation: { label, icon?, order?, group?: "primary" | "secondary" }`。`group` 默认 `primary`，`order` 默认 `0`；默认实现先按分组排列，再按组内 `order` 升序和页面 ID 字符顺序稳定排序。登记返回撤销函数。
+`navigation-layout` 插件通过共享单例 `navigationLayoutKey` 提供应用级导航布局（ID：`app/navigation-layout`），与工作台内部的 `layoutKey` 分开。`registerPage` 登记页面及导航信息；`registerAction` 登记不切换页面的导航操作。两者共享 ID 空间和 `navigation: { label, icon?, order?, group?: "primary" | "secondary" }`；默认实现按分组、顺序和 ID 排列，登记均返回撤销函数。
 
-欢迎页和设置页插件各自登记页面及其导航元数据。导航布局插件内部调用 `ui.registerPage`，并为同一登记保留导航条目；点击入口时调用 `ui.openPage(id)`，不传页面参数。路由、历史和导航守卫仍归 `uiKey` 的 UI 服务管理，设置页自己的返回按钮仍调用 `ui.back()`。默认提供者由 `appPlugins` 静态装配；其他提供同一 key 契约的插件可以替换它，无需修改页面插件。
+欢迎插件登记页面，设置插件登记打开弹框的操作。点击页面入口由布局调用 `ui.openPage(id)`；点击操作入口则调用贡献者提供的函数，不改变路由或历史。两类贡献都在启动期登记，当前撤销已挂载贡献会先停止 UI，尚不支持无损热卸载。替换导航布局时须同时实现页面和操作契约。
 
 替代实现须保留页面 ID、`params` 和 `active` 语义，并在切页后保留已访问页面的组件实例，以兼容 UI 服务的页面生命周期。
 

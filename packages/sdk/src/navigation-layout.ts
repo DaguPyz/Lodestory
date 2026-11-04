@@ -20,10 +20,17 @@ export type NavigationLayoutPage = UiPage & {
     readonly navigation: NavigationItem;
 };
 
+/** A navigation entry that performs an action without switching the current page. */
+export type NavigationLayoutAction = {
+    readonly id: string;
+    readonly navigation: NavigationItem;
+    readonly run: () => void | Promise<void>;
+};
+
 /**
  * 应用级导航布局；实际页面、历史和导航守卫仍由 UI 服务管理。
  * 替代实现必须保留页面 ID、params、active，以及切页时已访问页面的组件实例。
- * 选择导航入口通过 ui.openPage(id) 打开页面，不携带参数；同一当前页入口不跳转。
+ * 页面入口通过 ui.openPage(id) 打开页面；操作入口执行贡献者的回调，不改变当前页面。
  */
 export type NavigationLayoutService = {
     /**
@@ -32,6 +39,8 @@ export type NavigationLayoutService = {
      * 再移除布局登记；首版沿用 UI 的整树卸载规则，不支持运行中增删。
      */
     registerPage(page: NavigationLayoutPage): () => void;
+    /** 启动期登记独立操作；与页面共享 ID 空间和停止时先撤销 UI 的规则。 */
+    registerAction(action: NavigationLayoutAction): () => void;
 };
 
 /** 默认实现由应用显式装配；页面插件声明依赖并导入同一个 key。 */

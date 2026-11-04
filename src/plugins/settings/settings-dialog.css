@@ -1,0 +1,106 @@
+.settings-dialog {
+  container: settings-dialog / inline-size;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  height: min(35rem, calc(100dvh - 6rem));
+  min-height: 0;
+  margin-top: var(--ui-space-7);
+}
+
+.settings-dialog-panels {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(9rem, 11rem) minmax(0, 1fr);
+  min-height: 0;
+  border-top: 1px solid var(--ui-border-divider);
+  border-bottom: 1px solid var(--ui-border-divider);
+}
+
+.settings-navigation {
+  min-height: 0;
+  padding: var(--ui-space-5) var(--ui-space-4) var(--ui-space-5) 0;
+  overflow: auto;
+  border-right: 1px solid var(--ui-border-divider);
+}
+
+.settings-navigation-group + .settings-navigation-group { margin-top: var(--ui-space-6); }
+.settings-navigation-heading {
+  padding: var(--ui-space-3) var(--ui-space-4);
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+  font-weight: 600;
+}
+.settings-navigation-items { display: grid; gap: var(--ui-space-1); }
+.settings-navigation-item {
+  width: 100%;
+  padding: var(--ui-space-3) var(--ui-space-4);
+  border: 0;
+  border-radius: var(--ui-radius-row);
+  color: var(--ui-text-primary);
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.settings-navigation-item:hover { color: var(--ui-state-hover-foreground); background: var(--ui-surface-hover); }
+.settings-navigation-item[aria-current] { color: var(--ui-state-selected-foreground); background: var(--ui-surface-selected); }
+.settings-navigation-item[aria-current]:hover { color: var(--ui-state-selected-hover-foreground); background: var(--ui-surface-selected-hover); }
+.settings-navigation-item:focus-visible { outline: var(--ui-focus-width) solid var(--ui-focus-ring); outline-offset: var(--ui-focus-offset); }
+
+.settings-section {
+  container: settings-content / inline-size;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--ui-space-7) 0 var(--ui-space-7) var(--ui-space-8);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.settings-section-title {
+  margin: 0 0 var(--ui-space-6);
+  font-size: var(--ui-font-size-title);
+  line-height: var(--ui-line-height-title);
+  font-weight: 600;
+}
+.settings-dialog-footer { flex: 0 0 auto; }
+.settings-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@container settings-content (max-width: 32rem) {
+  .theme-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .motion-settings-control { grid-template-columns: minmax(0, 1fr); gap: var(--ui-space-3); }
+}
+@container settings-content (max-width: 19rem) {
+  .theme-options { grid-template-columns: minmax(0, 1fr); }
+}
+@container settings-dialog (max-width: 35rem) {
+  .settings-dialog-panels { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .settings-navigation { display: flex; gap: var(--ui-space-5); padding: var(--ui-space-3) 0; overflow: auto; border-right: 0; border-bottom: 1px solid var(--ui-border-divider); }
+  .settings-navigation-group { display: flex; align-items: center; flex-shrink: 0; }
+  .settings-navigation-group + .settings-navigation-group { margin-top: 0; }
+  .settings-navigation-items { display: flex; }
+  .settings-navigation-item { width: auto; white-space: nowrap; }
+  .settings-section { padding: var(--ui-space-6) 0; }
+}
+
+@media (max-height: 34rem) {
+  .settings-dialog { margin-top: var(--ui-space-3); }
+  .settings-navigation { padding-block: var(--ui-space-2); }
+  .settings-navigation-heading, .settings-navigation-item { padding-block: var(--ui-space-2); }
+  .settings-navigation-item { min-height: 2rem; }
+  .settings-section { padding-block: var(--ui-space-3); }
+  .settings-section-title { margin-bottom: var(--ui-space-3); }
+}
+
+@media (forced-colors: active) {
+  .settings-navigation-item[aria-current] { color: HighlightText; background: Highlight; }
+  .settings-navigation-item:focus-visible { outline-color: Highlight; }
+}

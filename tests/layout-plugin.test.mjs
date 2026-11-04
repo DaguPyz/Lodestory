@@ -247,10 +247,11 @@ test("outline navigation switches independently while preserving editor contents
   assert.ok(!layout.getSnapshot().shownIds.includes(outline.id));
   for (const id of editorContents) assert.ok(layout.getSnapshot().shownIds.includes(id), `${id} stays visible when returning to project files`);
   assert.strictEqual(workbench.getSnapshot().session, session, "returning to project files retains the same workbench session");
-  await ui.openPage("settings"); await ui.back();
-  assert.equal(layout.getSnapshot().shownIds.includes("project-management.files"), true, "page navigation does not reset layout selection");
+  assert.equal(f.getService(f.requireSdk("@lodestory/sdk/settings").settingsKey).open(), true);
+  assert.equal(ui.getSnapshot().current.id, "editor");
+  assert.equal(layout.getSnapshot().shownIds.includes("project-management.files"), true, "opening settings does not reset layout selection");
   assert.equal(layout.getSnapshot().shownIds.includes(outline.id), false);
-  assert.strictEqual(workbench.getSnapshot().session, session, "temporary page navigation retains the current project session");
+  assert.strictEqual(workbench.getSnapshot().session, session, "opening settings retains the current project session");
   const core = f.createdCores.at(-1);
   await core.unmount("outline-design");
   assert.ok(!layout.getSnapshot().contents.some(({id}) => id === outline.id), "unmounting outline-design revokes its contribution");

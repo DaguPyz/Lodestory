@@ -12,6 +12,8 @@ export type DialogProps = {
   title: string;
   /** Semantic width preset; the host viewport still constrains the rendered width. */
   size?: "regular" | "narrow" | "wide" | "large";
+  /** Fill the available body area when children manage their own scrolling. */
+  bodyLayout?: "scroll" | "fill";
   description?: ReactNode;
   children: ReactNode;
   /** Prevent user dismissal while the owning plugin is processing an operation. */
@@ -25,7 +27,7 @@ type Density = "comfortable" | "spacious" | "compact";
 const DialogBusyContext = createContext(false);
 
 /** Controlled modal shell. The owning plugin retains all form and operation state. */
-export function Dialog({ open, onOpenChange, onOpenChangeComplete, title, size = "regular", description, children, busy = false, initialFocus, finalFocus }: DialogProps) {
+export function Dialog({ open, onOpenChange, onOpenChangeComplete, title, size = "regular", bodyLayout = "scroll", description, children, busy = false, initialFocus, finalFocus }: DialogProps) {
   const [density, setDensity] = useState<Density>("comfortable");
   const movement = useDialogPosition(open);
   const interactionRef = useInteractionRef<HTMLDivElement>(open, "dialog");
@@ -66,7 +68,7 @@ export function Dialog({ open, onOpenChange, onOpenChangeComplete, title, size =
       }}>
         <BaseDialog.Portal>
           <BaseDialog.Backdrop className="ui-dialog-backdrop" />
-          <BaseDialog.Popup ref={setPopupRef} className="ui-dialog" data-ui-dialog-size={size} data-ui-density={density} aria-modal="true" aria-busy={busy || undefined} inert={!open}
+          <BaseDialog.Popup ref={setPopupRef} className="ui-dialog" data-ui-dialog-size={size} data-ui-dialog-body-layout={bodyLayout === "fill" ? "fill" : undefined} data-ui-density={density} aria-modal="true" aria-busy={busy || undefined} inert={!open}
             onKeyDownCapture={movement.onKeyDownCapture}
             initialFocus={initialFocus} finalFocus={finalFocus}>
             <div ref={movement.headerRef} className="ui-dialog-header" role="group" tabIndex={-1}

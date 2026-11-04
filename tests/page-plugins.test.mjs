@@ -12,6 +12,10 @@ function getWorkbench(fixture) {
   return fixture.getService(workbenchKey);
 }
 
+function getSettings(fixture) {
+  return fixture.getService(fixture.requireSdk("@lodestory/sdk/settings").settingsKey);
+}
+
 function renderRegisteredPage(fixture, ui, id) {
   const tree = fixture.UiPages({ service: ui });
   const pageContainer = tree.props.children.find((page) => page.key === id);
@@ -71,6 +75,22 @@ function findElement(value, expectedType) {
     if (match) return match;
   }
   return undefined;
+}
+
+function settingsStore(fixture) {
+  const SettingsDialog = fixture.loadModule("plugins/settings/SettingsDialog.tsx").SettingsDialog;
+  const dialog = findElement(fixture.roots[0].tree, SettingsDialog);
+  assert.ok(dialog, "settings shell is installed in the existing UI root");
+  return dialog.props.store;
+}
+
+function temporaryPagePlugin(uiKey) {
+  let remove;
+  return {
+    id: "test.temporary-page", requires: [uiKey], provides: [],
+    activate(context) { remove = context.get(uiKey).registerPage({id: "test.temporary-page", render: () => null}); },
+    deactivate() { remove?.(); },
+  };
 }
 
 function project(id, name, path) {
@@ -133,7 +153,7 @@ async function startFixture(options = {}) {
   return fixture;
 }
 
-test("shared navigation opens settings and settings back returns to welcome", async () => {
+test("shared navigation opens settings without navigating away from welcome", async () => {
   const fixture = await startFixture();
   const ui = getUi(fixture);
 
@@ -152,23 +172,17 @@ test("shared navigation opens settings and settings back returns to welcome", as
   assert.equal("onOpenSettings" in welcome.props, false, "the welcome page owns no application navigation");
   assert.equal(await welcomeLayout.props.onNavigate("settings"), true);
 
-  assert.equal(ui.getSnapshot().current.id, "settings");
-  const settingsShell = renderRegisteredPage(fixture, ui, "settings");
-  assert.equal(settingsShell.type, fixture.components.PageShell);
-  const settingsLayout = settingsShell.props.children;
-  assert.equal(settingsLayout.type, fixture.components.NavigationLayout);
-  assert.equal(settingsLayout.props.pageId, "settings");
-  const settings = renderPageContent(fixture, settingsLayout);
-  assert.equal(settings.type, fixture.components.ThemeSettingsPage);
-  const themeKey = fixture.requireSdk("@lodestory/sdk/theme").themeKey;
-  assert.strictEqual(settings.props.service, fixture.getService(themeKey));
-  await settings.props.onBack();
+  const store = settingsStore(fixture);
+  assert.equal(store.getSnapshot().open, true);
+  assert.equal(store.getSnapshot().selectedId, "appearance.theme");
+  assert.equal(ui.getSnapshot().current.id, "welcome");
+  store.close();
+  assert.equal(store.getSnapshot().open, false);
 
   const snapshot = ui.getSnapshot();
   assert.deepEqual({ ...snapshot.current }, { id: "welcome", params: undefined });
   assert.deepEqual(Array.from(snapshot.pages, ({ id, active }) => ({ id, active })), [
     { id: "welcome", active: true },
-    { id: "settings", active: false },
   ]);
   assert.equal(fixture.rootCalls.length, 1, "page navigation should stay in the existing root");
 });
@@ -195,8 +209,9 @@ test("workbench retains a project across settings and gives each reopened projec
     path: firstProject.path,
   });
 
-  await ui.openPage("settings");
-  await ui.back();
+  assert.equal(getSettings(fixture).open(), true);
+  assert.equal(ui.getSnapshot().current.id, "editor");
+  settingsStore(fixture).close();
   editor = renderEditor(fixture, ui);
   assert.equal(workbench.getSnapshot().session.id, firstSessionId, "temporary navigation should retain the same project session");
   assert.equal(renderWorkbenchView(fixture, editor).key, firstSessionId);
@@ -221,7 +236,10 @@ test("workbench retains a project across settings and gives each reopened projec
 test("direct navigation, back, and same-page project switching all honor workbench leave checks", async () => {
   const gate = { allowed: false, started: [], reasons: [], disposed: [] };
   const fixture = await startFixture({
-    additionalPlugins: ({ requireSdk }) => [gatePlugin(requireSdk("@lodestory/sdk/workbench").workbenchKey, gate)],
+    additionalPlugins: ({ requireSdk }) => [
+      gatePlugin(requireSdk("@lodestory/sdk/workbench").workbenchKey, gate),
+      temporaryPagePlugin(requireSdk("@lodestory/sdk/ui").uiKey),
+    ],
   });
   const ui = getUi(fixture);
   const workbench = getWorkbench(fixture);
@@ -233,7 +251,7 @@ test("direct navigation, back, and same-page project switching all honor workben
   const firstSessionId = workbench.getSnapshot().session.id;
   assert.equal(gate.started.length, 1);
 
-  assert.equal(await ui.openPage("settings"), false, "direct UI navigation is guarded");
+  assert.equal(await ui.openPage("test.temporary-page"), false, "direct UI navigation is guarded");
   assert.equal(ui.getSnapshot().current.id, "editor");
   assert.equal(workbench.getSnapshot().session.id, firstSessionId);
   assert.equal(await ui.back(), false, "back navigation is guarded");
@@ -287,14 +305,17 @@ test("navigation waits for an asynchronous participant decision before committin
   const decision = deferred();
   const gate = { allowed: true, check: () => decision.promise, started: [], reasons: [], disposed: [] };
   const fixture = await startFixture({
-    additionalPlugins: ({ requireSdk }) => [gatePlugin(requireSdk("@lodestory/sdk/workbench").workbenchKey, gate)],
+    additionalPlugins: ({ requireSdk }) => [
+      gatePlugin(requireSdk("@lodestory/sdk/workbench").workbenchKey, gate),
+      temporaryPagePlugin(requireSdk("@lodestory/sdk/ui").uiKey),
+    ],
   });
   const ui = getUi(fixture);
   const workbench = getWorkbench(fixture);
   await ui.openPage("editor", { project: project("novel-1", "第一本", "/stories/first") });
   await waitForWorkbench(workbench);
 
-  const navigation = ui.openPage("settings");
+  const navigation = ui.openPage("test.temporary-page");
   assert.equal(workbench.getSnapshot().busy, true, "the workbench should lock edits while leave approval is pending");
   assert.equal(ui.getSnapshot().current.id, "editor", "the route must remain unchanged until the guard resolves");
   decision.resolve(false);
@@ -310,17 +331,18 @@ test("page plugins revoke their route contributions and the UI root unmounts onl
   const ui = core.get(uiKey);
 
   await ui.openPage("editor", { project: project("novel-1", "第一本", "/stories/first") });
-  await ui.openPage("settings");
+  assert.equal(getSettings(fixture).open(), true);
+  await core.unmount("workbench-toolbar");
   await core.unmount("settings");
   assert.equal(core.isMounted("settings"), false);
-  assert.deepEqual(Array.from(ui.getSnapshot().pages, ({ id }) => id), ["welcome", "editor"]);
+  assert.deepEqual(Array.from(ui.getSnapshot().pages, ({ id }) => id), ["welcome"],
+    "removing the toolbar participant first stops the workbench view");
   assert.equal(fixture.logs.filter((entry) => entry === "root.unmount").length, 1);
   assert.throws(() => ui.openPage("settings"), /mounted page container/);
 
   await core.unmount("welcome");
   assert.equal(core.isMounted("welcome"), false);
-  assert.deepEqual(Array.from(ui.getSnapshot().pages, ({ id }) => id), ["editor"]);
-  await core.unmount("workbench-toolbar");
+  assert.deepEqual(Array.from(ui.getSnapshot().pages, ({ id }) => id), []);
   assert.equal(core.isMounted("workbench-toolbar"), false);
   await core.unmount("document-search");
   // Release workbench consumers and body-editor implementations before their providers.

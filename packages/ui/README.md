@@ -73,6 +73,8 @@ TextField、Textarea、SearchField 和 `variant="field"` 的 Select 常态及悬
 
 组件库可通过 `InteractionProvider` 接收可选的 `onActivate` 回调。Dialog、Select 在浮层可交互时通知该回调，并在关闭、禁用或卸载时调用回调返回的清理函数。独立实现的浮层可使用 `useInteractionRef` 接入同一通知协议。不提供 Provider 时组件仍可独立使用。组件库不管理应用级浮层状态。
 
+Dialog 的 `bodyLayout="fill"` 用于需要自行管理内部滚动的内容；默认仍由 Dialog 正文滚动。弹框的标题、焦点和拖动行为保持一致。
+
 ## 通用弹框
 
 ```tsx

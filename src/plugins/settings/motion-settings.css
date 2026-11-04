@@ -1,8 +1,6 @@
 .motion-settings {
   max-width: 42rem;
-  margin-top: var(--ui-section-gap);
-  padding-top: var(--ui-space-7);
-  border-top: 1px solid var(--ui-border-divider);
+  margin: 0;
 }
 
 .motion-settings > h3 {
@@ -43,6 +41,12 @@
 
 .motion-settings-error p {
   margin: 0;
+}
+
+.motion-settings-status {
+  margin: var(--ui-space-5) 0 0;
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
 }
 
 @container welcome (max-width: 30rem) {

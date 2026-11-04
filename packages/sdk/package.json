@@ -35,6 +35,10 @@
       "types": "./dist/navigation-layout.d.ts",
       "import": "./dist/navigation-layout.js"
     },
+    "./settings": {
+      "types": "./dist/settings.d.ts",
+      "import": "./dist/settings.js"
+    },
     "./window-shell": {
       "types": "./dist/window-shell.d.ts",
       "import": "./dist/window-shell.js"

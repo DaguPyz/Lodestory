@@ -8,3 +8,9 @@
 }
 
 .theme-option:has(input:checked) .theme-radio::after { opacity: 1; }
+
+.theme-settings .theme-preview,
+.theme-settings .theme-preview-split {
+  width: 100%;
+  min-height: 0;
+}

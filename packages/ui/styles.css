@@ -650,6 +650,17 @@
   overflow: auto;
   overscroll-behavior: contain;
 }
+.ui-dialog[data-ui-dialog-body-layout="fill"] .ui-dialog-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+@media (max-height: 34rem) {
+  .ui-dialog[data-ui-dialog-body-layout="fill"] {
+    --ui-dialog-padding: var(--ui-space-5);
+    --ui-dialog-actions-gap: var(--ui-space-3);
+  }
+}
 .ui-dialog-move-hint {
   position: absolute;
   width: 1px;

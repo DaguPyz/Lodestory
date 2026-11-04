@@ -49,13 +49,17 @@ function alternateProvider(sdk, registered, removed = []) {
             removed.push(page.id);
           };
         },
+        registerAction(action) {
+          registered.push({id: action.id, navigation: action.navigation, run: action.run});
+          return () => { removed.push(action.id); };
+        },
       }));
     },
     deactivate() {},
   };
 }
 
-test("welcome and settings contribute navigation metadata through the public layout service", async () => {
+test("welcome and settings contribute a page and an action through the public layout service", async () => {
   const fixture = createMainFixture();
   fixture.start();
   await flushStartup();
@@ -70,11 +74,9 @@ test("welcome and settings contribute navigation metadata through the public lay
     {id: "settings", label: "设置", group: "secondary", order: 0},
   ]);
   assert.equal(welcomeLayout.props.pageId, "welcome");
-  assert.equal(await uiFor(fixture).openPage("settings"), true);
-  const settings = registeredPage(fixture, ui, "settings");
-  assert.equal(settings.type, fixture.components.PageShell);
-  assert.equal(settings.props.children.type, fixture.components.NavigationLayout);
-  assert.equal(settings.props.children.props.pageId, "settings");
+  assert.equal(welcomeLayout.props.items.find(item => item.id === "settings").kind, "action");
+  assert.equal(await welcomeLayout.props.onNavigate("settings"), true);
+  assert.equal(ui.getSnapshot().current.id, "welcome", "an action does not navigate to another page");
   await fixture.createdCores.at(-1).unmountAll();
 });
 
@@ -195,6 +197,7 @@ test("navigation registration validates atomically, rejects duplicate and late e
   const {themeKey} = fixture.requireSdk("@lodestory/sdk/theme");
   const {windowShellKey} = fixture.requireSdk("@lodestory/sdk/window-shell");
   const registrations = new Map();
+  const actionMarkers = new Map();
   const removals = [];
   let ready = false;
   const ui = {
@@ -209,6 +212,11 @@ test("navigation registration validates atomically, rejects duplicate and late e
         removals.push(page.id);
         registrations.delete(page.id);
       };
+    },
+    addWrapper(wrapper) {
+      if (ready) throw new Error("UI wrappers can only be registered before pluginsReady.");
+      actionMarkers.set(wrapper.id, wrapper);
+      return () => { actionMarkers.delete(wrapper.id); };
     },
     openPage(id) { return Promise.resolve(id); },
   };
@@ -256,6 +264,21 @@ test("navigation registration validates atomically, rejects duplicate and late e
   assert.equal(navigationLayout.props.children.type, "page-content");
   assert.equal(await navigationLayout.props.onNavigate("settings"), "settings");
 
+  let actions = 0;
+  assert.throws(() => service.registerAction({id: "bad", navigation: {label: "bad"}, run: null}));
+  assert.equal(actionMarkers.size, 0);
+  const removeAction = service.registerAction({id: "action", navigation: {label: "操作", group: "secondary"}, run: () => { actions++; }});
+  assert.throws(() => service.registerAction({id: "alpha", navigation: {label: "重复"}, run() {}}), /already registered/);
+  assert.throws(() => service.registerPage(validPage("action", 0)), /already registered/);
+  const withAction = registrations.get("alpha").render({active: true}).props.children;
+  assert.equal(withAction.props.items.find(item => item.id === "action").kind, "action");
+  assert.equal(await withAction.props.onNavigate("action"), true);
+  assert.equal(actions, 1);
+  removeAction();
+  removeAction();
+  assert.equal(actionMarkers.size, 0);
+  assert.equal(await withAction.props.onNavigate("action"), false);
+
   const originalIcon = {name: "folder"};
   const navigation = {label: "原始名称", icon: originalIcon, order: 3, group: "primary"};
   const params = {session: "session-1"};
@@ -300,6 +323,7 @@ test("navigation registration validates atomically, rejects duplicate and late e
   ready = true;
   const lateSnapshot = [...registrations.keys()];
   assert.throws(() => service.registerPage(validPage("late", 0)), /pluginsReady/);
+  assert.throws(() => service.registerAction({id: "late-action", navigation: {label: "迟到"}, run() {}}), /pluginsReady/);
   assert.deepEqual([...registrations.keys()], lateSnapshot, "a rejected late registration leaves no UI or navigation entry");
 
   plugin.deactivate();
@@ -321,8 +345,8 @@ test("a navigation guard rejection preserves the active project and route", asyn
         provides: [],
         activate(context) {
           context.get(uiKey).registerNavigationGuard({
-            id: "example.deny-welcome-from-settings",
-            prepare: ({from, to}) => !(from?.id === "settings" && to.id === "welcome"),
+            id: "example.deny-welcome-from-editor",
+            prepare: ({from, to}) => !(from?.id === "editor" && to.id === "welcome"),
           });
         },
       }];
@@ -335,11 +359,8 @@ test("a navigation guard rejection preserves the active project and route", asyn
   const workbench = fixture.getService(fixture.requireSdk("@lodestory/sdk/workbench").workbenchKey);
   const opened = await openReadyProject(workbench, project);
   const sessionId = opened.session.id;
-  assert.equal(await ui.openPage("settings"), true);
-
-  const settings = registeredPage(fixture, ui, "settings");
-  assert.equal(await settings.props.children.props.onNavigate("welcome"), false);
-  assert.equal(ui.getSnapshot().current.id, "settings");
+  assert.equal(await ui.openPage("welcome"), false);
+  assert.equal(ui.getSnapshot().current.id, "editor");
   assert.equal(workbench.getSnapshot().session.id, sessionId);
   assert.equal(workbench.getSnapshot().session.project.path, project.path);
   await fixture.createdCores.at(-1).unmountAll();

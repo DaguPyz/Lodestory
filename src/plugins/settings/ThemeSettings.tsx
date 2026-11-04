@@ -1,8 +1,6 @@
-import { useCallback, useEffect, useRef, useSyncExternalStore, type CSSProperties } from "react";
+import { useCallback, useSyncExternalStore, type CSSProperties } from "react";
 import { BrandLogo, Button, Icon, Select } from "@lodestory/ui";
 import type { ResolvedTheme, ThemePreference, ThemeService } from "@lodestory/sdk/theme";
-import type { ConfigService } from "@lodestory/sdk/config";
-import { MotionSettings } from "./MotionSettings";
 import "./theme-settings.css";
 
 function ThemePreview({ theme }: { theme: ResolvedTheme }) {
@@ -24,15 +22,7 @@ function ThemePreview({ theme }: { theme: ResolvedTheme }) {
   );
 }
 
-type ThemeSettingsPageProps = {
-  service: ThemeService;
-  config: ConfigService;
-  active: boolean;
-  onBack: () => void;
-};
-
-export function ThemeSettingsPage({ service, config, active, onBack }: ThemeSettingsPageProps) {
-  const heading = useRef<HTMLHeadingElement>(null);
+export function ThemeSettings({ service }: {service: ThemeService}) {
   // Wrap methods so ThemeService implementations may safely use `this`.
   const subscribe = useCallback((listener: () => void) => service.subscribe(listener), [service]);
   const getSnapshot = useCallback(() => service.getSnapshot(), [service]);
@@ -47,25 +37,10 @@ export function ThemeSettingsPage({ service, config, active, onBack }: ThemeSett
   const systemLight = themes.find(item => item.id === systemPreference.lightThemeId && item.type === "light") ?? themes.find(item => item.id === fallbackThemeIds.light && item.type === "light") ?? themes.find(item => item.type === "light");
   const systemDark = themes.find(item => item.id === systemPreference.darkThemeId && item.type === "dark") ?? themes.find(item => item.id === fallbackThemeIds.dark && item.type === "dark") ?? themes.find(item => item.type === "dark");
 
-  useEffect(() => {
-    if (active) heading.current?.focus({ preventScroll: true });
-  }, [active]);
-
   return (
-      <main className="welcome-workspace appearance-workspace" aria-labelledby="appearance-page-heading">
-        <div className="appearance-content">
-          <header className="welcome-header">
-            <div className="welcome-heading">
-              <h1 id="appearance-page-heading" ref={heading} tabIndex={-1}>设置</h1>
-              <p>让工作空间适合你的创作习惯。</p>
-            </div>
-            <Button variant="ghost" onClick={onBack}><Icon name="arrowLeft" />返回</Button>
-          </header>
-
-          <section className="appearance-section" aria-labelledby="appearance-section-heading">
-            <h2 id="appearance-section-heading">外观</h2>
+          <section className="theme-settings" aria-label="主题设置">
             <fieldset className="theme-fieldset" aria-describedby="theme-description">
-              <legend>主题</legend>
+              <legend className="settings-visually-hidden">主题</legend>
               <p className="theme-description" id="theme-description">选择适合你的界面配色，切换即刻生效。</p>
               <div className="theme-options">
                 {themes.map(option => {
@@ -151,10 +126,6 @@ export function ThemeSettingsPage({ service, config, active, onBack }: ThemeSett
                 <Button variant="ghost" onClick={() => service.retry()}>重试</Button>
               </div>
             )}
-            <MotionSettings config={config} />
           </section>
-        </div>
-        <footer className="welcome-footer">一个目录，一部小说。</footer>
-      </main>
   );
 }

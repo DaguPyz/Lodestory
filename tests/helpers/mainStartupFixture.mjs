@@ -257,7 +257,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         active: active && !snapshot.busy,
       }) : null;
     },
-    ThemeSettingsPage: function ThemeSettingsPage() {},
+    ThemeSettings: function ThemeSettings() {},
     PageShell: function PageShell() {},
     ContextMenuProvider: function ContextMenuProvider() {},
     ThemeProvider: function ThemeProvider() {},
@@ -310,7 +310,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       ToolbarRecovery: components.ToolbarRecovery,
     };
     if (relativePath === "plugins/workbench/WorkbenchPage.tsx") return { __esModule: true, WorkbenchPage: components.WorkbenchPage };
-    if (relativePath === "plugins/settings/ThemeSettingsPage.tsx") return { __esModule: true, ThemeSettingsPage: components.ThemeSettingsPage };
+    if (relativePath === "plugins/settings/ThemeSettings.tsx") return { __esModule: true, ThemeSettings: components.ThemeSettings };
     if (relativePath === "components/PageShell.tsx") return { __esModule: true, PageShell: components.PageShell };
     if (relativePath === "plugins/context-menu/ContextMenuProvider.tsx") {
       return {

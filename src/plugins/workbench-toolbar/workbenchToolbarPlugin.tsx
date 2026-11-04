@@ -3,6 +3,7 @@ import {workbenchKey} from "@lodestory/sdk/workbench";
 import {uiKey} from "@lodestory/sdk/ui";
 import {layoutKey} from "@lodestory/sdk/layout";
 import {shortcutCommandIds, shortcutsKey} from "@lodestory/sdk/shortcuts";
+import {settingsKey} from "@lodestory/sdk/settings";
 import {WorkbenchToolbar, ToolbarRecovery} from "./WorkbenchToolbar";
 import {workbenchToolbarId} from "./workbenchToolbarIds";
 import {createWorkbenchToolbarModel, type WorkbenchToolbarModel} from "./workbenchToolbarModel";
@@ -14,18 +15,19 @@ export function createWorkbenchToolbarPlugin(): Plugin {
   let removeParticipant: (() => Promise<void>) | undefined;
   return {
     id: "workbench-toolbar",
-    requires: [workbenchKey, uiKey, layoutKey, shortcutsKey],
+    requires: [workbenchKey, uiKey, layoutKey, shortcutsKey, settingsKey],
     provides: [],
     activate(context) {
       const workbench = context.get(workbenchKey);
       const ui = context.get(uiKey);
       const layout = context.get(layoutKey);
       const shortcuts = context.get(shortcutsKey);
+      const settings = context.get(settingsKey);
       removeParticipant = workbench.registerParticipant({
         id: "workbench-toolbar",
         label: "工具栏",
         start(session) {
-          const model = createWorkbenchToolbarModel(session, workbench, ui, layout);
+          const model = createWorkbenchToolbarModel(session, workbench, settings, layout);
           models.set(session.id, model);
           return {
             dispose() {

@@ -16,7 +16,7 @@ export function createNavigationLayoutPlugin(): Plugin {
         activate(context) {
             const ui = context.get(uiKey);
             const WindowShell = context.get(windowShellKey).View;
-            const entries = new Map<string, { item: RegisteredNavigationItem; remove: () => void }>();
+            const entries = new Map<string, { item: RegisteredNavigationItem; run?: () => void | Promise<void>; remove: () => void }>();
             let active = true;
 
             const items = () => [...entries.values()].map(entry => entry.item).sort((a, b) =>
@@ -25,8 +25,12 @@ export function createNavigationLayoutPlugin(): Plugin {
 
             cleanup = () => {
                 // UI 撤销会先卸载组件；条目及页面资源保留到撤销完成。
-                for (const entry of [...entries.values()].reverse()) entry.remove();
+                const errors: unknown[] = [];
+                for (const entry of [...entries.values()].reverse()) {
+                    try { entry.remove(); } catch (error) { errors.push(error); }
+                }
                 active = false;
+                if (errors.length) throw Object.assign(new Error("Navigation layout failed to stop."), {errors});
             };
 
             const service: NavigationLayoutService = {
@@ -35,6 +39,7 @@ export function createNavigationLayoutPlugin(): Plugin {
                     const {id, render} = page;
                     const item = Object.freeze({
                         id,
+                        kind: "page" as const,
                         label: page.navigation.label,
                         icon: page.navigation.icon,
                         group: page.navigation.group ?? "primary",
@@ -54,7 +59,13 @@ export function createNavigationLayoutPlugin(): Plugin {
                             pageId={id}
                             active={pageContext.active}
                             items={items()}
-                            onNavigate={target => ui.openPage(target)}
+                            onNavigate={async target => {
+                                const entry = entries.get(target);
+                                if (!entry) return false;
+                                if (entry.item.kind === "page") return ui.openPage(target);
+                                await entry.run?.();
+                                return true;
+                            }}
                         >{render(pageContext)}</NavigationLayout></WindowShell>,
                     });
                     const entry = {
@@ -63,6 +74,30 @@ export function createNavigationLayoutPlugin(): Plugin {
                             if (entries.get(id) !== entry) return;
                             removePage();
                             entries.delete(id);
+                        },
+                    };
+                    entries.set(id, entry);
+                    return entry.remove;
+                },
+                registerAction(action) {
+                    if (!active) throw new Error("Navigation layout service is no longer active.");
+                    if (!action || typeof action !== "object") throw new TypeError("Navigation action must be an object.");
+                    const {id, navigation, run} = action;
+                    if (typeof id !== "string" || !id.trim()) throw new Error("Navigation action id cannot be empty.");
+                    if (!navigation || typeof navigation.label !== "string" || !navigation.label.trim()) throw new Error("Navigation label cannot be empty.");
+                    const item = Object.freeze({id, kind: "action" as const, label: navigation.label, icon: navigation.icon,
+                        group: navigation.group ?? "primary", order: navigation.order ?? 0});
+                    if (item.group !== "primary" && item.group !== "secondary") throw new Error("Unknown navigation group.");
+                    if (!Number.isFinite(item.order)) throw new Error("Navigation order must be finite.");
+                    if (typeof run !== "function") throw new Error("Navigation action must have a run function.");
+                    if (entries.has(id)) throw new Error(`Navigation entry '${id}' is already registered.`);
+                    // UI owns the startup registration boundary and unmounts before an action is withdrawn.
+                    const removeUiContribution = ui.addWrapper({id: `navigation-layout.action.${id}`, order: 0, wrap: children => children});
+                    const entry = {
+                        item, run,
+                        remove() {
+                            if (entries.get(id) !== entry) return;
+                            try { removeUiContribution(); } finally { entries.delete(id); }
                         },
                     };
                     entries.set(id, entry);

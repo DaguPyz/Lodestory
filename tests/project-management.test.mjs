@@ -308,6 +308,18 @@ test("renaming a file preserves its extension and refreshes the project tree", a
   f.model.dispose();
 });
 
+test("a file can be renamed while its initial open is still pending", async () => {
+  const f = createFixture({listDocuments: async () => entries(["draft.md"])});
+  await f.model.ready();
+  f.publishWorkspace({openingPath: "draft.md"});
+  assert.equal(f.model.requestRename("draft.md"), true);
+  f.controls.rename = async () => true;
+  await f.model.rename("final");
+  assert.deepEqual(f.renameCalls, [["draft.md", "final.md"]]);
+  assert.equal(f.model.getSnapshot().renamePath, null);
+  f.model.dispose();
+});
+
 test("renaming a folder remaps selected and open-document paths", async () => {
   let listed = entries(["draft/one.md", "draft/nested/two.txt"]);
   const f = createFixture({listDocuments: async () => listed});

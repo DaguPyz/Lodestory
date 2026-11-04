@@ -41,7 +41,7 @@ test("tab context menus close the requested range and disable empty ranges", asy
   async function createTabs(scenario = "") {
     await page.goto(`${baseUrl}${scenario ? `?scenario=${scenario}` : ""}`);
     await page.getByRole("button", {name: "打开项目 测试故事", exact: true}).click();
-    await page.locator(".file-tree").getByRole("button", {name: names[0], exact: true}).click();
+    await page.locator(".file-tree").getByRole("button", {name: names[0], exact: true}).dblclick();
     for (const name of names.slice(1)) {
       await page.locator(".file-tree").getByRole("button", {name: "测试故事", exact: true}).click({button: "right"});
       await item("新建文档").click();
@@ -97,19 +97,19 @@ test("tab context menus close the requested range and disable empty ranges", asy
       await item("关闭全部").click();
       await assertTabs([]);
     }
-    for (const name of names) await page.locator(".file-tree").getByRole("button", {name, exact: true}).click();
+    for (const name of names) await page.locator(".file-tree").getByRole("button", {name, exact: true}).dblclick();
     await assertTabs(names);
     await openMenu(names[2]);
     await item(action).click();
     await assertTabs(expected);
   }
 
-  await page.locator(".file-tree").getByRole("button", {name: names[0], exact: true}).click();
+  await page.locator(".file-tree").getByRole("button", {name: names[0], exact: true}).dblclick();
   await openMenu(names[0]);
   for (const action of ["关闭其他", "关闭左侧", "关闭右侧"]) assert.equal(await item(action).getAttribute("aria-disabled"), "true");
   assert.notEqual(await item("关闭全部").getAttribute("aria-disabled"), "true");
   await page.keyboard.press("Escape");
-  await page.locator(".file-tree").getByRole("button", {name: names[1], exact: true}).click();
+  await page.locator(".file-tree").getByRole("button", {name: names[1], exact: true}).dblclick();
   await openMenu(names[0]);
   assert.equal(await item("关闭左侧").getAttribute("aria-disabled"), "true");
   assert.notEqual(await item("关闭右侧").getAttribute("aria-disabled"), "true");

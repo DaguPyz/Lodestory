@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {createMainFixture} from "./helpers/mainStartupFixture.mjs";
 
-function createFiles(initialPaths) {
+function createFiles(initialPaths, {openGate} = {}) {
   const listeners = new Set();
   const pathListeners = new Set();
   const files = initialPaths.map(path => ({
@@ -18,7 +18,10 @@ function createFiles(initialPaths) {
     getSnapshot: () => ({files, blocked: false, error: null}),
     subscribe(listener) { listeners.add(listener); return () => listeners.delete(listener); },
     subscribePathChanges(listener) { pathListeners.add(listener); return () => pathListeners.delete(listener); },
-    async open(path) { return files.find(file => file.path === path) ?? null; },
+    async open(path) {
+      if (openGate) await openGate.promise;
+      return files.find(file => file.path === path) ?? null;
+    },
     update(path, content) {
       const index = files.findIndex(file => file.path === path);
       if (index < 0) return false;
@@ -115,5 +118,25 @@ test("a failed destination rename keeps queued editor input on the original path
   assert.equal(snapshot.documents[0].content, "保留在原路径的输入");
   assert.equal(files.files[0].content, "保留在原路径的输入");
   assert.equal(snapshot.renamingPath, null);
+  await workspace.dispose();
+});
+
+test("rename waits for a pending open and keeps the opened document at its new path", async () => {
+  let release;
+  const openGate = {promise: new Promise(resolve => { release = resolve; })};
+  const files = createFiles(["notes/one.md"], {openGate});
+  const workspace = createWorkspace(files);
+  const opening = workspace.service.open("notes/one.md");
+  const rename = workspace.service.renamePath("notes/one.md", "notes/final.md");
+  await Promise.resolve();
+  assert.equal(files.calls.some(([operation]) => operation === "rename"), false, "the file is not moved while its read is pending");
+  release();
+  assert.equal(await opening, true);
+  await files.renameStarted.promise;
+  files.finishRename(true);
+  assert.equal(await rename, true);
+  const snapshot = workspace.service.getSnapshot();
+  assert.equal(snapshot.documents[0].path, "notes/final.md");
+  assert.equal(snapshot.documents[0].content, "原文:notes/one.md");
   await workspace.dispose();
 });

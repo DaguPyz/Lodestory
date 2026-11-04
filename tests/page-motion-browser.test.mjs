@@ -146,12 +146,12 @@ test('page motion preserves editing state, coordinates menus and supports reduce
 
   await page.getByRole('button', {name: '打开项目 测试故事', exact: true}).click();
   await page.getByRole('toolbar', {name: '工作台工具栏'}).waitFor();
-  await page.getByRole('button', {name: '故事大纲.txt', exact: true}).click();
+  await page.getByRole('button', {name: '故事大纲.txt', exact: true}).dblclick();
   const editor = page.locator('.ql-editor');
   await editor.waitFor();
-  await assertSelectedPress(page.locator('.file-tree-entry[aria-current="page"]'), 'current project file');
+  await assertSelectedPress(page.locator('.file-tree-entry[data-selected="true"]'), 'current project file');
   await assertSelectedPress(page.locator('.document-tab-select[aria-current="page"]'), 'current document tab');
-  await assertForcedSelection(page.locator('.file-tree-entry[aria-current="page"]'), 'current project file');
+  await assertForcedSelection(page.locator('.file-tree-entry[data-selected="true"]'), 'current project file');
   await assertForcedSelection(page.locator('.document-tab-select[aria-current="page"]'), 'current document tab');
   const longFolder = await page.locator('.file-tree-folder-toggle .file-tree-label').first().evaluate(element => {
     const previous = element.textContent;

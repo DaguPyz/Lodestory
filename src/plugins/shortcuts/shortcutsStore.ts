@@ -1,8 +1,9 @@
+import {ShortcutConflictError} from "@lodestory/sdk/shortcuts";
 import type {
   ShortcutBinding, ShortcutCommand, ShortcutInvocation, ShortcutScope, ShortcutSnapshot, ShortcutsService,
 } from "@lodestory/sdk/shortcuts";
 
-type BindingEntry = {source: ShortcutBinding; keys: string | null};
+type BindingEntry = {source: ShortcutBinding; keys: string};
 type Options = {
   getOverrides(): Readonly<Record<string, string | null>>;
   persist(bindingId: string, keys: string | null | undefined): Promise<void>;
@@ -57,6 +58,24 @@ export function normalizeShortcut(value: string): string {
   return [...modifiers.filter(item => selected.has(item)), key].join("+");
 }
 
+export function isMacPlatform(): boolean {
+  return /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? "");
+}
+
+/** Turn an actual key press into the same chord representation used by dispatch. */
+export function shortcutFromKeyEvent(event: KeyboardEvent, isMac: boolean): string | null {
+  if (event.isComposing || event.keyCode === 229 || event.getModifierState?.("AltGraph")) return null;
+  if (["Control", "Meta", "Alt", "Shift", "AltGraph"].includes(event.key)) return null;
+  if (!isMac && event.metaKey) throw new TypeError("The system key is not supported in shortcuts.");
+  const parts: string[] = [];
+  if (isMac ? event.metaKey : event.ctrlKey) parts.push("Mod");
+  if (isMac && event.ctrlKey) parts.push("Ctrl");
+  if (event.altKey) parts.push("Alt");
+  if (event.shiftKey) parts.push("Shift");
+  parts.push(event.key === " " ? "Space" : event.key);
+  return normalizeShortcut(parts.join("+"));
+}
+
 function parseChord(value: string, isMac: boolean): Chord {
   const canonical = normalizeShortcut(value).split("+");
   const key = canonical.pop()!;
@@ -68,7 +87,7 @@ function parseChord(value: string, isMac: boolean): Chord {
   return {modifiers: result, key: /^[A-Z0-9]$/.test(key) ? key.toLowerCase() : key};
 }
 
-function formatChord(value: string, isMac: boolean): string {
+export function formatShortcut(value: string, isMac: boolean): string {
   const keys = normalizeShortcut(value).split("+");
   const key = keys.pop()!;
   // On non-Mac platforms Mod maps to Ctrl; display the merged physical modifier once.
@@ -113,12 +132,14 @@ export function createShortcutsStore(options: Options) {
   const bindings = new Map<string, BindingEntry>();
   const pending = new Map<string, object>();
   const listeners = new Set<() => void>();
-  const isMac = options.isMac ?? (() => /Mac|iPhone|iPad/.test(globalThis.navigator?.platform ?? ""));
+  const isMac = options.isMac ?? isMacPlatform;
   let snapshot: ShortcutSnapshot = deepFreeze({commands: [], bindings: [], conflicts: []});
   let active = true;
+  let accepting = true;
   let mutationQueue: Promise<void> = Promise.resolve();
+  let stopping: Promise<void> | undefined;
 
-  function checkActive() { if (!active) throw new Error("Shortcuts service is no longer active."); }
+  function checkActive() { if (!active || !accepting) throw new Error("Shortcuts service is no longer active."); }
   function overrides() { return options.getOverrides(); }
   function keysFor(entry: BindingEntry, source = overrides()) {
     return Object.prototype.hasOwnProperty.call(source, entry.source.id) ? source[entry.source.id] : entry.keys;
@@ -165,14 +186,17 @@ export function createShortcutsStore(options: Options) {
   }
   function publish() {
     if (!active) return;
-    const conflicts = conflictsFor();
+    const source = overrides();
+    const conflicts = conflictsFor(source);
     const conflicted = new Set(conflicts.flatMap(conflict => conflict.bindingIds));
     const next = deepFreeze({
       commands: [...commands.values()].map(command => ({id: command.id, title: command.title, category: command.category, running: pending.has(command.id)})),
       bindings: [...bindings.values()].map(entry => {
-        const keys = keysFor(entry);
+        const keys = keysFor(entry, source);
         return {id: entry.source.id, commandId: entry.source.commandId, scopeId: entry.source.scopeId, keys,
-          label: keys ? formatChord(keys, isMac()) : "", conflicted: conflicted.has(entry.source.id)};
+          label: keys ? formatShortcut(keys, isMac()) : "", defaultKeys: entry.keys,
+          defaultLabel: formatShortcut(entry.keys, isMac()),
+          customized: Object.prototype.hasOwnProperty.call(source, entry.source.id), conflicted: conflicted.has(entry.source.id)};
       }),
       conflicts,
     });
@@ -249,16 +273,25 @@ export function createShortcutsStore(options: Options) {
   }
 
   function setBinding(bindingId: string, keys: string | null | undefined) {
+    if (!accepting) return Promise.reject(new Error("Shortcuts service is no longer active."));
+    const entry = bindings.get(bindingId);
+    if (!entry) return Promise.reject(new Error(`Shortcut binding '${bindingId}' is not registered.`));
+    let normalized: string | null | undefined;
+    try { normalized = keys === null || keys === undefined ? keys : normalizeShortcut(keys); }
+    catch (error) { return Promise.reject(error); }
     const operation = mutationQueue.then(async () => {
-      checkActive();
-      const entry = bindings.get(bindingId);
-      if (!entry) throw new Error(`Shortcut binding '${bindingId}' is not registered.`);
-      const normalized = keys === null || keys === undefined ? keys : normalizeShortcut(keys);
+      if (!active) throw new Error("Shortcuts service is no longer active.");
+      const replacement = bindings.get(bindingId);
+      if (replacement && replacement !== entry) throw new Error(`Shortcut binding '${bindingId}' was replaced before saving.`);
       const nextOverrides = Object.assign(Object.create(null), overrides()) as Record<string, string | null>;
       if (normalized === undefined) delete nextOverrides[bindingId];
       else nextOverrides[bindingId] = normalized;
-      const conflicts = conflictsFor(nextOverrides);
-      if (conflicts.some(conflict => conflict.bindingIds.includes(bindingId))) throw new Error(`Shortcut '${normalized ?? ""}' conflicts in scope '${entry.source.scopeId}'.`);
+      const proposed = keysFor(entry, nextOverrides);
+      const conflictingIds = proposed ? [...bindings.values()].filter(other => other !== entry && other.source.id !== bindingId
+        && other.source.scopeId === entry.source.scopeId && keysFor(other, nextOverrides)
+        && sameChord(proposed, keysFor(other, nextOverrides)!, isMac())).map(other => other.source.id) : [];
+      if (conflictingIds.length) throw new ShortcutConflictError(bindingId, entry.source.scopeId,
+        proposed ?? "", conflictingIds);
       await options.persist(bindingId, normalized);
       publish();
     });
@@ -267,7 +300,7 @@ export function createShortcutsStore(options: Options) {
   }
 
   function handleKeyDown(event: KeyboardEvent, context: {blocked: boolean; editable: boolean; target: EventTarget | null}): boolean {
-    if (!active || !context || context.blocked || event.defaultPrevented || event.isComposing || event.keyCode === 229
+    if (!active || !accepting || !context || context.blocked || event.defaultPrevented || event.isComposing || event.keyCode === 229
       || event.getModifierState?.("AltGraph")) return false;
     const available = [...bindings.values()].filter(entry => {
       const keys = keysFor(entry);
@@ -296,7 +329,7 @@ export function createShortcutsStore(options: Options) {
       const conflicted = new Set(conflictsFor().flatMap(conflict => conflict.bindingIds));
       const entry = [...bindings.values()].find(item => item.source.commandId === commandId && keysFor(item) && !conflicted.has(item.source.id));
       const keys = entry && keysFor(entry);
-      return keys ? formatChord(keys, isMac()) : undefined;
+      return keys ? formatShortcut(keys, isMac()) : undefined;
     },
     getSnapshot() { checkActive(); return snapshot; },
     subscribe(listener) { checkActive(); listeners.add(listener); return () => { listeners.delete(listener); }; },
@@ -308,10 +341,14 @@ export function createShortcutsStore(options: Options) {
     service,
     handleKeyDown,
     refresh: publish,
-    dispose() {
-      if (!active) return;
-      active = false;
-      listeners.clear(); commands.clear(); scopes.clear(); bindings.clear(); pending.clear();
+    dispose(): Promise<void> {
+      if (stopping) return stopping;
+      accepting = false;
+      stopping = mutationQueue.then(() => {
+        active = false;
+        listeners.clear(); commands.clear(); scopes.clear(); bindings.clear(); pending.clear();
+      });
+      return stopping;
     },
   };
 }

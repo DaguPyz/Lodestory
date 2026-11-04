@@ -25,9 +25,24 @@ export type ShortcutBinding = Readonly<{
 }>;
 export type ShortcutSnapshot = Readonly<{
   commands: readonly Readonly<{id: string; title: string; category: string; running: boolean}>[];
-  bindings: readonly Readonly<{id: string; commandId: string; scopeId: string; keys: string | null; label: string; conflicted: boolean}>[];
+  bindings: readonly Readonly<{
+    id: string; commandId: string; scopeId: string; keys: string | null; label: string;
+    defaultKeys: string; defaultLabel: string;
+    /** True when a user override exists, including an explicitly cleared binding. */
+    customized: boolean; conflicted: boolean;
+  }>[];
   conflicts: readonly Readonly<{bindingIds: readonly string[]; keys: string; scopeId: string}>[];
 }>;
+
+/** A proposed binding conflicts with other bindings in the same scope. */
+export class ShortcutConflictError extends Error {
+  readonly conflictingBindingIds: readonly string[];
+  constructor(readonly bindingId: string, readonly scopeId: string, keys: string, conflictingBindingIds: readonly string[]) {
+    super(`Shortcut '${keys}' conflicts in scope '${scopeId}'.`);
+    this.name = "ShortcutConflictError";
+    this.conflictingBindingIds = Object.freeze([...conflictingBindingIds]);
+  }
+}
 export type ShortcutsService = Readonly<{
   registerCommand(command: ShortcutCommand): () => void;
   registerScope(scope: ShortcutScope): () => void;
@@ -37,7 +52,8 @@ export type ShortcutsService = Readonly<{
   getShortcut(commandId: string): string | undefined;
   getSnapshot(): ShortcutSnapshot;
   subscribe(listener: () => void): () => void;
-  /** Persist successfully before applying. null clears a default; reset restores it. */
+  /** Persist successfully before applying. null clears a default; reset restores it.
+   * A same-scope collision rejects with ShortcutConflictError. */
   setBinding(bindingId: string, keys: string | null): Promise<void>;
   resetBinding(bindingId: string): Promise<void>;
 }>;

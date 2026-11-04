@@ -72,7 +72,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.deepEqual(Object.keys(packageWorkbench), ["workbenchKey"]);
   assert.deepEqual(Object.keys(packageConfig), ["configKey"]);
   assert.deepEqual(Object.keys(packageContextMenu), ["contextMenuKey"]);
-  assert.deepEqual(Object.keys(packageShortcuts).sort(), ["shortcutCommandIds", "shortcutScopeIds", "shortcutsKey"]);
+  assert.deepEqual(Object.keys(packageShortcuts).sort(), ["ShortcutConflictError", "shortcutCommandIds", "shortcutScopeIds", "shortcutsKey"]);
   assert.equal(packageShortcuts.shortcutsKey.id, "app/shortcuts");
   assert.equal(packageContextMenu.contextMenuKey.id, "app/context-menu");
   assert.deepEqual(Object.keys(packageDocuments).sort(), ["documentCreateRequested", "documentRevealRequested", "documentsKey", "projectDocumentCatalogKey"]);

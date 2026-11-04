@@ -333,8 +333,8 @@ test("page plugins revoke their route contributions and the UI root unmounts onl
   await ui.openPage("editor", { project: project("novel-1", "第一本", "/stories/first") });
   assert.equal(getSettings(fixture).open(), true);
   await core.unmount("workbench-toolbar");
-  await core.unmount("settings");
-  assert.equal(core.isMounted("settings"), false);
+  await assert.rejects(core.unmount("settings"), /required by plugins: 'shortcuts'/);
+  assert.equal(core.isMounted("settings"), true, "the settings provider stays alive for the shortcut contribution");
   assert.deepEqual(Array.from(ui.getSnapshot().pages, ({ id }) => id), ["welcome"],
     "removing the toolbar participant first stops the workbench view");
   assert.equal(fixture.logs.filter((entry) => entry === "root.unmount").length, 1);
@@ -365,6 +365,9 @@ test("page plugins revoke their route contributions and the UI root unmounts onl
   await core.unmount("project-search");
   await core.unmount("workbench");
   assert.equal(core.isMounted("workbench"), false);
+  await core.unmount("shortcuts");
+  await core.unmount("settings");
+  assert.equal(core.isMounted("settings"), false);
   assert.deepEqual(Array.from(ui.getSnapshot().pages), []);
   assert.equal(fixture.logs.filter((entry) => entry === "root.unmount").length, 1);
 

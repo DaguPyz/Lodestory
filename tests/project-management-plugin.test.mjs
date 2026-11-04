@@ -144,6 +144,10 @@ function setup({wrapperError, invokeHandler} = {}) {
       workbenchSnapshot = {...workbenchSnapshot, ...next};
       for (const listener of [...workbenchListeners]) listener();
     },
+    setWorkspace(next) {
+      documentSnapshot = {...documentSnapshot, ...next};
+      for (const listener of [...workspaceListeners]) listener();
+    },
     ui,
     wrappers,
     workspace,
@@ -242,8 +246,9 @@ test("new-document and rename commands validate sessions, busy operations, and t
     "a late rename action from a previous project is ignored");
   assert.equal(await f.shortcuts.execute(f.shortcutCommandIds.renameEntry, {sessionId: f.session.id, path: "missing.txt"}), false,
     "rename commands validate that the target still exists");
+  f.setWorkspace({openingPath: "notes/chapter.txt"});
   assert.equal(await f.shortcuts.invokeKeyboard(f.shortcutCommandIds.renameEntry,
-    {sessionId: f.session.id, path: "notes/chapter.txt"}), true, "F2 uses the same session-checked rename command");
+    {sessionId: f.session.id, path: "notes/chapter.txt"}), true, "F2 accepts rename while that file is still opening");
   assert.equal(model.getSnapshot().renamePath, "notes/chapter.txt");
 
   await f.plugin.deactivate();

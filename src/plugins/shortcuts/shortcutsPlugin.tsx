@@ -2,10 +2,12 @@ import {useEffect, type ReactNode} from "react";
 import type {Plugin} from "@lodestory/sdk";
 import {configKey, type ConfigItem} from "@lodestory/sdk/config";
 import {shortcutsKey, shortcutScopeIds} from "@lodestory/sdk/shortcuts";
+import {settingsKey} from "@lodestory/sdk/settings";
 import {uiInteractionKey, uiKey} from "@lodestory/sdk/ui";
 import type {ConfigValue} from "@lodestory/sdk/config";
-import {createShortcutsStore} from "./shortcutsStore";
-import {normalizeShortcut} from "./shortcutsStore";
+import {createShortcutsStore, normalizeShortcut} from "./shortcutsStore";
+import {createShortcutSettingsModel} from "./shortcutSettingsModel";
+import {ShortcutSettings} from "./ShortcutSettings";
 
 type Overrides = Readonly<Record<string, string | null>>;
 
@@ -46,16 +48,33 @@ function ShortcutListener({children, hasActiveOverlay, handleKeyDown}: {
 
 /** Application-scoped command and single-chord shortcut registry. */
 export function createShortcutsPlugin(): Plugin {
-  let dispose: (() => void) | undefined;
+  let dispose: (() => Promise<void>) | undefined;
   return {
-    id: "shortcuts", requires: [uiKey, uiInteractionKey, configKey], provides: [shortcutsKey],
-    activate(context) {
+    id: "shortcuts", requires: [uiKey, uiInteractionKey, configKey, settingsKey], provides: [shortcutsKey],
+    async activate(context) {
       const ui = context.get(uiKey), config = context.get(configKey);
       const interaction = context.get(uiInteractionKey);
+      const settings = context.get(settingsKey);
       let removeConfig: (() => void) | undefined;
       let removeConfigSubscription: (() => void) | undefined;
       let removeWrapper: (() => void) | undefined;
+      let removeSettingsSection: (() => void) | undefined;
+      let removeApplicationScope: (() => void) | undefined;
       let store: ReturnType<typeof createShortcutsStore> | undefined;
+      let settingsModel: ReturnType<typeof createShortcutSettingsModel> | undefined;
+      const stop = async () => {
+        const errors: unknown[] = [];
+        for (const remove of [removeWrapper, removeSettingsSection]) {
+          try { remove?.(); } catch (error) { errors.push(error); }
+        }
+        try { await settingsModel?.dispose(); } catch (error) { errors.push(error); }
+        try { await store?.dispose(); } catch (error) { errors.push(error); }
+        for (const remove of [removeConfigSubscription, removeApplicationScope, removeConfig]) {
+          try { remove?.(); } catch (error) { errors.push(error); }
+        }
+        if (errors.length) throw Object.assign(new Error("Shortcuts failed to stop."), {errors});
+      };
+      dispose = stop;
       try {
         removeConfig = config.register(shortcutOverridesConfig);
         const configSnapshot = () => config.getSnapshot(shortcutOverridesConfig);
@@ -69,25 +88,27 @@ export function createShortcutsPlugin(): Plugin {
           },
         });
         const shortcuts = store.service;
-        const removeApplicationScope = shortcuts.registerScope({id: shortcutScopeIds.application, active: () => true});
+        removeApplicationScope = shortcuts.registerScope({id: shortcutScopeIds.application, active: () => true});
         removeConfigSubscription = config.subscribe(shortcutOverridesConfig, store.refresh);
         context.provide(shortcutsKey, shortcuts);
+        settingsModel = createShortcutSettingsModel(shortcuts);
+        const model = settingsModel;
+        removeSettingsSection = settings.registerSection({
+          id: "shortcuts.keymap", group: "操作", title: "快捷键", order: 30,
+          render: () => <ShortcutSettings shortcuts={shortcuts} model={model}/>,
+        });
         removeWrapper = ui.addWrapper({id: "shortcuts.key-listener", order: 5,
           wrap: children => <ShortcutListener hasActiveOverlay={interaction.hasActiveOverlay} handleKeyDown={store!.handleKeyDown}>{children}</ShortcutListener>});
-        dispose = () => {
-          const errors: unknown[] = [];
-          for (const remove of [removeWrapper, removeConfigSubscription, removeApplicationScope]) {
-            try { remove?.(); } catch (error) { errors.push(error); }
-          }
-          try { store?.dispose(); } catch (error) { errors.push(error); }
-          try { removeConfig?.(); } catch (error) { errors.push(error); }
-          if (errors.length) throw Object.assign(new Error("Shortcuts failed to stop."), {errors});
-        };
       } catch (error) {
-        removeWrapper?.(); removeConfigSubscription?.(); store?.dispose(); removeConfig?.();
+        dispose = undefined;
+        try { await stop(); } catch (cleanupError) {
+          throw Object.assign(new Error("Shortcuts failed to activate and clean up."), {
+            name: "ShortcutActivationError", activationError: error, cleanupError,
+          });
+        }
         throw error;
       }
     },
-    deactivate() { const stop = dispose; dispose = undefined; stop?.(); },
+    async deactivate() { const stop = dispose; dispose = undefined; await stop?.(); },
   };
 }

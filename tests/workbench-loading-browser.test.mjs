@@ -66,7 +66,7 @@ test("project opens its locked workspace before the file tree is ready and recov
     assert.deepEqual(loadError, [], `startup should succeed after releasing the tree: ${loadError.join(" ")}`);
     assert.equal(await page.locator(".workbench-status-loading").count(), 0,
       "the status-bar progress item disappears once startup finishes");
-    await page.locator(".file-tree").getByRole("button", {name: "故事大纲.txt", exact: true}).click();
+    await page.locator(".file-tree").getByRole("button", {name: "故事大纲.txt", exact: true}).dblclick();
     await page.locator('.document-tab-select[aria-current="page"]').waitFor();
     assert.equal(await layout.evaluate(element => !!element.closest("[inert]")), false);
   });

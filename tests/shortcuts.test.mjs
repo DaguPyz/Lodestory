@@ -14,6 +14,7 @@ function fixture() {
   const modules = new Map();
   const writes = [];
   const wrappers = new Map();
+  const sections = new Map();
   const jsx = {Fragment: Symbol("Fragment"), jsx: (type, props) => ({type, props}), jsxs: (type, props) => ({type, props})};
   function pathOf(from, specifier) {
     let base = specifier.startsWith("@lodestory/sdk/") ? resolve(sdk, specifier.slice("@lodestory/sdk/".length))
@@ -36,6 +37,8 @@ function fixture() {
     vm.runInNewContext(output, {exports, console, require(specifier) {
       if (specifier === "react") return {useEffect() {}};
       if (specifier === "react/jsx-runtime") return jsx;
+      if (specifier === "@lodestory/ui") return {Button() {}, SearchField() {}, TextField() {}};
+      if (specifier.endsWith(".css")) return {};
       return load(pathOf(path, specifier));
     }}, {filename: path});
     return exports;
@@ -49,16 +52,21 @@ function fixture() {
         wrappers.set(wrapper.id, wrapper);
         return () => wrappers.delete(wrapper.id);
       }};
+      if (key === sdkSettings.settingsKey) return {registerSection(section) {
+        sections.set(section.id, section);
+        return () => sections.delete(section.id);
+      }};
       throw new Error(`Unexpected capability ${key?.id}`);
     },
     provide(key, value) { this.services.set(key, value); },
   };
   const sdkConfig = load(resolve(sdk, "config.ts"));
   const sdkUi = load(resolve(sdk, "ui.ts"));
+  const sdkSettings = load(resolve(sdk, "settings.ts"));
   const {createConfigStore} = load(resolve(source, "plugins/config/configStore.ts"));
   config = createConfigStore({baseValues: {}, userValues: {}, persist(value) { writes.push(value); }});
   const shortcutsPlugin = load(resolve(source, "plugins/shortcuts/shortcutsPlugin.tsx"));
-  return {load, writes, wrappers, context, sdkConfig, sdkUi, shortcutsPlugin, config};
+  return {load, writes, wrappers, sections, context, sdkConfig, sdkUi, shortcutsPlugin, config};
 }
 
 let config;
@@ -103,6 +111,22 @@ test("ordinary text and local editing keys are rejected as global bindings", () 
   }
   assert.equal(normalizeShortcut("Shift+F2"), "Shift+F2");
   assert.equal(normalizeShortcut("Mod+Space"), "Mod+Space");
+});
+
+test("recording maps real keyboard events to platform-aware chords and rejects unsupported input", () => {
+  const {shortcutFromKeyEvent, formatShortcut} = fixture().load(resolve(source, "plugins/shortcuts/shortcutsStore.ts"));
+  assert.equal(shortcutFromKeyEvent(event("n", {metaKey: true, shiftKey: true}), true), "Mod+Shift+N");
+  assert.equal(shortcutFromKeyEvent(event("n", {ctrlKey: true, shiftKey: true}), false), "Mod+Shift+N");
+  assert.equal(shortcutFromKeyEvent(event("n", {ctrlKey: true}), true), "Ctrl+N");
+  assert.equal(shortcutFromKeyEvent(event(" ", {metaKey: true}), true), "Mod+Space");
+  assert.equal(shortcutFromKeyEvent(event("F2"), false), "F2");
+  assert.equal(shortcutFromKeyEvent(event("Shift", {shiftKey: true}), true), null);
+  assert.equal(shortcutFromKeyEvent(event("a", {isComposing: true}), true), null);
+  assert.equal(shortcutFromKeyEvent(event("a", {getModifierState: key => key === "AltGraph"}), false), null);
+  assert.throws(() => shortcutFromKeyEvent(event("a"), true), /shortcut must use/i);
+  assert.throws(() => shortcutFromKeyEvent(event("a", {metaKey: true}), false), /system key/i);
+  assert.equal(formatShortcut("Mod+Shift+N", true), "⌘ ⇧ N");
+  assert.equal(formatShortcut("Mod+Shift+N", false), "Ctrl + Shift + N");
 });
 
 test("a child scope wins; inactive ancestors and unknown scopes cannot dispatch", async () => {
@@ -217,23 +241,113 @@ test("binding changes persist first, reject conflicts, and keep the old shortcut
   for (const id of ["one", "two"]) store.service.registerCommand({id: `test.${id}`, title: id, category: "测试", run() {}});
   store.service.registerBinding({id: "test.one-key", commandId: "test.one", scopeId: "application", keys: "Mod+S"});
   store.service.registerBinding({id: "test.two-key", commandId: "test.two", scopeId: "application", keys: "Mod+N"});
+  assert.equal(store.service.getSnapshot().bindings[1].defaultLabel, "Ctrl + N");
+  assert.equal(store.service.getSnapshot().bindings[1].customized, false);
   await store.service.setBinding("test.two-key", "Mod+Shift+N");
   assert.equal(values["test.two-key"], "Mod+Shift+N");
-  await assert.rejects(store.service.setBinding("test.two-key", "Ctrl+S"), /conflicts/);
+  assert.equal(store.service.getSnapshot().bindings[1].customized, true);
+  await assert.rejects(store.service.setBinding("test.two-key", "Ctrl+S"), error => {
+    assert.equal(error.name, "ShortcutConflictError");
+    assert.equal(error.bindingId, "test.two-key");
+    assert.deepEqual(Array.from(error.conflictingBindingIds), ["test.one-key"]);
+    return true;
+  });
   await assert.rejects(store.service.setBinding("test.two-key", "Mod+Shift+X"), /disk full/);
   assert.equal(store.service.getShortcut("test.two"), "Ctrl + Shift + N");
   await store.service.resetBinding("test.two-key");
   assert.equal(values["test.two-key"], undefined);
+  assert.equal(store.service.getSnapshot().bindings[1].customized, false);
   store.dispose();
+});
+
+test("shortcut settings preserve failed changes for retry and show conflicts separately", async () => {
+  const f = fixture();
+  const {ShortcutConflictError} = f.load(resolve(sdk, "shortcuts.ts"));
+  const {createShortcutSettingsModel} = f.load(resolve(source, "plugins/shortcuts/shortcutSettingsModel.ts"));
+  let diskFails = true;
+  const values = {};
+  const model = createShortcutSettingsModel({
+    async setBinding(id, keys) {
+      if (id === "conflict") throw new ShortcutConflictError(id, "application", keys, ["occupied"]);
+      if (diskFails) throw new Error("disk unavailable");
+      values[id] = keys;
+    },
+    async resetBinding(id) { delete values[id]; },
+  });
+  assert.equal(await model.set("first", "Mod+K"), false);
+  assert.equal(await model.set("conflict", "Mod+S"), false);
+  assert.deepEqual(Array.from(model.getSnapshot().failures, item => item.kind), ["save", "conflict"]);
+  assert.deepEqual(Array.from(model.getSnapshot().failures[1].conflictingBindingIds), ["occupied"]);
+  diskFails = false;
+  assert.equal(await model.retry("first"), true);
+  assert.equal(values.first, "Mod+K");
+  assert.deepEqual(Array.from(model.getSnapshot().failures, item => item.kind), ["conflict"]);
+  model.clearFailure("conflict");
+  assert.equal(model.getSnapshot().failures.length, 0);
+  await model.dispose();
+});
+
+test("shortcut shutdown waits for already accepted binding changes", async () => {
+  const {createShortcutsStore} = fixture().load(resolve(source, "plugins/shortcuts/shortcutsStore.ts"));
+  let release;
+  const gate = new Promise(resolvePromise => { release = resolvePromise; });
+  const values = {};
+  const store = createShortcutsStore({getOverrides: () => values, isMac: () => false, async persist(id, keys) {
+    if (id === "test.one-key") await gate;
+    values[id] = keys;
+  }});
+  store.service.registerScope({id: "application", active: () => true});
+  for (const id of ["one", "two"]) store.service.registerCommand({id: `test.${id}`, title: id, category: "测试", run() {}});
+  store.service.registerBinding({id: "test.one-key", commandId: "test.one", scopeId: "application", keys: "Mod+S"});
+  const removeSecond = store.service.registerBinding({id: "test.two-key", commandId: "test.two", scopeId: "application", keys: "Mod+N"});
+  const first = store.service.setBinding("test.one-key", "Mod+Shift+S");
+  const second = store.service.setBinding("test.two-key", "Mod+Shift+N");
+  removeSecond();
+  let stopped = false;
+  const stop = store.dispose().then(() => { stopped = true; });
+  await assert.rejects(store.service.setBinding("test.two-key", "Mod+K"), /no longer active/);
+  await Promise.resolve();
+  assert.equal(stopped, false);
+  release();
+  await Promise.all([first, second, stop]);
+  assert.equal(values["test.one-key"], "Mod+Shift+S");
+  assert.equal(values["test.two-key"], "Mod+Shift+N", "an accepted change survives its contributor's shutdown");
+  assert.equal(stopped, true);
+  assert.throws(() => store.service.getSnapshot(), /no longer active/);
+});
+
+test("a queued change cannot overwrite a replacement binding with the same id", async () => {
+  const {createShortcutsStore} = fixture().load(resolve(source, "plugins/shortcuts/shortcutsStore.ts"));
+  let release;
+  const gate = new Promise(resolvePromise => { release = resolvePromise; });
+  const values = {};
+  const store = createShortcutsStore({getOverrides: () => values, isMac: () => false, async persist(id, keys) {
+    if (id === "test.one-key") await gate;
+    values[id] = keys;
+  }});
+  store.service.registerScope({id: "application", active: () => true});
+  for (const id of ["one", "two"]) store.service.registerCommand({id: `test.${id}`, title: id, category: "测试", run() {}});
+  store.service.registerBinding({id: "test.one-key", commandId: "test.one", scopeId: "application", keys: "Mod+S"});
+  const remove = store.service.registerBinding({id: "test.two-key", commandId: "test.two", scopeId: "application", keys: "Mod+N"});
+  const first = store.service.setBinding("test.one-key", "Mod+Shift+S");
+  const second = store.service.setBinding("test.two-key", "Mod+Shift+N");
+  remove();
+  store.service.registerBinding({id: "test.two-key", commandId: "test.two", scopeId: "application", keys: "Mod+K"});
+  release();
+  await first;
+  await assert.rejects(second, /replaced before saving/);
+  assert.equal(values["test.two-key"], undefined);
+  await store.dispose();
 });
 
 test("plugin uses ConfigService, installs one wrapper, and releases registration on shutdown", async () => {
   const f = fixture();
   const plugin = f.shortcutsPlugin.createShortcutsPlugin();
-  plugin.activate(f.context);
+  await plugin.activate(f.context);
   const service = f.context.services.get(f.load(resolve(sdk, "shortcuts.ts")).shortcutsKey);
   assert.ok(service);
   assert.equal(f.wrappers.size, 1);
+  assert.equal(f.sections.get("shortcuts.keymap").render().props.shortcuts, service);
   service.registerCommand({id: "test.persist", title: "持久化", category: "测试", run() {}});
   service.registerBinding({id: "test.persist-key", commandId: "test.persist", scopeId: "application", keys: "Mod+S"});
   await service.setBinding("test.persist-key", "Mod+Shift+S");
@@ -242,7 +356,74 @@ test("plugin uses ConfigService, installs one wrapper, and releases registration
   assert.equal(f.writes.length, 1);
   await plugin.deactivate();
   assert.equal(f.wrappers.size, 0);
+  assert.equal(f.sections.size, 0);
   assert.throws(() => f.config.service.getSnapshot(item), /not registered/);
+  await f.config.dispose();
+});
+
+test("shortcut plugin withdraws its settings contribution and waits for writes before unregistering config", async () => {
+  const f = fixture();
+  let release;
+  let started;
+  const gate = new Promise(resolvePromise => { release = resolvePromise; });
+  const saving = new Promise(resolvePromise => { started = resolvePromise; });
+  const get = f.context.get.bind(f.context);
+  f.context.get = key => key === f.sdkConfig.configKey ? {
+    ...f.config.service,
+    async set(item, value) { started(); await gate; await f.config.service.set(item, value); },
+  } : get(key);
+  const plugin = f.shortcutsPlugin.createShortcutsPlugin();
+  await plugin.activate(f.context);
+  const service = f.context.services.get(f.load(resolve(sdk, "shortcuts.ts")).shortcutsKey);
+  service.registerCommand({id: "test.pending", title: "保存中", category: "测试", run() {}});
+  service.registerBinding({id: "test.pending-key", commandId: "test.pending", scopeId: "application", keys: "Mod+S"});
+  const write = service.setBinding("test.pending-key", "Mod+Shift+S");
+  await saving;
+  let stopped = false;
+  const stop = plugin.deactivate().then(() => { stopped = true; });
+  await Promise.resolve();
+  assert.equal(f.sections.size, 0, "the contributed UI is withdrawn before its service stops");
+  assert.equal(stopped, false, "shutdown waits for the accepted configuration write");
+  release();
+  await Promise.all([write, stop]);
+  assert.equal(f.writes.at(-1)["shortcuts.bindings"]["test.pending-key"], "Mod+Shift+S");
+  assert.throws(() => f.config.service.getSnapshot(f.shortcutsPlugin.shortcutOverridesConfig), /not registered/);
+  await f.config.dispose();
+});
+
+test("shortcut plugin cleans its config if settings contribution fails during activation", async () => {
+  const f = fixture();
+  const get = f.context.get.bind(f.context);
+  const {settingsKey} = f.load(resolve(sdk, "settings.ts"));
+  f.context.get = key => key === settingsKey ? {registerSection() { throw new Error("cannot register settings"); }} : get(key);
+  const plugin = f.shortcutsPlugin.createShortcutsPlugin();
+  await assert.rejects(plugin.activate(f.context), /cannot register settings/);
+  await plugin.deactivate();
+  assert.equal(f.wrappers.size, 0);
+  assert.throws(() => f.config.service.getSnapshot(f.shortcutsPlugin.shortcutOverridesConfig), /not registered/);
+  await f.config.dispose();
+});
+
+test("shortcut activation reports both registration and cleanup failures", async () => {
+  const f = fixture();
+  const get = f.context.get.bind(f.context);
+  const {settingsKey} = f.load(resolve(sdk, "settings.ts"));
+  f.context.get = key => {
+    if (key === settingsKey) return {registerSection() { throw new Error("settings registration failed"); }};
+    if (key === f.sdkConfig.configKey) return {...f.config.service, register(item) {
+      const remove = f.config.service.register(item);
+      return () => { remove(); throw new Error("config cleanup failed"); };
+    }};
+    return get(key);
+  };
+  const plugin = f.shortcutsPlugin.createShortcutsPlugin();
+  await assert.rejects(plugin.activate(f.context), error => {
+    assert.equal(error.name, "ShortcutActivationError");
+    assert.match(error.activationError.message, /settings registration failed/);
+    assert.match(error.cleanupError.errors[0].message, /config cleanup failed/);
+    return true;
+  });
+  await plugin.deactivate();
   await f.config.dispose();
 });
 

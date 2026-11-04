@@ -69,7 +69,7 @@ export function createProjectManagementPlugin(): Plugin {
                 const model = models.get(state.session.id);
                 const snapshot = model?.getSnapshot();
                 if (!active || !model || !state.active || state.busy || !snapshot || snapshot.blocked || snapshot.loading
-                    || snapshot.openingPath || snapshot.creating || snapshot.deleting || snapshot.deletingPath
+                    || snapshot.creating || snapshot.deleting || snapshot.deletingPath
                     || snapshot.renaming || snapshot.renamePath || snapshot.dialogOpen || !entryExists(snapshot.entries, path)) return null;
                 return {model, path};
             };

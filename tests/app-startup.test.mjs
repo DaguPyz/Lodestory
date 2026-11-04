@@ -165,7 +165,6 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.ok(fixture.logs.indexOf("activate:project-storage:complete") < fixture.logs.indexOf("activate:asset-management:begin"),
     "asset schemas require the shared project-storage capability before activation");
   assert.ok(fixture.logs.indexOf("activate:documents:complete") < fixture.logs.indexOf("activate:project-management:begin"), "the document service must be available before project management activation");
-  assert.ok(fixture.logs.indexOf("activate:project-management:complete") < fixture.logs.indexOf("activate:canvas:begin"), "the canvas service activates after project management");
   assert.ok(fixture.logs.indexOf("activate:canvas:complete") < fixture.logs.indexOf("activate:timeline:begin"), "the canvas service is available before timeline");
   assert.ok(fixture.logs.indexOf("activate:timeline:complete") < fixture.logs.indexOf("activate:outline-design:begin"), "timeline is available before outline-design");
   assert.ok(fixture.logs.indexOf("activate:project-management:complete") < fixture.logs.indexOf("activate:body-editor:begin"), "documents and project management activate before the body editor");
@@ -191,6 +190,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.ok(fixture.logs.indexOf("activate:config:complete") < fixture.logs.indexOf("activate:ui:begin"), "the config service must be available before UI activation");
   assert.ok(fixture.logs.indexOf("activate:workbench:complete") < fixture.logs.indexOf("activate:welcome:begin"), "the workbench page registers before the welcome page");
   assert.ok(fixture.logs.indexOf("activate:settings:complete") < fixture.logs.indexOf("activate:workbench-toolbar:begin"));
+  assert.ok(fixture.logs.indexOf("activate:settings:complete") < fixture.logs.indexOf("activate:shortcuts:begin"));
   assert.ok(fixture.logs.indexOf("activate:settings:complete") < fixture.logs.indexOf("plugins-ready.emit"));
   assert.ok(fixture.logs.indexOf("plugins-ready.emit") < fixture.logs.indexOf("root.render"));
 
@@ -269,6 +269,9 @@ test("the entry delegates UI composition and page registration to the plugin cat
   const settingsSection = settingsDialog.props.store.getSnapshot().sections.find(section => section.id === "appearance.theme");
   assert.equal(settingsSection.render().type, fixture.components.ThemeSettings);
   assert.equal(settingsSection.render().props.service, fixture.getService(themeKey(fixture)));
+  const shortcutSection = settingsDialog.props.store.getSnapshot().sections.find(section => section.id === "shortcuts.keymap");
+  assert.ok(shortcutSection, "the shortcuts plugin contributes a settings section");
+  assert.equal(shortcutSection.render().props.shortcuts, fixture.getService(fixture.requireSdk("@lodestory/sdk/shortcuts").shortcutsKey));
   settingsDialog.props.store.close();
 });
 

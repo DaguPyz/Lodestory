@@ -11,6 +11,7 @@ import {
 import {layoutKey, type LayoutService, type LayoutContent} from "@lodestory/sdk/layout";
 import {navigationLayoutKey, type NavigationLayoutPage, type NavigationLayoutService} from "@lodestory/sdk/navigation-layout";
 import {settingsKey, type SettingsService} from "@lodestory/sdk/settings";
+import {shortcutsKey, ShortcutConflictError, type ShortcutsService} from "@lodestory/sdk/shortcuts";
 import {windowShellKey, type WindowShellProps, type WindowShellService} from "@lodestory/sdk/window-shell";
 import { uiKey, type UiService } from "@lodestory/sdk/ui";
 import type { UiNavigationRequest } from "@lodestory/sdk/ui";
@@ -107,13 +108,26 @@ const listener: EventListener<DocumentChanged> = ({ documentId, revision }) => {
 declare const context: PluginContext;
 const plugin: Plugin = {
   id: "sdk-types",
-  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, navigationLayoutKey, settingsKey, windowShellKey, workbenchKey, configKey, projectStorageKey, documentsKey, bodyEditorKey, canvasKey, timelineKey],
+  requires: [documentKey, uiKey, errorUiKey, themeKey, layoutKey, navigationLayoutKey, settingsKey, shortcutsKey, windowShellKey, workbenchKey, configKey, projectStorageKey, documentsKey, bodyEditorKey, canvasKey, timelineKey],
   provides: [],
   activate(pluginContext) {
     const document = pluginContext.get(documentKey);
     const text: string = document.read();
     const ui: UiService = pluginContext.get(uiKey);
     const config: ConfigService = pluginContext.get(configKey);
+    const shortcuts: ShortcutsService = pluginContext.get(shortcutsKey);
+    const binding = shortcuts.getSnapshot().bindings[0];
+    if (binding) {
+      const defaultKeys: string = binding.defaultKeys;
+      const defaultLabel: string = binding.defaultLabel;
+      const customized: boolean = binding.customized;
+      // @ts-expect-error Shortcut snapshots are immutable to consumers.
+      binding.customized = false;
+      void defaultKeys; void defaultLabel; void customized;
+    }
+    const conflict = new ShortcutConflictError("binding", "scope", "Mod+S", ["other"]);
+    const conflicts: readonly string[] = conflict.conflictingBindingIds;
+    void conflicts;
     const documents: DocumentsService = pluginContext.get(documentsKey);
     const storage: ProjectStorageService = pluginContext.get(projectStorageKey);
     const bodyEditor: BodyEditorService = pluginContext.get(bodyEditorKey);

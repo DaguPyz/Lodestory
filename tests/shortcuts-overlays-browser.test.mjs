@@ -43,7 +43,7 @@ test("shortcut overlay isolation follows UI surfaces and releases after dismissa
   await page.getByRole("button", {name: "打开项目 测试故事", exact: true}).click();
   await page.getByRole("heading", {name: "作品已打开", exact: true}).waitFor();
   if (!await file("故事大纲.lode").isVisible()) await page.getByRole("button", {name: "工程文件", exact: true}).click();
-  await file("故事大纲.lode").click();
+  await file("故事大纲.lode").dblclick();
   await editor.waitFor();
   await page.getByRole("combobox", {name: "字号", exact: true}).click();
   const listbox = page.getByRole("listbox");
@@ -74,5 +74,61 @@ test("shortcut overlay isolation follows UI surfaces and releases after dismissa
   await dialog.waitFor({state: "detached"});
   await pressShortcut("w");
   await tabs.waitFor({state: "detached"});
+
+  await file("故事大纲.lode").click();
+  assert.equal(await tabs.count(), 0, "a single click selects the file without opening a tab");
+  assert.equal(await file("故事大纲.lode").getAttribute("data-selected"), "true");
+  await page.keyboard.press("F2");
+  await page.getByRole("dialog", {name: "重命名文件", exact: true}).waitFor();
+  await page.keyboard.press("Escape");
+  assert.equal(await file("故事大纲.lode").evaluate(element => document.activeElement === element), true,
+    "selection keeps keyboard focus on its tree entry");
+  await page.keyboard.press("F2");
+  await page.getByRole("dialog", {name: "重命名文件", exact: true}).waitFor();
+  await page.keyboard.press("Escape");
+
+  await file("正文").click();
+  assert.equal(await file("正文").evaluate(element => document.activeElement === element), true,
+    "clicking a folder focuses it even where pointer clicks do not focus buttons by default");
+  await page.keyboard.press("F2");
+  await page.getByRole("dialog", {name: "重命名文件夹", exact: true}).waitFor();
+  await page.keyboard.press("Escape");
+
+  await file("故事大纲.lode").dblclick();
+  await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "富文本正文");
+  await page.keyboard.press("F2");
+  assert.equal(await page.getByRole("dialog", {name: "重命名文件", exact: true}).count(), 0,
+    "tree rename does not take F2 from the focused editor");
+
+  let releaseMarkdown;
+  const markdownGate = new Promise(resolve => { releaseMarkdown = resolve; });
+  t.after(() => releaseMarkdown());
+  await page.route("**/src/plugins/markdown-editor/MarkdownEditor.tsx*", async route => {
+    await markdownGate;
+    await route.continue();
+  });
+  await file("已有章节.md").dblclick();
+  await page.getByText("正在加载编辑器…", {exact: true}).waitFor();
+  await file("故事大纲.txt").click();
+  releaseMarkdown();
+  await page.getByRole("textbox", {name: "Markdown 正文", exact: true}).waitFor();
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  assert.equal(await file("故事大纲.txt").evaluate(element => document.activeElement === element), true,
+    "a delayed editor does not take focus back after another file is selected");
+  await page.keyboard.press("F2");
+  await page.getByRole("dialog", {name: "重命名文件", exact: true}).waitFor();
+  await page.keyboard.press("Escape");
+
+  await page.setViewportSize({width: 600, height: 800});
+  await page.getByRole("button", {name: "工程文件", exact: true}).click();
+  const tabsBeforeSelection = await tabs.count();
+  await file("故事大纲.txt").click();
+  assert.equal(await file("故事大纲.txt").isVisible(), true, "selection keeps the tree drawer open");
+  assert.equal(await file("故事大纲.txt").getAttribute("data-selected"), "true");
+  assert.equal(await tabs.count(), tabsBeforeSelection, "selecting another file does not open it");
+  assert.equal(await file("故事大纲.txt").evaluate(element => document.activeElement === element), true);
+  await page.keyboard.press("F2");
+  await page.getByRole("dialog", {name: "重命名文件", exact: true}).waitFor();
+  await page.keyboard.press("Escape");
   assert.deepEqual(errors, []);
 });

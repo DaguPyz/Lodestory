@@ -36,7 +36,7 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 
 ## 生命周期与 key
 
-快捷键消费者声明 `shortcutsKey` 依赖，通过 `registerCommand` 登记自己拥有的操作，通过 `registerBinding` 登记默认组合键；按钮和菜单通过 `execute` 复用业务入口。调用方保留并在停用时撤销登记，作用域的活动状态与 DOM 范围由所属插件提供。`execute` 的布尔值表示是否接收执行，不代表保存等业务操作成功；业务结果与错误仍由原服务管理。`getShortcut` 供界面显示实际生效的键，改绑通过 `setBinding/resetBinding`，不直接读写实现方的配置对象。
+快捷键消费者声明 `shortcutsKey` 依赖，通过 `registerCommand` 登记自己拥有的操作，通过 `registerBinding` 登记默认组合键；按钮和菜单通过 `execute` 复用业务入口。调用方保留并在停用时撤销登记，作用域的活动状态与 DOM 范围由所属插件提供。`execute` 的布尔值表示是否接收执行，不代表保存等业务操作成功；业务结果与错误仍由原服务管理。`getShortcut` 供界面显示实际生效的键；快照提供当前及默认绑定和用户覆盖状态。改绑通过 `setBinding/resetBinding`，同作用域冲突以 `ShortcutConflictError` 返回，不直接读写实现方的配置对象。
 
 UI 服务拥有当前窗口的交互浮层状态。交互接入插件通过 `uiInteractionKey` 暴露查询与独立 React 根的包装能力，把组件库的通用通知转为 UI 服务的登记与撤销。快捷键插件声明该能力并查询活动浮层，浮层内的导航和 Escape 由组件处理。
 

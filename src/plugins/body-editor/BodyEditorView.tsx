@@ -39,12 +39,14 @@ export function BodyEditor({active}: {active: boolean}) {
         contentReaders.current.set(documentId, workspace.registerContentReader(documentId, content => handle.flushContent!(content)));
       }
       const state = focusState.current;
-      if (state.active && !state.busy && state.activeId === documentId) {
+      // A lazy editor may finish loading after the user has moved to another control.
+      if (state.active && !state.busy && state.activeId === documentId && root.current?.contains(document.activeElement)) {
         const frame = requestAnimationFrame(() => {
           focusFrames.current.delete(frame);
           if (!mounted.current) return;
           const latest = focusState.current;
-          if (latest.active && !latest.busy && latest.activeId === documentId && isOpen()) {
+          if (latest.active && !latest.busy && latest.activeId === documentId && isOpen()
+            && root.current?.contains(document.activeElement)) {
             handles.current.get(documentId)?.focus();
           }
         });
@@ -77,8 +79,9 @@ export function BodyEditor({active}: {active: boolean}) {
 
   useEffect(() => {
     if (!active || editor.busy) return;
+    const focusedBeforeFrame = document.activeElement;
     const frame = requestAnimationFrame(() => {
-      if (!mounted.current) return;
+      if (!mounted.current || document.activeElement !== focusedBeforeFrame) return;
       if (workspace.activeId) {
         const handle = handles.current.get(workspace.activeId);
         if (handle) handle.focus();

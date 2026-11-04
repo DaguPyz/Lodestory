@@ -340,7 +340,7 @@ export function createProjectManagementModel(
         },
         requestRename(path) {
             const entry = findEntry(entries, path);
-            if (blocked() || documentState.creating || documentState.deletingPath || documentState.openingPath
+            if (blocked() || documentState.creating || documentState.deletingPath
                 || deleting || deletePath || dialogOpen || renaming || renamePath || !entry) return false;
             renamePath = path;
             renameDirectory = !!entry.children;

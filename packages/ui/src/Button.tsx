@@ -20,9 +20,11 @@ export function Button({ variant = "secondary", type = "button", selectionActive
 
 export type IconButtonProps = Omit<NativeButtonProps, "aria-label" | "title"> & ButtonStateProps & {
   label: string;
+  /** Optional longer hover hint, e.g. the action's current shortcut. Accessible name stays concise. */
+  tooltip?: string;
 };
 
-export function IconButton({ label, type = "button", selectionActive, focusSurface, ...props }: IconButtonProps) {
-  return <button {...props} type={type} className="icon-button" aria-label={label} title={label}
+export function IconButton({ label, tooltip, type = "button", selectionActive, focusSurface, ...props }: IconButtonProps) {
+  return <button {...props} type={type} className="icon-button" aria-label={label} title={tooltip ?? label}
     data-selection-active={selectionActive} data-focus-surface={focusSurface} />;
 }

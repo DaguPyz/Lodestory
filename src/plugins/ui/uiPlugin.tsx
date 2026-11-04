@@ -100,6 +100,7 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
             const pages = createPageRegistry();
             const wrappers = new Map<string, UiWrapper>();
             const navigationGuards = new Map<string, UiNavigationGuard>();
+            const overlays = new Set<{element: HTMLElement}>();
             let active = true;
             let mountAttempted = false;
             let navigationAllowed = false;
@@ -116,7 +117,11 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                 navigationGeneration += 1;
                 const root = reactRoot;
                 reactRoot = undefined;
-                root?.unmount();
+                try {
+                    root?.unmount();
+                } finally {
+                    overlays.clear();
+                }
             }
 
             cleanup = () => {
@@ -334,6 +339,21 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
             }
 
             const service: UiService = {
+                registerOverlay(element) {
+                    checkActive();
+                    const registration = {element};
+                    overlays.add(registration);
+                    return () => { overlays.delete(registration); };
+                },
+                hasActiveOverlay() {
+                    checkActive();
+                    for (const {element} of overlays) {
+                        if (!element.isConnected || element.closest("[hidden], [inert]") || !element.getClientRects().length) continue;
+                        const view = element.ownerDocument.defaultView;
+                        if (view?.getComputedStyle(element).visibility === "visible") return true;
+                    }
+                    return false;
+                },
                 registerPage(page) {
                     checkRegistrationAllowed();
                     const remove = pages.registerPage(page);

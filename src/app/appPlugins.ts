@@ -1,6 +1,7 @@
 import type {Plugin} from "@lodestory/sdk";
 import {createErrorUiPlugin} from "../plugins/error-ui";
 import {createUiPlugin} from "../plugins/ui";
+import {createUiInteractionPlugin} from "../plugins/ui-interaction";
 import {createThemePlugin} from "../plugins/theme/themePlugin";
 import {createBuiltinThemesPlugin} from "../plugins/builtin-themes";
 import {createDefaultLayoutPlugin} from "../plugins/default-layout/defaultLayoutPlugin";
@@ -27,6 +28,7 @@ import {createConfigPlugin} from "../plugins/config/configPlugin";
 import {createSettingsPlugin} from "../plugins/settings/settingsPlugin";
 import {createProjectSearchPlugin} from "../plugins/project-search/projectSearchPlugin";
 import {createDocumentSearchPlugin} from "../plugins/document-search/documentSearchPlugin";
+import {createShortcutsPlugin} from "../plugins/shortcuts";
 
 /** 应用选择哪些插件；启动和渲染流程不根据具体插件添加分支。 */
 export function createAppPlugins(): readonly Plugin[] {
@@ -34,6 +36,8 @@ export function createAppPlugins(): readonly Plugin[] {
         createConfigPlugin(),
         createErrorUiPlugin(),
         createUiPlugin(),
+        createUiInteractionPlugin(),
+        createShortcutsPlugin(),
         createThemePlugin(),
         createBuiltinThemesPlugin(),
         createContextMenuPlugin(),

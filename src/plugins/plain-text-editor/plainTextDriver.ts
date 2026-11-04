@@ -302,7 +302,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     const word = mac ? event.altKey : event.ctrlKey;
     const key = event.key.toLowerCase();
     if (command && key === "s") return; // Existing document owner handles Save.
-    if (command && key === "f") { event.preventDefault(); openSearch(event.altKey); return; }
+    if (command && !event.shiftKey && key === "f") { event.preventDefault(); openSearch(event.altKey); return; }
     if (!mac && command && key === "h") {
       event.preventDefault(); openSearch(true); return;
     }

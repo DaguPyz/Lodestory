@@ -2,7 +2,7 @@ import type {Plugin} from "@lodestory/sdk";
 import {workbenchKey} from "@lodestory/sdk/workbench";
 import {uiKey} from "@lodestory/sdk/ui";
 import {layoutKey} from "@lodestory/sdk/layout";
-import {projectSearchRequested} from "@lodestory/sdk/project-search";
+import {shortcutCommandIds, shortcutsKey} from "@lodestory/sdk/shortcuts";
 import {WorkbenchToolbar, ToolbarRecovery} from "./WorkbenchToolbar";
 import {workbenchToolbarId} from "./workbenchToolbarIds";
 import {createWorkbenchToolbarModel, type WorkbenchToolbarModel} from "./workbenchToolbarModel";
@@ -14,12 +14,13 @@ export function createWorkbenchToolbarPlugin(): Plugin {
   let removeParticipant: (() => Promise<void>) | undefined;
   return {
     id: "workbench-toolbar",
-    requires: [workbenchKey, uiKey, layoutKey],
+    requires: [workbenchKey, uiKey, layoutKey, shortcutsKey],
     provides: [],
     activate(context) {
       const workbench = context.get(workbenchKey);
       const ui = context.get(uiKey);
       const layout = context.get(layoutKey);
+      const shortcuts = context.get(shortcutsKey);
       removeParticipant = workbench.registerParticipant({
         id: "workbench-toolbar",
         label: "工具栏",
@@ -38,8 +39,8 @@ export function createWorkbenchToolbarPlugin(): Plugin {
         id: workbenchToolbarId,
         title: "工作台工具栏",
         role: "actions",
-        render: ({active}) => <WorkbenchToolbar workbench={workbench} layout={layout} models={models} active={active}
-          onSearch={sessionId => { void context.emit(projectSearchRequested, {sessionId}).catch(error => console.error("Could not open project search.", error)); }}/>,
+        render: ({active}) => <WorkbenchToolbar workbench={workbench} layout={layout} models={models} active={active} shortcuts={shortcuts}
+          onSearch={sessionId => { void shortcuts.execute(shortcutCommandIds.projectSearch, {sessionId}).catch(error => console.error("Could not open project search.", error)); }}/>,
       }));
       removeViews.push(ui.addWrapper({
         id: "workbench-toolbar.recovery",

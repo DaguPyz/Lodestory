@@ -2,7 +2,8 @@ import {useEffect, useId, useRef, useState, useSyncExternalStore} from "react";
 import {Menu} from "@base-ui/react/menu";
 import type {LayoutService} from "@lodestory/sdk/layout";
 import type {WorkbenchService} from "@lodestory/sdk/workbench";
-import {BrandLogo, Button, IconButton, Icon} from "@lodestory/ui";
+import {shortcutCommandIds, type ShortcutsService} from "@lodestory/sdk/shortcuts";
+import {BrandLogo, Button, IconButton, Icon, useInteractionRef} from "@lodestory/ui";
 import {useContextMenus} from "../context-menu";
 import type {ToolbarSnapshot, WorkbenchToolbarModel} from "./workbenchToolbarModel";
 import {workbenchToolbarId} from "./workbenchToolbarIds";
@@ -20,23 +21,25 @@ const pendingSnapshot: ToolbarSnapshot = Object.freeze({focusMode: false, restor
 const getPendingSnapshot = () => pendingSnapshot;
 const subscribePending = () => () => {};
 
-export function WorkbenchToolbar({workbench, layout, models, onSearch, active}: ToolbarServices & {active: boolean; onSearch(sessionId: string): void}) {
+export function WorkbenchToolbar({workbench, layout, models, onSearch, active, shortcuts}: ToolbarServices & {active: boolean; onSearch(sessionId: string): void; shortcuts: ShortcutsService}) {
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
+  useSyncExternalStore(shortcuts.subscribe, shortcuts.getSnapshot, shortcuts.getSnapshot);
   const session = state.session;
   const model = session ? models.get(session.id) : undefined;
   // Project identity is available before this plugin's session participant starts.
   // Keep the same toolbar visible throughout loading; only enable a ready session's actions.
   return session ? <ToolbarView key={session.id} model={model} layout={layout}
-    projectName={session.project.name} onSearch={() => onSearch(session.id)}
+    projectName={session.project.name} onSearch={() => onSearch(session.id)} searchShortcut={shortcuts.getShortcut(shortcutCommandIds.projectSearch)}
     enabled={Boolean(model) && active && state.active && !state.busy && !state.loading}/> : null;
 }
 
-function ToolbarView({model, layout, projectName, enabled, onSearch}: {
+function ToolbarView({model, layout, projectName, enabled, onSearch, searchShortcut}: {
   model?: WorkbenchToolbarModel;
   layout: LayoutService;
   projectName: string;
   enabled: boolean;
   onSearch(): void;
+  searchShortcut?: string;
 }) {
   const {focusMode} = useSyncExternalStore(model?.subscribe ?? subscribePending,
     model?.getSnapshot ?? getPendingSnapshot, model?.getSnapshot ?? getPendingSnapshot);
@@ -128,6 +131,8 @@ function ToolbarView({model, layout, projectName, enabled, onSearch}: {
 
   const projectOpen = enabled && openMenu === projectOwner;
   const contentOpen = enabled && openMenu === contentOwner;
+  const projectPopupRef = useInteractionRef(projectOpen, "menu");
+  const contentPopupRef = useInteractionRef(contentOpen, "menu");
   const menuIsImmediate = (owner: string) => !enabled || instantCloseOwners.has(owner);
 
   return <div className="workbench-toolbar" role="toolbar" aria-label="工作台工具栏" ref={toolbar}>
@@ -141,7 +146,7 @@ function ToolbarView({model, layout, projectName, enabled, onSearch}: {
         </Menu.Trigger>
         <Menu.Portal className="toolbar-menu-portal" data-ui-density={menuDensity}>
           <Menu.Positioner className="toolbar-menu-positioner" side="bottom" align="start" sideOffset={4} collisionPadding={8}>
-            <Menu.Popup className="toolbar-menu-popup" aria-label={`${projectName}项目菜单`}
+            <Menu.Popup ref={projectPopupRef} className="toolbar-menu-popup" aria-label={`${projectName}项目菜单`}
               data-toolbar-menu-instant={menuIsImmediate(projectOwner) || undefined}>
               <Menu.Item nativeButton={true} render={<Button variant="ghost" data-toolbar-menu-item/>} disabled={!enabled}
                 onClick={() => perform(model?.leaveProject)}>返回欢迎页</Menu.Item>
@@ -152,7 +157,7 @@ function ToolbarView({model, layout, projectName, enabled, onSearch}: {
         </Menu.Portal>
       </Menu.Root>
       <div className="toolbar-common-actions">
-        <IconButton label="搜索项目" disabled={!enabled} onClick={() => perform(onSearch)}><Icon name="search"/></IconButton>
+        <IconButton label="搜索项目" tooltip={searchShortcut ? `搜索项目 (${searchShortcut})` : undefined} disabled={!enabled} onClick={() => perform(onSearch)}><Icon name="search"/></IconButton>
         <IconButton label="设置" disabled={!enabled} onClick={() => perform(model?.openSettings)}><Icon name="settings"/></IconButton>
       </div>
     </div>
@@ -178,7 +183,7 @@ function ToolbarView({model, layout, projectName, enabled, onSearch}: {
         </Menu.Trigger>
         <Menu.Portal className="toolbar-menu-portal" data-ui-density={menuDensity}>
           <Menu.Positioner className="toolbar-menu-positioner" side="bottom" align="end" sideOffset={4} collisionPadding={8}>
-            <Menu.Popup className="toolbar-menu-popup" aria-label="显示或隐藏内容"
+            <Menu.Popup ref={contentPopupRef} className="toolbar-menu-popup" aria-label="显示或隐藏内容"
               data-toolbar-menu-instant={menuIsImmediate(contentOwner) || undefined}>
               {snapshot.contents.filter(entry => entry.id !== workbenchToolbarId).map(entry => <Menu.Item key={entry.id}
                 nativeButton={true} render={<Button variant="ghost" data-toolbar-menu-item/>} disabled={!enabled} closeOnClick={false}

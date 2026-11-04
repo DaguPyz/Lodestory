@@ -5,6 +5,7 @@ import {layoutKey} from "@lodestory/sdk/layout";
 import {themeKey} from "@lodestory/sdk/theme";
 import {errorUiKey} from "@lodestory/sdk/error";
 import {windowShellKey} from "@lodestory/sdk/window-shell";
+import {shortcutsKey, shortcutScopeIds} from "@lodestory/sdk/shortcuts";
 import {isTauri} from "@tauri-apps/api/core";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 import {flushSync} from "react-dom";
@@ -19,7 +20,7 @@ export function createWorkbenchPlugin(): Plugin {
   let cleanup: (() => Promise<void>) | undefined;
   return {
     id: "workbench",
-    requires: [uiKey, layoutKey, themeKey, errorUiKey, windowShellKey],
+    requires: [uiKey, layoutKey, themeKey, errorUiKey, windowShellKey, shortcutsKey],
     provides: [workbenchKey],
     activate(context) {
       const ui = context.get(uiKey);
@@ -31,6 +32,7 @@ export function createWorkbenchPlugin(): Plugin {
       let removeWrapper: (() => void) | undefined;
       let removeCloseListener: (() => void) | undefined;
       let removeStatus: (() => void) | undefined;
+      let removeShortcutScope: (() => void) | undefined;
       let alive = true;
       const store = createWorkbenchStore(ui, {
         editorPage: appPages.editor, welcomePage: appPages.welcome,
@@ -40,13 +42,20 @@ export function createWorkbenchPlugin(): Plugin {
       cleanup = async () => {
         alive = false;
         const errors: unknown[] = [];
-        for (const remove of [removeCloseListener, removePage, removeStatus, removeGuard, removeWrapper]) {
+        for (const remove of [removeCloseListener, removePage, removeShortcutScope, removeStatus, removeGuard, removeWrapper]) {
           try { remove?.(); } catch (error) { errors.push(error); }
         }
         try { await store.dispose(); } catch (error) { errors.push(error); }
         if (errors.length) throw Object.assign(new Error("Workbench failed to stop."), {errors});
       };
       context.provide(workbenchKey, store.service);
+      removeShortcutScope = context.get(shortcutsKey).registerScope({
+        id: shortcutScopeIds.workbench, parentId: shortcutScopeIds.application,
+        active() {
+          const state = store.service.getSnapshot();
+          return alive && !!state.session && state.active && !state.busy && !state.loading;
+        },
+      });
       removeStatus = layout.registerContent({
         id: "workbench.loading", title: "项目加载进度", role: "status", order: 100,
         render: () => <WorkbenchLoadingStatus workbench={store.service}/>,

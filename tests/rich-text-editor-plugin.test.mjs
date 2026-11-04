@@ -19,6 +19,8 @@ test("rich text editor instances register independently and revoke only their ow
     },
   });
   const {bodyEditorKey} = fixture.requireSdk("@lodestory/sdk/body-editor");
+  const {uiInteractionKey} = fixture.requireSdk("@lodestory/sdk/ui");
+  const interaction = {wrap: children => children, hasActiveOverlay: () => false};
   const format = fixture.loadModule("plugins/rich-text-editor/richDeltaFormat.ts");
   const {createRichTextEditorPlugin} = fixture.loadModule("plugins/rich-text-editor/richTextEditorPlugin.ts");
 
@@ -42,6 +44,7 @@ test("rich text editor instances register independently and revoke only their ow
   function context(service) {
     return {get(key) {
       if (key === bodyEditorKey) return service;
+      if (key === uiInteractionKey) return interaction;
       assert.fail(`unexpected capability ${key.id}`);
     }};
   }
@@ -59,7 +62,7 @@ test("rich text editor instances register independently and revoke only their ow
   const editorB = serviceB.editors.get("quill");
   assert.ok(editorA);
   assert.ok(editorB);
-  assert.deepEqual(Array.from(pluginB.requires), [bodyEditorKey]);
+  assert.deepEqual(Array.from(pluginB.requires), [bodyEditorKey, uiInteractionKey]);
   assert.deepEqual(Array.from(editorB.formats), ["rich-delta"]);
   assert.equal(editorB.scrollMode, "editor", "Quill owns the body viewport so its toolbar can remain fixed");
   assert.equal(typeof editorB.load, "function");

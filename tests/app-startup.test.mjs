@@ -94,7 +94,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "theme", "builtin-themes", "context-menu", "window-shell", "navigation-layout", "default-layout", "workbench", "project-search", "project-storage", "documents", "project-management", "canvas", "timeline", "outline-design", "asset-management", "body-editor", "plain-text-editor", "markdown-editor", "rich-text-editor", "document-search", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "ui", "ui-interaction", "shortcuts", "theme", "builtin-themes", "context-menu", "window-shell", "navigation-layout", "default-layout", "workbench", "project-search", "project-storage", "documents", "project-management", "canvas", "timeline", "outline-design", "asset-management", "body-editor", "plain-text-editor", "markdown-editor", "rich-text-editor", "document-search", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings"]);
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "./MarkdownEditor"), false,
   "application startup does not import the Milkdown component");
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier.startsWith("@milkdown/")), false,
@@ -198,7 +198,13 @@ test("the entry delegates UI composition and page registration to the plugin cat
   assert.equal(tree.type, fixture.React.StrictMode);
   const errorUi = tree.props.children;
   assert.equal(errorUi.type, fixture.components.ErrorBoundary);
-  const contextMenu = errorUi.props.children;
+  const ui = fixture.getService(fixture.requireSdk("@lodestory/sdk/ui").uiKey);
+  const interactionProvider = errorUi.props.children;
+  assert.equal(interactionProvider.type.name, "InteractionProvider");
+  const shortcuts = interactionProvider.props.children;
+  assert.equal(shortcuts.type.name, "ShortcutListener");
+  assert.equal(shortcuts.props.hasActiveOverlay, fixture.getService(fixture.requireSdk("@lodestory/sdk/ui").uiInteractionKey).hasActiveOverlay);
+  const contextMenu = shortcuts.props.children;
   assert.equal(contextMenu.type, fixture.components.ContextMenuProvider);
   const themeProvider = contextMenu.props.children;
   assert.equal(themeProvider.type, fixture.components.ThemeProvider);
@@ -355,7 +361,7 @@ test("the entry waits for native theme setup before the plugin catalog renders",
   assert.equal(renderedTree(fixture).type, fixture.React.StrictMode);
 });
 
-test("browser startup remains asynchronous and retains both UI wrappers", async () => {
+test("browser startup remains asynchronous and retains shortcut, menu, and theme UI wrappers", async () => {
   const fixture = createMainFixture({ tauri: false });
 
   fixture.start();
@@ -367,8 +373,12 @@ test("browser startup remains asynchronous and retains both UI wrappers", async 
   const tree = renderedTree(fixture);
   assert.equal(tree.type, fixture.React.StrictMode);
   assert.equal(tree.props.children.type, fixture.components.ErrorBoundary);
-  assert.equal(tree.props.children.props.children.type, fixture.components.ContextMenuProvider);
-  assert.equal(tree.props.children.props.children.props.children.type, fixture.components.ThemeProvider);
+  const interactionProvider = tree.props.children.props.children;
+  assert.equal(interactionProvider.type.name, "InteractionProvider");
+  const shortcuts = interactionProvider.props.children;
+  assert.equal(shortcuts.type.name, "ShortcutListener");
+  assert.equal(shortcuts.props.children.type, fixture.components.ContextMenuProvider);
+  assert.equal(shortcuts.props.children.props.children.type, fixture.components.ThemeProvider);
 });
 
 test("theme startup errors remain recoverable and the app still renders", async () => {

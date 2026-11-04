@@ -1,6 +1,7 @@
 import {useEffect, useLayoutEffect, useRef, useState} from "react";
 import Quill from "quill";
 import type {EditorFormat, EditorProps} from "@lodestory/sdk/body-editor";
+import type {UiInteractionService} from "@lodestory/sdk/ui";
 import {createRichTextEditorSession, type RichTextEditorDriver} from "./createRichTextEditorSession";
 import {createRichDeltaFromPlainText, parseRichDeltaEnvelope, serializeRichDelta, type RichDeltaOperation} from "./richDeltaFormat";
 import {createPlainTextPasteDelta} from "./plainTextPaste";
@@ -9,7 +10,7 @@ import {createQuillSelectControls, type QuillSelectControls} from "./quillSelect
 import "./rich-text-editor.css";
 
 type Session = ReturnType<typeof createRichTextEditorSession>;
-type RichTextEditorProps = EditorProps & {loadFontFamilies: () => Promise<readonly string[]>};
+type RichTextEditorProps = EditorProps & {loadFontFamilies: () => Promise<readonly string[]>; interaction: UiInteractionService};
 type QuillEditorDriver = RichTextEditorDriver & {
   setFontFamilies(families: readonly string[]): void;
 };
@@ -95,7 +96,7 @@ export default function RichTextEditor(props: RichTextEditorProps) {
         throw new Error("Quill 编辑器不支持该文档格式。");
       }
       const initial = current.current;
-      driver = createQuillDriver(editorRoot, initial.content, initial.format);
+      driver = createQuillDriver(editorRoot, initial.content, initial.format, initial.interaction);
       driver.setFontFamilies(fontFamilies.current);
       activeDriver.current = driver;
       instance = createRichTextEditorSession(driver, {
@@ -188,7 +189,8 @@ export default function RichTextEditor(props: RichTextEditorProps) {
   </div>;
 }
 
-function createQuillDriver(root: HTMLElement, initialContent: string, format: EditorFormat): QuillEditorDriver {
+function createQuillDriver(root: HTMLElement, initialContent: string, format: EditorFormat,
+  interaction: UiInteractionService): QuillEditorDriver {
   let quill: Quill | undefined;
   let notify: (() => void) | undefined;
   let changeHandler: ((delta: unknown, oldDelta: unknown, source: string) => void) | undefined;
@@ -256,7 +258,7 @@ function createQuillDriver(root: HTMLElement, initialContent: string, format: Ed
         if (format === "rich-delta") {
           const toolbar = getToolbarContainer(instance);
           if (toolbar) {
-            selectControls = createQuillSelectControls(instance, toolbar);
+            selectControls = createQuillSelectControls(instance, toolbar, interaction.wrap);
             selectControls.setFamilies(families);
             selectControls.setReadOnly(readOnly);
             prepareToolbar(toolbar);

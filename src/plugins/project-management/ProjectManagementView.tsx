@@ -1,5 +1,6 @@
 import {useLayoutEffect, useState, useSyncExternalStore} from "react";
 import type {WorkbenchService} from "@lodestory/sdk/workbench";
+import {shortcutCommandIds, type ShortcutsService} from "@lodestory/sdk/shortcuts";
 import type {ProjectManagementModel} from "./projectManagementModel";
 import {NewDocumentDialog} from "./NewDocumentDialog";
 import {DeleteDocumentDialog} from "./DeleteDocumentDialog";
@@ -16,15 +17,16 @@ function useWorkbench(workbench: WorkbenchService) {
   return useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
 }
 
-function ProjectFilesForSession({workbench, model, active}: {
+function ProjectFilesForSession({workbench, model, active, shortcuts}: {
   workbench: WorkbenchService;
   model: ProjectManagementModel;
   active: boolean;
+  shortcuts: ShortcutsService;
 }) {
   const workbenchState = useWorkbench(workbench);
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const canInteract = active && workbenchState.active && !workbenchState.busy && !snapshot.blocked;
-  return <ProjectTree
+  return <ProjectTree shortcuts={shortcuts}
     projectName={snapshot.projectName}
     entries={snapshot.entries}
     activeDocumentPath={snapshot.activeDocumentPath}
@@ -37,21 +39,23 @@ function ProjectFilesForSession({workbench, model, active}: {
     lastRename={snapshot.lastRename}
     onOpenDocument={path => model.openDocument(path)}
     onSelectFolder={path => { model.selectFolder(path); }}
-    onNewDocument={(parentPath, extension) => { model.requestCreate(parentPath, extension); }}
+    onNewDocument={(parentPath, extension) => { void shortcuts.execute(shortcutCommandIds.newDocument,
+      {sessionId: snapshot.sessionId, parentPath, extension}).catch(error => console.error("Could not execute new-document command.", error)); }}
     onNewDirectory={parentPath => { model.requestCreateDirectory(parentPath); }}
     onDeleteDocument={path => { model.requestDelete(path); }}
-    onRename={path => { model.requestRename(path); }}
+    onRename={path => { void shortcuts.execute(shortcutCommandIds.renameEntry, {sessionId: snapshot.sessionId, path})
+      .catch(error => console.error("Could not execute rename command.", error)); }}
     onReload={() => { void model.refresh(); }}
   />;
 }
 
 /** Registered as the project's navigation content; layout owns its placement. */
-export function ProjectFiles({workbench, models, active}: ProjectManagementViewsProps & {active: boolean}) {
+export function ProjectFiles({workbench, models, shortcuts, active}: ProjectManagementViewsProps & {shortcuts: ShortcutsService; active: boolean}) {
   const workbenchState = useWorkbench(workbench);
   const session = workbenchState.session;
   const model = session ? models.get(session.id) : undefined;
   if (!session || !model) return null;
-  return <ProjectFilesForSession key={session.id} workbench={workbench} model={model} active={active} />;
+  return <ProjectFilesForSession key={session.id} workbench={workbench} model={model} active={active} shortcuts={shortcuts} />;
 }
 
 function ProjectDialogsForSession({workbench, model}: {workbench: WorkbenchService; model: ProjectManagementModel}) {

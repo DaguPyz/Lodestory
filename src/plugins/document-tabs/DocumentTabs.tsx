@@ -13,9 +13,11 @@ type DocumentTabsProps = {
   onNewDocument: () => void;
   newDisabled: boolean;
   disabled?: boolean;
+  closeShortcut?: string;
+  newShortcut?: string;
 };
 
-export function DocumentTabs({documents, activeDocument, onSelect, onClose, onCloseMany, onSave, onNewDocument, newDisabled, disabled = false}: DocumentTabsProps) {
+export function DocumentTabs({documents, activeDocument, onSelect, onClose, onCloseMany, onSave, onNewDocument, newDisabled, disabled = false, closeShortcut, newShortcut}: DocumentTabsProps) {
   if (documents.length === 0) return null;
 
   function closeDocuments(id: string, scope: "all" | "others" | "left" | "right") {
@@ -30,7 +32,7 @@ export function DocumentTabs({documents, activeDocument, onSelect, onClose, onCl
 
   return (
     <ContextMenuRegion label="文稿标签栏操作" items={[
-      {id: "new-document", label: "新建文档", icon: <Icon name="plus"/>, disabled: newDisabled, restoreFocus: false,
+      {id: "new-document", label: "新建文档", shortcut: newShortcut, icon: <Icon name="plus"/>, disabled: newDisabled, restoreFocus: false,
         onSelect: () => { if (!newDisabled) onNewDocument(); }},
     ]}>
       <ScrollArea.Root className="document-tabs-shell">
@@ -42,6 +44,7 @@ export function DocumentTabs({documents, activeDocument, onSelect, onClose, onCl
             {id: "save", label: "保存", disabled: disabled || document.saveState === "saving",
               onSelect: id => { if (!disabled && documents.some(record => record.id === id)) return onSave(id); }},
             {id: "close", label: "关闭", icon: <Icon name="close"/>, restoreFocus: false, disabled,
+              shortcut: document.id === activeDocument ? closeShortcut : undefined,
               onSelect: id => { if (!disabled && documents.some(record => record.id === id)) return onClose(id); }},
             {id: "batch-close-separator", type: "separator"},
             {id: "close-all", label: "关闭全部", restoreFocus: false, disabled,

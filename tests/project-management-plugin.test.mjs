@@ -10,6 +10,7 @@ function setup({wrapperError, invokeHandler} = {}) {
   const {layoutKey} = sdk("@lodestory/sdk/layout");
   const {uiKey} = sdk("@lodestory/sdk/ui");
   const {projectSearchKey} = sdk("@lodestory/sdk/project-search");
+  const {shortcutsKey, shortcutCommandIds, shortcutScopeIds} = sdk("@lodestory/sdk/shortcuts");
   const session = {id: "project-session", project: {id: "project", name: "项目", path: "/projects/current"}};
   let workbenchSnapshot = {session, active: true, busy: false};
   const workbenchListeners = new Set();
@@ -18,6 +19,33 @@ function setup({wrapperError, invokeHandler} = {}) {
   const contributions = [];
   const wrappers = [];
   const lifecycle = [];
+  const shortcutCommands = new Map();
+  const shortcutScopes = new Map();
+  const shortcutBindings = new Map();
+  const shortcutListeners = new Set();
+  const shortcuts = {
+    registerCommand(value) { shortcutCommands.set(value.id, value); return () => shortcutCommands.delete(value.id); },
+    registerScope(value) { shortcutScopes.set(value.id, value); return () => shortcutScopes.delete(value.id); },
+    registerBinding(value) { shortcutBindings.set(value.id, value); return () => shortcutBindings.delete(value.id); },
+    async execute(id, args) {
+      const command = shortcutCommands.get(id);
+      const invocation = {source: "ui", target: null, args};
+      if (!command || command.enabled && !command.enabled(invocation)) return false;
+      await command.run(invocation);
+      return true;
+    },
+    getShortcut(id) { return [...shortcutBindings.values()].find(binding => binding.commandId === id)?.keys; },
+    getSnapshot() { return {commands: [], bindings: [], conflicts: []}; },
+    subscribe(listener) { shortcutListeners.add(listener); return () => shortcutListeners.delete(listener); },
+    async setBinding() {}, async resetBinding() {},
+    async invokeKeyboard(id, args, target = null) {
+      const command = shortcutCommands.get(id);
+      const invocation = {source: "keyboard", target, args};
+      if (!command || command.enabled && !command.enabled(invocation)) return false;
+      await command.run(invocation);
+      return true;
+    },
+  };
   let participation;
   let activeParticipation;
   const workspaceListeners = new Set();
@@ -75,6 +103,7 @@ function setup({wrapperError, invokeHandler} = {}) {
       if (key === layoutKey) return layout;
       if (key === uiKey) return ui;
       if (key === projectSearchKey) return {registerSource() { return () => {}; }};
+      if (key === shortcutsKey) return shortcuts;
       throw new Error(`Unexpected service '${key.id}'.`);
     },
     on(key, listener) {
@@ -104,6 +133,12 @@ function setup({wrapperError, invokeHandler} = {}) {
       return activeParticipation;
     },
     removedEvents,
+    shortcutBindings,
+    shortcutCommandIds,
+    shortcutCommands,
+    shortcutScopeIds,
+    shortcutScopes,
+    shortcuts,
     session,
     setWorkbench(next) {
       workbenchSnapshot = {...workbenchSnapshot, ...next};
@@ -133,13 +168,17 @@ test("project management registers its own navigation and a dialog wrapper indep
   const {layoutKey} = f.fixture.requireSdk("@lodestory/sdk/layout");
   const {uiKey} = f.fixture.requireSdk("@lodestory/sdk/ui");
   const {projectSearchKey} = f.fixture.requireSdk("@lodestory/sdk/project-search");
-  assert.deepEqual(Array.from(f.plugin.requires, key => key.id), [workbenchKey.id, documentsKey.id, layoutKey.id, uiKey.id, projectSearchKey.id]);
+  const {shortcutsKey} = f.fixture.requireSdk("@lodestory/sdk/shortcuts");
+  assert.deepEqual(Array.from(f.plugin.requires, key => key.id), [workbenchKey.id, documentsKey.id, layoutKey.id, uiKey.id, projectSearchKey.id, shortcutsKey.id]);
   assert.deepEqual(Array.from(f.plugin.provides, key => key.id), ["app/project-document-catalog"]);
   f.plugin.activate(f.context);
   assert.equal(f.contributions.length, 1);
   assert.deepEqual({id: f.contributions[0].id, role: f.contributions[0].role}, {id: "project-management.files", role: "navigation"});
   assert.equal(f.wrappers.length, 1);
   assert.equal(f.wrappers[0].id, "project-management.dialogs");
+  assert.equal(f.shortcutBindings.get("project-management.new-document").keys, "Mod+N");
+  assert.equal(f.shortcutBindings.get("project-management.new-document").allowInInput, true);
+  assert.equal(f.shortcutBindings.get("project-management.rename-entry").keys, "F2");
 
   await f.startParticipant();
   await flushStartup();
@@ -168,6 +207,46 @@ test("project management registers its own navigation and a dialog wrapper indep
   assert.equal(f.wrappers.length, 0);
   assert.equal(f.eventListeners.get(f.documentCreateRequested).size, 0);
   assert.equal(f.eventListeners.get(f.documentRevealRequested).size, 0);
+  assert.equal(f.shortcutCommands.size, 0);
+  assert.equal(f.shortcutBindings.size, 0);
+});
+
+test("new-document and rename commands validate sessions, busy operations, and tree target paths", async () => {
+  const f = setup({invokeHandler(command) {
+    if (command === "list_documents") return [{path: "notes/chapter.txt", name: "chapter.txt"}];
+    throw new Error(`Unexpected command '${command}'.`);
+  }});
+  f.plugin.activate(f.context);
+  await f.startParticipant();
+  await flushStartup();
+  const dialogTree = f.wrappers[0].wrap("pages");
+  const dialogElement = find(dialogTree, f.fixture.components.ProjectDialogs);
+  assert.ok(dialogElement);
+  dialogElement.type(dialogElement.props);
+  const model = f.fixture.projectManagementModels.get(f.session.id);
+
+  assert.equal(await f.shortcuts.invokeKeyboard(f.shortcutCommandIds.newDocument, undefined, {tagName: "INPUT"}), true,
+    "Mod+N can enter the common command without UI arguments even when an input owns focus");
+  assert.equal(model.getSnapshot().dialogOpen, true);
+  model.closeCreateDialog();
+  assert.equal(await f.shortcuts.execute(f.shortcutCommandIds.newDocument, {sessionId: "old-session"}), false,
+    "a stale new-document request cannot open a dialog in the current session");
+  assert.equal(await f.shortcuts.execute(f.shortcutCommandIds.newDocument, {sessionId: f.session.id, parentPath: "missing"}), false,
+    "new-document commands validate that the parent is still a directory");
+  f.setWorkbench({busy: true});
+  assert.equal(await f.shortcuts.invokeKeyboard(f.shortcutCommandIds.newDocument, undefined), false,
+    "new-document commands stay disabled while the workbench is busy");
+  f.setWorkbench({busy: false});
+
+  assert.equal(await f.shortcuts.execute(f.shortcutCommandIds.renameEntry, {sessionId: "old-session", path: "notes/chapter.txt"}), false,
+    "a late rename action from a previous project is ignored");
+  assert.equal(await f.shortcuts.execute(f.shortcutCommandIds.renameEntry, {sessionId: f.session.id, path: "missing.txt"}), false,
+    "rename commands validate that the target still exists");
+  assert.equal(await f.shortcuts.invokeKeyboard(f.shortcutCommandIds.renameEntry,
+    {sessionId: f.session.id, path: "notes/chapter.txt"}), true, "F2 uses the same session-checked rename command");
+  assert.equal(model.getSnapshot().renamePath, "notes/chapter.txt");
+
+  await f.plugin.deactivate();
 });
 
 test("partial activation failure removes the event listeners, participant, and layout contribution", async () => {

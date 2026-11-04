@@ -19,7 +19,7 @@ test("the UI package exposes its components, React peer, declaration build, and 
   assert.equal(manifest.peerDependencies["react-dom"], "^19.1.0");
   assert.ok(manifest.dependencies["@base-ui/react"], "Base UI is declared by the package that wraps it");
   assert.equal(manifest.exports["./styles.css"], "./styles.css");
-  assert.deepEqual(Object.keys(ui).sort(), ["BrandLogo", "Button", "Dialog", "DialogActions", "DialogClose", "Icon", "IconButton", "SearchField", "Select", "TextField", "Textarea"]);
+  assert.deepEqual(Object.keys(ui).sort(), ["BrandLogo", "Button", "Dialog", "DialogActions", "DialogClose", "Icon", "IconButton", "InteractionProvider", "SearchField", "Select", "TextField", "Textarea", "useInteractionRef"]);
   assert.match(declarations, /ButtonProps/);
   assert.match(declarations, /DialogProps/);
   assert.match(declarations, /DialogActionsProps/);

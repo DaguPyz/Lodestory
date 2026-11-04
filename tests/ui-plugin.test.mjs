@@ -224,6 +224,37 @@ test("a missing default #root fails EngineCore startup before createRoot and rol
   assert.equal(f.core.isMounted("page-contributor"), false);
 });
 
+test("overlay registrations stay local to each UI and release independently", async () => {
+  const first = uiPluginFixture();
+  const second = uiPluginFixture();
+  const {service: ui} = await first.mountUi();
+  const {service: otherUi} = await second.mountUi();
+  const popup = () => ({
+    isConnected: true,
+    closest: () => null,
+    getClientRects: () => [{}],
+    ownerDocument: {defaultView: {getComputedStyle: () => ({visibility: "visible"})}},
+  });
+  const dialog = popup();
+  const closeDialog = ui.registerOverlay(dialog);
+  const closeSelect = ui.registerOverlay(popup());
+  assert.equal(otherUi.hasActiveOverlay(), false);
+  closeSelect();
+  closeSelect();
+  assert.equal(ui.hasActiveOverlay(), true, "closing the inner overlay keeps the dialog active");
+  dialog.closest = () => dialog;
+  assert.equal(ui.hasActiveOverlay(), false, "a hidden or inert ancestor suspends the surface");
+  dialog.closest = () => null;
+  dialog.isConnected = false;
+  assert.equal(ui.hasActiveOverlay(), false);
+  dialog.isConnected = true;
+  assert.equal(ui.hasActiveOverlay(), true);
+  closeDialog();
+  assert.equal(ui.hasActiveOverlay(), false);
+  await first.core.unmount("ui");
+  await second.core.unmount("ui");
+});
+
 test("page registration validates descriptors and wrappers remain unique", async () => {
   const f = uiPluginFixture();
   const { service } = await f.mountUi();
@@ -990,8 +1021,9 @@ test("wrappers surround the real UiPages tree and ThemeProvider receives its reg
   const strictTree = f.roots[0].renderCalls[0];
   assert.equal(strictTree.type, f.React.StrictMode);
   assert.equal(strictTree.props.children.type, errorService.ErrorBoundary);
-  assert.equal(strictTree.props.children.props.children.type, "div");
-  assert.equal(strictTree.props.children.props.children.props["data-ui-wrapper"], "first");
+  const firstWrapper = strictTree.props.children.props.children;
+  assert.equal(firstWrapper.type, "div");
+  assert.equal(firstWrapper.props["data-ui-wrapper"], "first");
   const markup = f.renderToStaticMarkup(strictTree);
   assert.match(markup, /data-ui-wrapper="first"/);
   assert.match(markup, /data-ui-wrapper="second"/);

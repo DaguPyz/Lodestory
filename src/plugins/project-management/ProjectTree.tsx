@@ -1,9 +1,11 @@
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { Button, IconButton, Icon } from "@lodestory/ui";
+import {shortcutCommandIds, shortcutScopeIds, type ShortcutsService} from "@lodestory/sdk/shortcuts";
 import type { DocumentExtension, ProjectTreeEntry } from "./projectManagementModel";
 import { ContextMenuRegion, type MenuEntry } from "../context-menu";
 
 type ProjectTreeProps = {
+  shortcuts: ShortcutsService;
   projectName: string;
   entries: readonly ProjectTreeEntry[];
   activeDocumentPath: string | null;
@@ -25,10 +27,10 @@ type ProjectTreeProps = {
 
 function creationItems(contextPath: string, disabled: boolean,
   onNewDocument: ProjectTreeProps["onNewDocument"], onNewDirectory: ProjectTreeProps["onNewDirectory"],
-  parentPath = contextPath): MenuEntry<string>[] {
+  parentPath = contextPath, newDocumentShortcut?: string): MenuEntry<string>[] {
   const formats: readonly [DocumentExtension, string][] = [["txt", "TXT"], ["md", "Markdown"], ["lode", "富文本"]];
   return [
-    {id: "new-document", label: "新建文档", icon: <Icon name="plus" />, disabled, restoreFocus: false,
+    {id: "new-document", label: "新建文档", shortcut: newDocumentShortcut, icon: <Icon name="plus" />, disabled, restoreFocus: false,
       onSelect: path => { if (!disabled && path === contextPath) onNewDocument(parentPath); }},
     ...formats.map(([extension, label]) => ({
       id: `new-document-${extension}`, label: `新建 ${label} 文档`, icon: <Icon name="file" />, disabled, restoreFocus: false,
@@ -40,11 +42,13 @@ function creationItems(contextPath: string, disabled: boolean,
 }
 
 function TreeNode({
-  node, depth, activeDocumentPath, openingPath, expanded, onToggleFolder, onOpenDocument, onNewDocument, onNewDirectory, onDeleteDocument, newDisabled, loading, deletingPath,
+  node, depth, renameShortcut, newDocumentShortcut, activeDocumentPath, openingPath, expanded, onToggleFolder, onOpenDocument, onNewDocument, onNewDirectory, onDeleteDocument, newDisabled, loading, deletingPath,
   onRename,
 }: {
   node: ProjectTreeEntry;
   depth: number;
+  renameShortcut?: string;
+  newDocumentShortcut?: string;
   activeDocumentPath: string | null;
   openingPath: string | null;
   expanded: Set<string>;
@@ -64,14 +68,15 @@ function TreeNode({
     return (
       <li>
         <ContextMenuRegion context={node.path} label={`${node.name}目录操作`} items={[
-          ...creationItems(node.path, newDisabled, onNewDocument, onNewDirectory),
+          ...creationItems(node.path, newDisabled, onNewDocument, onNewDirectory, node.path, newDocumentShortcut),
           {type: "separator", id: "folder-actions-separator"},
-          {id: "rename-folder", label: "重命名文件夹", visible: path => !!path, disabled: newDisabled || loading || !!openingPath,
+          {id: "rename-folder", label: "重命名文件夹", shortcut: renameShortcut, visible: path => !!path, disabled: newDisabled || loading || !!openingPath,
             restoreFocus: false, onSelect: path => { if (!newDisabled && !loading && !openingPath && node.path === path) onRename(path); }},
           { id: "toggle", label: expanded.has(node.path) ? "折叠" : "展开", disabled: loading,
             onSelect: (path) => { if (!loading && node.path === path) onToggleFolder(path); } },
         ]}>
           <button type="button" className="file-tree-entry file-tree-folder-toggle" style={indentation} title={node.name}
+            data-project-tree-path={node.path}
             disabled={loading}
             aria-expanded={expanded.has(node.path)} onClick={() => onToggleFolder(node.path)}>
             <Icon name={expanded.has(node.path) ? "chevronDown" : "chevronRight"} size="small" />
@@ -83,6 +88,8 @@ function TreeNode({
           {node.children.length > 0 ? node.children.map((child) => (
             <TreeNode
               key={child.path} node={child} depth={depth + 1} expanded={expanded} onToggleFolder={onToggleFolder}
+              renameShortcut={renameShortcut}
+              newDocumentShortcut={newDocumentShortcut}
               activeDocumentPath={activeDocumentPath} openingPath={openingPath} onOpenDocument={onOpenDocument}
               onNewDocument={onNewDocument} onNewDirectory={onNewDirectory} onDeleteDocument={onDeleteDocument}
               onRename={onRename} newDisabled={newDisabled} loading={loading} deletingPath={deletingPath}
@@ -101,8 +108,8 @@ function TreeNode({
       <ContextMenuRegion context={node.path} label={`${node.name}文档操作`} items={[
         { id: "open", label: "打开文档", icon: <Icon name="file" />, disabled: loading || deleting || openingPath === node.path, restoreFocus: false,
           onSelect: (path) => { if (!loading && !deleting && openingPath !== path && node.path === path) return onOpenDocument(path); } },
-        ...creationItems(node.path, newDisabled || deleting || loading, onNewDocument, onNewDirectory, parentPath),
-        {id: "rename-file", label: "重命名文件", disabled: newDisabled || deleting || loading || !!openingPath,
+        ...creationItems(node.path, newDisabled || deleting || loading, onNewDocument, onNewDirectory, parentPath, newDocumentShortcut),
+        {id: "rename-file", label: "重命名文件", shortcut: renameShortcut, disabled: newDisabled || deleting || loading || !!openingPath,
           restoreFocus: false, onSelect: path => { if (!newDisabled && !deleting && !loading && !openingPath && node.path === path) onRename(path); }},
         {type: "separator", id: "file-actions-separator"},
         {id: "delete-document", label: "删除文档", disabled: newDisabled || deleting || loading || openingPath === node.path, restoreFocus: false,
@@ -110,6 +117,7 @@ function TreeNode({
       ]}>
         <button
           className="file-tree-entry file-tree-document"
+          data-project-tree-path={node.path}
           style={indentation}
           type="button"
           disabled={loading || deleting}
@@ -127,10 +135,26 @@ function TreeNode({
   );
 }
 
-export function ProjectTree({ projectName, entries, activeDocumentPath, openingPath, loading, error, active, newDisabled, deletingPath,
+export function ProjectTree({ shortcuts, projectName, entries, activeDocumentPath, openingPath, loading, error, active, newDisabled, deletingPath,
   lastRename, onOpenDocument, onSelectFolder, onNewDocument, onNewDirectory, onDeleteDocument, onRename, onReload }: ProjectTreeProps) {
   const [expanded, setExpanded] = useState(() => new Set([""]));
+  const tree = useRef<HTMLElement>(null);
+  const activeRef = useRef(active);
+  activeRef.current = active;
   const canInteract = active && !loading;
+  useSyncExternalStore(shortcuts.subscribe, shortcuts.getSnapshot, shortcuts.getSnapshot);
+  const renameShortcut = shortcuts.getShortcut(shortcutCommandIds.renameEntry);
+  const newDocumentShortcut = shortcuts.getShortcut(shortcutCommandIds.newDocument);
+
+  useEffect(() => shortcuts.registerScope({
+    id: shortcutScopeIds.projectTree,
+    parentId: shortcutScopeIds.workbench,
+    active: () => activeRef.current,
+    contains(target) {
+      const node = target instanceof Node ? target : null;
+      return !!node && !!tree.current?.contains(node);
+    },
+  }), [shortcuts]);
 
   useEffect(() => {
     if (!activeDocumentPath) return;
@@ -170,13 +194,16 @@ export function ProjectTree({ projectName, entries, activeDocumentPath, openingP
     >
       <div className="project-management-panel-header">
         <div className="project-management-panel-actions">
-          <IconButton id="project-management-new-document" label="新建文档" disabled={!canInteract || newDisabled} onClick={() => onNewDocument()}><Icon name="plus" /></IconButton>
+          <IconButton id="project-management-new-document" label="新建文档"
+            tooltip={newDocumentShortcut ? `新建文档 · ${newDocumentShortcut}` : undefined}
+            disabled={!canInteract || newDisabled} onClick={() => onNewDocument()}><Icon name="plus" /></IconButton>
           <IconButton label="更多项目操作" disabled><Icon name="more" /></IconButton>
         </div>
       </div>
       <ContextMenuRegion context="" label="文件目录树操作" disabled={!active}
-        items={creationItems("", newDisabled || !canInteract, onNewDocument, newDirectory)}>
-        <nav className="file-tree-scroll" aria-label="文件目录树" aria-busy={loading} tabIndex={0}>
+        items={creationItems("", newDisabled || !canInteract, onNewDocument, newDirectory, "", newDocumentShortcut)}>
+        <nav ref={tree} className="file-tree-scroll" aria-label="文件目录树" aria-busy={loading} tabIndex={0}
+          data-shortcut-scope={shortcutScopeIds.projectTree}>
           {loading && <p className="file-tree-message" role="status">正在读取文档…</p>}
           {error && <div className="file-tree-message" role="alert">
             <p className="project-error">{error}</p>
@@ -186,6 +213,8 @@ export function ProjectTree({ projectName, entries, activeDocumentPath, openingP
             <TreeNode
               node={{ path: "", name: projectName, children: entries }}
               depth={0} expanded={expanded} onToggleFolder={toggleFolder}
+              renameShortcut={renameShortcut}
+              newDocumentShortcut={newDocumentShortcut}
               activeDocumentPath={activeDocumentPath} openingPath={openingPath}
               onOpenDocument={(path) => { if (canInteract) return onOpenDocument(path); }}
               onNewDocument={(path, extension) => { if (canInteract && !newDisabled) onNewDocument(path, extension); }}

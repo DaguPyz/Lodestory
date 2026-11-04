@@ -23,6 +23,40 @@ function createFixture() {
   const documentRevealRequested = Object.freeze({id: "app/documents/reveal-requested"});
   const workbenchKey = Object.freeze({id: "app/workbench"});
   const projectStorageKey = Object.freeze({id: "app/project-storage"});
+  const shortcutsKey = Object.freeze({id: "app/shortcuts"});
+  const shortcutCommandIds = Object.freeze({
+    saveAll: "documents.saveAll", closeDocument: "documents.close", projectSearch: "project-search.open",
+    newDocument: "project-management.newDocument", renameEntry: "project-management.rename",
+  });
+  const shortcutScopeIds = Object.freeze({application: "application", workbench: "workbench", document: "document", projectTree: "project-tree"});
+  const commands = new Map();
+  const bindings = new Map();
+  const scopes = new Map();
+  const shortcuts = {
+    registerCommand(command) {
+      if (commands.has(command.id)) throw new Error(`Duplicate command '${command.id}'.`);
+      commands.set(command.id, command);
+      return () => { if (commands.get(command.id) === command) commands.delete(command.id); };
+    },
+    registerBinding(binding) {
+      if (bindings.has(binding.id)) throw new Error(`Duplicate binding '${binding.id}'.`);
+      bindings.set(binding.id, binding);
+      return () => { if (bindings.get(binding.id) === binding) bindings.delete(binding.id); };
+    },
+    registerScope(scope) { scopes.set(scope.id, scope); return () => scopes.delete(scope.id); },
+    async execute(id, args) {
+      const command = commands.get(id);
+      const invocation = {source: "ui", target: null, args};
+      if (!command || command.enabled && !command.enabled(invocation)) return false;
+      await command.run(invocation);
+      return true;
+    },
+    getShortcut() { return undefined; },
+    getSnapshot() { return {commands: [], bindings: [], conflicts: []}; },
+    subscribe() { return () => {}; },
+    async setBinding() {},
+    async resetBinding() {},
+  };
 
   function resolveModule(fromPath, specifier) {
     const base = resolve(dirname(fromPath), specifier);
@@ -54,6 +88,7 @@ function createFixture() {
         if (specifier === "@lodestory/sdk/documents") return {documentsKey, documentRevealRequested};
         if (specifier === "@lodestory/sdk/project-storage") return {projectStorageKey};
         if (specifier === "@lodestory/sdk/workbench") return {workbenchKey};
+        if (specifier === "@lodestory/sdk/shortcuts") return {shortcutsKey, shortcutCommandIds, shortcutScopeIds};
         return load(resolveModule(path, specifier));
       },
     }, { filename: path });
@@ -196,6 +231,7 @@ function createFixture() {
     get(key) {
       if (key === workbenchKey) return workbench;
       if (key === projectStorageKey) return {getFiles: sessionId => storageFor(sessionId).files};
+      if (key === shortcutsKey) return shortcuts;
       throw new Error(`Unexpected service key: ${key.id}`);
     },
     provide(key, value) { provided.set(key, value); },
@@ -208,7 +244,8 @@ function createFixture() {
   const plugin = createDocumentsPlugin();
   return {
     controls, context, emitted, logs, participants, participationBySession, plugin, provided, encode, decode,
-    documentsKey, documentRevealRequested, workbenchKey, projectStorageKey, stores,
+    documentsKey, documentRevealRequested, workbenchKey, projectStorageKey, shortcutsKey, shortcuts,
+    shortcutCommandIds, shortcutScopeIds, commands, bindings, scopes, stores,
     setWorkbench, workbench,
     activate() { plugin.activate(context); return provided.get(documentsKey); },
     start(session) {
@@ -224,7 +261,7 @@ const projectSession = (id, path) => ({id, project: {id: `project-${id}`, name: 
 
 test("documents depends on project storage and owns one tab workspace per workbench session", async () => {
   const f = createFixture();
-  assert.deepEqual(Array.from(f.plugin.requires), [f.workbenchKey, f.projectStorageKey]);
+  assert.deepEqual(Array.from(f.plugin.requires), [f.workbenchKey, f.projectStorageKey, f.shortcutsKey]);
   assert.deepEqual(Array.from(f.plugin.provides), [f.documentsKey]);
   const documents = f.activate();
   assert.equal(documents.getWorkspace("session-a"), null);
@@ -263,6 +300,78 @@ test("documents depends on project storage and owns one tab workspace per workbe
   await secondParticipation.dispose();
   f.participationBySession.delete(secondSession.id);
   assert.equal(documents.getWorkspace(secondSession.id), null);
+  await f.plugin.deactivate();
+});
+
+test("save and close commands reject unavailable work and stale sessions", async () => {
+  const f = createFixture();
+  const documents = f.activate();
+  const firstSession = projectSession("shortcut-a", "/projects/shortcut-a");
+  const firstParticipation = f.start(firstSession);
+  f.setWorkbench({session: firstSession, busy: false, active: true});
+  const first = documents.getWorkspace(firstSession.id);
+  const firstDocument = await first.create("", "第一章");
+  assert.equal(first.update(firstDocument.id, "待保存内容"), true);
+
+  const save = f.commands.get(f.shortcutCommandIds.saveAll);
+  const close = f.commands.get(f.shortcutCommandIds.closeDocument);
+  assert.ok(save);
+  assert.ok(close);
+  assert.equal(f.bindings.get("documents.saveAll.default").keys, "Mod+S");
+  assert.equal(f.bindings.get("documents.close.default").keys, "Mod+W");
+  assert.equal(save.enabled({source: "keyboard", target: null}), true);
+  assert.equal(await f.shortcuts.execute(f.shortcutCommandIds.saveAll), true);
+  assert.equal(f.stores.get(firstSession.id).calls.some(([operation]) => operation === "save"), true);
+  assert.equal(first.getSnapshot().documents[0].saveState, "saved");
+
+  assert.equal(close.enabled({source: "keyboard", target: null}), true);
+  f.setWorkbench({session: firstSession, busy: true, active: true});
+  assert.equal(save.enabled({source: "keyboard", target: null}), false);
+  assert.equal(close.enabled({source: "keyboard", target: null}), false);
+
+  const secondSession = projectSession("shortcut-b", "/projects/shortcut-b");
+  f.setWorkbench({session: secondSession, busy: false, active: true});
+  const secondParticipation = f.start(secondSession);
+  f.setWorkbench({session: secondSession, busy: false, active: true});
+  const second = documents.getWorkspace(secondSession.id);
+  const secondDocument = await second.create("", "第二章");
+  assert.equal(second.update(secondDocument.id, "当前会话内容"), true);
+  const firstSaveCount = f.stores.get(firstSession.id).calls.filter(([operation]) => operation === "save").length;
+  assert.equal(await f.shortcuts.execute(f.shortcutCommandIds.saveAll, {sessionId: firstSession.id}), false);
+  assert.equal(await f.shortcuts.execute(f.shortcutCommandIds.closeDocument, {sessionId: firstSession.id, documentId: firstDocument.id}), false);
+  assert.equal(f.stores.get(firstSession.id).calls.filter(([operation]) => operation === "save").length, firstSaveCount);
+  assert.equal(first.getSnapshot().documents.length, 1, "a stale shortcut cannot close a previous session's document");
+  assert.equal(second.getSnapshot().documents.length, 1);
+
+  await firstParticipation.dispose();
+  await secondParticipation.dispose();
+  await f.plugin.deactivate();
+  assert.equal(f.commands.has(f.shortcutCommandIds.saveAll), false, "deactivation unregisters contributed commands");
+  assert.equal(f.bindings.has("documents.close.default"), false, "deactivation unregisters default bindings");
+});
+
+test("close shortcut keeps a document open when its save fails", async () => {
+  const f = createFixture();
+  const documents = f.activate();
+  const session = projectSession("shortcut-close", "/projects/shortcut-close");
+  const participation = f.start(session);
+  f.setWorkbench({session, busy: false, active: true});
+  const workspace = documents.getWorkspace(session.id);
+  const document = await workspace.create("", "保留内容");
+  assert.equal(workspace.update(document.id, "尚未保存"), true);
+  f.controls.failWrites = true;
+
+  assert.equal(await f.shortcuts.execute(f.shortcutCommandIds.closeDocument, {documentId: document.id}), true);
+  const retained = workspace.getSnapshot().documents[0];
+  assert.equal(retained.id, document.id);
+  assert.equal(retained.content, "尚未保存");
+  assert.equal(retained.saveState, "error");
+
+  f.controls.failWrites = false;
+  assert.equal(await f.shortcuts.execute(f.shortcutCommandIds.closeDocument, {documentId: document.id}), true);
+  assert.equal(workspace.getSnapshot().documents.length, 0);
+
+  await participation.dispose();
   await f.plugin.deactivate();
 });
 

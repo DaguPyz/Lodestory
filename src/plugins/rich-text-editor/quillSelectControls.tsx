@@ -1,5 +1,6 @@
 import {createRoot, type Root} from "react-dom/client";
 import {Icon, Select} from "@lodestory/ui";
+import type {UiInteractionService} from "@lodestory/sdk/ui";
 import type Quill from "quill";
 import {isRichFontFamily} from "./richTextFormatting";
 import {
@@ -41,7 +42,8 @@ const pickerLabels: Readonly<Record<SelectFormat, string>> = {
 const pickerOrder: readonly Exclude<SelectFormat, "font">[] = ["header", "size", "color", "background"];
 
 /** Replaces Snow's generated select pickers with the public shared Select while leaving action buttons to Quill. */
-export function createQuillSelectControls(quill: Quill, toolbar: HTMLElement): QuillSelectControls {
+export function createQuillSelectControls(quill: Quill, toolbar: HTMLElement,
+  wrap: UiInteractionService["wrap"]): QuillSelectControls {
   const entries: SelectEntry[] = [];
   const cleanups: Array<() => void> = [];
   const editorFocus: {current: HTMLElement | null} = {current: quill.root};
@@ -70,11 +72,11 @@ export function createQuillSelectControls(quill: Quill, toolbar: HTMLElement): Q
     const icon = entry.format === "color" ? "textColor" : entry.format === "background" ? "highlight" : undefined;
     entry.value = value;
     entry.disabled = disabled;
-    entry.root.render(<Select variant="toolbar" value={value} options={options} onValueChange={next => controller.apply(entry.format, next)}
-      placeholder={entry.placeholder} disabled={disabled} aria-label={entry.label}
-      iconOnly={!!icon} triggerIcon={icon && <Icon name={icon} />}
-      title={`${entry.label}：${options.find(option => option.value === value)?.label ?? entry.placeholder}`}
-      finalFocus={editorFocus} />);
+    entry.root.render(wrap(<Select variant="toolbar" value={value} options={options} onValueChange={next => controller.apply(entry.format, next)}
+        placeholder={entry.placeholder} disabled={disabled} aria-label={entry.label}
+        iconOnly={!!icon} triggerIcon={icon && <Icon name={icon} />}
+        title={`${entry.label}：${options.find(option => option.value === value)?.label ?? entry.placeholder}`}
+        finalFocus={editorFocus} />));
   }
 
   function renderAll() {

@@ -2,6 +2,7 @@ import { Select as BaseSelect } from "@base-ui/react/select";
 import { useEffect, useImperativeHandle, useRef, useState, type ComponentPropsWithRef, type ReactNode, type RefObject } from "react";
 import type { FocusSurface } from "./FocusSurface.js";
 import { Icon } from "./Icon.js";
+import {useInteractionRef} from "./Interaction.js";
 
 export type SelectOption = Readonly<{
   value: string;
@@ -43,6 +44,7 @@ export function Select({ value, options, onValueChange, variant = "field", trigg
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [density, setDensity] = useState<string>();
+  const interactionRef = useInteractionRef<HTMLDivElement>(open && !disabled, "select");
   useImperativeHandle(ref, () => trigger.current!, []);
   const selected = options.find(option => option.value === value);
 
@@ -83,7 +85,7 @@ export function Select({ value, options, onValueChange, variant = "field", trigg
       <BaseSelect.Portal>
         <BaseSelect.Positioner className="ui-select-positioner" data-ui-density={density} side="bottom" align="start"
           sideOffset={4} collisionPadding={8} alignItemWithTrigger={false}>
-          <BaseSelect.Popup className="ui-select-popup" finalFocus={finalFocus}>
+          <BaseSelect.Popup ref={interactionRef} className="ui-select-popup" finalFocus={finalFocus}>
             <BaseSelect.List className="ui-select-list">
               {options.map(option => <BaseSelect.Item key={option.value} value={option.value} disabled={option.disabled}
                 label={option.label} className="ui-select-option">

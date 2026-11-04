@@ -6,6 +6,7 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 
 - `@lodestory/sdk`：`Plugin`、`PluginContext`、能力 key 与事件 key 类型和创建函数。
 - `@lodestory/sdk/config`：JSON 配置值、配置项、配置服务类型，以及共享单例 `configKey`。
+- `@lodestory/sdk/shortcuts`：命令、默认按键、作用域及用户覆盖接口，共享 `shortcutsKey`、命令 ID 和作用域 ID；实现见[快捷键插件](../../src/plugins/shortcuts/README.md)。
 - `@lodestory/sdk/ui`：UI 服务类型与共享单例 `uiKey`。
 - `@lodestory/sdk/navigation-layout`：应用导航布局服务、页面与导航元数据类型，以及共享单例 `navigationLayoutKey`。
 - `@lodestory/sdk/window-shell`：窗口外壳属性与服务类型，以及共享单例 `windowShellKey`。
@@ -33,6 +34,10 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 存在原生输入合成状态的编辑器可提供 `EditorHandle.flushContent(currentContent?)`，同步提交已经发生的输入并返回完整持久化内容。传入的 `currentContent` 是宿主最新缓冲；格式实现应先接纳尚未通过 React 属性送达的外部替换，避免旧界面覆盖新内容。正文宿主会将该句柄通过文档工作区的可选 `registerContentReader(documentId, reader)` 接口登记；保存、切换和离开前由文档插件调用读取器并更新既有共享缓冲。读取错误会阻止对应操作，句柄失效后不能继续读取。登记返回的撤销函数只撤销自身批次，旧实例不能移除新实例的读取器。
 
 ## 生命周期与 key
+
+快捷键消费者声明 `shortcutsKey` 依赖，通过 `registerCommand` 登记自己拥有的操作，通过 `registerBinding` 登记默认组合键；按钮和菜单通过 `execute` 复用业务入口。调用方保留并在停用时撤销登记，作用域的活动状态与 DOM 范围由所属插件提供。`execute` 的布尔值表示是否接收执行，不代表保存等业务操作成功；业务结果与错误仍由原服务管理。`getShortcut` 供界面显示实际生效的键，改绑通过 `setBinding/resetBinding`，不直接读写实现方的配置对象。
+
+UI 服务拥有当前窗口的交互浮层状态。交互接入插件通过 `uiInteractionKey` 暴露查询与独立 React 根的包装能力，把组件库的通用通知转为 UI 服务的登记与撤销。快捷键插件声明该能力并查询活动浮层，浮层内的导航和 Escape 由组件处理。
 
 宿主创建 `EngineCore` 并挂载插件时调用 `activate(context)`。插件在其中用 `provide` 注册声明过的能力，用 `get` 读取声明的依赖，用 `on` 订阅事件，也可用 `emit` 发布事件。卸载或激活失败时，宿主调用可选的 `deactivate()`，并撤销该插件的能力和订阅。
 

@@ -61,8 +61,39 @@ function loadDialogWithBaseUiStub() {
     return exports;
   }
 
-  return {...load(resolve(uiDist, "Dialog.js")), BaseDialog};
+  return {...load(resolve(uiDist, "Dialog.js")), ...load(resolve(uiDist, "Interaction.js")), BaseDialog};
 }
+
+test("Dialog reports its active popup through an optional generic observer", () => {
+  const {Dialog, InteractionProvider, useInteractionRef} = loadDialogWithBaseUiStub();
+  const element = {id: "popup"};
+  assert.equal(useInteractionRef(true, "custom")(element), undefined, "an observer is optional");
+  const active = new Set();
+  const events = [];
+  InteractionProvider({onActivate(target) {
+    active.add(target.element);
+    events.push(target.kind);
+    return () => active.delete(target.element);
+  }, children: null});
+
+  const tree = Dialog({open: true, onOpenChange() {}, title: "弹框", children: null});
+  const popup = tree.props.children.props.children.props.children[1];
+  const release = popup.props.ref(element);
+  assert.deepEqual(events, ["dialog"]);
+  assert.equal(active.has(element), true);
+  release();
+  release();
+  assert.equal(active.has(element), false, "cleanup is safe to repeat");
+
+  const closed = Dialog({open: false, onOpenChange() {}, title: "弹框", children: null});
+  const closedPopup = closed.props.children.props.children.props.children[1];
+  closedPopup.props.ref(element)();
+  assert.deepEqual(events, ["dialog"], "a closed popup is not reported");
+  const releaseCustom = useInteractionRef(true, "custom")(element);
+  assert.deepEqual(events, ["dialog", "custom"], "independent controls use the same interface");
+  releaseCustom();
+  assert.equal(active.size, 0);
+});
 
 test("Dialog busy state cancels dismissal and DialogClose forwards disabled, ref, and button type", () => {
   const {Dialog, DialogClose, BaseDialog} = loadDialogWithBaseUiStub();

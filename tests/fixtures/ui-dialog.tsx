@@ -17,6 +17,8 @@ import { DeleteDocumentDialog } from "../../src/plugins/project-management/Delet
 
 const wrappers = new Map<string, UiWrapper>();
 const uiService: UiService = {
+  registerOverlay: () => () => {},
+  hasActiveOverlay: () => false,
   registerPage: () => () => {},
   addWrapper(wrapper) {
     wrappers.set(wrapper.id, wrapper);

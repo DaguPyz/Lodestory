@@ -3,6 +3,9 @@ import {readFileSync} from "node:fs";
 import test from "node:test";
 import {createMainFixture} from "./helpers/mainStartupFixture.mjs";
 
+const shortcutSnapshot = Object.freeze({commands: [], bindings: [], conflicts: []});
+const shortcutService = {subscribe: () => () => {}, getSnapshot: () => shortcutSnapshot, getShortcut: () => "⌘ ⇧ F", execute: async () => true};
+
 const toolbarId = "workbench-toolbar.main";
 const entries = [
   {id: "body-editor.main", title: "正文", role: "main"},
@@ -270,7 +273,7 @@ test("toolbar UI exposes project actions, layout toggles, focus, and search", as
     ui: {openPage: async id => { uiCalls.push(id); return true; }},
   });
   const {WorkbenchToolbar} = fixture.loadModule("plugins/workbench-toolbar/WorkbenchToolbar.tsx");
-  const tree = expandReactTree(WorkbenchToolbar({
+  const tree = expandReactTree(WorkbenchToolbar({shortcuts: shortcutService,
     workbench: workbench.service,
     layout,
     models: new Map([[activeSession.id, model]]),
@@ -347,7 +350,7 @@ test("toolbar stays visible but inert while a session model is still loading, th
   const workbench = createWorkbench(initialSession, {active: true, busy: true});
   const models = new Map();
   const searches = [];
-  const render = () => expandReactTree(WorkbenchToolbar({
+  const render = () => expandReactTree(WorkbenchToolbar({shortcuts: shortcutService,
     workbench: workbench.service, layout, models, active: true, onSearch: id => searches.push(id),
   }));
   const loadingTree = render();
@@ -386,7 +389,7 @@ test("toolbar stays visible but inert while a session model is still loading, th
   oldSessionModel.dispose();
 
   workbench.set({session: null, active: false, busy: false});
-  assert.equal(WorkbenchToolbar({workbench: workbench.service, layout, models, active: true, onSearch() {}}), null,
+  assert.equal(WorkbenchToolbar({shortcuts: shortcutService, workbench: workbench.service, layout, models, active: true, onSearch() {}}), null,
     "the toolbar is absent when there is no project session");
 });
 
@@ -412,12 +415,13 @@ test("toolbar plugin registers its actions content and independent recovery wrap
   };
   const plugin = fixture.loadModule("plugins/workbench-toolbar/workbenchToolbarPlugin.tsx").createWorkbenchToolbarPlugin();
   assert.equal(plugin.id, "workbench-toolbar");
-  assert.deepEqual(Array.from(plugin.requires, key => key.id), ["app/workbench", "app/ui", "app/layout"]);
+  assert.deepEqual(Array.from(plugin.requires, key => key.id), ["app/workbench", "app/ui", "app/layout", "app/shortcuts"]);
   assert.deepEqual(Array.from(plugin.provides), []);
   assert.throws(() => plugin.activate({get(key) {
     if (key === workbenchKey) return workbench;
     if (key === uiKey) return ui;
     if (key === layoutKey) return layout;
+    if (key.id === "app/shortcuts") return shortcutService;
   }}), /wrapper registration failed/);
   assert.equal(registrations.length, 1);
   assert.equal(registrations[0].id, toolbarId);
@@ -448,6 +452,7 @@ test("the UI wrapper keeps a separate recovery component that calls the session 
     if (key === workbenchKey) return service;
     if (key === uiKey) return ui;
     if (key === layoutKey) return layout;
+    if (key.id === "app/shortcuts") return shortcutService;
   }});
   const participation = participant.start(activeSession);
   const toolbarElement = registered[0].render({active: true});
@@ -480,6 +485,7 @@ test("each workbench session owns a separate toolbar model and stale models cann
     if (key === workbenchKey) return {...workbench.service, registerParticipant(value) { participant = value; return async () => {}; }};
     if (key === uiKey) return {openPage: async () => true, addWrapper: () => () => {}};
     if (key === layoutKey) return layout;
+    if (key.id === "app/shortcuts") return shortcutService;
   }});
   const firstResources = participant.start(first);
   const modelFor = id => registered[0].render({active: true}).props.models.get(id);

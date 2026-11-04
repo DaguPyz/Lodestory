@@ -8,6 +8,7 @@ test("document tabs follow the public body content visibility and restore the op
   const {documentsKey} = fixture.requireSdk("@lodestory/sdk/documents");
   const {workbenchKey} = fixture.requireSdk("@lodestory/sdk/workbench");
   const {bodyEditorContentIds} = fixture.requireSdk("@lodestory/sdk/body-editor");
+  const {shortcutsKey, shortcutCommandIds, shortcutScopeIds} = fixture.requireSdk("@lodestory/sdk/shortcuts");
   const session = {id: "session-tabs", project: {id: "project-tabs", name: "正文标签", path: "/stories/tabs"}};
   const workbenchSnapshot = {session, active: true, busy: false};
   const workbench = {
@@ -38,10 +39,23 @@ test("document tabs follow the public body content visibility and restore the op
       for (const listener of [...listeners]) listener();
     },
   };
-  const services = new Map([[layoutKey, layout], [documentsKey, documents], [workbenchKey, workbench]]);
+  const registeredScopes = new Map();
+  const shortcuts = {
+    registerScope(scope) {
+      registeredScopes.set(scope.id, scope);
+      return () => { if (registeredScopes.get(scope.id) === scope) registeredScopes.delete(scope.id); };
+    },
+    subscribe: () => () => {},
+    getSnapshot: () => ({commands: [{id: shortcutCommandIds.closeDocument}, {id: shortcutCommandIds.newDocument}], bindings: [], conflicts: []}),
+    getShortcut: id => id === shortcutCommandIds.closeDocument ? "⌘ W" : id === shortcutCommandIds.newDocument ? "⌘ N" : undefined,
+    execute: async () => true,
+  };
+  const services = new Map([[layoutKey, layout], [documentsKey, documents], [workbenchKey, workbench], [shortcutsKey, shortcuts]]);
   const plugin = fixture.loadModule("plugins/document-tabs/documentTabsPlugin.tsx").createDocumentTabsPlugin();
   plugin.activate({get: key => services.get(key), emit: async () => {}});
   assert.equal(bodyEditorContentIds.main, "body-editor.main");
+  assert.equal(registeredScopes.get(shortcutScopeIds.document).parentId, shortcutScopeIds.workbench);
+  assert.equal(registeredScopes.get(shortcutScopeIds.document).active(), true, "the document scope activates only for a usable open document");
 
   const tabs = registered;
   assert.ok(tabs);
@@ -55,9 +69,12 @@ test("document tabs follow the public body content visibility and restore the op
   const visible = renderTabs();
   assert.equal(visible.type, fixture.components.DocumentTabs);
   assert.equal(visible.props.documents.length, 1);
+  assert.equal(visible.props.closeShortcut, "⌘ W", "the active tab receives the current platform label");
+  assert.equal(visible.props.newShortcut, "⌘ N", "the new-document command receives the current platform label");
   const activeId = workspace.getSnapshot().activeId;
 
   layout.hide(bodyEditorContentIds.main);
+  assert.equal(registeredScopes.get(shortcutScopeIds.document).active(), false, "hiding the body removes the close-document scope");
   assert.equal(renderTabs(), null, "hiding the body editor removes the document tabs UI");
   assert.equal(workspaceSnapshot.documents.length, 1, "hiding the body editor keeps its open document");
   assert.equal(workspaceSnapshot.activeId, activeId, "hiding the body editor keeps the active document");
@@ -68,4 +85,5 @@ test("document tabs follow the public body content visibility and restore the op
   assert.equal(restored.props.documents.length, 1);
   assert.equal(restored.props.activeDocument, activeId);
   plugin.deactivate();
+  assert.equal(registeredScopes.has(shortcutScopeIds.document), false, "deactivation removes the dynamic scope");
 });

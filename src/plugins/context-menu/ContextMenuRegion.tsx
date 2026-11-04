@@ -1,9 +1,11 @@
+import {useInteractionRef} from "@lodestory/ui";
 import { ContextMenu } from "@base-ui/react/context-menu";
 import type { BaseUIEvent } from "@base-ui/react/types";
 import {
-  useEffect, useId, useRef, useState, type MouseEvent, type ReactElement, type TouchEvent,
+  useEffect, useId, useRef, useState, type MouseEvent, type ReactElement, type ReactNode, type TouchEvent,
 } from "react";
 import { createPortal } from "react-dom";
+
 import { useContextMenus } from "./ContextMenuProvider";
 import type { ContextMenuRegionProps } from "@lodestory/sdk/context-menu";
 import { findMenuAction, resolveMenu, type ResolvedEntry } from "./menuModel";
@@ -24,6 +26,11 @@ function Chevron() {
   return <svg className="context-menu-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden="true"><path d="m9 5 7 7-7 7" /></svg>;
 }
 
+function SubmenuPopup({active, label, children}: {active: boolean; label: string; children: ReactNode}) {
+  const popupRef = useInteractionRef(active, "menu");
+  return <ContextMenu.Popup ref={popupRef} className="context-menu-popup" aria-label={label}>{children}</ContextMenu.Popup>;
+}
+
 export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T>) {
   const { children, mode = "custom", disabled = false, label = "操作", items = [] } = props;
   const coordinator = useContextMenus();
@@ -40,6 +47,7 @@ export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T
   const [snapshot, setSnapshot] = useState<Session<T> | null>(null);
   const [pendingKeys, setPendingKeys] = useState<ReadonlySet<string>>(new Set());
   const [actionError, setActionError] = useState(false);
+  const popupRef = useInteractionRef(open && !disabled, "menu");
 
   function close(reason: MenuCloseReason) {
     if (reason !== "dismiss") restore.current = false;
@@ -177,7 +185,7 @@ export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T
         <ContextMenu.SubmenuTrigger className="context-menu-item" disabled={entry.disabled}>{content}</ContextMenu.SubmenuTrigger>
         <ContextMenu.Portal className="context-menu-portal" data-context-menu-session={id} data-ui-density={snapshot?.density} data-immediate-close={immediateClose || undefined}>
           <ContextMenu.Positioner className="context-menu-positioner" collisionPadding={8} sideOffset={4}>
-            <ContextMenu.Popup className="context-menu-popup" aria-label={entry.label}>{renderEntries(entry.items, path)}</ContextMenu.Popup>
+            <SubmenuPopup active={open && !disabled} label={entry.label}>{renderEntries(entry.items, path)}</SubmenuPopup>
           </ContextMenu.Positioner>
         </ContextMenu.Portal>
       </ContextMenu.SubmenuRoot>;
@@ -224,7 +232,7 @@ export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T
         }} />
       <ContextMenu.Portal className="context-menu-portal" data-context-menu-session={id} data-ui-density={snapshot?.density} data-immediate-close={immediateClose || undefined}>
         <ContextMenu.Positioner className="context-menu-positioner" collisionPadding={8} sideOffset={4} alignOffset={0}>
-          <ContextMenu.Popup className="context-menu-popup" aria-label={label}
+          <ContextMenu.Popup ref={popupRef} className="context-menu-popup" aria-label={label}
             onContextMenu={(event) => { event.preventDefault(); event.stopPropagation(); }}
             onKeyDownCapture={(event) => {
               if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) event.stopPropagation();

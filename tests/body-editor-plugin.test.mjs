@@ -21,7 +21,7 @@ function setup({rejectContentId, editorDefaults = {markdown: "milkdown", "plain-
   const {workbenchKey} = fixture.requireSdk("@lodestory/sdk/workbench");
   const {documentsKey, documentCreateRequested, documentRevealRequested} = fixture.requireSdk("@lodestory/sdk/documents");
   const {layoutKey} = fixture.requireSdk("@lodestory/sdk/layout");
-  const {uiKey} = fixture.requireSdk("@lodestory/sdk/ui");
+  const {uiKey, uiInteractionKey} = fixture.requireSdk("@lodestory/sdk/ui");
   const {bodyEditorKey, bodyEditorDefaultEditorsConfig} = fixture.requireSdk("@lodestory/sdk/body-editor");
   const session = {id: "session-one", project: {id: "project-one", name: "第一本", path: "/stories/one"}};
   let workbenchSnapshot = {session, active: true, busy: false};
@@ -93,6 +93,7 @@ function setup({rejectContentId, editorDefaults = {markdown: "milkdown", "plain-
       if (key === documentsKey) return documents;
       if (key === layoutKey) return layout;
       if (key === uiKey) return ui;
+      if (key === uiInteractionKey) return {wrap: children => children, hasActiveOverlay: () => false};
       throw new Error(`Unexpected service '${key.id}'.`);
     },
     provide(key, service) {

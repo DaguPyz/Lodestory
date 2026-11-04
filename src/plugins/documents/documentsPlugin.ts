@@ -2,6 +2,7 @@ import type {Plugin} from "@lodestory/sdk";
 import {documentsKey, documentRevealRequested, type DocumentsService} from "@lodestory/sdk/documents";
 import {projectStorageKey} from "@lodestory/sdk/project-storage";
 import {workbenchKey} from "@lodestory/sdk/workbench";
+import {shortcutsKey, shortcutCommandIds, shortcutScopeIds} from "@lodestory/sdk/shortcuts";
 import {createDocumentWorkspace} from "./createDocumentWorkspace";
 import {createDocumentFiles} from "./documentFiles";
 
@@ -16,11 +17,13 @@ type ManagedSession = {
 export function createDocumentsPlugin(): Plugin {
   let cleanup: (() => Promise<void>) | undefined;
   return {
-    id: "documents", requires: [workbenchKey, projectStorageKey], provides: [documentsKey],
+    id: "documents", requires: [workbenchKey, projectStorageKey, shortcutsKey], provides: [documentsKey],
     activate(context) {
       const workbench = context.get(workbenchKey);
       const storage = context.get(projectStorageKey);
+      const shortcuts = context.get(shortcutsKey);
       const sessions = new Map<string, ManagedSession>();
+      const registrations: (() => void)[] = [];
       let alive = true;
       const service: DocumentsService = Object.freeze({
         getWorkspace(sessionId: string) {
@@ -33,8 +36,13 @@ export function createDocumentsPlugin(): Plugin {
       cleanup = async () => {
         alive = false;
         removeSubscription?.();
-        await removeParticipant?.();
+        const errors: unknown[] = [];
+        for (const remove of registrations.splice(0).reverse()) {
+          try { remove(); } catch (error) { errors.push(error); }
+        }
+        try { await removeParticipant?.(); } catch (error) { errors.push(error); }
         sessions.clear();
+        if (errors.length) throw Object.assign(new Error("Documents failed to stop."), {errors});
       };
       context.provide(documentsKey, service);
       removeSubscription = workbench.subscribe(() => {
@@ -88,6 +96,74 @@ export function createDocumentsPlugin(): Plugin {
           };
         },
       });
+
+      registrations.push(shortcuts.registerCommand({
+        id: shortcutCommandIds.saveAll,
+        title: "保存全部文稿",
+        category: "文稿",
+        enabled(invocation) {
+          if (!alive) return false;
+          const state = workbench.getSnapshot();
+          const sessionId = state.session?.id;
+          if (!state.active || state.busy || !sessionId
+            || isTargetingAnotherSession(invocation.args, sessionId)) return false;
+          const workspace = service.getWorkspace(sessionId);
+          const snapshot = workspace?.getSnapshot();
+          return !!workspace && !!snapshot && !snapshot.blocked && snapshot.documents.length > 0;
+        },
+        run(invocation) {
+          const state = workbench.getSnapshot();
+          const sessionId = state.session?.id;
+          if (!state.active || state.busy || !sessionId
+            || isTargetingAnotherSession(invocation.args, sessionId)) return false;
+          const workspace = service.getWorkspace(sessionId);
+          if (!workspace || workspace.getSnapshot().blocked) return false;
+          return workspace.saveAll();
+        },
+      }));
+      registrations.push(shortcuts.registerBinding({
+        id: "documents.saveAll.default",
+        commandId: shortcutCommandIds.saveAll,
+        scopeId: shortcutScopeIds.workbench,
+        keys: "Mod+S",
+        allowInInput: true,
+      }));
+      registrations.push(shortcuts.registerCommand({
+        id: shortcutCommandIds.closeDocument,
+        title: "关闭当前文稿",
+        category: "文稿",
+        enabled(invocation) {
+          if (!alive) return false;
+          const state = workbench.getSnapshot();
+          const sessionId = state.session?.id;
+          if (!state.active || state.busy || !sessionId
+            || isTargetingAnotherSession(invocation.args, sessionId)) return false;
+          const workspace = service.getWorkspace(sessionId);
+          const snapshot = workspace?.getSnapshot();
+          const documentId = requestedDocumentId(invocation.args) ?? snapshot?.activeId;
+          return !!snapshot && !snapshot.blocked && !!documentId
+            && snapshot.documents.some(document => document.id === documentId);
+        },
+        run(invocation) {
+          const state = workbench.getSnapshot();
+          const sessionId = state.session?.id;
+          if (!state.active || state.busy || !sessionId
+            || isTargetingAnotherSession(invocation.args, sessionId)) return false;
+          const workspace = service.getWorkspace(sessionId);
+          const snapshot = workspace?.getSnapshot();
+          const documentId = requestedDocumentId(invocation.args) ?? snapshot?.activeId;
+          if (!workspace || !snapshot || snapshot.blocked || !documentId
+            || !snapshot.documents.some(document => document.id === documentId)) return false;
+          return workspace.close(documentId);
+        },
+      }));
+      registrations.push(shortcuts.registerBinding({
+        id: "documents.close.default",
+        commandId: shortcutCommandIds.closeDocument,
+        scopeId: shortcutScopeIds.document,
+        keys: "Mod+W",
+        allowInInput: true,
+      }));
     },
     async deactivate() {
       const stop = cleanup;
@@ -95,4 +171,16 @@ export function createDocumentsPlugin(): Plugin {
       await stop?.();
     },
   };
+}
+
+function isTargetingAnotherSession(value: unknown, sessionId: string): boolean {
+  if (!value || typeof value !== "object") return false;
+  const requested = (value as {sessionId?: unknown}).sessionId;
+  return typeof requested === "string" && requested !== sessionId;
+}
+
+function requestedDocumentId(value: unknown): string | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const documentId = (value as {documentId?: unknown}).documentId;
+  return typeof documentId === "string" ? documentId : undefined;
 }

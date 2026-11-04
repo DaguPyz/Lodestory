@@ -13,6 +13,12 @@
       const query = new URLSearchParams(location.search);
       const scenario = query.get("scenario");
       const encode = text => Array.from(new TextEncoder().encode(text));
+      const decodeBase64 = value => Array.from(atob(value), char => char.charCodeAt(0));
+      function encodedFile(path, bytes) {
+        let binary = "";
+        for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.slice(i, i + 8192));
+        return {path, fileName: path.split("/").at(-1), bytesBase64: btoa(binary), byteLength: bytes.length};
+      }
       const equalBytes = (left, right) => left.length === right.length && left.every((byte, index) => byte === right[index]);
       const projects = new Map();
       const parentOf = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
@@ -234,6 +240,23 @@
       const projectTreeGate = new Promise(resolve => { releaseProjectTree = resolve; });
       if (scenario === "project-loading-gate") window.__releaseProjectTree = releaseProjectTree;
       mockIPC(async (command, args) => {
+        // Adapt the native byte transports to the same in-memory conflict checks.
+        const encodedCreate = command === "create_project_file_base64";
+        if (encodedCreate) {
+          command = "create_project_file";
+          args = {...args, bytes: decodeBase64(args.bytesBase64)};
+        } else if (command === "delete_project_file_base64") {
+          command = "delete_project_file";
+          args = {...args, expectedBytes: decodeBase64(args.expectedBytesBase64)};
+        } else if (command === "save_project_file_binary") {
+          const body = args instanceof Uint8Array ? args : new Uint8Array(args);
+          const metadataLength = new DataView(body.buffer, body.byteOffset, body.byteLength).getUint32(0, true);
+          const offset = 4 + metadataLength;
+          const metadata = JSON.parse(new TextDecoder().decode(body.subarray(4, offset)));
+          if (metadata.version !== 1 || offset + metadata.byteLength + metadata.expectedByteLength !== body.length) throw new Error("无效的二进制保存请求。");
+          command = "save_project_file";
+          args = {...metadata, bytes: [...body.subarray(offset, offset + metadata.byteLength)], expectedBytes: [...body.subarray(offset + metadata.byteLength)]};
+        }
         if (command.startsWith("plugin:")) return command === "plugin:window|theme" ? (query.get("theme") === "Light" ? "Light" : "Dark") : 1;
         if (["list_documents", "read_project_file", "read_project_file_base64", "create_project_file", "save_project_file", "delete_project_file", "list_project_directory", "create_project_directory", "rename_project_path"].includes(command)) {
           const state = projectFiles(args.projectPath);
@@ -269,10 +292,7 @@
           if (command === "read_project_file" || command === "read_project_file_base64") {
             if (!state.files.has(path)) throw {message: "文件不存在。"};
             if (command === "read_project_file_base64") {
-              const bytes = state.files.get(path);
-              let binary = "";
-              for (let i = 0; i < bytes.length; i += 8192) binary += String.fromCharCode(...bytes.slice(i, i + 8192));
-              return {path, fileName: path.split("/").at(-1), bytesBase64: btoa(binary), byteLength: bytes.length};
+              return encodedFile(path, state.files.get(path));
             }
             return {path, fileName: path.split("/").at(-1), bytes: [...state.files.get(path)]};
           }
@@ -324,6 +344,7 @@
               if (!state.directories.has(parentOf(path))) throw {message: "父目录不存在。"};
               state.files.set(path, [...args.bytes]);
             }
+            if (encodedCreate) return encodedFile(path, state.files.get(path));
             return {path, fileName: path.split("/").at(-1), bytes: [...state.files.get(path)]};
           }
           if (scenario === "save-error" && command === "save_project_file") throw {message: "保存文档失败：磁盘不可写。"};

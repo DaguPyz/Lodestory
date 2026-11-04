@@ -1,6 +1,7 @@
 import {createElement, type ComponentType} from "react";
 import type {Plugin} from "@lodestory/sdk";
 import {bodyEditorKey, type EditorProps} from "@lodestory/sdk/body-editor";
+import {uiInteractionKey} from "@lodestory/sdk/ui";
 import {createRichDeltaFromPlainText, getRichEditorText} from "./richDeltaFormat";
 import {createSystemFontLoader} from "./systemFonts";
 
@@ -10,10 +11,11 @@ export function createRichTextEditorPlugin(): Plugin {
 
   return {
     id: "rich-text-editor",
-    requires: [bodyEditorKey],
+    requires: [bodyEditorKey, uiInteractionKey],
     provides: [],
     activate(context) {
       const bodyEditor = context.get(bodyEditorKey);
+      const interaction = context.get(uiInteractionKey);
       const loadFontFamilies = createSystemFontLoader();
       removeEditor = bodyEditor.registerEditor({
         id: "quill",
@@ -38,7 +40,7 @@ export function createRichTextEditorPlugin(): Plugin {
         load: async () => {
           const module = await import("./RichTextEditor");
           const EditorWithSystemFonts: ComponentType<EditorProps> = props =>
-            createElement(module.default, {...props, loadFontFamilies});
+            createElement(module.default, {...props, loadFontFamilies, interaction});
           return {default: EditorWithSystemFonts};
         },
       });

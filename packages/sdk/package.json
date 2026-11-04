@@ -78,6 +78,10 @@
     "./project-search": {
       "types": "./dist/project-search.d.ts",
       "import": "./dist/project-search.js"
+    },
+    "./shortcuts": {
+      "types": "./dist/shortcuts.d.ts",
+      "import": "./dist/shortcuts.js"
     }
   },
   "scripts": {

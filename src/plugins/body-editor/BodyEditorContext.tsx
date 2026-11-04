@@ -55,19 +55,10 @@ function BodyEditorModelProvider({model, workbench, resolveEditor, resolveConver
 
 /** 只在 main 内容安装一次；隐藏或阻塞时停止快捷键，自动保存由文档插件继续执行。 */
 export function BodyEditorInteractions({active}: {active: boolean}) {
-  const editor = useBodyEditorContext();
+  useBodyEditorContext();
   const menus = useContextMenus();
   useEffect(() => {
     menus.closeAll();
-    if (!active || editor.busy) return;
-    const save = (event: KeyboardEvent) => {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s" && !event.isComposing) {
-        event.preventDefault();
-        void editor.workspace.saveAll();
-      }
-    };
-    window.addEventListener("keydown", save);
-    return () => window.removeEventListener("keydown", save);
-  }, [active, editor.busy, editor.workspace.saveAll, menus]);
+  }, [active, menus]);
   return null;
 }

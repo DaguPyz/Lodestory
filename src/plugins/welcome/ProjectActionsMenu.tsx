@@ -1,5 +1,5 @@
 import { Menu } from "@base-ui/react/menu";
-import { Icon, IconButton } from "@lodestory/ui";
+import {Icon, IconButton, useInteractionRef} from "@lodestory/ui";
 import { useEffect, useId, useRef, useState } from "react";
 import { useContextMenus, type MenuAction } from "../context-menu";
 import type { MenuCloseReason } from "../context-menu/menuCoordinator";
@@ -18,6 +18,7 @@ export function ProjectActionsMenu({ projectId, name, disabled, actions }: {
   const [open, setOpen] = useState(false);
   const [immediateClose, setImmediateClose] = useState(false);
   const [density, setDensity] = useState("spacious");
+  const popupRef = useInteractionRef(open && !disabled, "menu");
 
   function close(reason: MenuCloseReason) {
     restoreFocus.current = reason === "dismiss";
@@ -48,7 +49,7 @@ export function ProjectActionsMenu({ projectId, name, disabled, actions }: {
     </Menu.Trigger>
     <Menu.Portal data-ui-density={density}>
       <Menu.Positioner className="project-menu-positioner" sideOffset={4} collisionPadding={8} align="end">
-        <Menu.Popup className="project-menu" data-immediate-close={immediateClose || undefined}
+        <Menu.Popup ref={popupRef} className="project-menu" data-immediate-close={immediateClose || undefined}
           finalFocus={() => restoreFocus.current ? trigger.current : false}>
           {actions.filter((action) => action.id !== "open").map((action) => <Menu.Item
             key={action.id} className="project-menu-item" disabled={action.disabled as boolean}

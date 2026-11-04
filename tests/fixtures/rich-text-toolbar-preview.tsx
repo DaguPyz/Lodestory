@@ -1,4 +1,5 @@
 import {createRoot} from "react-dom/client";
+import type {ReactNode} from "react";
 import type {EditorHandle} from "@lodestory/sdk/body-editor";
 import RichTextEditor from "../../src/plugins/rich-text-editor/RichTextEditor";
 import {serializeRichDelta} from "../../src/plugins/rich-text-editor/richDeltaFormat";
@@ -73,6 +74,7 @@ const renderTree = (
   <main className="rich-toolbar-preview-page">
     <section className="rich-toolbar-preview-content" aria-label="正文编辑器预览">
       <RichTextEditor
+        interaction={{wrap: (children: ReactNode) => children, hasActiveOverlay: () => false}}
         documentId="rich-text-toolbar-preview"
         format="rich-delta"
         content={content}

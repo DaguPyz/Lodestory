@@ -86,6 +86,8 @@ const customThemes: readonly ThemeDefinition[] = [
 const themeRemovers: (() => void)[] = [];
 const wrappers = new Map<string, UiWrapper>();
 const uiService: UiService = {
+  registerOverlay: () => () => {},
+  hasActiveOverlay: () => false,
   registerPage: () => () => {},
   addWrapper(wrapper) {
     wrappers.set(wrapper.id, wrapper);

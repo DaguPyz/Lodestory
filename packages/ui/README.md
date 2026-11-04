@@ -69,6 +69,10 @@ TextField、Textarea、SearchField 和 `variant="field"` 的 Select 常态及悬
 
 `Icon` 使用 `currentColor`，由承载它的按钮、选中对象或内容区域提供最终前景。单独使用图标时也须由宿主提供与背景配套的前景。
 
+`IconButton` 的 `label` 是简短无障碍名称；可通过 `tooltip` 补充当前快捷键等悬停提示，不修改按钮的可访问名称。未提供时沿用 `label`。
+
+组件库可通过 `InteractionProvider` 接收可选的 `onActivate` 回调。Dialog、Select 在浮层可交互时通知该回调，并在关闭、禁用或卸载时调用回调返回的清理函数。独立实现的浮层可使用 `useInteractionRef` 接入同一通知协议。不提供 Provider 时组件仍可独立使用。组件库不管理应用级浮层状态。
+
 ## 通用弹框
 
 ```tsx

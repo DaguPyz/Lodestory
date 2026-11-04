@@ -1,7 +1,8 @@
 import { Dialog as BaseDialog } from "@base-ui/react/dialog";
-import { createContext, useContext, useId, useLayoutEffect, useState, type ComponentPropsWithoutRef, type ReactNode, type RefObject } from "react";
+import { createContext, useCallback, useContext, useId, useLayoutEffect, useState, type ComponentPropsWithoutRef, type ReactNode, type RefObject } from "react";
 import { Button, type ButtonProps } from "./Button.js";
 import {useDialogPosition} from "./useDialogPosition.js";
+import {useInteractionRef} from "./Interaction.js";
 
 export type DialogProps = {
   open: boolean;
@@ -27,6 +28,21 @@ const DialogBusyContext = createContext(false);
 export function Dialog({ open, onOpenChange, onOpenChangeComplete, title, size = "regular", description, children, busy = false, initialFocus, finalFocus }: DialogProps) {
   const [density, setDensity] = useState<Density>("comfortable");
   const movement = useDialogPosition(open);
+  const interactionRef = useInteractionRef<HTMLDivElement>(open, "dialog");
+  const setPopupRef = useCallback((element: HTMLDivElement | null) => {
+    movement.popupRef(element);
+    if (!element) return;
+    let release: ReturnType<typeof interactionRef>;
+    try { release = interactionRef(element); }
+    catch (error) { movement.popupRef(null); throw error; }
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      try { if (typeof release === "function") release(); }
+      finally { movement.popupRef(null); }
+    };
+  }, [movement.popupRef, interactionRef]);
   const movementHint = useId();
 
   useLayoutEffect(() => {
@@ -50,7 +66,7 @@ export function Dialog({ open, onOpenChange, onOpenChangeComplete, title, size =
       }}>
         <BaseDialog.Portal>
           <BaseDialog.Backdrop className="ui-dialog-backdrop" />
-          <BaseDialog.Popup ref={movement.popupRef} className="ui-dialog" data-ui-dialog-size={size} data-ui-density={density} aria-modal="true" aria-busy={busy || undefined} inert={!open}
+          <BaseDialog.Popup ref={setPopupRef} className="ui-dialog" data-ui-dialog-size={size} data-ui-density={density} aria-modal="true" aria-busy={busy || undefined} inert={!open}
             onKeyDownCapture={movement.onKeyDownCapture}
             initialFocus={initialFocus} finalFocus={finalFocus}>
             <div ref={movement.headerRef} className="ui-dialog-header" role="group" tabIndex={-1}

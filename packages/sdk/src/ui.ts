@@ -101,6 +101,10 @@ export type UiSnapshot = {
  * 页面和包装层在 activate 中登记；ready 后可切页，使用者不自行 createRoot。
  */
 export type UiService = {
+  /** 登记已打开浮层的实际节点（可位于 Portal）。关闭、禁用或卸载时调用返回的撤销函数。 */
+  registerOverlay(element: HTMLElement): () => void;
+  /** 当前 UI 实例中是否有可见、可交互的浮层。嵌套浮层独立登记。 */
+  hasActiveOverlay(): boolean;
   /** 登记页面，保存函数而不立即调用；返回可重复调用的撤销函数。 */
   registerPage(page: UiPage): () => void;
   /** 登记包装规则，保存函数而不立即调用；返回可重复调用的撤销函数。 */
@@ -122,3 +126,12 @@ export type UiService = {
  * 再释放组件使用的资源；撤销已挂载贡献会先卸载整棵树，本版不支持运行中增删贡献。
  */
 export const uiKey = createServiceKey<UiService>("app/ui");
+
+/** Bridges component interaction notifications to the active UI instance. */
+export type UiInteractionService = Readonly<{
+  /** Provide the same interaction listener to an independently mounted React root. */
+  wrap(children: ReactNode): ReactNode;
+  /** Query the UI instance's active surfaces. */
+  hasActiveOverlay(): boolean;
+}>;
+export const uiInteractionKey = createServiceKey<UiInteractionService>("app/ui-interaction");

@@ -21,13 +21,14 @@ import * as packageCanvas from "@lodestory/sdk/canvas";
 import * as packageTimeline from "@lodestory/sdk/timeline";
 import * as packageAssetCatalog from "@lodestory/sdk/asset-catalog";
 import * as packageContextMenu from "@lodestory/sdk/context-menu";
+import * as packageShortcuts from "@lodestory/sdk/shortcuts";
 import { createSdkLoader } from "./helpers/sdkFixture.mjs";
 
 const packageManifest = JSON.parse(readFileSync(new URL("../packages/sdk/package.json", import.meta.url), "utf8"));
 
 test("SDK package exposes ESM root and all public capability entry points", () => {
   assert.equal(packageManifest.type, "module");
-  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./asset-catalog", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./layout", "./navigation-layout", "./project-search", "./project-storage", "./theme", "./timeline", "./ui", "./window-shell", "./workbench"]);
+  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./asset-catalog", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./layout", "./navigation-layout", "./project-search", "./project-storage", "./shortcuts", "./theme", "./timeline", "./ui", "./window-shell", "./workbench"]);
 
   assert.equal(packageManifest.exports["./body-editor"].import, "./dist/body-editor.js");
   assert.equal(packageManifest.exports["./body-editor"].types, "./dist/body-editor.d.ts");
@@ -44,6 +45,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
     ["./workbench", "workbench"],
     ["./config", "config"],
     ["./context-menu", "context-menu"],
+    ["./shortcuts", "shortcuts"],
     ["./documents", "documents"],
     ["./project-storage", "project-storage"],
     ["./project-search", "project-search"],
@@ -56,7 +58,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   }
 
   assert.deepEqual(Object.keys(packageRoot).sort(), ["createEventKey", "createServiceKey"]);
-  assert.deepEqual(Object.keys(packageUi).sort(), ["UiNavigationCompleteError", "uiInitialPageConfig", "uiKey", "uiMotionConfig"]);
+  assert.deepEqual(Object.keys(packageUi).sort(), ["UiNavigationCompleteError", "uiInitialPageConfig", "uiInteractionKey", "uiKey", "uiMotionConfig"]);
   assert.equal(typeof packageUi.UiNavigationCompleteError, "function");
   assert.deepEqual(Object.keys(packageError), ["errorUiKey"]);
   assert.deepEqual(Object.keys(packageTheme).sort(), ["themeKey"]);
@@ -66,6 +68,8 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.deepEqual(Object.keys(packageWorkbench), ["workbenchKey"]);
   assert.deepEqual(Object.keys(packageConfig), ["configKey"]);
   assert.deepEqual(Object.keys(packageContextMenu), ["contextMenuKey"]);
+  assert.deepEqual(Object.keys(packageShortcuts).sort(), ["shortcutCommandIds", "shortcutScopeIds", "shortcutsKey"]);
+  assert.equal(packageShortcuts.shortcutsKey.id, "app/shortcuts");
   assert.equal(packageContextMenu.contextMenuKey.id, "app/context-menu");
   assert.deepEqual(Object.keys(packageDocuments).sort(), ["documentCreateRequested", "documentRevealRequested", "documentsKey", "projectDocumentCatalogKey"]);
   assert.deepEqual(Object.keys(packageStorage), ["projectStorageKey"]);
@@ -159,6 +163,8 @@ test("SDK subpaths share one key module and need no host imports or runtime APIs
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/workbench").workbenchKey, hostWorkbenchKey);
   const hostConfigKey = sdk.requireSdk("@lodestory/sdk/config").configKey;
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/config").configKey, hostConfigKey);
+  const hostShortcutsKey = sdk.requireSdk("@lodestory/sdk/shortcuts").shortcutsKey;
+  assert.strictEqual(sdk.requireSdk("@lodestory/sdk/shortcuts").shortcutsKey, hostShortcutsKey);
   const hostContextMenuKey = sdk.requireSdk("@lodestory/sdk/context-menu").contextMenuKey;
   assert.strictEqual(sdk.requireSdk("@lodestory/sdk/context-menu").contextMenuKey, hostContextMenuKey);
   const hostDocumentsKey = sdk.requireSdk("@lodestory/sdk/documents").documentsKey;

@@ -75,6 +75,37 @@ function projectFilesWithOverlay(base, overlay) {
   });
 }
 
+test("template colors persist, validate, and can be edited or cleared", async () => {
+  const f = byteStorageFixture();
+  const store = storeFor(f.files().service);
+  assert.equal(await store.load(), true);
+  assert.equal(await store.createType({id: typeId, name: "人物", description: "", color: "#Ab12Cd"}), true);
+  assert.equal(diskSchema(f).types[0].color, "#ab12cd");
+  assert.equal(await store.updateType(typeId, {description: "描述"}), true);
+  assert.equal(store.getSnapshot().types[0].color, "#ab12cd");
+  assert.equal(await store.updateType(typeId, {color: "invalid"}), false);
+  assert.equal(diskSchema(f).types[0].color, "#ab12cd");
+  const reopened = storeFor(f.files().service);
+  assert.equal(await reopened.load(), true);
+  assert.equal(reopened.getSnapshot().types[0].color, "#ab12cd");
+  assert.equal(await store.updateType(typeId, {color: null}), true);
+  assert.equal(Object.hasOwn(diskSchema(f).types[0], "color"), false);
+  store.dispose();
+  reopened.dispose();
+});
+
+test("invalid saved template color blocks writes without losing the file", async () => {
+  const f = byteStorageFixture();
+  const original = JSON.stringify(storedSchema([type(typeId, {color: "#bad"})]));
+  seedFile(f, path, original);
+  const store = storeFor(f.files().service);
+  assert.equal(await store.load(), false);
+  assert.equal(store.getSnapshot().blocked, true);
+  assert.equal(await store.updateType(typeId, {name: "其他"}), false);
+  assert.equal(new TextDecoder().decode(new Uint8Array(f.disk.get(f.key("/book", path)))), original);
+  store.dispose();
+});
+
 test("missing schema loads empty without creating a file; type and field edits persist by stable IDs", async () => {
   const f = byteStorageFixture();
   const controller = f.files();

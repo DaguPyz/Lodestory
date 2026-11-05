@@ -15,6 +15,18 @@
 .asset-type-entry[aria-pressed="true"]:active { color: var(--ui-state-selected-pressed-foreground); background: var(--ui-state-selected-pressed-background); }
 .asset-type-entry:disabled { color: var(--ui-state-disabled-foreground); background: var(--ui-state-disabled-background); cursor: not-allowed; }
 .asset-type-entry[aria-pressed="true"]:disabled { color: var(--ui-state-disabled-selected-foreground); background: var(--ui-state-disabled-selected-background); }
+.asset-type-entry[data-colored] { color: var(--asset-card-foreground); background: var(--asset-card-background); }
+.asset-type-entry[data-colored] .asset-type-count { color: inherit; }
+.asset-type-entry[data-colored]:hover { color: var(--asset-card-foreground); background: var(--asset-card-hover); }
+.asset-type-entry[data-colored]:active { color: var(--asset-card-foreground); background: var(--asset-card-pressed); }
+.asset-type-entry[data-colored][aria-pressed="true"] { color: var(--asset-card-foreground); background: var(--asset-card-background); box-shadow: inset 0 0 0 2px var(--asset-card-foreground); }
+.asset-type-entry[data-colored][aria-pressed="true"]:hover { background: var(--asset-card-hover); }
+.asset-type-entry[data-colored][aria-pressed="true"]:active { background: var(--asset-card-pressed); }
+.asset-type-entry[data-colored]:disabled { opacity: .6; cursor: not-allowed; }
+@media (forced-colors: active) {
+  .asset-type-entry[data-colored] { color: ButtonText; background: ButtonFace; }
+  .asset-type-entry[data-colored][aria-pressed="true"] { color: HighlightText; background: Highlight; box-shadow: none; }
+}
 .asset-order-buttons { display: inline-flex; align-items: center; flex-shrink: 0; }
 .asset-order-up { display: inline-flex; }
 .asset-order-up .icon { transform: rotate(180deg); }

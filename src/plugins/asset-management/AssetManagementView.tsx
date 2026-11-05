@@ -5,6 +5,7 @@ import {Button, Dialog, DialogActions, Icon, IconButton} from "@lodestory/ui";
 import type {AssetSessionResources} from "./assetManagementPlugin";
 import type {AssetFieldDefinition} from "./assetSchemaStore";
 import {AssetSchemaForm, type AssetSchemaDraft} from "./AssetSchemaForm";
+import {assetCardColorStyle} from "./assetCardColor";
 
 export type AssetViewProps = {
   workbench: WorkbenchService;
@@ -39,9 +40,20 @@ function TypeNavigation({resource, contextMenus, active, onOpenTypes, onOpenAsse
   const {store} = resource;
   const MenuRegion = contextMenus.Region;
   const listSurface = useRef<HTMLDivElement>(null);
+  const deleteCancel = useRef<HTMLButtonElement>(null);
+  const editingToken = useRef(Symbol("asset-navigation-delete"));
+  const epoch = useRef(0);
+  const [deleteTarget, setDeleteTarget] = useState<{id: string; name: string} | null>(null);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const types = snapshot.types.filter(item => item.status === "active").sort((a, b) => a.order - b.order);
-  const disabled = !active || snapshot.loading || snapshot.saving || snapshot.blocked || !snapshot.loaded || snapshot.dirty;
+  const disabled = !active || snapshot.loading || snapshot.saving || snapshot.blocked || !snapshot.loaded || snapshot.dirty || pending || deleteTarget !== null;
+  const deletionPendingSave = deleteTarget !== null && !snapshot.types.some(type => type.id === deleteTarget.id) && snapshot.dirty;
+  useLayoutEffect(() => () => {
+    epoch.current++;
+    resource.editing.delete(editingToken.current);
+  }, [resource]);
   const typeIds = new Set(types.map(type => type.id));
   const unclassifiedCount = snapshot.assets.filter(asset => asset.typeId === null || !typeIds.has(asset.typeId)).length;
   function openTemplate(id: string | null) {
@@ -59,6 +71,38 @@ function TypeNavigation({resource, contextMenus, active, onOpenTypes, onOpenAsse
     if (!canManage() || !store.getSnapshot().types.some(type => type.id === id && type.status === "active")) return;
     if (store.selectType(id) && store.selectAsset(null)) onOpenTypes();
   }
+  function confirmRemoval(id: string) {
+    if (!canManage()) return;
+    const target = store.getSnapshot().types.find(type => type.id === id && type.status === "active");
+    if (!target) return;
+    resource.editing.add(editingToken.current);
+    setError(null);
+    setDeleteTarget({id: target.id, name: target.name});
+  }
+  function closeRemoval() {
+    if (pending || snapshot.saving) return;
+    resource.editing.delete(editingToken.current);
+    setDeleteTarget(null);
+    setError(null);
+  }
+  async function removeConfirmed() {
+    if (!deleteTarget || !active || !canInteract() || pending || snapshot.saving) return;
+    const operationEpoch = epoch.current;
+    setPending(true);
+    setError(null);
+    try {
+      const accepted = await (deletionPendingSave ? store.retry() : store.removeType(deleteTarget.id));
+      if (operationEpoch !== epoch.current) return;
+      if (accepted) {
+        resource.editing.delete(editingToken.current);
+        setDeleteTarget(null);
+      } else setError(store.getSnapshot().error ?? "未能保存，请重试。");
+    } catch (cause) {
+      if (operationEpoch === epoch.current) setError(cause instanceof Error ? cause.message : "保存失败，请重试。");
+    } finally {
+      if (operationEpoch === epoch.current) setPending(false);
+    }
+  }
   return <MenuRegion label="资产模板列表操作" disabled={disabled} fallbackFocus={() => listSurface.current}
     items={[{id: "new-template", label: "新建资产模板", icon: <Icon name="plus"/>, disabled: () => !canManage(), restoreFocus: false, onSelect: newTemplate}]}>
   <div className="asset-navigation" ref={listSurface} tabIndex={active ? 0 : -1} aria-label="资产模板列表">
@@ -71,9 +115,11 @@ function TypeNavigation({resource, contextMenus, active, onOpenTypes, onOpenAsse
         return <li key={type.id}>
           <MenuRegion context={type.id} label={`${type.name}资产模板操作`} disabled={disabled} fallbackFocus={() => listSurface.current} items={[
             {id: "template-settings", label: "模板设置", disabled: () => !canManage(), restoreFocus: false, onSelect: openSettings},
+            {id: "delete-template", label: "删除模板", disabled: () => !canManage(), restoreFocus: false, onSelect: confirmRemoval},
             {id: "new-template", label: "新建资产模板", icon: <Icon name="plus"/>, disabled: () => !canManage(), restoreFocus: false, onSelect: newTemplate},
           ]}>
           <button type="button" className="asset-type-entry" aria-label={`${type.name}，${objectCount} 个对象`}
+            data-colored={type.color ? true : undefined} style={assetCardColorStyle(type.color)}
             aria-pressed={snapshot.selectedTypeId === type.id} disabled={!active} onClick={() => openTemplate(type.id)}>
             <strong className="asset-type-name" title={type.name}>{type.name}</strong>
             <span className="asset-type-count" aria-hidden="true">{objectCount}</span>
@@ -88,6 +134,18 @@ function TypeNavigation({resource, contextMenus, active, onOpenTypes, onOpenAsse
         <span className="asset-type-count" aria-hidden="true">{unclassifiedCount}</span>
       </button></li>}
     </ul>
+    <Dialog open={deleteTarget !== null && active} onOpenChange={open => {if (!open) closeRemoval();}}
+      title="删除资产模板" size="narrow" busy={pending || snapshot.saving} initialFocus={deleteCancel} finalFocus={listSurface}
+      description={deleteTarget ? `确定删除资产模板“${deleteTarget.name}”及其全部字段定义吗？此操作无法撤销。仍被对象或其他关联字段使用的模板无法删除。` : undefined}>
+      {(error ?? (deletionPendingSave ? snapshot.error : null)) && <p className="asset-form-error asset-delete-feedback" role="alert">{error ?? snapshot.error}</p>}
+      {deletionPendingSave && <p className="asset-form-help asset-delete-feedback" role="status">删除变更尚未保存，请重试保存。</p>}
+      <DialogActions>
+        <Button variant="secondary" ref={deleteCancel} disabled={pending || snapshot.saving} onClick={closeRemoval}>{deletionPendingSave ? "关闭" : "取消"}</Button>
+        <Button variant="danger" disabled={!active || pending || snapshot.saving} onClick={() => void removeConfirmed()}>
+          {pending || snapshot.saving ? "正在删除…" : deletionPendingSave ? "重试保存" : "确认删除"}
+        </Button>
+      </DialogActions>
+    </Dialog>
   </div>
   </MenuRegion>;
 }
@@ -183,7 +241,7 @@ function TypeEditor({resource, contextMenus, active, canInteract, onOpenAssets}:
   function newType() {
     const current = store.getSnapshot();
     if (!current.loaded || current.loading || current.blocked || current.saving || current.dirty) return;
-    begin({kind: "newType", id: crypto.randomUUID(), name: "", description: ""});
+    begin({kind: "newType", id: crypto.randomUUID(), name: "", description: "", color: null});
   }
   function canNavigateFromMenu(typeId: string | null) {
     const current = store.getSnapshot();
@@ -203,7 +261,7 @@ function TypeEditor({resource, contextMenus, active, canInteract, onOpenAssets}:
   }
   function editTemplate(typeId: string | null) {
     const target = templateFromMenu(typeId);
-    if (target) begin({kind: "editType", id: target.id, name: target.name, description: target.description});
+    if (target) begin({kind: "editType", id: target.id, name: target.name, description: target.description, color: target.color ?? null});
   }
   function newField(typeId: string | null) {
     const target = templateFromMenu(typeId);

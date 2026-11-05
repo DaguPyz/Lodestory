@@ -592,6 +592,29 @@ function findReactElement(node, predicate) {
   return findReactElement(node.props?.children, predicate);
 }
 
+test("template navigation renders saved colors while preserving selection", () => {
+  const f = uiPluginFixture();
+  f.React.useLayoutEffect = () => {};
+  const {AssetTypeNavigation} = f.loadSource("plugins/asset-management/AssetManagementView.tsx");
+  const session = {id: "color-session"};
+  const snapshot = {types: [
+    {id: "one", name: "人物", color: "#d8e5f2", order: 0, status: "active"},
+    {id: "two", name: "物品", order: 1, status: "active"},
+  ], assets: [], selectedTypeId: "one", loaded: true, loading: false, saving: false, blocked: false, dirty: false};
+  const store = {getSnapshot: () => snapshot, subscribe: () => () => {}};
+  const workbenchSnapshot = {session, active: true, busy: false};
+  const props = {workbench: {getSnapshot: () => workbenchSnapshot, subscribe: () => () => {}},
+    sessions: new Map([[session.id, {store, editing: new Set()}]]), active: true,
+    contextMenus: {Region: function Region() {}}, onOpenTypes() {}, onOpenAssets() {}};
+  const outer = f.withHooks({}, () => AssetTypeNavigation(props));
+  const tree = f.withHooks({}, () => outer.type(outer.props));
+  const colored = findReactElement(tree, el => el.type === "button" && el.props["aria-label"] === "人物，0 个对象");
+  const plain = findReactElement(tree, el => el.type === "button" && el.props["aria-label"] === "物品，0 个对象");
+  assert.equal(colored.props.style["--asset-card-background"], "#d8e5f2");
+  assert.equal(colored.props["aria-pressed"], true);
+  assert.equal(plain.props.style, undefined);
+});
+
 test("object view and search stay local while filtering both list modes", () => {
   const f = uiPluginFixture();
   // This fixture drives hook state directly; effects only manage focus and cleanup.
@@ -756,4 +779,125 @@ test("object view and search stay local while filtering both list modes", () => 
   assert.equal(modeButton(tree, "列表视图")?.props["aria-pressed"], true, "a new workbench session resets to list mode");
   assert.equal(modeButton(tree, "卡片视图")?.props["aria-pressed"], false);
   assert.deepEqual(writes, [], "view preference changes do not write asset schema data");
+});
+
+test("template navigation right-click deletion targets the chosen template and confirms before removal", async () => {
+  const f = uiPluginFixture();
+  f.React.useLayoutEffect = () => {};
+  const {AssetTypeNavigation} = f.loadSource("plugins/asset-management/AssetManagementView.tsx");
+  const session = {id: "delete-template-session"};
+  const target = {id: "type-delete-me", name: "人物", description: "", order: 0, status: "active"};
+  const other = {id: "type-keep", name: "地点", description: "", order: 1, status: "active"};
+  const snapshot = {types: [target, other], assets: [], fields: [], selectedTypeId: null, selectedAssetId: null,
+    loaded: true, loading: false, saving: false, dirty: false, blocked: false, error: null};
+  const calls = [];
+  const store = {
+    getSnapshot: () => snapshot,
+    subscribe: () => () => {},
+    async removeType(id) {
+      calls.push(id);
+      snapshot.types = snapshot.types.filter(type => type.id !== id);
+      return true;
+    },
+    async retry() { return true; },
+  };
+  const resource = {store, editing: new Set()};
+  const workbenchSnapshot = {session, active: true, busy: false};
+  const props = {workbench: {getSnapshot: () => workbenchSnapshot, subscribe: () => () => {}},
+    sessions: new Map([[session.id, resource]]), active: true,
+    contextMenus: {Region: function Region() {}}, onOpenTypes() {}, onOpenAssets() {}};
+  const outerHooks = {};
+  const navigationHooks = {};
+  function render() {
+    const outer = f.withHooks(outerHooks, () => AssetTypeNavigation(props));
+    return f.withHooks(navigationHooks, () => outer.type(outer.props));
+  }
+
+  let tree = render();
+  const targetRegion = findReactElement(tree, element => element.type?.name === "Region"
+    && element.props.context === target.id);
+  const deleteEntry = targetRegion.props.items.find(entry => entry.id === "delete-template");
+  assert.equal(typeof deleteEntry.onSelect, "function", "each template's right-click menu offers deletion");
+  deleteEntry.onSelect(target.id);
+  assert.equal(resource.editing.size, 1, "opening deletion confirmation marks this session as being edited");
+  tree = render();
+  const dialog = findReactElement(tree, element => element.type?.name === "Dialog" && element.props.title === "删除资产模板");
+  assert.equal(dialog.props.open, true);
+  assert.match(dialog.props.description, /人物/);
+  assert.deepEqual(calls, [], "right-clicking opens confirmation without deleting immediately");
+
+  const confirm = findReactElement(dialog, element => element.type?.name === "Button" && element.props.variant === "danger");
+  await confirm.props.onClick();
+  await new Promise(resolve => setImmediate(resolve));
+  tree = render();
+  assert.deepEqual(calls, [target.id], "confirmation deletes the template represented by the menu context");
+  assert.deepEqual(snapshot.types.map(type => type.id), [other.id], "the other template remains unchanged");
+  assert.equal(resource.editing.size, 0, "successful deletion releases the editing guard");
+  assert.equal(findReactElement(tree, element => element.type?.name === "Dialog" && element.props.title === "删除资产模板")?.props.open, false);
+});
+
+test("object list right-click deletion targets objects in both list and card views", async () => {
+  for (const mode of ["list", "cards"]) {
+    const f = uiPluginFixture();
+    f.React.useLayoutEffect = () => {};
+    const {AssetRecordsEditor} = f.loadSource("plugins/asset-management/AssetRecordsView.tsx");
+    const session = {id: `delete-object-${mode}`};
+    const type = {id: "object-menu-type", name: "人物", description: "", order: 0, status: "active"};
+    const asset = {id: `object-menu-${mode}`, name: "林舟", description: "旅人", typeId: type.id, values: {}};
+    const snapshot = {types: [type], assets: [asset], fields: [], selectedTypeId: type.id, selectedAssetId: null,
+      loaded: true, loading: false, saving: false, dirty: false, blocked: false, error: null};
+    const calls = [];
+    const store = {
+      getSnapshot: () => snapshot,
+      subscribe: () => () => {},
+      selectAsset(id) { snapshot.selectedAssetId = id; return true; },
+      async removeAsset(id) {
+        calls.push(id);
+        snapshot.assets = snapshot.assets.filter(item => item.id !== id);
+        return true;
+      },
+      async retry() { return true; },
+    };
+    const resource = {store, editing: new Set()};
+    const workbenchSnapshot = {session, active: true, busy: false};
+    const props = {workbench: {getSnapshot: () => workbenchSnapshot, subscribe: () => () => {}},
+      sessions: new Map([[session.id, resource]]), active: true, onOpenTypes() {},
+      contextMenus: {Region: function Region() {}}};
+    const editorHooks = {};
+    const recordHooks = {};
+    function render() {
+      const outer = f.withHooks(editorHooks, () => AssetRecordsEditor(props));
+      return f.withHooks(recordHooks, () => outer.type(outer.props));
+    }
+
+    let tree = render();
+    if (mode === "cards") {
+      findReactElement(tree, element => element.type?.name === "IconButton" && element.props.label === "卡片视图").props.onClick();
+      tree = render();
+      assert.ok(findReactElement(tree, element => element.type === "ul" && element.props.className === "asset-object-cards"),
+        "the card view renders the object-specific context-menu region");
+    } else {
+      assert.ok(findReactElement(tree, element => element.type === "table" && element.props.className === "asset-object-table"),
+        "the list view renders the object-specific context-menu region");
+    }
+
+    const objectRegion = findReactElement(tree, element => element.type?.name === "Region" && element.props.context === asset.id);
+    assert.ok(objectRegion, `${mode} view binds its right-click menu to the object ID`);
+    const deleteEntry = objectRegion.props.items.find(entry => entry.id === "delete-object");
+    assert.equal(deleteEntry.disabled(asset.id), false);
+    deleteEntry.onSelect(asset.id);
+    tree = render();
+    const dialog = findReactElement(tree, element => element.type?.name === "Dialog" && element.props.title === "删除对象");
+    assert.equal(dialog.props.open, true);
+    assert.match(dialog.props.description, /林舟/);
+    assert.deepEqual(calls, [], "the right-click action asks for confirmation first");
+
+    findReactElement(dialog, element => element.type?.name === "Button" && element.props.variant === "danger").props.onClick();
+    await new Promise(resolve => setImmediate(resolve));
+    tree = render();
+    assert.deepEqual(calls, [asset.id], `${mode} view removes the object associated with the menu region`);
+    assert.equal(snapshot.assets.length, 0);
+    assert.equal(findReactElement(tree, element => element.type?.name === "Dialog" && element.props.title === "删除对象")?.props.open, false);
+    assert.equal(resource.editing.size, 0);
+  }
 });

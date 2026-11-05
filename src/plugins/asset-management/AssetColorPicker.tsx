@@ -2,16 +2,17 @@ import {useId} from "react";
 import {TextField} from "@lodestory/ui";
 import {ASSET_COLOR_PRESETS, assetCardColorStyle, isAssetColor} from "./assetCardColor";
 
-export function AssetColorPicker({value, disabled, onChange}: {
+export function AssetColorPicker({value, disabled, onChange, target = "卡片"}: {
   value: string | null;
   disabled: boolean;
   onChange(value: string | null): void;
+  target?: string;
 }) {
   const id = useId();
   return <fieldset className="asset-color-picker" disabled={disabled} aria-describedby={`${id}-hint`}>
     <legend>颜色标记 <span className="asset-optional">选填</span></legend>
     <div className="asset-color-presets">
-      <label className="asset-color-choice asset-color-default" title="使用默认卡片背景">
+      <label className="asset-color-choice asset-color-default" title={`使用默认${target}背景`}>
         <input type="radio" name={`${id}-preset`} value="default" aria-label="默认" checked={value === null}
           onChange={() => onChange(null)}/>
         <span>默认</span>
@@ -29,6 +30,6 @@ export function AssetColorPicker({value, disabled, onChange}: {
         value={value ?? ""} placeholder="#RRGGBB" pattern="#[0-9a-fA-F]{6}" maxLength={7}
         title="请输入完整的颜色值，例如 #D8E5F2" onChange={event => onChange(event.currentTarget.value || null)}/>
     </div>
-    <p id={`${id}-hint`} className="asset-form-help">用于卡片背景，可选候选色或输入十六进制颜色；选择“默认”可清除。</p>
+    <p id={`${id}-hint`} className="asset-form-help">用于{target}背景，可选候选色或输入十六进制颜色；选择“默认”可清除。</p>
   </fieldset>;
 }

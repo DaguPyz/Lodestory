@@ -16,6 +16,7 @@ export type AssetTypeTemplate = Readonly<{
   id: string;
   name: string;
   description: string;
+  color?: string;
   order: number;
   status: "active" | "archived";
 }>;
@@ -48,6 +49,7 @@ export type CreateAssetTypeInput = Readonly<{
   id: string;
   name: string;
   description: string;
+  color?: string | null;
 }>;
 
 export type CreateAssetInput = Readonly<{
@@ -89,7 +91,7 @@ export type AssetSchemaStore = Readonly<{
   createAsset(input: CreateAssetInput): Promise<boolean>;
   updateAsset(id: string, patch: Readonly<{name?: string; description?: string; color?: string | null; values?: Readonly<Record<string, AssetPropertyValue>>}>): Promise<boolean>;
   removeAsset(id: string): Promise<boolean>;
-  updateType(id: string, patch: Readonly<{name?: string; description?: string}>): Promise<boolean>;
+  updateType(id: string, patch: Readonly<{name?: string; description?: string; color?: string | null}>): Promise<boolean>;
   moveType(id: string, direction: -1 | 1): Promise<boolean>;
   createField(input: CreateAssetFieldInput): Promise<boolean>;
   renameField(id: string, title: string): Promise<boolean>;
@@ -211,7 +213,7 @@ function normalizeSchema(value: unknown): {schema: SchemaData | null; error: str
   const typeOrders = new Set<number>();
   const activeTypeNames = new Set<string>();
   for (const candidate of value.types) {
-    if (!isRecord(candidate) || !keysMatch(candidate, TYPE_FIELDS)) {
+    if (!isRecord(candidate) || !keysMatch(candidate, TYPE_FIELDS, ["color"])) {
       return {schema: null, error: "资产类型定义字段不完整或包含未知字段，已保留原始文件。"};
     }
     if (!isUuid(candidate.id) || !orderIsValid(candidate.order)) {
@@ -239,7 +241,9 @@ function normalizeSchema(value: unknown): {schema: SchemaData | null; error: str
     globalIds.add(candidate.id);
     typeOrders.add(candidate.order);
     if (candidate.status === "active") activeTypeNames.add(nameKey);
-    types.push(Object.freeze({id: candidate.id, name, description: candidate.description, order: candidate.order, status: candidate.status}));
+    const color = hasOwn(candidate, "color") ? normalizeAssetColor(candidate.color) : undefined;
+    if (color === null) return {schema: null, error: "资产模板颜色必须是 #RRGGBB 格式，已保留原始文件。"};
+    types.push(Object.freeze({id: candidate.id, name, description: candidate.description, ...(color !== undefined ? {color} : {}), order: candidate.order, status: candidate.status}));
   }
 
   const rawAssets: {id: string; name: string; description: string; typeId: string | null; color?: string; values: Record<string, unknown>}[] = [];
@@ -903,6 +907,12 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       return Promise.resolve(false);
     }
     const name = typeof input.name === "string" ? input.name.trim() : "";
+    const color = input.color == null ? undefined : normalizeAssetColor(input.color);
+    if (color === null) {
+      localError = "资产模板颜色必须是 #RRGGBB 格式。";
+      publish();
+      return Promise.resolve(false);
+    }
     if (!isUuid(input.id) || !name || typeof input.description !== "string") {
       localError = "资产类型需要有效 UUID、名称和文本说明。";
       publish();
@@ -910,8 +920,8 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     }
     const existing = schema.types.find(type => type.id === input.id);
     if (existing) {
-      if (existing.name !== name || existing.description !== input.description) {
-        if (pendingTypeIds.has(input.id)) return updateType(input.id, {name, description: input.description});
+      if (existing.name !== name || existing.description !== input.description || existing.color !== color) {
+        if (pendingTypeIds.has(input.id)) return updateType(input.id, {name, description: input.description, color: color ?? null});
         localError = "资产类型 ID 已被其他类型使用。";
         publish();
         return Promise.resolve(false);
@@ -924,7 +934,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       return Promise.resolve(false);
     }
     const order = schema.types.reduce((maximum, type) => Math.max(maximum, type.order), -1) + 1;
-    const type: AssetTypeTemplate = Object.freeze({id: input.id, name, description: input.description, order, status: "active"});
+    const type: AssetTypeTemplate = Object.freeze({id: input.id, name, description: input.description, ...(color !== undefined ? {color} : {}), order, status: "active"});
     return mutate(currentSchemaWith([...schema.types, type]), type.id);
   }
 
@@ -1090,7 +1100,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     return mutate(freezeSchema(schema.types, fields, assets), selectedTypeId, nextSelectedAssetId);
   }
 
-  function updateType(id: string, patch: Readonly<{name?: string; description?: string}>): Promise<boolean> {
+  function updateType(id: string, patch: Readonly<{name?: string; description?: string; color?: string | null}>): Promise<boolean> {
     if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
     if (!isRecord(patch)) {
       localError = "资产类型修改内容无效。";
@@ -1102,6 +1112,12 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     const current = schema.types[index];
     const name = patch.name === undefined ? current.name : typeof patch.name === "string" ? patch.name.trim() : "";
     const description = patch.description === undefined ? current.description : patch.description;
+    const color = patch.color === undefined ? current.color : patch.color === null ? undefined : normalizeAssetColor(patch.color);
+    if (color === null) {
+      localError = "资产模板颜色必须是 #RRGGBB 格式。";
+      publish();
+      return Promise.resolve(false);
+    }
     if (!name || typeof description !== "string") {
       localError = "资产类型名称不能为空，说明必须是文本。";
       publish();
@@ -1113,9 +1129,10 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       publish();
       return Promise.resolve(false);
     }
-    if (current.name === name && current.description === description) return settleNoop();
+    if (current.name === name && current.description === description && current.color === color) return settleNoop();
     const types = [...schema.types];
-    types[index] = Object.freeze({...current, name, description});
+    const {color: _previousColor, ...rest} = current;
+    types[index] = Object.freeze({...rest, name, description, ...(color !== undefined ? {color} : {})});
     return mutate(currentSchemaWith(types));
   }
 

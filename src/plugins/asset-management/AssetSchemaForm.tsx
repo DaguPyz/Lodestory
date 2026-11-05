@@ -1,9 +1,11 @@
 import {useState, type FormEvent, type RefObject} from "react";
 import {Button, DialogActions, Icon, IconButton, Select, Textarea, TextField, type SelectOption} from "@lodestory/ui";
 import type {AssetFieldOption, AssetSchemaStore, AssetTypeTemplate, AssetValueType} from "./assetSchemaStore";
+import {AssetColorPicker} from "./AssetColorPicker";
+import {isAssetColor} from "./assetCardColor";
 
 export type AssetSchemaDraft =
-  | {kind: "newType" | "editType"; id: string; name: string; description: string}
+  | {kind: "newType" | "editType"; id: string; name: string; description: string; color: string | null}
   | {kind: "newField" | "renameField"; id: string; ownerKind?: "type" | "asset"; typeId: string; title: string; valueType: AssetValueType; options: AssetFieldOption[]; targetTypeId: string | null; defaultText: string; defaultOptions: string[]};
 
 export type AssetSchemaFormProps = {
@@ -60,6 +62,7 @@ export function AssetSchemaForm({draft, types, busy, error, inputRef, onChange, 
     const nameLength = characterCount(name);
     if (nameLength < 1 || nameLength > 60) return "模板名称需要填写 1–60 个字符。";
     if (characterCount(draft.description) > 200) return "模板说明不能超过 200 个字符。";
+    if (draft.color !== null && !isAssetColor(draft.color)) return "颜色需要使用 #RRGGBB 格式。";
     if (types.some(type => type.id !== draft.id && type.status === "active" && normalizedName(type.name) === normalizedName(name))) {
       return "已存在同名的资产模板。";
     }
@@ -131,11 +134,11 @@ export function AssetSchemaForm({draft, types, busy, error, inputRef, onChange, 
     setValidationError(null);
 
     if (draft.kind === "newType") {
-      const input = {id: draft.id, name: draft.name.trim(), description: draft.description};
+      const input = {id: draft.id, name: draft.name.trim(), description: draft.description, color: draft.color};
       onSubmit(() => store.createType(input));
     } else if (draft.kind === "editType") {
       const id = draft.id;
-      const patch = {name: draft.name.trim(), description: draft.description};
+      const patch = {name: draft.name.trim(), description: draft.description, color: draft.color};
       onSubmit(() => store.updateType(id, patch));
     } else if (draft.kind === "renameField") {
       const id = draft.id;
@@ -210,6 +213,8 @@ export function AssetSchemaForm({draft, types, busy, error, inputRef, onChange, 
           onChange={event => {onChange({...draft, description: event.currentTarget.value}); setValidationError(null);}} />
         <span className="asset-form-help">{characterCount(draft.description)}/200</span>
       </label>
+      <AssetColorPicker value={draft.color} disabled={fieldsDisabled} target="左侧列表选项"
+        onChange={color => {onChange({...draft, color}); setValidationError(null);}}/>
     </> : <>
       <label className="asset-form-field">
         <span>字段名称</span>

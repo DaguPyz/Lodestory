@@ -42,6 +42,7 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
   contextMenus: ContextMenuService;
 }) {
   const {store} = resource;
+  const MenuRegion = contextMenus.Region;
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const types = snapshot.types.filter(type => type.status === "active").slice().sort((a, b) => a.order - b.order);
   const activeTypeIds = new Set(types.map(type => type.id));
@@ -194,6 +195,31 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
     const asset = assetFromMenu(assetId);
     if (asset) confirmAssetRemoval(asset);
   }
+  function assetFromListMenu(assetId: string | null) {
+    const current = store.getSnapshot();
+    if (!canUseMenu() || !assetId || selected || snapshot.selectedAssetId !== null ||
+      current.selectedAssetId !== null || current.selectedTypeId !== snapshot.selectedTypeId) return undefined;
+    const currentActiveTypeIds = new Set(current.types.filter(type => type.status === "active").map(type => type.id));
+    const currentType = current.types.find(type => type.id === current.selectedTypeId && type.status === "active");
+    const asset = current.assets.find(item => item.id === assetId);
+    if (!asset) return undefined;
+    return currentType
+      ? asset.typeId === currentType.id ? asset : undefined
+      : asset.typeId === null || !currentActiveTypeIds.has(asset.typeId) ? asset : undefined;
+  }
+  function removeAssetFromListMenu(assetId: string | null) {
+    const asset = assetFromListMenu(assetId);
+    if (asset) confirmAssetRemoval(asset);
+  }
+  function createObjectFromAssetMenu(assetId: string | null) {
+    if (assetFromListMenu(assetId) && selectedType) newAsset();
+  }
+  function openTemplateSettingsFromAssetMenu(assetId: string | null) {
+    if (assetFromListMenu(assetId) && selectedType) openTypes(false);
+  }
+  function createTemplateFromAssetMenu(assetId: string | null) {
+    if (assetFromListMenu(assetId) && !selectedType) openTypes(true);
+  }
   function openSelectedTemplateSettings(menuTypeId: string | null) {
     const current = store.getSnapshot();
     const validSelection = current.types.some(type => type.id === current.selectedTypeId && type.status === "active");
@@ -310,6 +336,19 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
     {id: "delete-object", label: "删除对象", disabled: assetId => !assetFromMenu(assetId),
       restoreFocus: false, onSelect: removeAssetFromMenu},
   ];
+  const objectMenuItems: readonly MenuEntry<string | null>[] = selectedType ? [
+    {id: "create-object", label: "新建对象", icon: <Icon name="plus"/>, disabled: assetId => !assetFromListMenu(assetId),
+      restoreFocus: false, onSelect: createObjectFromAssetMenu},
+    {id: "edit-template", label: "模板设置", disabled: assetId => !assetFromListMenu(assetId),
+      restoreFocus: false, onSelect: openTemplateSettingsFromAssetMenu},
+    {id: "delete-object", label: "删除对象", disabled: assetId => !assetFromListMenu(assetId),
+      restoreFocus: false, onSelect: removeAssetFromListMenu},
+  ] : [
+    {id: "create-template", label: "新建资产模板", icon: <Icon name="plus"/>, disabled: assetId => !assetFromListMenu(assetId),
+      restoreFocus: false, onSelect: createTemplateFromAssetMenu},
+    {id: "delete-object", label: "删除对象", disabled: assetId => !assetFromListMenu(assetId),
+      restoreFocus: false, onSelect: removeAssetFromListMenu},
+  ];
 
   const content = <div className="asset-type-editor asset-record-editor" ref={editor} tabIndex={!draft && active ? 0 : -1}>
     <header className={isObjectList ? "asset-editor-header asset-records-header" : "asset-editor-header"}>
@@ -373,7 +412,9 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
           {visibleAssets.map(asset => {
             const templateCount = asset.typeId === null ? 0 : templateFieldCounts.get(asset.typeId) ?? 0;
             const customCount = customFieldCounts.get(asset.id) ?? 0;
-            return <li className="asset-object-card" key={asset.id} data-colored={isAssetColor(asset.color) || undefined}
+            return <MenuRegion key={asset.id} context={asset.id} label={`对象“${asset.name}”操作`} items={objectMenuItems}
+              disabled={listActionsDisabled} fallbackFocus={() => editor.current}>
+            <li className="asset-object-card" data-colored={isAssetColor(asset.color) || undefined}
               style={assetCardColorStyle(asset.color)}>
             <header><h2><Button variant="ghost" disabled={disabled} title={asset.name}
               aria-label={`查看对象“${asset.name}”`} onClick={() => showAsset(asset.id)}>
@@ -391,7 +432,7 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
               </div>
             </header>
             {asset.description.trim() !== "" && <p className="asset-object-card-summary">{asset.description}</p>}
-          </li>;})}
+          </li></MenuRegion>;})}
         </ul></> : <div id="asset-object-results" className="asset-object-empty">
           <p>{objectListEmptyTitle}</p>
           <span>{objectListEmptyHint}</span>
@@ -403,7 +444,8 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
             {scopeFields.map(field => <th scope="col" key={field.id} data-value-type={field.valueType}>{field.title}</th>)}
             <th scope="col" aria-label="对象操作"/>
           </tr></thead>
-          <tbody>{visibleAssets.map(asset => <tr key={asset.id}>
+          <tbody>{visibleAssets.map(asset => <MenuRegion key={asset.id} context={asset.id} label={`对象“${asset.name}”操作`} items={objectMenuItems}
+            disabled={listActionsDisabled} fallbackFocus={() => editor.current}><tr>
             <th scope="row"><div className="asset-object-name"><Button variant="ghost" disabled={disabled}
               title={asset.name} aria-label={`查看对象“${asset.name}”`} onClick={() => showAsset(asset.id)}>
               <strong className="asset-object-name-label">{asset.name}</strong>
@@ -419,7 +461,7 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
               <IconButton label={`删除对象“${asset.name}”`} disabled={disabled || resource.editing.size > 0}
                 onClick={() => confirmAssetRemoval(asset)}><Icon name="trash"/></IconButton>
             </td>
-          </tr>)}{visibleAssets.length === 0 && <tr><td colSpan={scopeFields.length + 2}>
+          </tr></MenuRegion>)}{visibleAssets.length === 0 && <tr><td colSpan={scopeFields.length + 2}>
           <div className="asset-object-empty"><p>{objectListEmptyTitle}</p><span>{objectListEmptyHint}</span></div>
           </td></tr>}</tbody>
         </table>
@@ -454,7 +496,6 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
       </DialogActions>
     </Dialog>
   </div>;
-  const MenuRegion = contextMenus.Region;
   return <MenuRegion label={isObjectList ? "对象列表操作" : "对象详情操作"}
     context={isObjectList ? selectedType?.id ?? null : selected?.id ?? null}
     items={isObjectList ? listMenuItems : detailMenuItems} disabled={draft !== null || listActionsDisabled}

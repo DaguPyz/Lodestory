@@ -1,4 +1,4 @@
-import {useLayoutEffect, useRef, useState, useSyncExternalStore} from "react";
+import {useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore} from "react";
 import type {WorkbenchService} from "@lodestory/sdk/workbench";
 import type {ContextMenuService, MenuEntry} from "@lodestory/sdk/context-menu";
 import {Button, Dialog, DialogActions, Icon, IconButton} from "@lodestory/ui";
@@ -49,13 +49,18 @@ function TypeNavigation({resource, contextMenus, active, onOpenTypes, onOpenAsse
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const types = snapshot.types.filter(item => item.status === "active").sort((a, b) => a.order - b.order);
   const disabled = !active || snapshot.loading || snapshot.saving || snapshot.blocked || !snapshot.loaded || snapshot.dirty || pending || deleteTarget !== null;
-  const deletionPendingSave = deleteTarget !== null && !snapshot.types.some(type => type.id === deleteTarget.id) && snapshot.dirty;
+  const deletionPendingSave = deleteTarget !== null && snapshot.dirty
+    && (snapshot.pendingTypeRemoval === deleteTarget.id || !snapshot.types.some(type => type.id === deleteTarget.id));
   useLayoutEffect(() => () => {
     epoch.current++;
     resource.editing.delete(editingToken.current);
   }, [resource]);
-  const typeIds = new Set(types.map(type => type.id));
-  const unclassifiedCount = snapshot.assets.filter(asset => asset.typeId === null || !typeIds.has(asset.typeId)).length;
+  const counts = useMemo(() => {
+    const byType = new Map<string | null, number>();
+    for (const asset of snapshot.assets) byType.set(asset.typeId, (byType.get(asset.typeId) ?? 0) + 1);
+    return byType;
+  }, [snapshot.assets]);
+  const unclassifiedCount = snapshot.assets.length - types.reduce((total, type) => total + (counts.get(type.id) ?? 0), 0);
   function openTemplate(id: string | null) {
     if (!canInteract() || resource.editing.size > 0) return;
     if (store.selectType(id) && store.selectAsset(null)) onOpenAssets();
@@ -111,7 +116,7 @@ function TypeNavigation({resource, contextMenus, active, onOpenTypes, onOpenAsse
     {snapshot.loaded && !snapshot.blocked && types.length === 0 && <p className="asset-navigation-message">右键新建资产模板，定义字段后再添加具体对象。</p>}
     <ul className="asset-type-list" aria-label="资产模板">
       {types.map(type => {
-        const objectCount = snapshot.assets.filter(asset => asset.typeId === type.id).length;
+        const objectCount = counts.get(type.id) ?? 0;
         return <li key={type.id}>
           <MenuRegion context={type.id} label={`${type.name}资产模板操作`} disabled={disabled} fallbackFocus={() => listSurface.current} items={[
             {id: "template-settings", label: "模板设置", disabled: () => !canManage(), restoreFocus: false, onSelect: openSettings},
@@ -192,7 +197,8 @@ function TypeEditor({resource, contextMenus, active, canInteract, onOpenAssets}:
   activeRef.current = active;
   const disabled = !active || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.saving || snapshot.dirty || pending;
   const editing = draft !== null || deleteTarget !== null;
-  const deletionPendingSave = deleteTarget !== null && !snapshot.types.some(type => type.id === deleteTarget.id) && snapshot.dirty;
+  const deletionPendingSave = deleteTarget !== null && snapshot.dirty
+    && (snapshot.pendingTypeRemoval === deleteTarget.id || !snapshot.types.some(type => type.id === deleteTarget.id));
   const deletionError = error ?? (deletionPendingSave ? snapshot.error : null);
   const orderDisabled = !active || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.orderBlocked || editing
     || pending && !snapshot.reordering || snapshot.dirty && !snapshot.reordering || snapshot.saving && !snapshot.reordering;

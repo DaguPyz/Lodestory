@@ -23,6 +23,29 @@
       const projects = new Map();
       const parentOf = path => path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
       const timelineDirectory = ".lodestory/outline-design/timelines";
+      function writeAssetGroups(state, assets, fields) {
+        const byAssetId = new Map(assets.map(asset => [asset.id, asset]));
+        const groups = new Map();
+        const groupFor = typeId => {
+          const fileName = typeId ?? "unclassified";
+          if (!groups.has(fileName)) groups.set(fileName, {assets: [], fields: []});
+          return groups.get(fileName);
+        };
+        for (const asset of assets) groupFor(asset.typeId).assets.push(asset);
+        for (const field of fields) {
+          const typeId = field.owner.kind === "type" ? field.owner.id : byAssetId.get(field.owner.id)?.typeId ?? null;
+          groupFor(typeId).fields.push(field);
+        }
+        state.directories.add(".lodestory/assets/objects");
+        for (const [fileName, content] of groups) {
+          state.files.set(`.lodestory/assets/objects/${fileName}.json`,
+            encode(JSON.stringify(content)));
+        }
+        const groupIds = [...groups.keys()].map(fileName => fileName === "unclassified" ? null : fileName);
+        state.files.set(".lodestory/assets/schema.json", encode(JSON.stringify({
+          format: "lodestory.asset-schema", schemaVersion: 4, groups: groupIds,
+        })));
+      }
       function projectFiles(projectPath) {
         let state = projects.get(projectPath);
         if (!state) {
@@ -33,7 +56,7 @@
             format: "quill-delta", version: 1,
             ops: [{insert: Array.from({length: 150}, (_, index) => `第 ${index + 1} 段：滚动长篇正文时，工具栏应保持固定。\n`).join("")}],
           })));
-          state = {files, directories: new Set(["", "正文", "资料"])};
+          state = {files, directories: new Set(["", "正文", "资料"]), calls: []};
           if (scenario?.startsWith("asset-template-workspace")) {
             // Sample objects exist only in this development fixture's in-memory files.
             const refinedPreview = scenario === "asset-template-workspace-refined";
@@ -96,10 +119,11 @@
               },
             }));
             for (const directory of [".lodestory", ".lodestory/assets"]) state.directories.add(directory);
-            files.set(".lodestory/assets/schema.json", encode(JSON.stringify({
-              format: "lodestory.asset-schema", schemaVersion: 2,
-              types: [{id: peopleId, name: longPreview ? "来自北境边城的流亡者与同行之人" : "人物", description: "故事中的角色", order: 0, status: "active"}, {id: artsId, name: "功法", description: "修炼与施展的方法", order: 1, status: "active"}],
-              fields: [field(ageId, peopleId, "年龄", "number", 0, {}, {defaultValue: 18}),
+            files.set(".lodestory/assets/templates.json", encode(JSON.stringify([
+              {id: peopleId, name: longPreview ? "来自北境边城的流亡者与同行之人" : "人物", description: "故事中的角色", order: 0, status: "active"},
+              {id: artsId, name: "功法", description: "修炼与施展的方法", order: 1, status: "active"},
+            ])));
+            const workspaceFields = [field(ageId, peopleId, "年龄", "number", 0, {}, {defaultValue: 18}),
                 field(identityId, peopleId, "身份", "text", 1, {}, {defaultValue: "门派弟子"}),
                 field(factionId, peopleId, "所属门派", "text", 2),
                 ...(richArtsPreview ? [field(artsNameId, artsId, "名称", "text", 0),
@@ -107,8 +131,8 @@
                   field(artsAbilityId, artsId, "能力", "text", 2)]
                   : [field(gradeId, artsId, "品阶", "text", 0, {}, {defaultValue: "黄阶"})]),
                 ...(masonryPreview ? masonryFields : []),
-                {...field(customId, peopleId, "备注", "text", 0), owner: {kind: "asset", id: oldAssetId}}],
-              assets: [
+                {...field(customId, peopleId, "备注", "text", 0), owner: {kind: "asset", id: oldAssetId}}];
+            const workspaceAssets = [
                 {id: "40000000-0000-4000-8000-000000000001", name: longPreview ? "林舟与来自北境边城的同行者共同记载的修行经历与未完的归乡之路" : "林舟",
                   description: "下山寻找失踪的师父", typeId: peopleId,
                   values: {[ageId]: 18, [identityId]: longPreview ? "曾任北境守城军副统领，现为隐居山中的游历者" : "门派弟子", [factionId]: "青云门"}},
@@ -127,8 +151,8 @@
                   {id: "40000000-0000-4000-8000-000000000004", name: "御风诀", description: "借山风而行", typeId: artsId, values: {[gradeId]: "玄阶"}},
                 ]),
                 {id: oldAssetId, name: "旧设定", description: "整理前留下的对象", typeId: null, values: {[customId]: "旧资料保留"}},
-              ],
-            })));
+            ];
+            writeAssetGroups(state, workspaceAssets, workspaceFields);
           }
           if (scenario?.startsWith("asset-types-delete")) {
             const targetTypeId = "10000000-0000-4000-8000-000000000001";
@@ -136,15 +160,15 @@
             const referencedTypeId = "10000000-0000-4000-8000-000000000003";
             const type = (id, name, order) => ({id, name, description: "", order, status: "active"});
             for (const directory of [".lodestory", ".lodestory/assets"]) state.directories.add(directory);
-            files.set(".lodestory/assets/schema.json", encode(JSON.stringify({
-              format: "lodestory.asset-schema", schemaVersion: 2,
-              types: [type(targetTypeId, "兵器", 0), type(usedTypeId, "功法", 1), type(referencedTypeId, "门派", 2)],
-              fields: [
-                {id: "20000000-0000-4000-8000-000000000001", owner: {kind: "type", id: targetTypeId}, title: "材质", valueType: "text", config: {}, order: 0, status: "active"},
-                {id: "20000000-0000-4000-8000-000000000002", owner: {kind: "type", id: usedTypeId}, title: "所属门派", valueType: "reference", config: {targetTypeId: referencedTypeId}, order: 0, status: "active"},
-              ],
-              assets: [{id: "40000000-0000-4000-8000-000000000001", name: "御风诀", description: "", typeId: usedTypeId, values: {}}],
-            })));
+            files.set(".lodestory/assets/templates.json", encode(JSON.stringify([
+              type(targetTypeId, "兵器", 0), type(usedTypeId, "功法", 1), type(referencedTypeId, "门派", 2),
+            ])));
+            writeAssetGroups(state, [
+              {id: "40000000-0000-4000-8000-000000000001", name: "御风诀", description: "", typeId: usedTypeId, values: {}},
+            ], [
+              {id: "20000000-0000-4000-8000-000000000001", owner: {kind: "type", id: targetTypeId}, title: "材质", valueType: "text", config: {}, order: 0, status: "active"},
+              {id: "20000000-0000-4000-8000-000000000002", owner: {kind: "type", id: usedTypeId}, title: "所属门派", valueType: "reference", config: {targetTypeId: referencedTypeId}, order: 0, status: "active"},
+            ]);
           }
           if (scenario?.startsWith("asset-records")) {
             const typeId = "10000000-0000-4000-8000-000000000001";
@@ -234,6 +258,13 @@
         { id: "66c64727-ddb5-4bd6-b8cc-b029b57bde2c", name: "测试故事", path: "/tmp/lodestory-ui/测试故事", lastOpenedAt: new Date().toISOString(), available: true },
         { id: "afc7f0f5-1dc4-46a1-988c-a9b4ef69c6e1", name: "已移动故事", path: "/tmp/lodestory-ui/旧位置", lastOpenedAt: "2026-09-25T01:41:00Z", available: false },
       ];
+      if (scenario?.startsWith("asset-")) window.__projectFixture = Object.freeze({
+        readJson(path) {
+          const bytes = projects.get(records[0]?.path)?.files.get(path);
+          return bytes ? JSON.parse(new TextDecoder().decode(new Uint8Array(bytes))) : null;
+        },
+        calls() { return [...(projects.get(records[0]?.path)?.calls ?? [])]; },
+      });
       window.isTauri = true;
       mockWindows("main");
       let releaseProjectTree;
@@ -261,6 +292,7 @@
         if (["list_documents", "read_project_file", "read_project_file_base64", "create_project_file", "save_project_file", "delete_project_file", "list_project_directory", "create_project_directory", "rename_project_path"].includes(command)) {
           const state = projectFiles(args.projectPath);
           const path = args.path ?? "";
+          state.calls.push({command, path});
           const inTimeline = path === timelineDirectory || path.startsWith(`${timelineDirectory}/`);
           const inTimelineEvents = path.startsWith(".lodestory/timeline/events/");
           function makeParents(directory) {
@@ -325,7 +357,7 @@
             return;
           }
           if (command === "create_project_file") {
-            if (scenario === "asset-schema-create-once" && path === ".lodestory/assets/schema.json" && !state.assetSchemaCreateFailed) {
+            if (scenario === "asset-schema-create-once" && path === ".lodestory/assets/templates.json" && !state.assetSchemaCreateFailed) {
               state.assetSchemaCreateFailed = true;
               throw {message: "类型模板保存失败：模拟首次创建失败，请重试。"};
             }
@@ -348,19 +380,19 @@
             return {path, fileName: path.split("/").at(-1), bytes: [...state.files.get(path)]};
           }
           if (scenario === "save-error" && command === "save_project_file") throw {message: "保存文档失败：磁盘不可写。"};
-          if (scenario === "asset-records-save-once" && command === "save_project_file" && path === ".lodestory/assets/schema.json" && !state.assetSaveFailed) {
+          if (scenario === "asset-records-save-once" && command === "save_project_file" && path.startsWith(".lodestory/assets/objects/") && !state.assetSaveFailed) {
             state.assetSaveFailed = true;
             throw {message: "资产保存失败：模拟首次写入失败，请重试。"};
           }
-          if (scenario === "asset-records-delete-save-once" && command === "save_project_file" && path === ".lodestory/assets/schema.json" && !state.assetDeleteSaveFailed) {
+          if (scenario === "asset-records-delete-save-once" && command === "save_project_file" && path.startsWith(".lodestory/assets/objects/") && !state.assetDeleteSaveFailed) {
             state.assetDeleteSaveFailed = true;
             throw {message: "删除保存失败：模拟首次写入失败，请重试。"};
           }
-          if (scenario === "asset-types-delete-save-once" && command === "save_project_file" && path === ".lodestory/assets/schema.json" && !state.assetTypeDeleteSaveFailed) {
+          if (scenario === "asset-types-delete-save-once" && command === "save_project_file" && path === ".lodestory/assets/templates.json" && !state.assetTypeDeleteSaveFailed) {
             state.assetTypeDeleteSaveFailed = true;
             throw {message: "类型删除保存失败：模拟首次写入失败，请重试。"};
           }
-          if (scenario === "asset-template-workspace-save-once" && command === "save_project_file" && path === ".lodestory/assets/schema.json" && !state.assetWorkspaceSaveFailed) {
+          if (scenario === "asset-template-workspace-save-once" && command === "save_project_file" && path.endsWith("/10000000-0000-4000-8000-000000000002.json") && !state.assetWorkspaceSaveFailed) {
             state.assetWorkspaceSaveFailed = true;
             throw {message: "对象保存失败：模拟首次写入失败，请重试。"};
           }

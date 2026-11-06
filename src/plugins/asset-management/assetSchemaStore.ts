@@ -1,5 +1,6 @@
-import {createAssetTypeOrderStore} from "./assetTypeOrderStore";
-import type {ProjectByteView, ProjectFile, ProjectFileData, ProjectFiles, ProjectSaveState} from "@lodestory/sdk/project-storage";
+import {createAssetObjectFiles, parseGroupManifest, type AssetGroupData, type AssetGroupId} from "./assetObjectFiles";
+import {createAssetTemplateStore, readLegacyTypeOrder, validateAssetTemplates} from "./assetTemplateStore";
+import type {ProjectByteView, ProjectDirectoryListing, ProjectFile, ProjectFileData, ProjectFiles, ProjectSaveState} from "@lodestory/sdk/project-storage";
 
 export type AssetValueType = "text" | "number" | "singleSelect" | "multiSelect" | "reference";
 
@@ -75,6 +76,7 @@ export type AssetSchemaSnapshot = Readonly<{
   loading: boolean;
   saving: boolean;
   reordering: boolean;
+  pendingTypeRemoval: string | null;
   orderBlocked: boolean;
   dirty: boolean;
   blocked: boolean;
@@ -107,18 +109,14 @@ export type AssetSchemaStore = Readonly<{
 const PATH = ".lodestory/assets/schema.json";
 const DIRECTORY = ".lodestory/assets";
 const FORMAT = "lodestory.asset-schema";
-const LEGACY_SCHEMA_VERSION = 1;
-const SCHEMA_VERSION = 2;
+const INLINE_DATA_VERSION = 3;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
-const MAX_TYPE_NAME = 60;
-const MAX_TYPE_DESCRIPTION = 200;
 const MAX_FIELD_TITLE = 60;
 const MAX_ASSET_NAME = 60;
 const MAX_ASSET_DESCRIPTION = 200;
 const ASSET_COLOR_PATTERN = /^#[0-9a-f]{6}$/i;
 const MIN_OPTIONS = 1;
 const MAX_OPTIONS = 100;
-const TYPE_FIELDS = ["description", "id", "name", "order", "status"];
 const ASSET_FIELDS = ["description", "id", "name", "typeId", "values"];
 const FIELD_FIELDS = ["config", "id", "order", "owner", "status", "title", "valueType"];
 const CONFIG_FIELDS = ["options", "targetTypeId"];
@@ -151,10 +149,6 @@ function keysMatch(value: Record<string, unknown>, required: readonly string[], 
     && actual.every(key => allowed.includes(key));
 }
 
-function encodeUtf8(value: string): Uint8Array {
-  return new TextEncoder().encode(value);
-}
-
 function isByteView(bytes: ProjectFileData): bytes is ProjectByteView {
   return !Array.isArray(bytes) && !(bytes instanceof Uint8Array)
     && typeof bytes === "object" && bytes !== null
@@ -169,17 +163,6 @@ function decodeUtf8(bytes: ProjectFileData): string {
     return new TextDecoder("utf-8", {fatal: true}).decode(buffer);
   }
   return new TextDecoder("utf-8", {fatal: true}).decode(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
-}
-
-function sameBytes(left: ProjectFileData, right: ProjectFileData): boolean {
-  if (left === right) return true;
-  if (isByteView(left)) return left.equals(right);
-  if (isByteView(right)) return right.equals(left);
-  if (left.length !== right.length) return false;
-  for (let index = 0; index < left.length; index++) {
-    if (left[index] !== right[index]) return false;
-  }
-  return true;
 }
 
 function cloneConfig(config: AssetFieldConfig): AssetFieldConfig {
@@ -210,71 +193,56 @@ function freezeAsset(asset: AssetRecord): AssetRecord {
 }
 
 function freezeSchema(types: readonly AssetTypeTemplate[], fields: readonly AssetFieldDefinition[], assets: readonly AssetRecord[] = []): SchemaData {
-  return Object.freeze({types: Object.freeze([...types]), assets: Object.freeze(assets.map(freezeAsset)), fields: Object.freeze([...fields])});
+  return Object.freeze({types: Object.freeze([...types]), assets: Object.freeze([...assets]), fields: Object.freeze([...fields])});
 }
 
 function orderIsValid(order: unknown): order is number {
   return typeof order === "number" && Number.isSafeInteger(order) && order >= 0;
 }
 
-function normalizeSchema(value: unknown): {schema: SchemaData | null; error: string | null} {
+function normalizeSchema(value: unknown, templates: readonly AssetTypeTemplate[] | null,
+  otherGroups?: ReadonlyMap<AssetGroupId, AssetGroupData>, editingGroup?: AssetGroupId): {schema: SchemaData | null; error: string | null} {
   if (!isRecord(value)) {
     return {schema: null, error: "类型模板文件字段不完整或包含未知字段，已保留原始文件。"};
   }
   const version = value.schemaVersion;
-  if (value.format !== FORMAT || version !== LEGACY_SCHEMA_VERSION && version !== SCHEMA_VERSION) {
+  if (value.format !== FORMAT || version !== 1 && version !== 2 && version !== INLINE_DATA_VERSION) {
     return {schema: null, error: "类型模板文件格式或版本不受支持，已保留原始文件。"};
   }
-  const expectedDocumentFields = version === LEGACY_SCHEMA_VERSION ? LEGACY_DOCUMENT_FIELDS : DOCUMENT_FIELDS;
+  const expectedDocumentFields = version === 1 ? LEGACY_DOCUMENT_FIELDS
+    : version === 2 ? DOCUMENT_FIELDS : ["assets", "fields", "format", "schemaVersion"];
   if (!keysMatch(value, expectedDocumentFields)) {
     return {schema: null, error: "类型模板文件字段不完整或包含未知字段，已保留原始文件。"};
   }
-  if (!Array.isArray(value.types) || !Array.isArray(value.fields) || version === SCHEMA_VERSION && !Array.isArray(value.assets)) {
+  if (!Array.isArray(value.fields) || version !== 1 && !Array.isArray(value.assets)) {
     return {schema: null, error: "资产类型和字段定义必须是数组，已保留原始文件。"};
   }
 
-  const types: AssetTypeTemplate[] = [];
-  const typeIds = new Set<string>();
-  const globalIds = new Set<string>();
-  const typeOrders = new Set<number>();
-  const activeTypeNames = new Set<string>();
-  for (const candidate of value.types) {
-    if (!isRecord(candidate) || !keysMatch(candidate, TYPE_FIELDS, ["color"])) {
-      return {schema: null, error: "资产类型定义字段不完整或包含未知字段，已保留原始文件。"};
+  if (version === INLINE_DATA_VERSION && templates === null) {
+    return {schema: null, error: "资产数据缺少对应的 templates.json 模板列表，已保留原始文件。"};
+  }
+  const catalog = templates === null ? validateAssetTemplates(value.types) : {templates, error: null};
+  if (!catalog.templates) return {schema: null, error: catalog.error};
+  const types = catalog.templates;
+  const typeIds = new Set(types.map(type => type.id));
+  const globalIds = new Set(typeIds);
+  const assetById = new Map<string, {typeId: AssetGroupId}>();
+  // Only IDs from other groups participate in uniqueness and reference checks.
+  for (const [id, group] of otherGroups ?? []) {
+    if (id === editingGroup) continue;
+    for (const asset of group.assets) {
+      globalIds.add(asset.id);
+      assetById.set(asset.id, asset);
     }
-    if (!isUuid(candidate.id) || !orderIsValid(candidate.order)) {
-      return {schema: null, error: "资产类型 ID 必须是 UUID，顺序必须是非负整数，已保留原始文件。"};
+    for (const field of group.fields) {
+      globalIds.add(field.id);
+      for (const option of field.config.options ?? []) globalIds.add(option.id);
     }
-    if (typeIds.has(candidate.id) || globalIds.has(candidate.id)) {
-      return {schema: null, error: "资产类型 ID 重复，已保留原始文件。"};
-    }
-    if (typeOrders.has(candidate.order)) return {schema: null, error: "资产类型顺序重复，已保留原始文件。"};
-    if (typeof candidate.name !== "string" || [...candidate.name.trim()].length < 1 || [...candidate.name.trim()].length > MAX_TYPE_NAME) {
-      return {schema: null, error: `资产类型名称需为 trim 后 1 到 ${MAX_TYPE_NAME} 个字符，已保留原始文件。`};
-    }
-    if (typeof candidate.description !== "string" || [...candidate.description].length > MAX_TYPE_DESCRIPTION) {
-      return {schema: null, error: `资产类型说明必须是文本且最多 ${MAX_TYPE_DESCRIPTION} 个字符，已保留原始文件。`};
-    }
-    if (candidate.status !== "active" && candidate.status !== "archived") {
-      return {schema: null, error: "资产类型状态无效，已保留原始文件。"};
-    }
-    const name = candidate.name.trim();
-    const nameKey = name.toLowerCase();
-    if (candidate.status === "active" && activeTypeNames.has(nameKey)) {
-      return {schema: null, error: "启用中的资产类型名称重复，已保留原始文件。"};
-    }
-    typeIds.add(candidate.id);
-    globalIds.add(candidate.id);
-    typeOrders.add(candidate.order);
-    if (candidate.status === "active") activeTypeNames.add(nameKey);
-    const color = hasOwn(candidate, "color") ? normalizeAssetColor(candidate.color) : undefined;
-    if (color === null) return {schema: null, error: "资产模板颜色必须是 #RRGGBB 格式，已保留原始文件。"};
-    types.push(Object.freeze({id: candidate.id, name, description: candidate.description, ...(color !== undefined ? {color} : {}), order: candidate.order, status: candidate.status}));
   }
 
   const rawAssets: {id: string; name: string; description: string; typeId: string | null; color?: string; values: Record<string, unknown>}[] = [];
   const assetIds = new Set<string>();
-  for (const candidate of version === SCHEMA_VERSION ? value.assets as unknown[] : []) {
+  for (const candidate of version === 1 ? [] : value.assets as unknown[]) {
     if (!isRecord(candidate) || !keysMatch(candidate, ASSET_FIELDS, ["color"])) {
       return {schema: null, error: "资产记录字段不完整或包含未知字段，已保留原始文件。"};
     }
@@ -324,7 +292,7 @@ function normalizeSchema(value: unknown): {schema: SchemaData | null; error: str
     if (!isRecord(candidate.owner) || !keysMatch(candidate.owner, ["id", "kind"])
       || !["type", "asset"].includes(candidate.owner.kind as string) || !isUuid(candidate.owner.id)
       || candidate.owner.kind === "type" && !typeIds.has(candidate.owner.id)
-      || candidate.owner.kind === "asset" && (version === LEGACY_SCHEMA_VERSION || !assetIds.has(candidate.owner.id))) {
+      || candidate.owner.kind === "asset" && (version === 1 || !assetIds.has(candidate.owner.id))) {
       return {schema: null, error: "资产字段所属类型不存在或格式无效，已保留原始文件。"};
     }
     if (typeof candidate.title !== "string" || [...candidate.title.trim()].length < 1 || [...candidate.title.trim()].length > MAX_FIELD_TITLE) {
@@ -432,7 +400,7 @@ function normalizeSchema(value: unknown): {schema: SchemaData | null; error: str
 
   const fieldById = new Map(fields.map(field => [field.id, field]));
   const normalizedAssets: AssetRecord[] = [];
-  const assetById = new Map(rawAssets.map(asset => [asset.id, {id: asset.id, typeId: asset.typeId}]));
+  for (const asset of rawAssets) assetById.set(asset.id, asset);
   for (const asset of rawAssets) {
     const values: Record<string, AssetPropertyValue> = {};
     for (const [fieldId, supplied] of Object.entries(asset.values)) {
@@ -470,22 +438,48 @@ function normalizeSchema(value: unknown): {schema: SchemaData | null; error: str
   return {schema: freezeSchema(types, fields, normalizedAssets), error: null};
 }
 
-function parseSchema(bytes: ProjectFileData): {schema: SchemaData | null; error: string | null} {
+const emptyGroup: AssetGroupData = Object.freeze({assets: Object.freeze([]), fields: Object.freeze([])});
+
+function groupRecords(body: AssetGroupData): Map<AssetGroupId, AssetGroupData> {
+  const groups = new Map<AssetGroupId, {assets: AssetRecord[]; fields: AssetFieldDefinition[]}>();
+  function group(id: AssetGroupId) {
+    let result = groups.get(id);
+    if (!result) {
+      result = {assets: [], fields: []};
+      groups.set(id, result);
+    }
+    return result;
+  }
+  const assetTypes = new Map<string, AssetGroupId>();
+  for (const asset of body.assets) {
+    assetTypes.set(asset.id, asset.typeId);
+    group(asset.typeId).assets.push(asset);
+  }
+  for (const field of body.fields) {
+    const typeId = field.owner.kind === "type" ? field.owner.id : assetTypes.get(field.owner.id);
+    if (typeId === undefined) throw new Error("字段所属对象不存在。");
+    group(typeId).fields.push(field);
+  }
+  return groups;
+}
+
+function sameRecords<T>(left: readonly T[], right: readonly T[]): boolean {
+  return left === right || left.length === right.length && left.every((item, index) => item === right[index]);
+}
+
+function decodeSchemaFile(bytes: ProjectFileData): {value?: unknown; groups?: readonly AssetGroupId[]; error?: string} {
   let text: string;
   try { text = decodeUtf8(bytes); }
-  catch { return {schema: null, error: "类型模板文件不是有效 UTF-8，已保留原始文件。"}; }
+  catch { return {error: "schema.json 不是有效的 UTF-8 文件。"}; }
   let value: unknown;
   try { value = JSON.parse(text); }
-  catch { return {schema: null, error: "类型模板文件已损坏，已保留原始文件。"}; }
-  return normalizeSchema(value);
-}
-
-function serializeSchema(schema: SchemaData): Uint8Array {
-  return encodeUtf8(`${JSON.stringify({format: FORMAT, schemaVersion: SCHEMA_VERSION, types: schema.types, assets: schema.assets, fields: schema.fields}, null, 2)}\n`);
-}
-
-function sameSchema(left: SchemaData, right: SchemaData): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  catch { return {error: "资产数据文件已损坏，请检查 schema.json。"}; }
+  try {
+    const groups = parseGroupManifest(value);
+    return groups ? {groups} : {value};
+  } catch (cause) {
+    return {error: cause instanceof Error ? cause.message : "资产对象文件清单格式无效。"};
+  }
 }
 
 function sameFieldInput(field: AssetFieldDefinition, input: CreateAssetFieldInput): boolean {
@@ -516,52 +510,85 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
   let typeSelectionInitialized = false;
   let assetSelectionInitialized = false;
   let typeCreationRequest = 0;
-  const pendingTypeIds = new Set<string>();
+  let pendingTemplateEdit: {id: string; isNew: boolean} | null = null;
   const pendingAssetIds = new Set<string>();
   const pendingFieldIds = new Set<string>();
   let loaded = false;
   let loading = false;
   let mutating = false;
-  const orderStore = createAssetTypeOrderStore(files);
+  const templateStore = createAssetTemplateStore(files);
+  let legacyOrder: readonly string[] | null = null;
+  let legacyOrderError: string | null = null;
+  let catalogReferenceError: string | null = null;
+  let pendingRemoval: string | null = null;
+  let moving = 0;
   let knownFile = false;
-  let localDraft = false;
   let localBlocked = false;
   let localError: string | null = null;
   let alive = true;
   let generation = 0;
   let loadOperation: Promise<boolean> | null = null;
   let mutationOperation: Promise<boolean> | null = null;
-  let parsedBytes: ProjectFileData | null = null;
-  let parsedResult: ReturnType<typeof parseSchema> | null = null;
+  const objectFiles = createAssetObjectFiles(files);
+  // null denotes an inline legacy body (or a new project without a manifest).
+  let manifestGroups: readonly AssetGroupId[] | null = null;
+  let groups = new Map<AssetGroupId, AssetGroupData>();
+  let legacyGroups = groups;
+  let pendingGroup: {id: AssetGroupId; data: AssetGroupData} | null = null;
   let schemaBytes: ProjectFileData | null = null;
-  let projection: {
-    source: readonly AssetTypeTemplate[];
-    ids: readonly string[];
-    types: readonly AssetTypeTemplate[];
-  } | undefined;
+  const acceptedGroups = new Map<AssetGroupId, AssetGroupData>();
+  let parsedBytes: ProjectFileData | null = null;
+  let document: ReturnType<typeof decodeSchemaFile> = {};
   let snapshot = buildSnapshot();
-  const unsubscribeOrder = orderStore.subscribe(publish);
 
-  // schema.types retains the on-disk fallback order. Only the view applies the order file.
-  function visibleOrder(): readonly AssetTypeTemplate[] {
-    const ids = orderStore.getSnapshot().typeIds;
-    if (!ids) return schema.types;
-    if (projection?.source === schema.types && projection.ids === ids) return projection.types;
-    const rank = new Map(ids.map((id, index) => [id, index]));
-    const sorted = [...schema.types].sort((a, b) =>
-      (rank.get(a.id) ?? ids.length) - (rank.get(b.id) ?? ids.length) || a.order - b.order);
-    const types = Object.freeze(sorted.map((type, order) =>
-      type.order === order ? type : Object.freeze({...type, order})));
-    projection = {source: schema.types, ids, types};
-    return types;
+  function currentTypes(): readonly AssetTypeTemplate[] {
+    return templateStore.getSnapshot().templates ?? schema.types;
   }
 
-  function parseFile(bytes: ProjectFileData): ReturnType<typeof parseSchema> {
-    if (parsedBytes !== bytes || parsedResult === null) {
-      parsedBytes = bytes;
-      parsedResult = parseSchema(bytes);
+  // An external catalog edit can remove an ID still used in the data file.
+  // Reordering or renaming keeps the same IDs and never visits assets or fields.
+  let checkedTypes = currentTypes();
+  const unsubscribeTemplates = templateStore.subscribe(() => {
+    const types = currentTypes();
+    if (checkedTypes !== types && loaded) {
+      const ids = new Set(types.map(type => type.id));
+      if (ids.size !== checkedTypes.length || checkedTypes.some(type => !ids.has(type.id))) {
+        const invalid = schema.assets.some(asset => ids.has(asset.id) || asset.typeId !== null && !ids.has(asset.typeId))
+          || schema.fields.some(field => ids.has(field.id) || field.owner.kind === "type" && !ids.has(field.owner.id)
+            || field.config.targetTypeId != null && !ids.has(field.config.targetTypeId)
+            || field.config.options?.some(option => ids.has(option.id)));
+        catalogReferenceError = invalid ? "模板列表与资产或字段的 ID 不匹配，请检查项目文件。" : null;
+      }
+      reconcileTypeSelection();
     }
-    return parsedResult;
+    checkedTypes = types;
+    const catalog = templateStore.getSnapshot();
+    if (catalog.loaded && !catalog.dirty && !catalog.saving && !catalog.error) pendingTemplateEdit = null;
+    publish();
+  });
+
+  async function loadTemplates(listing?: ProjectDirectoryListing): Promise<boolean> {
+    if (!await templateStore.load(listing)) return false;
+    legacyOrder = null;
+    legacyOrderError = null;
+    if (templateStore.getSnapshot().templates === null) {
+      try { legacyOrder = await readLegacyTypeOrder(files, listing); }
+      catch (cause) { legacyOrderError = cause instanceof Error ? cause.message : "读取旧模板顺序失败。"; }
+    }
+    return true;
+  }
+
+  function readDocument(file: ProjectFile) {
+    const bytes = file.byteView ?? file.bytes;
+    if (bytes !== parsedBytes) {
+      parsedBytes = bytes;
+      document = decodeSchemaFile(bytes);
+    }
+    return document;
+  }
+
+  function dataFiles(source = files.getSnapshot()) {
+    return source.files.filter(file => file.path === PATH || file.path.startsWith(DIRECTORY + "/objects/"));
   }
 
   function fileFrom(sourceFiles = files.getSnapshot().files): ProjectFile | undefined {
@@ -569,14 +596,14 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
   }
 
   function buildSnapshot(source = files.getSnapshot()): AssetSchemaSnapshot {
-    const file = fileFrom(source.files);
-    const order = orderStore.getSnapshot();
-    const dirty = localDraft || Boolean(file?.dirty) || order.dirty || order.saving;
-    const saveState: ProjectSaveState = mutating || order.saving ? "saving"
-      : dirty ? (localError || order.error || file?.saveState === "error" ? "error" : "pending")
+    const file = dataFiles(source).find(file => file.dirty || file.saveState === "error") ?? fileFrom(source.files);
+    const catalog = templateStore.getSnapshot();
+    const dirty = pendingGroup !== null || Boolean(file?.dirty) || catalog.dirty || catalog.saving || pendingRemoval !== null;
+    const saveState: ProjectSaveState = mutating || catalog.saving ? "saving"
+      : dirty ? (localError || catalog.error || file?.saveState === "error" ? "error" : "pending")
         : file?.saveState ?? "saved";
     return Object.freeze({
-      types: visibleOrder(),
+      types: currentTypes(),
       assets: schema.assets,
       fields: schema.fields,
       selectedTypeId,
@@ -585,11 +612,12 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       loaded,
       loading,
       saving: loading || mutating || saveState === "pending" || saveState === "saving",
-      reordering: order.saving && !mutating && !file?.dirty,
-      orderBlocked: order.blocked || !order.loaded,
+      reordering: moving > 0 && catalog.saving && !mutating && !file?.dirty,
+      pendingTypeRemoval: pendingRemoval,
+      orderBlocked: catalog.blocked || !catalog.loaded || legacyOrderError !== null,
       dirty,
-      blocked: source.blocked || localBlocked,
-      error: localError ?? file?.saveError ?? order.error ?? (saveState === "error" ? "类型模板保存失败，请重试。" : null),
+      blocked: source.blocked || localBlocked || catalog.blocked || catalogReferenceError !== null,
+      error: localError ?? catalogReferenceError ?? catalog.error ?? legacyOrderError ?? file?.saveError ?? (saveState === "error" ? "类型模板保存失败，请重试。" : null),
       saveState,
     });
   }
@@ -600,27 +628,24 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     if (snapshot.types === next.types && snapshot.assets === next.assets && snapshot.fields === next.fields
       && snapshot.selectedTypeId === next.selectedTypeId && snapshot.selectedAssetId === next.selectedAssetId
       && snapshot.typeCreationRequest === next.typeCreationRequest && snapshot.loaded === next.loaded
-      && snapshot.loading === next.loading && snapshot.saving === next.saving && snapshot.reordering === next.reordering && snapshot.orderBlocked === next.orderBlocked && snapshot.dirty === next.dirty
+      && snapshot.loading === next.loading && snapshot.saving === next.saving && snapshot.reordering === next.reordering
+      && snapshot.pendingTypeRemoval === next.pendingTypeRemoval && snapshot.orderBlocked === next.orderBlocked && snapshot.dirty === next.dirty
       && snapshot.blocked === next.blocked && snapshot.error === next.error && snapshot.saveState === next.saveState) return;
     snapshot = next;
     for (const listener of [...listeners]) listener();
   }
 
   function clearPendingIds() {
-    pendingTypeIds.clear();
     pendingAssetIds.clear();
     pendingFieldIds.clear();
   }
 
   function reconcileTypeSelection() {
-    if (!typeSelectionInitialized && !orderStore.getSnapshot().loaded && !orderStore.getSnapshot().error) return;
-    const firstActiveId = [...visibleOrder()].sort((left, right) => left.order - right.order).find(type => type.status === "active")?.id ?? null;
-    if (!typeSelectionInitialized) {
-      selectedTypeId = firstActiveId;
-      typeSelectionInitialized = true;
-    } else if (selectedTypeId !== null && !schema.types.some(type => type.id === selectedTypeId)) {
-      selectedTypeId = firstActiveId;
-    }
+    if (!templateStore.getSnapshot().loaded) return;
+    const types = currentTypes();
+    if (typeSelectionInitialized && (selectedTypeId === null || types.some(type => type.id === selectedTypeId))) return;
+    selectedTypeId = types.find(type => type.status === "active")?.id ?? null;
+    typeSelectionInitialized = true;
   }
 
   function reconcileAssetSelection() {
@@ -636,22 +661,44 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
   function acceptFile(file: ProjectFile, requestGeneration?: number): boolean {
     if (!alive || requestGeneration !== undefined && requestGeneration !== generation) return false;
     const bytes = file.byteView ?? file.bytes;
-    const parsed = parseFile(bytes);
-    if (!parsed.schema) {
+    try {
+      const doc = readDocument(file);
+      if (doc.error) throw new Error(doc.error);
+      const templates = templateStore.getSnapshot().templates;
+      const rawGroups = new Map<AssetGroupId, AssetGroupData>();
+      let body = doc.value;
+      if (doc.groups) {
+        for (const id of doc.groups) rawGroups.set(id, objectFiles.read(id));
+        const values = [...rawGroups.values()];
+        body = {format: FORMAT, schemaVersion: INLINE_DATA_VERSION,
+          assets: values.flatMap(group => group.assets), fields: values.flatMap(group => group.fields)};
+      }
+      const parsed = normalizeSchema(body, templates);
+      if (!parsed.schema) throw new Error(parsed.error ?? "资产数据无效。");
+      schema = parsed.schema;
+      if (!templates && legacyOrder) {
+        const rank = new Map(legacyOrder.map((id, i) => [id, i]));
+        const sorted = [...schema.types].sort((a, b) =>
+          (rank.get(a.id) ?? rank.size) - (rank.get(b.id) ?? rank.size) || a.order - b.order);
+        schema = {...schema, types: Object.freeze(sorted.map((type, order) => Object.freeze({...type, order})))};
+      }
+      groups = groupRecords(schema);
+      manifestGroups = doc.groups ?? null;
+      legacyGroups = manifestGroups ? new Map() : groups;
+      acceptedGroups.clear();
+      for (const [id, group] of rawGroups) acceptedGroups.set(id, group);
+      schemaBytes = bytes;
+    } catch (cause) {
       loaded = false;
       localBlocked = true;
-      localError = parsed.error;
+      localError = cause instanceof Error ? cause.message : "资产数据读取失败。";
       return false;
     }
-    if (schemaBytes !== bytes) {
-      if (!sameSchema(schema, parsed.schema)) schema = parsed.schema;
-      schemaBytes = bytes;
-      reconcileTypeSelection();
-      reconcileAssetSelection();
-    }
-    if (!typeSelectionInitialized) reconcileTypeSelection();
+    checkedTypes = currentTypes();
+    catalogReferenceError = null;
+    reconcileTypeSelection();
+    reconcileAssetSelection();
     knownFile = true;
-    localDraft = false;
     if (!file.dirty && file.saveState === "saved") clearPendingIds();
     loaded = true;
     localBlocked = false;
@@ -659,49 +706,40 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     return true;
   }
 
-  const unsubscribe = files.subscribe(() => {
-    if (!alive) return;
-    const sharedFile = fileFrom();
-    if (sharedFile) {
-      knownFile = true;
-      // Shared ProjectFiles bytes are canonical once accepted; don't replace a local draft
-      // that has not yet been accepted by the byte store.
-      if (!localDraft) {
-        const bytes = sharedFile.byteView ?? sharedFile.bytes;
-        if (schemaBytes === bytes) {
-          loaded = true;
-          if (!sharedFile.dirty && sharedFile.saveState === "saved") clearPendingIds();
-          localBlocked = false;
-          localError = null;
-        } else {
-          const parsed = parseFile(bytes);
-          if (parsed.schema) {
-            if (!sameSchema(schema, parsed.schema)) schema = parsed.schema;
-            schemaBytes = bytes;
-            reconcileTypeSelection();
-            reconcileAssetSelection();
-            loaded = true;
-            if (!sharedFile.dirty && sharedFile.saveState === "saved") clearPendingIds();
-            localBlocked = false;
-            localError = null;
-          } else if (loaded) {
-            loaded = false;
-            localBlocked = true;
-            localError = parsed.error;
-          }
-        }
+  function syncSharedFiles() {
+    if (!alive || loading || !templateStore.getSnapshot().loaded || templateStore.getSnapshot().blocked) return;
+    const file = fileFrom();
+    if (!pendingGroup && file) {
+      try {
+        if (schemaBytes !== (file.byteView ?? file.bytes)
+          || manifestGroups?.some(id => objectFiles.read(id) !== acceptedGroups.get(id))) acceptFile(file);
+      } catch (cause) {
+        loaded = false;
+        localBlocked = true;
+        localError = cause instanceof Error ? cause.message : "资产对象文件缺失或损坏。";
       }
-    } else if (knownFile && !localDraft) {
-      knownFile = false;
-      schemaBytes = null;
+      if (!dataFiles().some(item => item.dirty) && !mutating) clearPendingIds();
+    } else if (!pendingGroup && knownFile && !file) {
+      loaded = false;
+      localBlocked = true;
+      localError = "资产数据文件 schema.json 缺失，请恢复后重试。";
     }
     publish();
-  });
+  }
+  const unsubscribe = files.subscribe(syncSharedFiles);
+
+  async function loadBody(file: ProjectFile, requestGeneration: number): Promise<boolean> {
+    const doc = readDocument(file);
+    if (doc.groups) await objectFiles.load(doc.groups);
+    if (!alive || requestGeneration !== generation) return false;
+    return acceptFile(fileFrom() ?? file, requestGeneration);
+  }
 
   function load(): Promise<boolean> {
     if (!alive) return Promise.resolve(false);
-    if (loaded && !localBlocked && orderStore.getSnapshot().loaded) return Promise.resolve(true);
+    if (loaded && !snapshot.blocked && !legacyOrderError && templateStore.getSnapshot().loaded) return Promise.resolve(true);
     if (loadOperation) return loadOperation;
+    if (pendingGroup) return Promise.resolve(false);
     const requestGeneration = ++generation;
     loading = true;
     localError = null;
@@ -723,7 +761,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       try {
         if (protectedFile) {
           if (!alive) return false;
-          await orderStore.load();
+          if (!await loadTemplates()) { loaded = false; return false; }
           if (!alive || requestGeneration !== generation) return false;
           const latest = fileFrom();
           if (!latest) {
@@ -731,7 +769,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
             localError = "资产文件在读取期间发生变化，请重试。";
             return false;
           }
-          const valid = acceptFile(latest, requestGeneration);
+          const valid = await loadBody(latest, requestGeneration);
           publish();
           return valid;
         }
@@ -751,8 +789,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
           publish();
           return false;
         }
-        // A malformed optional order must not prevent opening the assets themselves.
-        await orderStore.load(listing);
+        if (!await loadTemplates(listing)) { loaded = false; return false; }
         if (!alive || requestGeneration !== generation) return false;
         const entry = listing.entries.find(candidate => candidate.name === "schema.json" || candidate.path === PATH);
         const issue = listing.issues.find(candidate => candidate.path === PATH || candidate.path === "schema.json");
@@ -764,14 +801,19 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
           return false;
         }
         if (!entry) {
+          if (knownFile) throw new Error("资产数据文件 schema.json 缺失，请恢复后重试。");
+          if (listing.entries.some(item => item.name === "objects") || listing.issues.some(item => item.path.endsWith("/objects"))) {
+            await objectFiles.assertNoOrphanData();
+            if (!alive || requestGeneration !== generation) return false;
+          }
           schema = freezeSchema([], [], []);
-          selectedTypeId = null;
-          typeSelectionInitialized = true;
+          reconcileTypeSelection();
+          checkedTypes = currentTypes();
+          catalogReferenceError = null;
           selectedAssetId = null;
           assetSelectionInitialized = true;
           loaded = true;
           knownFile = false;
-          localDraft = false;
           localBlocked = false;
           localError = null;
           publish();
@@ -793,13 +835,13 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
         catch (cause) { readFailure = cause; }
         if (!alive || requestGeneration !== generation) return false;
         if (file) {
-          const valid = acceptFile(file, requestGeneration);
+          const valid = await loadBody(file, requestGeneration);
           publish();
           return valid;
         }
         const retainedFile = fileFrom();
         if (retainedFile && (retainedFile.dirty || retainedFile.saveState === "saving" || retainedFile.saveState === "pending")) {
-          const valid = acceptFile(retainedFile, requestGeneration);
+          const valid = await loadBody(retainedFile, requestGeneration);
           publish();
           return valid;
         }
@@ -827,95 +869,108 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
   }
 
   async function persistCurrent(): Promise<boolean> {
-    if (!alive || files.getSnapshot().blocked || localBlocked) return false;
-    const bytes = serializeSchema(schema);
-    if (!knownFile && !fileFrom()) {
-      if (schema.types.length === 0 && schema.assets.length === 0 && schema.fields.length === 0) {
-        localDraft = false;
-        localError = null;
-        publish();
-        return true;
+    if (!alive || files.getSnapshot().blocked || localBlocked || !pendingGroup) return false;
+    const {id, data} = pendingGroup;
+    if (templateStore.getSnapshot().templates === null && !await templateStore.save(schema.types)) return false;
+    const ensureCurrentManifest = () => {
+      if (!alive || files.getSnapshot().blocked || snapshot.blocked) throw new Error("项目已暂停写入。");
+      const current = fileFrom();
+      if (knownFile && (!current || (current.byteView ?? current.bytes) !== schemaBytes)) {
+        throw new Error("资产文件清单在编辑期间被修改，已保留待保存的内容。");
       }
-      let created: ProjectFile | null = null;
-      try { created = await files.create(PATH, bytes, {createParents: true, acceptIdentical: true, preferByteView: true}); }
-      catch (cause) { localError = cause instanceof Error ? cause.message : "创建类型模板文件失败，请重试。"; }
-      if (!alive) return false;
-      if (!created) {
-        localError ??= files.getSnapshot().error ?? "创建类型模板文件失败，请重试。";
-        return false;
+    };
+    ensureCurrentManifest();
+    const nextIds = new Set(manifestGroups ?? legacyGroups.keys());
+    nextIds.add(id);
+    if (!manifestGroups || nextIds.size !== manifestGroups.length) {
+      // Stage deterministic baseline files before switching the manifest. A restart can reuse
+      // any files created before a failure, even if the next edit is different.
+      for (const id of nextIds) {
+        if (!alive || snapshot.blocked) return false;
+        if (!manifestGroups?.includes(id)) await objectFiles.saveGroup(id, legacyGroups.get(id) ?? emptyGroup, false);
       }
-      return acceptFile(created);
+      ensureCurrentManifest();
+      const ids = [...nextIds];
+      try {
+        await objectFiles.saveManifest(ids, knownFile);
+      } catch (error) {
+        // ProjectFiles may already hold our new manifest while its disk write is pending retry.
+        const current = fileFrom();
+        if (current && sameRecords(readDocument(current).groups ?? [], ids)) schemaBytes = current.byteView ?? current.bytes;
+        throw error;
+      }
+      manifestGroups = ids;
+      knownFile = true;
+      const manifest = fileFrom()!;
+      schemaBytes = manifest.byteView ?? manifest.bytes;
+      readDocument(manifest);
+      for (const id of nextIds) {
+        if (!acceptedGroups.has(id)) acceptedGroups.set(id, objectFiles.read(id));
+      }
+      legacyGroups = new Map();
     }
-
-    localDraft = true;
-    let accepted = false;
-    try { accepted = files.write(PATH, bytes, {preferByteView: true}); }
-    catch (cause) { localError = cause instanceof Error ? cause.message : "更新类型模板失败。"; }
-    if (!accepted) {
-      localError ??= files.getSnapshot().blocked ? files.getSnapshot().error : "项目存储未接受类型模板。";
-      return false;
+    ensureCurrentManifest();
+    if (objectFiles.read(id) !== acceptedGroups.get(id)) throw new Error("当前模板的对象文件在编辑期间被修改，已保留待保存的内容。");
+    try {
+      await objectFiles.saveGroup(id, data, true);
+    } catch (error) {
+      const buffered = objectFiles.read(id);
+      if (JSON.stringify(buffered) === JSON.stringify(data)) acceptedGroups.set(id, buffered);
+      throw error;
     }
-    const acceptedFile = fileFrom();
-    if (acceptedFile) {
-      const acceptedBytes = acceptedFile.byteView ?? acceptedFile.bytes;
-      if (sameBytes(acceptedBytes, bytes)) schemaBytes = acceptedBytes;
-    }
-    localDraft = false;
-    knownFile = true;
-    publish();
-    let saved = false;
-    try { saved = await files.save(PATH); }
-    catch (cause) { localError = cause instanceof Error ? cause.message : "保存类型模板失败，请重试。"; }
-    if (!alive) return false;
-    localError = saved ? null : fileFrom()?.saveError ?? (files.getSnapshot().blocked ? files.getSnapshot().error : null) ?? "保存类型模板失败，请重试。";
-    return saved;
+    acceptedGroups.set(id, objectFiles.read(id));
+    pendingGroup = null;
+    localError = null;
+    syncSharedFiles();
+    return true;
   }
 
-  function mutate(nextSchema: SchemaData, nextSelectedTypeId = selectedTypeId, nextSelectedAssetId = selectedAssetId): Promise<boolean> {
-    if (!alive || !loaded || snapshot.blocked || mutating || orderStore.getSnapshot().saving || orderStore.getSnapshot().dirty) return Promise.resolve(false);
-    const checked = normalizeSchema({format: FORMAT, schemaVersion: SCHEMA_VERSION, types: nextSchema.types, assets: nextSchema.assets, fields: nextSchema.fields});
-    if (!checked.schema) {
-      localError = checked.error?.replace(/ 已保留原始文件。$/, "") ?? "类型模板定义无效。";
+  function groupForOwner(owner: AssetFieldOwner): AssetGroupId {
+    return owner.kind === "type" ? owner.id : schema.assets.find(asset => asset.id === owner.id)!.typeId;
+  }
+
+  function mutateGroup(id: AssetGroupId, changes: Partial<AssetGroupData>,
+    nextSelectedTypeId = selectedTypeId, nextSelectedAssetId = selectedAssetId): Promise<boolean> {
+    if (!alive || !loaded || snapshot.blocked || snapshot.orderBlocked || mutating || templateStore.getSnapshot().saving || templateStore.getSnapshot().dirty) return Promise.resolve(false);
+    if (!pendingGroup && dataFiles().some(file => file.dirty || file.saveState === "saving")) return Promise.resolve(false);
+    if (pendingGroup && pendingGroup.id !== id) {
+      localError = "请先保存当前模板的修改，再编辑其他模板。";
       publish();
       return Promise.resolve(false);
     }
-    const validatedSchema = checked.schema;
-    if (sameSchema(schema, validatedSchema)) {
-      if (selectedTypeId !== nextSelectedTypeId || selectedAssetId !== nextSelectedAssetId) {
-        selectedTypeId = nextSelectedTypeId;
-        typeSelectionInitialized = true;
-        selectedAssetId = nextSelectedAssetId;
-        assetSelectionInitialized = true;
-        publish();
-        return Promise.resolve(true);
-      }
-      return settleNoop();
+    const before = groups.get(id) ?? emptyGroup;
+    const checked = normalizeSchema({format: FORMAT, schemaVersion: INLINE_DATA_VERSION, ...before, ...changes}, currentTypes(), groups, id);
+    if (!checked.schema) {
+      localError = checked.error;
+      publish();
+      return Promise.resolve(false);
     }
-    const previousTypeIds = new Set(schema.types.map(type => type.id));
-    const previousAssetIds = new Set(schema.assets.map(asset => asset.id));
-    const previousFieldIds = new Set(schema.fields.map(field => field.id));
-    for (const type of validatedSchema.types) {
-      if (!previousTypeIds.has(type.id)) pendingTypeIds.add(type.id);
-    }
-    for (const field of validatedSchema.fields) {
-      if (!previousFieldIds.has(field.id)) pendingFieldIds.add(field.id);
-    }
-    for (const asset of validatedSchema.assets) {
-      if (!previousAssetIds.has(asset.id)) pendingAssetIds.add(asset.id);
-    }
-    schema = validatedSchema;
+    const next = {assets: checked.schema.assets, fields: checked.schema.fields};
+    const previousAssetIds = new Set(before.assets.map(asset => asset.id));
+    const previousFieldIds = new Set(before.fields.map(field => field.id));
+    for (const field of next.fields) if (!previousFieldIds.has(field.id)) pendingFieldIds.add(field.id);
+    for (const asset of next.assets) if (!previousAssetIds.has(asset.id)) pendingAssetIds.add(asset.id);
+    pendingGroup = {id, data: next};
+    // Keep the legacy baseline immutable until the v4 manifest has committed.
+    groups = new Map(groups).set(id, next);
+    const parts = [...groups.values()];
+    schema = {types: currentTypes(),
+      assets: Object.freeze(parts.flatMap(group => group.assets)), fields: Object.freeze(parts.flatMap(group => group.fields))};
     selectedTypeId = nextSelectedTypeId;
     typeSelectionInitialized = true;
     selectedAssetId = nextSelectedAssetId && schema.assets.some(asset => asset.id === nextSelectedAssetId) ? nextSelectedAssetId : null;
     assetSelectionInitialized = true;
-    localDraft = true;
     localError = null;
+    return persistMutation();
+  }
+
+  function persistMutation(): Promise<boolean> {
     mutating = true;
     let resolveOperation!: (value: boolean) => void;
     const operation = new Promise<boolean>(resolve => { resolveOperation = resolve; });
     mutationOperation = operation;
     publish();
-    void persistCurrent().catch(cause => {
+    void persistCurrent().then(saved => saved && finishPendingRemoval()).catch(cause => {
       if (alive) localError = cause instanceof Error ? cause.message : "保存类型模板失败，请重试。";
       return false;
     }).then(result => {
@@ -934,7 +989,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
 
   function settleNoop(): Promise<boolean> {
     const file = fileFrom();
-    if (snapshot.dirty || localDraft || file?.saveState === "pending" || file?.saveState === "saving" || file?.saveState === "error") {
+    if (snapshot.dirty || file?.saveState === "pending" || file?.saveState === "saving" || file?.saveState === "error") {
       return retry();
     }
     if (localError) {
@@ -944,12 +999,12 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     return Promise.resolve(true);
   }
 
-  function currentSchemaWith(types: readonly AssetTypeTemplate[], fields: readonly AssetFieldDefinition[] = schema.fields): SchemaData {
-    return freezeSchema(types, fields, schema.assets);
+  function canEdit(): boolean {
+    return alive && loaded && !snapshot.blocked && !snapshot.orderBlocked && !mutating && pendingRemoval === null;
   }
 
   function selectType(id: string | null): boolean {
-    if (!alive || id !== null && !schema.types.some(type => type.id === id)) return false;
+    if (!alive || id !== null && !currentTypes().some(type => type.id === id)) return false;
     typeSelectionInitialized = true;
     if (selectedTypeId !== id) {
       selectedTypeId = id;
@@ -959,7 +1014,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
   }
 
   function requestTypeCreation(): boolean {
-    if (!alive || !loaded || snapshot.blocked || snapshot.saving || snapshot.dirty) return false;
+    if (!canEdit() || snapshot.saving || snapshot.dirty) return false;
     typeCreationRequest++;
     publish();
     return true;
@@ -975,8 +1030,49 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     return true;
   }
 
+  function saveTemplates(types: readonly AssetTypeTemplate[], selection: string | null, edit?: {id: string; isNew: boolean}): Promise<boolean> {
+    const catalog = templateStore.getSnapshot();
+    if (catalog.saving || pendingGroup || dataFiles().some(file => file.dirty) || catalog.dirty && (!edit || edit.id !== pendingTemplateEdit?.id)) {
+      return Promise.resolve(false);
+    }
+    const checked = validateAssetTemplates(types);
+    if (!checked.templates) {
+      localError = checked.error;
+      publish();
+      return Promise.resolve(false);
+    }
+    pendingTemplateEdit = edit ?? null;
+    selectedTypeId = selection;
+    typeSelectionInitialized = true;
+    localError = null;
+    return templateStore.save(checked.templates).then(saved => {
+      if (saved) pendingTemplateEdit = null;
+      publish();
+      return saved;
+    });
+  }
+
+  async function finishPendingRemoval(): Promise<boolean> {
+    if (pendingRemoval === null) return true;
+    const id = pendingRemoval;
+    if (!alive || snapshot.blocked) return false;
+    if (schema.assets.some(asset => asset.typeId === id) || schema.fields.some(field =>
+      field.owner.kind === "type" && field.owner.id === id || field.config.targetTypeId === id)) {
+      pendingRemoval = null;
+      localError = "删除期间资产或字段引用了此模板，模板已保留。";
+      publish();
+      return false;
+    }
+    const types = currentTypes().filter(type => type.id !== id);
+    const saved = currentTypes().some(type => type.id === id)
+      ? await templateStore.save(types) : await templateStore.retry();
+    if (saved) pendingRemoval = null;
+    publish();
+    return saved;
+  }
+
   function createType(input: CreateAssetTypeInput): Promise<boolean> {
-    if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
+    if (!canEdit()) return Promise.resolve(false);
     if (!isRecord(input)) {
       localError = "资产类型输入格式无效。";
       publish();
@@ -994,29 +1090,36 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       publish();
       return Promise.resolve(false);
     }
-    const existing = schema.types.find(type => type.id === input.id);
+    const existing = currentTypes().find(type => type.id === input.id);
     if (existing) {
       if (existing.name !== name || existing.description !== input.description || existing.color !== color) {
-        if (pendingTypeIds.has(input.id)) return updateType(input.id, {name, description: input.description, color: color ?? null});
+        if (pendingTemplateEdit?.isNew && pendingTemplateEdit.id === input.id) return updateType(input.id, {name, description: input.description, color: color ?? null});
         localError = "资产类型 ID 已被其他类型使用。";
         publish();
         return Promise.resolve(false);
       }
       return settleNoop();
     }
-    if (schema.types.some(type => type.status === "active" && type.name.toLowerCase() === name.toLowerCase())) {
+    if (currentTypes().some(type => type.status === "active" && type.name.toLowerCase() === name.toLowerCase())) {
       localError = "已存在同名的启用类型。";
       publish();
       return Promise.resolve(false);
     }
-    const order = schema.types.reduce((maximum, type) => Math.max(maximum, type.order), -1) + 1;
+    const order = currentTypes().reduce((maximum, type) => Math.max(maximum, type.order), -1) + 1;
     const type: AssetTypeTemplate = Object.freeze({id: input.id, name, description: input.description, ...(color !== undefined ? {color} : {}), order, status: "active"});
-    return mutate(currentSchemaWith([...schema.types, type]), type.id);
+    if (schema.assets.some(asset => asset.id === type.id) || schema.fields.some(field =>
+      field.id === type.id || field.config.options?.some(option => option.id === type.id))) {
+      localError = "资产类型与已有资产、字段或选项的 ID 重复。";
+      publish();
+      return Promise.resolve(false);
+    }
+    return saveTemplates([...currentTypes(), type], type.id, {id: type.id, isNew: true});
   }
 
   function removeType(id: string): Promise<boolean> {
-    if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
-    const target = schema.types.find(type => type.id === id);
+    if (id === pendingRemoval) return retry();
+    if (!canEdit()) return Promise.resolve(false);
+    const target = currentTypes().find(type => type.id === id);
     if (!target) return settleNoop();
 
     const assignedAssets = schema.assets.filter(asset => asset.typeId === id);
@@ -1031,7 +1134,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       if (externalReferenceFields.length > 0) {
         const names = externalReferenceFields.map(field => {
           const ownerName = field.owner.kind === "type"
-            ? schema.types.find(type => type.id === field.owner.id)?.name ?? field.owner.id
+            ? currentTypes().find(type => type.id === field.owner.id)?.name ?? field.owner.id
             : schema.assets.find(asset => asset.id === field.owner.id)?.name ?? field.owner.id;
           return `“${field.title}”（${ownerName}）`;
         });
@@ -1042,16 +1145,19 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       return Promise.resolve(false);
     }
 
-    const types = schema.types.filter(type => type.id !== id);
-    const fields = schema.fields.filter(field => field.owner.kind !== "type" || field.owner.id !== id);
+    const types = currentTypes().filter(type => type.id !== id);
     const nextSelectedTypeId = selectedTypeId === id
-      ? [...visibleOrder()].sort((left, right) => left.order - right.order).find(type => type.id !== id && type.status === "active")?.id ?? null
+      ? [...currentTypes()].sort((left, right) => left.order - right.order).find(type => type.id !== id && type.status === "active")?.id ?? null
       : selectedTypeId;
-    return mutate(freezeSchema(types, fields, schema.assets), nextSelectedTypeId);
+    if (!groups.get(id)?.fields.length) return saveTemplates(types, nextSelectedTypeId);
+    if (snapshot.dirty || snapshot.saving) return Promise.resolve(false);
+    // Remove dependent fields durably before dropping their owner from the catalog.
+    pendingRemoval = id;
+    return mutateGroup(id, {fields: []}, nextSelectedTypeId);
   }
 
   function createAsset(input: CreateAssetInput): Promise<boolean> {
-    if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
+    if (!canEdit()) return Promise.resolve(false);
     if (!isRecord(input) || !keysMatch(input, ["description", "id", "name", "typeId"], ["color", "values"])) {
       localError = "资产输入字段不完整或包含未知字段。";
       publish();
@@ -1061,7 +1167,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     const description = input.description;
     const typeId = input.typeId;
     if (!isUuid(input.id) || !name || typeof description !== "string"
-      || typeId !== null && (!isUuid(typeId) || !schema.types.some(type => type.id === typeId))) {
+      || typeId !== null && (!isUuid(typeId) || !currentTypes().some(type => type.id === typeId))) {
       localError = "资产需要有效 UUID、名称、文本说明和已存在的类型或空类型。";
       publish();
       return Promise.resolve(false);
@@ -1082,9 +1188,10 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       return Promise.resolve(false);
     }
 
+    const group = groups.get(typeId) ?? emptyGroup;
     const values: Record<string, AssetPropertyValue> = {};
     if (typeId !== null) {
-      for (const field of schema.fields) {
+      for (const field of group.fields) {
         if (field.owner.kind === "type" && field.owner.id === typeId && field.status === "active" && hasOwn(field, "defaultValue")) {
           values[field.id] = clonePropertyValue(field.defaultValue!);
         }
@@ -1097,20 +1204,20 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     const existing = schema.assets.find(candidate => candidate.id === input.id);
     if (existing) {
       if (JSON.stringify(existing) === JSON.stringify(asset)) return settleNoop();
-      if (!pendingAssetIds.has(input.id)) {
+      if (!pendingAssetIds.has(input.id) || existing.typeId !== typeId) {
         localError = "资产 ID 已被其他资产使用。";
         publish();
         return Promise.resolve(false);
       }
-      const assets = [...schema.assets];
+      const assets = [...group.assets];
       assets[assets.findIndex(candidate => candidate.id === input.id)] = asset;
-      return mutate(freezeSchema(schema.types, schema.fields, assets), selectedTypeId, input.id);
+      return mutateGroup(typeId, {assets}, selectedTypeId, input.id);
     }
-    return mutate(freezeSchema(schema.types, schema.fields, [...schema.assets, asset]), selectedTypeId, asset.id);
+    return mutateGroup(typeId, {assets: [...group.assets, asset]}, selectedTypeId, asset.id);
   }
 
   function updateAsset(id: string, patch: Readonly<{name?: string; description?: string; color?: string | null; values?: Readonly<Record<string, AssetPropertyValue>>}>): Promise<boolean> {
-    if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
+    if (!canEdit()) return Promise.resolve(false);
     if (!isRecord(patch) || Object.keys(patch).some(key => !["color", "description", "name", "values"].includes(key))) {
       localError = "资产修改内容包含未知字段。";
       publish();
@@ -1150,13 +1257,12 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     const next = freezeAsset({id: current.id, name, description, typeId: current.typeId,
       ...(color !== undefined ? {color} : {}), values});
     if (JSON.stringify(current) === JSON.stringify(next)) return settleNoop();
-    const assets = [...schema.assets];
-    assets[index] = next;
-    return mutate(freezeSchema(schema.types, schema.fields, assets));
+    const assets = groups.get(current.typeId)!.assets.map(asset => asset.id === id ? next : asset);
+    return mutateGroup(current.typeId, {assets});
   }
 
   function removeAsset(id: string): Promise<boolean> {
-    if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
+    if (!canEdit()) return Promise.resolve(false);
     const target = schema.assets.find(asset => asset.id === id);
     if (!target) return settleNoop();
 
@@ -1170,22 +1276,23 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       return Promise.resolve(false);
     }
 
-    const assets = schema.assets.filter(asset => asset.id !== id);
-    const fields = schema.fields.filter(field => field.owner.kind !== "asset" || field.owner.id !== id);
-    const nextSelectedAssetId = selectedAssetId === id ? assets[0]?.id ?? null : selectedAssetId;
-    return mutate(freezeSchema(schema.types, fields, assets), selectedTypeId, nextSelectedAssetId);
+    const group = groups.get(target.typeId)!;
+    const assets = group.assets.filter(asset => asset.id !== id);
+    const fields = group.fields.filter(field => field.owner.kind !== "asset" || field.owner.id !== id);
+    const nextSelectedAssetId = selectedAssetId === id ? schema.assets.find(asset => asset.id !== id)?.id ?? null : selectedAssetId;
+    return mutateGroup(target.typeId, {fields, assets}, selectedTypeId, nextSelectedAssetId);
   }
 
   function updateType(id: string, patch: Readonly<{name?: string; description?: string; color?: string | null}>): Promise<boolean> {
-    if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
+    if (!canEdit()) return Promise.resolve(false);
     if (!isRecord(patch)) {
       localError = "资产类型修改内容无效。";
       publish();
       return Promise.resolve(false);
     }
-    const index = schema.types.findIndex(type => type.id === id);
+    const index = currentTypes().findIndex(type => type.id === id);
     if (index < 0) return Promise.resolve(false);
-    const current = schema.types[index];
+    const current = currentTypes()[index];
     const name = patch.name === undefined ? current.name : typeof patch.name === "string" ? patch.name.trim() : "";
     const description = patch.description === undefined ? current.description : patch.description;
     const color = patch.color === undefined ? current.color : patch.color === null ? undefined : normalizeAssetColor(patch.color);
@@ -1199,44 +1306,48 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       publish();
       return Promise.resolve(false);
     }
-    if (current.status === "active" && schema.types.some(type => type.id !== id && type.status === "active"
+    if (current.status === "active" && currentTypes().some(type => type.id !== id && type.status === "active"
       && type.name.toLowerCase() === name.toLowerCase())) {
       localError = "已存在同名的启用类型。";
       publish();
       return Promise.resolve(false);
     }
     if (current.name === name && current.description === description && current.color === color) return settleNoop();
-    const types = [...schema.types];
+    const types = [...currentTypes()];
     const {color: _previousColor, ...rest} = current;
     types[index] = Object.freeze({...rest, name, description, ...(color !== undefined ? {color} : {})});
-    return mutate(currentSchemaWith(types));
+    return saveTemplates(types, selectedTypeId, {id, isNew: pendingTemplateEdit?.id === id && pendingTemplateEdit.isNew});
   }
 
   function moveType(id: string, direction: -1 | 1): Promise<boolean> {
     if (!alive || !loaded || snapshot.blocked || snapshot.orderBlocked || mutating
       || (snapshot.saving || snapshot.dirty) && !snapshot.reordering) return Promise.resolve(false);
-    const types = [...visibleOrder()].sort((a, b) => a.order - b.order);
+    const types = [...currentTypes()].sort((a, b) => a.order - b.order);
     const index = types.findIndex(type => type.id === id && type.status === "active");
     if (index < 0 || direction !== -1 && direction !== 1) return Promise.resolve(false);
     let target = index + direction;
     while (types[target]?.status === "archived") target += direction;
     if (!types[target]) return settleNoop();
     [types[index], types[target]] = [types[target], types[index]];
-    return orderStore.save(types.map(type => type.id));
+    moving++;
+    localError = null;
+    return templateStore.save(types.map((type, order) => ({...type, order}))).finally(() => { moving--; publish(); });
   }
 
   function createField(input: CreateAssetFieldInput): Promise<boolean> {
-    if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
+    if (!canEdit()) return Promise.resolve(false);
     if (!isRecord(input) || !isRecord(input.owner) || !isRecord(input.config)
       || !keysMatch(input.owner, ["id", "kind"]) || !keysMatch(input.config, [], CONFIG_FIELDS)
       || !isUuid(input.id) || !["type", "asset"].includes(input.owner.kind as string) || !isUuid(input.owner.id)
-      || input.owner.kind === "type" && !schema.types.some(type => type.id === input.owner.id)
+      || input.owner.kind === "type" && !currentTypes().some(type => type.id === input.owner.id)
       || input.owner.kind === "asset" && !schema.assets.some(asset => asset.id === input.owner.id)) {
       localError = "资产字段需要有效 UUID 和已存在的所属类型或资产。";
       publish();
       return Promise.resolve(false);
     }
     const existing = schema.fields.find(field => field.id === input.id);
+    const groupId = groupForOwner(existing?.owner ?? input.owner);
+    const group = groups.get(groupId) ?? emptyGroup;
     if (existing) {
       let same = false;
       try { same = sameFieldInput(existing, input); }
@@ -1253,19 +1364,20 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
           order: existing.order,
           status: existing.status,
         };
-        const fields = [...schema.fields];
+        const fields = [...group.fields];
         fields[fields.findIndex(field => field.id === input.id)] = replacement as AssetFieldDefinition;
-        const assets = schema.assets.map(asset => {
+        const assets = group.assets.map(asset => {
+          if (existing.owner.kind !== "asset" || existing.owner.id !== asset.id) return asset;
           const values: Record<string, AssetPropertyValue> = {...asset.values};
-          if (existing.owner.kind === "asset" && existing.owner.id === asset.id && hasOwn(existing, "defaultValue")
+          if (hasOwn(existing, "defaultValue")
             && hasOwn(values, existing.id) && JSON.stringify(values[existing.id]) === JSON.stringify(existing.defaultValue)) {
             delete values[existing.id];
           }
-          if (replacement.owner.kind === "asset" && replacement.owner.id === asset.id && replacement.defaultValue !== undefined
+          if (replacement.defaultValue !== undefined
             && !hasOwn(values, replacement.id)) values[replacement.id] = clonePropertyValue(replacement.defaultValue);
           return freezeAsset({...asset, values});
         });
-        return mutate(freezeSchema(schema.types, fields, assets));
+        return mutateGroup(groupId, {fields, assets});
       }
       if (!same) {
         localError = "字段 ID 已被其他字段使用。";
@@ -1280,13 +1392,13 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       publish();
       return Promise.resolve(false);
     }
-    if (schema.fields.some(field => field.owner.kind === input.owner.kind && field.owner.id === input.owner.id && field.status === "active"
+    if (group.fields.some(field => field.owner.kind === input.owner.kind && field.owner.id === input.owner.id && field.status === "active"
       && field.title.toLowerCase() === title.toLowerCase())) {
       localError = "同一对象中已存在同名的启用字段。";
       publish();
       return Promise.resolve(false);
     }
-    const ownerFields = schema.fields.filter(field => field.owner.kind === input.owner.kind && field.owner.id === input.owner.id);
+    const ownerFields = group.fields.filter(field => field.owner.kind === input.owner.kind && field.owner.id === input.owner.id);
     const order = ownerFields.reduce((maximum, field) => Math.max(maximum, field.order), -1) + 1;
     const candidate: AssetFieldDefinition = Object.freeze({
       id: input.id,
@@ -1298,23 +1410,18 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       order,
       status: "active",
     });
-    const checked = normalizeSchema({format: FORMAT, schemaVersion: SCHEMA_VERSION, types: schema.types, assets: schema.assets, fields: [...schema.fields, candidate]});
-    if (!checked.schema) {
-      localError = checked.error?.replace(/ 已保留原始文件。$/, "") ?? "资产字段定义无效。";
-      publish();
-      return Promise.resolve(false);
-    }
+    const fields = [...group.fields, candidate];
     if (candidate.owner.kind === "asset" && hasOwn(candidate, "defaultValue")) {
-      const assets = checked.schema.assets.map(asset => asset.id === candidate.owner.id
+      const assets = group.assets.map(asset => asset.id === candidate.owner.id
         ? freezeAsset({...asset, values: {...asset.values, [candidate.id]: clonePropertyValue(candidate.defaultValue!)}})
         : asset);
-      return mutate(freezeSchema(checked.schema.types, checked.schema.fields, assets));
+      return mutateGroup(groupId, {fields, assets});
     }
-    return mutate(checked.schema);
+    return mutateGroup(groupId, {fields});
   }
 
   function renameField(id: string, title: string): Promise<boolean> {
-    if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
+    if (!canEdit()) return Promise.resolve(false);
     const index = schema.fields.findIndex(field => field.id === id);
     if (index < 0) return Promise.resolve(false);
     const normalizedTitle = typeof title === "string" ? title.trim() : "";
@@ -1331,13 +1438,13 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       return Promise.resolve(false);
     }
     if (current.title === normalizedTitle) return settleNoop();
-    const fields = [...schema.fields];
-    fields[index] = Object.freeze({...current, title: normalizedTitle});
-    return mutate(currentSchemaWith(schema.types, fields));
+    const groupId = groupForOwner(current.owner);
+    const fields = groups.get(groupId)!.fields.map(field => field.id === id ? Object.freeze({...field, title: normalizedTitle}) : field);
+    return mutateGroup(groupId, {fields});
   }
 
   function removeAssetField(assetId: string, fieldId: string): Promise<boolean> {
-    if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
+    if (!canEdit()) return Promise.resolve(false);
     const assetIndex = schema.assets.findIndex(asset => asset.id === assetId);
     if (assetIndex < 0) {
       localError = "无法删除专属属性：所属资产不存在。";
@@ -1352,72 +1459,59 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       return Promise.resolve(false);
     }
 
-    const fields = schema.fields.filter(candidate => candidate.id !== fieldId);
-    const assets = [...schema.assets];
-    const asset = assets[assetIndex];
+    const asset = schema.assets[assetIndex];
+    const group = groups.get(asset.typeId)!;
+    const fields = group.fields.filter(candidate => candidate.id !== fieldId);
     const values: Record<string, AssetPropertyValue> = {...asset.values};
     delete values[fieldId];
-    assets[assetIndex] = freezeAsset({...asset, values});
-    return mutate(freezeSchema(schema.types, fields, assets));
+    const assets = group.assets.map(item => item.id === assetId ? freezeAsset({...asset, values}) : item);
+    return mutateGroup(asset.typeId, {fields, assets});
   }
 
   function moveField(id: string, direction: -1 | 1): Promise<boolean> {
-    if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
+    if (!canEdit()) return Promise.resolve(false);
     const current = schema.fields.find(field => field.id === id);
     if (!current) return Promise.resolve(false);
-    const ownerFields = schema.fields.filter(field => field.owner.kind === current.owner.kind && field.owner.id === current.owner.id).sort((a, b) => a.order - b.order);
+    const groupId = groupForOwner(current.owner);
+    const group = groups.get(groupId)!;
+    const ownerFields = group.fields.filter(field => field.owner.kind === current.owner.kind && field.owner.id === current.owner.id).sort((a, b) => a.order - b.order);
     const index = ownerFields.findIndex(field => field.id === id);
     const target = index + direction;
     if (target < 0 || target >= ownerFields.length) return settleNoop();
     [ownerFields[index], ownerFields[target]] = [ownerFields[target], ownerFields[index]];
     const normalized = ownerFields.map((field, order) => Object.freeze({...field, order}));
     const byId = new Map(normalized.map(field => [field.id, field]));
-    const fields = schema.fields.map(field => byId.get(field.id) ?? field);
-    return mutate(currentSchemaWith(schema.types, fields));
+    const fields = group.fields.map(field => byId.get(field.id) ?? field);
+    return mutateGroup(groupId, {fields});
   }
 
   async function retry(): Promise<boolean> {
     if (!alive) return false;
     if (loading) return loadOperation ?? false;
     if (mutating) return mutationOperation ?? false;
-    if (!loaded || localBlocked) return load();
     if (files.getSnapshot().blocked) return false;
-    const order = orderStore.getSnapshot();
-    const file = fileFrom();
-    const schemaNeedsSave = localDraft || file?.dirty || file?.saveState === "pending" || file?.saveState === "saving" || file?.saveState === "error";
-    if (order.dirty || order.saving || (!schemaNeedsSave && (order.blocked || !order.loaded))) {
-      if (!await orderStore.retry()) return false;
-    }
-    if (localDraft) {
-      mutating = true;
-      localError = null;
-      let resolveOperation!: (value: boolean) => void;
-      const operation = new Promise<boolean>(resolve => { resolveOperation = resolve; });
-      mutationOperation = operation;
-      publish();
-      void persistCurrent().catch(cause => {
-        if (alive) localError = cause instanceof Error ? cause.message : "保存类型模板失败，请重试。";
+    if (!loaded || snapshot.blocked || legacyOrderError) {
+      // Reload repaired files without discarding a body edit that storage has not accepted.
+      if (pendingGroup) {
+        if (!await loadTemplates() || snapshot.blocked || legacyOrderError) return false;
+      } else if (!await load() || snapshot.orderBlocked || snapshot.blocked) {
         return false;
-      }).then(result => {
-        if (alive) {
-          if (result) clearPendingIds();
-          mutating = false;
-          publish();
-        }
-        if (mutationOperation === operation) mutationOperation = null;
-        resolveOperation(Boolean(result));
-      });
-      return operation;
+      }
     }
-    if (!file?.dirty && file?.saveState !== "pending" && file?.saveState !== "saving" && file?.saveState !== "error") return true;
-    let saved = false;
-    try { saved = await files.save(PATH); }
-    catch (cause) { localError = cause instanceof Error ? cause.message : "保存类型模板失败，请重试。"; }
-    if (!alive) return false;
-    if (saved) clearPendingIds();
-    localError = saved ? null : fileFrom()?.saveError ?? (files.getSnapshot().blocked ? files.getSnapshot().error : null) ?? "保存类型模板失败，请重试。";
-    publish();
-    return saved;
+    const catalog = templateStore.getSnapshot();
+    if (catalog.dirty || catalog.saving || catalog.blocked || !catalog.loaded) {
+      if (!await templateStore.retry()) return false;
+      pendingTemplateEdit = null;
+    }
+    if (pendingGroup) {
+      localError = null;
+      return persistMutation();
+    }
+    for (const file of dataFiles()) {
+      if (!file.dirty && file.saveState === "saved") continue;
+      if (!await files.save(file.path)) return false;
+    }
+    return finishPendingRemoval();
   }
 
   return Object.freeze({
@@ -1447,17 +1541,18 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       if (!alive) return;
       alive = false;
       generation++;
-      unsubscribeOrder();
-      const finishingOrder = orderStore.dispose();
+      unsubscribeTemplates();
+      const finishingTemplates = templateStore.dispose();
+      objectFiles.dispose();
       unsubscribe();
       listeners.clear();
       parsedBytes = null;
-      parsedResult = null;
+      document = {};
       schemaBytes = null;
       loading = false;
       mutating = false;
       snapshot = Object.freeze({...snapshot, loading: false, saving: false, reordering: false, blocked: true});
-      await finishingOrder;
+      await finishingTemplates;
     },
   });
 }

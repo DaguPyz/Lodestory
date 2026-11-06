@@ -97,6 +97,17 @@ export function uiPluginFixture({ container = {}, documentRoot = createDocumentR
       if (changed) hooks[index] = { value: callback, dependencies };
       return hooks[index].value;
     },
+    useMemo(factory, dependencies) {
+      if (!hookRuntime) return React.useMemo(factory, dependencies);
+      const { hooks, index } = hookRuntime;
+      hookRuntime.index += 1;
+      const previous = hooks[index];
+      const changed = !previous || !dependencies || !previous.dependencies
+        || dependencies.length !== previous.dependencies.length
+        || dependencies.some((value, dependencyIndex) => !Object.is(value, previous.dependencies[dependencyIndex]));
+      if (changed) hooks[index] = { value: factory(), dependencies };
+      return hooks[index].value;
+    },
     useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot) {
       if (hookRuntime) {
         hookRuntime.index += 1;

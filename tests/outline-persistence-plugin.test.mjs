@@ -2,6 +2,19 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {createMainFixture, flushStartup} from "./helpers/mainStartupFixture.mjs";
 
+function decodeBinarySaveFrame(frame) {
+  const metadataLength = new DataView(frame.buffer, frame.byteOffset, frame.byteLength).getUint32(0, true);
+  const metadataEnd = 4 + metadataLength;
+  const metadata = JSON.parse(new TextDecoder("utf-8", {fatal: true}).decode(frame.subarray(4, metadataEnd)));
+  const dataEnd = metadataEnd + metadata.byteLength;
+  return {
+    projectPath: metadata.projectPath,
+    path: metadata.path,
+    bytes: Array.from(frame.subarray(metadataEnd, dataEnd)),
+    expectedBytes: Array.from(frame.subarray(dataEnd, dataEnd + metadata.expectedByteLength)),
+  };
+}
+
 function persistenceFixture({failFirstRead = false, deferAxisSave = false, failEventCreate = false, deferEventCreate = false} = {}) {
   const disk = new Map();
   let readFailed = false;
@@ -16,10 +29,27 @@ function persistenceFixture({failFirstRead = false, deferAxisSave = false, failE
   const bytesOf = value => Array.from(new TextEncoder().encode(value));
   const f = createMainFixture({
     async invokeHandler(command, args) {
+      const compact = command.endsWith("_base64");
+      if (compact) {
+        command = command.slice(0, -"_base64".length);
+        args = {...args,
+          ...(typeof args.bytesBase64 === "string" ? {bytes: Array.from(Buffer.from(args.bytesBase64, "base64"))} : {}),
+          ...(typeof args.expectedBytesBase64 === "string" ? {expectedBytes: Array.from(Buffer.from(args.expectedBytesBase64, "base64"))} : {}),
+        };
+        delete args.bytesBase64;
+        delete args.expectedBytesBase64;
+      } else if (command === "save_project_file_binary") {
+        args = decodeBinarySaveFrame(args);
+        command = "save_project_file";
+      }
       calls.push({command, args});
       if (command === "read_project_file") {
         const key = keyOf(args.projectPath, args.path);
         if (!disk.has(key)) throw new Error("文件不存在");
+        if (compact) {
+          const bytes = disk.get(key);
+          return {path: args.path, fileName: args.path.split("/").at(-1), bytesBase64: Buffer.from(bytes).toString("base64"), byteLength: bytes.length};
+        }
         return {path: args.path, fileName: args.path.split("/").at(-1), bytes: disk.get(key)};
       }
       if (command === "create_project_file") {
@@ -40,6 +70,10 @@ function persistenceFixture({failFirstRead = false, deferAxisSave = false, failE
           throw new Error("文件已存在");
         }
         disk.set(key, Array.from(args.bytes));
+        if (compact) {
+          const bytes = disk.get(key);
+          return {path: args.path, fileName: args.path.split("/").at(-1), bytesBase64: Buffer.from(bytes).toString("base64"), byteLength: bytes.length};
+        }
         return {path: args.path, fileName: args.path.split("/").at(-1), bytes: disk.get(key)};
       }
       if (command === "save_project_file" || command === "delete_project_file") {

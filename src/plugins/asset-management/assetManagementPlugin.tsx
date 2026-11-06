@@ -125,7 +125,7 @@ export function createAssetManagementPlugin(): Plugin {
                   let previous = store.getSnapshot();
                   return store.subscribe(() => {
                     const next = store.getSnapshot();
-                    if (next.assets !== previous.assets || next.fields !== previous.fields || next.types !== previous.types
+                    if (next.assets !== previous.assets || next.fields !== previous.fields
                       || next.loading !== previous.loading || next.loaded !== previous.loaded || next.error !== previous.error) listener();
                     previous = next;
                   });
@@ -145,7 +145,7 @@ export function createAssetManagementPlugin(): Plugin {
               removeSearch?.();
               try { catalogController.dispose(); }
               finally {
-                try { store.dispose(); }
+                try { await store.dispose(); }
                 finally {
                   if (sessions.get(session.id) === resource) sessions.delete(session.id);
                 }
@@ -161,10 +161,10 @@ export function createAssetManagementPlugin(): Plugin {
                 }
                 return resource.editing.size === 0 && !store.getSnapshot().dirty;
               },
-              dispose() {
+              async dispose() {
                 try { removeSearch?.(); catalogController.dispose(); }
                 finally {
-                  try { store.dispose(); }
+                  try { await store.dispose(); }
                   finally {
                     resource.editing.clear();
                     if (sessions.get(session.id) === resource) sessions.delete(session.id);

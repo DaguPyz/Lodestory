@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {createMainFixture, flushStartup} from "./helpers/mainStartupFixture.mjs";
+import {createMainFixture, deferred, flushStartup} from "./helpers/mainStartupFixture.mjs";
 import {byteStorageFixture} from "./helpers/byteStorageFixture.mjs";
 import {uiPluginFixture} from "./helpers/uiPluginFixture.mjs";
 
 function fixture() {
   const stores = [];
-  const controls = {load: "success", retry: true, save: true};
+  const controls = {load: "success", retry: true, save: true, retryWait: null, retryStarted: null};
   function createAssetSchemaStore(files) {
     const snapshot = {
       types: [], assets: [], fields: [], selectedTypeId: null, selectedAssetId: null, loaded: false, loading: true, saving: false,
@@ -35,6 +35,12 @@ function fixture() {
       },
       async retry() {
         record.retryCalls++;
+        if (controls.retryWait) {
+          controls.retryStarted?.resolve();
+          await controls.retryWait.promise;
+          controls.retryWait = null;
+          controls.retryStarted = null;
+        }
         if (!controls.retry) return false;
         snapshot.dirty = false;
         snapshot.error = null;
@@ -167,7 +173,13 @@ test("asset schema sessions own their stores, guard project leave, and release r
   assert.equal(stores[0].retryCalls, 1);
 
   controls.retry = true;
-  assert.equal(await workbench.closeProject(), true);
+  controls.retryStarted = deferred();
+  controls.retryWait = deferred();
+  const closing = workbench.closeProject();
+  await controls.retryStarted.promise;
+  assert.strictEqual(workbench.getSnapshot().session, session, "leave waits while a reorder save retry is pending");
+  controls.retryWait.resolve();
+  assert.equal(await closing, true);
   assert.equal(stores[0].retryCalls, 2);
   assert.equal(stores[0].disposed, true);
   assert.equal(navProps.sessions.has(session.id), false);
@@ -613,6 +625,38 @@ test("template navigation renders saved colors while preserving selection", () =
   assert.equal(colored.props.style["--asset-card-background"], "#d8e5f2");
   assert.equal(colored.props["aria-pressed"], true);
   assert.equal(plain.props.style, undefined);
+});
+
+test("template ordering stays enabled during its own save while other edits stay disabled", () => {
+  const f = uiPluginFixture();
+  f.React.useLayoutEffect = () => {};
+  const {AssetTypeEditor} = f.loadSource("plugins/asset-management/AssetManagementView.tsx");
+  const session = {id: "ordering-session"};
+  const first = {id: "order-type-first", name: "功法", description: "", order: 0, status: "active"};
+  const selected = {id: "order-type-selected", name: "兵器", description: "", order: 1, status: "active"};
+  const last = {id: "order-type-last", name: "丹药", description: "", order: 2, status: "active"};
+  const field = {id: "order-field", owner: {kind: "type", id: selected.id}, title: "品阶",
+    valueType: "text", config: {}, order: 0, status: "active"};
+  const snapshot = {types: [first, selected, last], assets: [], fields: [field], selectedTypeId: selected.id,
+    selectedAssetId: null, typeCreationRequest: 0, loaded: true, loading: false, saving: true,
+    reordering: true, dirty: true, blocked: false, error: null};
+  const store = {getSnapshot: () => snapshot, subscribe: () => () => {}, selectAsset() { return true; }};
+  const workbenchSnapshot = {session, active: true, busy: false};
+  const props = {workbench: {getSnapshot: () => workbenchSnapshot, subscribe: () => () => {}},
+    sessions: new Map([[session.id, {store, editing: new Set()}]]), active: true,
+    contextMenus: {Region: function Region({children}) { return children; }}, onOpenTypes() {}, onOpenAssets() {}};
+  const outer = f.withHooks({}, () => AssetTypeEditor(props));
+  const tree = f.withHooks({}, () => outer.type(outer.props));
+  const orderButtons = findReactElement(tree, element => element.type?.name === "OrderButtons"
+    && element.props.label === "模板“兵器”");
+  const orderTree = f.withHooks({}, () => orderButtons.type(orderButtons.props));
+  const button = label => findReactElement(orderTree, element => element.type?.name === "IconButton" && element.props.label === label);
+  const rename = findReactElement(tree, element => element.type?.name === "Button"
+    && element.props["aria-label"] === "修改“品阶”的字段名称");
+
+  assert.equal(button("上移模板“兵器”")?.props.disabled, false);
+  assert.equal(button("下移模板“兵器”")?.props.disabled, false);
+  assert.equal(rename?.props.disabled, true, "field edits stay disabled while the schema is saving");
 });
 
 test("object view and search stay local while filtering both list modes", () => {

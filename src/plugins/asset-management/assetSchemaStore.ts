@@ -1,4 +1,5 @@
-import type {ProjectFile, ProjectFileBytes, ProjectFiles, ProjectSaveState} from "@lodestory/sdk/project-storage";
+import {createAssetTypeOrderStore} from "./assetTypeOrderStore";
+import type {ProjectByteView, ProjectFile, ProjectFileData, ProjectFiles, ProjectSaveState} from "@lodestory/sdk/project-storage";
 
 export type AssetValueType = "text" | "number" | "singleSelect" | "multiSelect" | "reference";
 
@@ -73,6 +74,8 @@ export type AssetSchemaSnapshot = Readonly<{
   loaded: boolean;
   loading: boolean;
   saving: boolean;
+  reordering: boolean;
+  orderBlocked: boolean;
   dirty: boolean;
   blocked: boolean;
   error: string | null;
@@ -98,7 +101,7 @@ export type AssetSchemaStore = Readonly<{
   removeAssetField(assetId: string, fieldId: string): Promise<boolean>;
   moveField(id: string, direction: -1 | 1): Promise<boolean>;
   retry(): Promise<boolean>;
-  dispose(): void;
+  dispose(): Promise<void>;
 }>;
 
 const PATH = ".lodestory/assets/schema.json";
@@ -148,12 +151,35 @@ function keysMatch(value: Record<string, unknown>, required: readonly string[], 
     && actual.every(key => allowed.includes(key));
 }
 
-function encodeUtf8(value: string): ProjectFileBytes {
-  return Object.freeze(Array.from(new TextEncoder().encode(value)));
+function encodeUtf8(value: string): Uint8Array {
+  return new TextEncoder().encode(value);
 }
 
-function decodeUtf8(bytes: ProjectFileBytes): string {
-  return new TextDecoder("utf-8", {fatal: true}).decode(new Uint8Array(bytes));
+function isByteView(bytes: ProjectFileData): bytes is ProjectByteView {
+  return !Array.isArray(bytes) && !(bytes instanceof Uint8Array)
+    && typeof bytes === "object" && bytes !== null
+    && typeof (bytes as ProjectByteView).copyTo === "function"
+    && typeof (bytes as ProjectByteView).equals === "function";
+}
+
+function decodeUtf8(bytes: ProjectFileData): string {
+  if (isByteView(bytes)) {
+    const buffer = new Uint8Array(bytes.byteLength);
+    bytes.copyTo(buffer);
+    return new TextDecoder("utf-8", {fatal: true}).decode(buffer);
+  }
+  return new TextDecoder("utf-8", {fatal: true}).decode(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
+}
+
+function sameBytes(left: ProjectFileData, right: ProjectFileData): boolean {
+  if (left === right) return true;
+  if (isByteView(left)) return left.equals(right);
+  if (isByteView(right)) return right.equals(left);
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index++) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
 }
 
 function cloneConfig(config: AssetFieldConfig): AssetFieldConfig {
@@ -444,7 +470,7 @@ function normalizeSchema(value: unknown): {schema: SchemaData | null; error: str
   return {schema: freezeSchema(types, fields, normalizedAssets), error: null};
 }
 
-function parseSchema(bytes: ProjectFileBytes): {schema: SchemaData | null; error: string | null} {
+function parseSchema(bytes: ProjectFileData): {schema: SchemaData | null; error: string | null} {
   let text: string;
   try { text = decodeUtf8(bytes); }
   catch { return {schema: null, error: "类型模板文件不是有效 UTF-8，已保留原始文件。"}; }
@@ -454,7 +480,7 @@ function parseSchema(bytes: ProjectFileBytes): {schema: SchemaData | null; error
   return normalizeSchema(value);
 }
 
-function serializeSchema(schema: SchemaData): ProjectFileBytes {
+function serializeSchema(schema: SchemaData): Uint8Array {
   return encodeUtf8(`${JSON.stringify({format: FORMAT, schemaVersion: SCHEMA_VERSION, types: schema.types, assets: schema.assets, fields: schema.fields}, null, 2)}\n`);
 }
 
@@ -496,6 +522,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
   let loaded = false;
   let loading = false;
   let mutating = false;
+  const orderStore = createAssetTypeOrderStore(files);
   let knownFile = false;
   let localDraft = false;
   let localBlocked = false;
@@ -504,12 +531,32 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
   let generation = 0;
   let loadOperation: Promise<boolean> | null = null;
   let mutationOperation: Promise<boolean> | null = null;
-  let parsedBytes: ProjectFileBytes | null = null;
+  let parsedBytes: ProjectFileData | null = null;
   let parsedResult: ReturnType<typeof parseSchema> | null = null;
-  let schemaBytes: ProjectFileBytes | null = null;
-  let snapshot = buildSnapshot(files.getSnapshot());
+  let schemaBytes: ProjectFileData | null = null;
+  let projection: {
+    source: readonly AssetTypeTemplate[];
+    ids: readonly string[];
+    types: readonly AssetTypeTemplate[];
+  } | undefined;
+  let snapshot = buildSnapshot();
+  const unsubscribeOrder = orderStore.subscribe(publish);
 
-  function parseFile(bytes: ProjectFileBytes): ReturnType<typeof parseSchema> {
+  // schema.types retains the on-disk fallback order. Only the view applies the order file.
+  function visibleOrder(): readonly AssetTypeTemplate[] {
+    const ids = orderStore.getSnapshot().typeIds;
+    if (!ids) return schema.types;
+    if (projection?.source === schema.types && projection.ids === ids) return projection.types;
+    const rank = new Map(ids.map((id, index) => [id, index]));
+    const sorted = [...schema.types].sort((a, b) =>
+      (rank.get(a.id) ?? ids.length) - (rank.get(b.id) ?? ids.length) || a.order - b.order);
+    const types = Object.freeze(sorted.map((type, order) =>
+      type.order === order ? type : Object.freeze({...type, order})));
+    projection = {source: schema.types, ids, types};
+    return types;
+  }
+
+  function parseFile(bytes: ProjectFileData): ReturnType<typeof parseSchema> {
     if (parsedBytes !== bytes || parsedResult === null) {
       parsedBytes = bytes;
       parsedResult = parseSchema(bytes);
@@ -523,12 +570,13 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
 
   function buildSnapshot(source = files.getSnapshot()): AssetSchemaSnapshot {
     const file = fileFrom(source.files);
-    const dirty = localDraft || Boolean(file?.dirty);
-    const saveState: ProjectSaveState = mutating ? "saving"
-      : dirty ? (localError || file?.saveState === "error" ? "error" : "pending")
+    const order = orderStore.getSnapshot();
+    const dirty = localDraft || Boolean(file?.dirty) || order.dirty || order.saving;
+    const saveState: ProjectSaveState = mutating || order.saving ? "saving"
+      : dirty ? (localError || order.error || file?.saveState === "error" ? "error" : "pending")
         : file?.saveState ?? "saved";
     return Object.freeze({
-      types: schema.types,
+      types: visibleOrder(),
       assets: schema.assets,
       fields: schema.fields,
       selectedTypeId,
@@ -537,9 +585,11 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       loaded,
       loading,
       saving: loading || mutating || saveState === "pending" || saveState === "saving",
+      reordering: order.saving && !mutating && !file?.dirty,
+      orderBlocked: order.blocked || !order.loaded,
       dirty,
       blocked: source.blocked || localBlocked,
-      error: localError ?? file?.saveError ?? (saveState === "error" ? "类型模板保存失败，请重试。" : null),
+      error: localError ?? file?.saveError ?? order.error ?? (saveState === "error" ? "类型模板保存失败，请重试。" : null),
       saveState,
     });
   }
@@ -550,7 +600,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     if (snapshot.types === next.types && snapshot.assets === next.assets && snapshot.fields === next.fields
       && snapshot.selectedTypeId === next.selectedTypeId && snapshot.selectedAssetId === next.selectedAssetId
       && snapshot.typeCreationRequest === next.typeCreationRequest && snapshot.loaded === next.loaded
-      && snapshot.loading === next.loading && snapshot.saving === next.saving && snapshot.dirty === next.dirty
+      && snapshot.loading === next.loading && snapshot.saving === next.saving && snapshot.reordering === next.reordering && snapshot.orderBlocked === next.orderBlocked && snapshot.dirty === next.dirty
       && snapshot.blocked === next.blocked && snapshot.error === next.error && snapshot.saveState === next.saveState) return;
     snapshot = next;
     for (const listener of [...listeners]) listener();
@@ -563,7 +613,8 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
   }
 
   function reconcileTypeSelection() {
-    const firstActiveId = [...schema.types].sort((left, right) => left.order - right.order).find(type => type.status === "active")?.id ?? null;
+    if (!typeSelectionInitialized && !orderStore.getSnapshot().loaded && !orderStore.getSnapshot().error) return;
+    const firstActiveId = [...visibleOrder()].sort((left, right) => left.order - right.order).find(type => type.status === "active")?.id ?? null;
     if (!typeSelectionInitialized) {
       selectedTypeId = firstActiveId;
       typeSelectionInitialized = true;
@@ -584,19 +635,21 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
 
   function acceptFile(file: ProjectFile, requestGeneration?: number): boolean {
     if (!alive || requestGeneration !== undefined && requestGeneration !== generation) return false;
-    const parsed = parseFile(file.bytes);
+    const bytes = file.byteView ?? file.bytes;
+    const parsed = parseFile(bytes);
     if (!parsed.schema) {
       loaded = false;
       localBlocked = true;
       localError = parsed.error;
       return false;
     }
-    if (schemaBytes !== file.bytes) {
+    if (schemaBytes !== bytes) {
       if (!sameSchema(schema, parsed.schema)) schema = parsed.schema;
-      schemaBytes = file.bytes;
+      schemaBytes = bytes;
       reconcileTypeSelection();
       reconcileAssetSelection();
     }
+    if (!typeSelectionInitialized) reconcileTypeSelection();
     knownFile = true;
     localDraft = false;
     if (!file.dirty && file.saveState === "saved") clearPendingIds();
@@ -614,22 +667,28 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       // Shared ProjectFiles bytes are canonical once accepted; don't replace a local draft
       // that has not yet been accepted by the byte store.
       if (!localDraft) {
-        const parsed = parseFile(sharedFile.bytes);
-        if (parsed.schema) {
-          if (schemaBytes !== sharedFile.bytes) {
-            if (!sameSchema(schema, parsed.schema)) schema = parsed.schema;
-            schemaBytes = sharedFile.bytes;
-            reconcileTypeSelection();
-            reconcileAssetSelection();
-          }
+        const bytes = sharedFile.byteView ?? sharedFile.bytes;
+        if (schemaBytes === bytes) {
           loaded = true;
           if (!sharedFile.dirty && sharedFile.saveState === "saved") clearPendingIds();
           localBlocked = false;
           localError = null;
-        } else if (loaded) {
-          loaded = false;
-          localBlocked = true;
-          localError = parsed.error;
+        } else {
+          const parsed = parseFile(bytes);
+          if (parsed.schema) {
+            if (!sameSchema(schema, parsed.schema)) schema = parsed.schema;
+            schemaBytes = bytes;
+            reconcileTypeSelection();
+            reconcileAssetSelection();
+            loaded = true;
+            if (!sharedFile.dirty && sharedFile.saveState === "saved") clearPendingIds();
+            localBlocked = false;
+            localError = null;
+          } else if (loaded) {
+            loaded = false;
+            localBlocked = true;
+            localError = parsed.error;
+          }
         }
       }
     } else if (knownFile && !localDraft) {
@@ -641,7 +700,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
 
   function load(): Promise<boolean> {
     if (!alive) return Promise.resolve(false);
-    if (loaded && !localBlocked) return Promise.resolve(true);
+    if (loaded && !localBlocked && orderStore.getSnapshot().loaded) return Promise.resolve(true);
     if (loadOperation) return loadOperation;
     const requestGeneration = ++generation;
     loading = true;
@@ -663,7 +722,16 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     void (async () => {
       try {
         if (protectedFile) {
-          const valid = acceptFile(protectedFile, requestGeneration);
+          if (!alive) return false;
+          await orderStore.load();
+          if (!alive || requestGeneration !== generation) return false;
+          const latest = fileFrom();
+          if (!latest) {
+            loaded = false;
+            localError = "资产文件在读取期间发生变化，请重试。";
+            return false;
+          }
+          const valid = acceptFile(latest, requestGeneration);
           publish();
           return valid;
         }
@@ -683,6 +751,9 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
           publish();
           return false;
         }
+        // A malformed optional order must not prevent opening the assets themselves.
+        await orderStore.load(listing);
+        if (!alive || requestGeneration !== generation) return false;
         const entry = listing.entries.find(candidate => candidate.name === "schema.json" || candidate.path === PATH);
         const issue = listing.issues.find(candidate => candidate.path === PATH || candidate.path === "schema.json");
         if (issue) {
@@ -714,7 +785,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
           return false;
         }
         let readOperation: ReturnType<ProjectFiles["read"]>;
-        try { readOperation = files.read(PATH); }
+        try { readOperation = files.read(PATH, {preferByteView: true}); }
         catch (cause) { readOperation = Promise.reject(cause); }
         let file: ProjectFile | null = null;
         let readFailure: unknown = null;
@@ -766,7 +837,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
         return true;
       }
       let created: ProjectFile | null = null;
-      try { created = await files.create(PATH, bytes, {createParents: true, acceptIdentical: true}); }
+      try { created = await files.create(PATH, bytes, {createParents: true, acceptIdentical: true, preferByteView: true}); }
       catch (cause) { localError = cause instanceof Error ? cause.message : "创建类型模板文件失败，请重试。"; }
       if (!alive) return false;
       if (!created) {
@@ -778,11 +849,16 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
 
     localDraft = true;
     let accepted = false;
-    try { accepted = files.write(PATH, bytes); }
+    try { accepted = files.write(PATH, bytes, {preferByteView: true}); }
     catch (cause) { localError = cause instanceof Error ? cause.message : "更新类型模板失败。"; }
     if (!accepted) {
       localError ??= files.getSnapshot().blocked ? files.getSnapshot().error : "项目存储未接受类型模板。";
       return false;
+    }
+    const acceptedFile = fileFrom();
+    if (acceptedFile) {
+      const acceptedBytes = acceptedFile.byteView ?? acceptedFile.bytes;
+      if (sameBytes(acceptedBytes, bytes)) schemaBytes = acceptedBytes;
     }
     localDraft = false;
     knownFile = true;
@@ -796,7 +872,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
   }
 
   function mutate(nextSchema: SchemaData, nextSelectedTypeId = selectedTypeId, nextSelectedAssetId = selectedAssetId): Promise<boolean> {
-    if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
+    if (!alive || !loaded || snapshot.blocked || mutating || orderStore.getSnapshot().saving || orderStore.getSnapshot().dirty) return Promise.resolve(false);
     const checked = normalizeSchema({format: FORMAT, schemaVersion: SCHEMA_VERSION, types: nextSchema.types, assets: nextSchema.assets, fields: nextSchema.fields});
     if (!checked.schema) {
       localError = checked.error?.replace(/ 已保留原始文件。$/, "") ?? "类型模板定义无效。";
@@ -969,7 +1045,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     const types = schema.types.filter(type => type.id !== id);
     const fields = schema.fields.filter(field => field.owner.kind !== "type" || field.owner.id !== id);
     const nextSelectedTypeId = selectedTypeId === id
-      ? [...types].sort((left, right) => left.order - right.order).find(type => type.status === "active")?.id ?? null
+      ? [...visibleOrder()].sort((left, right) => left.order - right.order).find(type => type.id !== id && type.status === "active")?.id ?? null
       : selectedTypeId;
     return mutate(freezeSchema(types, fields, schema.assets), nextSelectedTypeId);
   }
@@ -1137,15 +1213,16 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
   }
 
   function moveType(id: string, direction: -1 | 1): Promise<boolean> {
-    if (!alive || !loaded || snapshot.blocked || mutating) return Promise.resolve(false);
-    const types = [...schema.types].sort((a, b) => a.order - b.order);
-    const index = types.findIndex(type => type.id === id);
-    const target = index + direction;
-    if (index < 0) return Promise.resolve(false);
-    if (target < 0 || target >= types.length) return settleNoop();
+    if (!alive || !loaded || snapshot.blocked || snapshot.orderBlocked || mutating
+      || (snapshot.saving || snapshot.dirty) && !snapshot.reordering) return Promise.resolve(false);
+    const types = [...visibleOrder()].sort((a, b) => a.order - b.order);
+    const index = types.findIndex(type => type.id === id && type.status === "active");
+    if (index < 0 || direction !== -1 && direction !== 1) return Promise.resolve(false);
+    let target = index + direction;
+    while (types[target]?.status === "archived") target += direction;
+    if (!types[target]) return settleNoop();
     [types[index], types[target]] = [types[target], types[index]];
-    const ordered = types.map((type, order) => Object.freeze({...type, order}));
-    return mutate(currentSchemaWith(ordered));
+    return orderStore.save(types.map(type => type.id));
   }
 
   function createField(input: CreateAssetFieldInput): Promise<boolean> {
@@ -1305,7 +1382,12 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     if (mutating) return mutationOperation ?? false;
     if (!loaded || localBlocked) return load();
     if (files.getSnapshot().blocked) return false;
+    const order = orderStore.getSnapshot();
     const file = fileFrom();
+    const schemaNeedsSave = localDraft || file?.dirty || file?.saveState === "pending" || file?.saveState === "saving" || file?.saveState === "error";
+    if (order.dirty || order.saving || (!schemaNeedsSave && (order.blocked || !order.loaded))) {
+      if (!await orderStore.retry()) return false;
+    }
     if (localDraft) {
       mutating = true;
       localError = null;
@@ -1361,10 +1443,12 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     removeAssetField,
     moveField,
     retry,
-    dispose() {
+    async dispose() {
       if (!alive) return;
       alive = false;
       generation++;
+      unsubscribeOrder();
+      const finishingOrder = orderStore.dispose();
       unsubscribe();
       listeners.clear();
       parsedBytes = null;
@@ -1372,7 +1456,8 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       schemaBytes = null;
       loading = false;
       mutating = false;
-      snapshot = Object.freeze({...snapshot, loading: false, saving: false, blocked: true});
+      snapshot = Object.freeze({...snapshot, loading: false, saving: false, reordering: false, blocked: true});
+      await finishingOrder;
     },
   });
 }

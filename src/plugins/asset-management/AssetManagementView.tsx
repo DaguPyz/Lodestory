@@ -187,12 +187,15 @@ function TypeEditor({resource, contextMenus, active, canInteract, onOpenAssets}:
   const editingToken = useRef(Symbol("asset-schema-editor"));
   const handledCreationRequest = useRef(resource.handledTypeCreationRequest ?? 0);
   const epoch = useRef(0);
+  const reorderRequests = useRef(0);
   const activeRef = useRef(active);
   activeRef.current = active;
   const disabled = !active || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.saving || snapshot.dirty || pending;
   const editing = draft !== null || deleteTarget !== null;
   const deletionPendingSave = deleteTarget !== null && !snapshot.types.some(type => type.id === deleteTarget.id) && snapshot.dirty;
   const deletionError = error ?? (deletionPendingSave ? snapshot.error : null);
+  const orderDisabled = !active || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.orderBlocked || editing
+    || pending && !snapshot.reordering || snapshot.dirty && !snapshot.reordering || snapshot.saving && !snapshot.reordering;
 
   useLayoutEffect(() => () => {
     epoch.current++;
@@ -236,6 +239,27 @@ function TypeEditor({resource, contextMenus, active, canInteract, onOpenAssets}:
       if (operationEpoch === epoch.current) setError(cause instanceof Error ? cause.message : "保存失败，请重试。");
     } finally {
       if (operationEpoch === epoch.current) setPending(false);
+    }
+  }
+  async function moveType(id: string, direction: -1 | 1) {
+    const current = store.getSnapshot();
+    if (!activeRef.current || !canInteract() || resource.editing.size > 0 || !current.loaded || current.loading || current.blocked
+      || current.orderBlocked || (pending && !current.reordering) || (current.saving && !current.reordering) || (current.dirty && !current.reordering)) return;
+    const operationEpoch = epoch.current;
+    reorderRequests.current++;
+    setPending(true);
+    setError(null);
+    try {
+      const accepted = await store.moveType(id, direction);
+      if (operationEpoch !== epoch.current) return;
+      if (!accepted) setError(store.getSnapshot().error ?? "未能保存模板顺序，请重试。");
+    } catch (cause) {
+      if (operationEpoch === epoch.current) setError(cause instanceof Error ? cause.message : "保存失败，请重试。");
+    } finally {
+      if (operationEpoch === epoch.current) {
+        reorderRequests.current = Math.max(0, reorderRequests.current - 1);
+        setPending(reorderRequests.current > 0);
+      }
     }
   }
   function newType() {
@@ -307,14 +331,14 @@ function TypeEditor({resource, contextMenus, active, canInteract, onOpenAssets}:
         <p>{selected ? "配置这个模板下所有对象共用的字段、字段类型和默认值。" : "先定义资产模板，再基于模板创建具体对象。"}</p></div>
     </header>
     {(error || snapshot.error) && !editing && <div className="asset-feedback" role="alert"><span>{error ?? snapshot.error}</span>
-      {(snapshot.dirty || snapshot.blocked || !snapshot.loaded) && <Button variant="ghost" disabled={!active || pending || snapshot.saving}
+      {(snapshot.dirty || snapshot.blocked || snapshot.orderBlocked || !snapshot.loaded) && <Button variant="ghost" disabled={!active || pending || snapshot.saving}
         onClick={() => void run(store.retry)}>重试</Button>}</div>}
     {snapshot.loading && <p className="asset-editor-message" role="status">正在读取资产模板…</p>}
     {snapshot.loaded && !snapshot.blocked && <>
       {selected ? <section className="asset-fields" aria-label={`${selected.name}的字段定义`}>
         {types.length > 1 && <div className="asset-template-order"><span>模板顺序</span>
           <OrderButtons label={`模板“${selected.name}”`} first={types[0]?.id === selected.id} last={types[types.length - 1]?.id === selected.id}
-            disabled={disabled || editing} onMove={direction => void run(() => store.moveType(selected.id, direction))}/>
+            disabled={orderDisabled} onMove={direction => void moveType(selected.id, direction)}/>
         </div>}
         <div className="asset-fields-heading"><h2>字段</h2><span role="status">{fields.length} 个字段 · {snapshot.saving ? "正在保存…" : snapshot.dirty ? "尚未保存" : "已保存"}</span></div>
         {fields.length ? <div className="asset-fields-scroll"><table className="asset-fields-table">

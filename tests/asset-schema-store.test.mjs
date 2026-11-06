@@ -7,21 +7,43 @@ import {byteStorageFixture} from "./helpers/byteStorageFixture.mjs";
 import {deferred} from "./helpers/mainStartupFixture.mjs";
 
 const source = await readFile(new URL("../src/plugins/asset-management/assetSchemaStore.ts", import.meta.url), "utf8");
+const orderSource = await readFile(new URL("../src/plugins/asset-management/assetTypeOrderStore.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, {
   compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS},
 }).outputText;
+const compiledOrder = ts.transpileModule(orderSource, {
+  compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS},
+}).outputText;
 const storeExports = {};
+const orderExports = {};
 const parseStats = {decodes: 0};
+const validationWatch = {objects: new WeakSet(), rejectEntries: false};
+const instrumentedObject = new Proxy(Object, {
+  get(target, property, receiver) {
+    if (property === "entries") return value => {
+      if (validationWatch.rejectEntries && validationWatch.objects.has(value)) {
+        throw new Error("排序不应枚举既有资产属性");
+      }
+      return Object.entries(value);
+    };
+    return Reflect.get(target, property, receiver);
+  },
+});
 class CountingTextDecoder extends TextDecoder {
   decode(...args) {
     parseStats.decodes++;
     return super.decode(...args);
   }
 }
-vm.runInNewContext(compiled, {
-  exports: storeExports, TextDecoder: CountingTextDecoder, TextEncoder, Uint8Array, Object, Array, Number, String,
+const vmGlobals = {
+  TextDecoder: CountingTextDecoder, TextEncoder, Uint8Array, Object: instrumentedObject, Array, Number, String,
   Set, Map, Promise, Error, RegExp, JSON, Math,
-});
+};
+vm.runInNewContext(compiledOrder, {...vmGlobals, TextDecoder, exports: orderExports});
+vm.runInNewContext(compiled, {...vmGlobals, exports: storeExports, require(specifier) {
+  if (specifier === "./assetTypeOrderStore") return orderExports;
+  throw new Error(`Unexpected asset schema dependency ${specifier}`);
+}});
 const {createAssetSchemaStore} = storeExports;
 
 const typeId = "10000000-0000-4000-8000-000000000001";
@@ -30,6 +52,7 @@ const fieldId = "20000000-0000-4000-8000-000000000001";
 const secondFieldId = "20000000-0000-4000-8000-000000000002";
 const optionId = "30000000-0000-4000-8000-000000000001";
 const path = ".lodestory/assets/schema.json";
+const orderPath = ".lodestory/assets/type-order.json";
 const directory = ".lodestory/assets";
 
 function storeFor(files) { return createAssetSchemaStore(files); }
@@ -62,6 +85,14 @@ function diskSchema(f) {
   return JSON.parse(new TextDecoder().decode(new Uint8Array(f.disk.get(f.key("/book", path)))));
 }
 
+function diskTypeOrder(f) {
+  return JSON.parse(new TextDecoder().decode(new Uint8Array(f.disk.get(f.key("/book", orderPath)))));
+}
+
+function storedTypeOrder(typeIds) {
+  return {format: "lodestory.asset-type-order", schemaVersion: 1, typeIds};
+}
+
 function projectFilesWithOverlay(base, overlay) {
   return Object.freeze({
     ...base,
@@ -71,6 +102,20 @@ function projectFilesWithOverlay(base, overlay) {
       if (!patch) return snapshot;
       return Object.freeze({...snapshot, files: Object.freeze(snapshot.files.map(file => file.path === path
         ? Object.freeze({...file, ...patch}) : file))});
+    },
+  });
+}
+
+function forbidLegacyByteProjection(files) {
+  return Object.freeze({...files,
+    getSnapshot() {
+      const snapshot = files.getSnapshot();
+      return Object.freeze({...snapshot, files: Object.freeze(snapshot.files.map(file => new Proxy(file, {
+        get(target, property, receiver) {
+          if (property === "bytes") throw new Error("asset store must use ProjectByteView instead of materializing ProjectFile.bytes");
+          return Reflect.get(target, property, receiver);
+        },
+      })))});
     },
   });
 }
@@ -136,11 +181,340 @@ test("missing schema loads empty without creating a file; type and field edits p
   assert.equal(saved.fields[1].defaultValue, optionId);
   assert.equal(await store.createType({id: secondTypeId, name: "兵器", description: "法器和武器"}), true);
   assert.equal(await store.moveType(secondTypeId, -1), true);
-  assert.deepEqual(diskSchema(f).types.map(item => [item.id, item.order]), [[secondTypeId, 0], [typeId, 1]]);
+  assert.deepEqual(diskSchema(f).types.map(item => [item.id, item.order]), [[typeId, 0], [secondTypeId, 1]]);
+  assert.deepEqual(diskTypeOrder(f), storedTypeOrder([secondTypeId, typeId]));
   assert.equal(store.selectType(secondTypeId), true);
   assert.equal(store.getSnapshot().selectedTypeId, secondTypeId);
   assert.equal(store.selectType("not-a-type"), false);
 
+  store.dispose();
+  await controller.dispose();
+});
+
+test("template moves persist only stable IDs in the separate order file", async () => {
+  const original = JSON.stringify(storedSchema([
+    type(typeId, {name: "功法", order: 0}),
+    type(secondTypeId, {name: "兵器", order: 1}),
+  ], [textField()], {assets: [{id: "60000000-0000-4000-8000-000000000095", name: "青霜剑", description: "旧物",
+    typeId, values: {[fieldId]: "玄铁"}}]}));
+  const f = byteStorageFixture();
+  seedFile(f, path, original);
+  const originalSchemaBytes = [...f.disk.get(f.key("/book", path))];
+  const controller = f.files();
+  const store = storeFor(controller.service);
+
+  assert.equal(await store.load(), true);
+  assert.equal(f.disk.has(f.key("/book", orderPath)), false, "opening an older project does not create an order file");
+  assert.equal(await store.moveType(secondTypeId, -1), true);
+
+  assert.deepEqual(f.disk.get(f.key("/book", path)), originalSchemaBytes,
+    "moving a template leaves the complete asset schema file byte-for-byte unchanged");
+  assert.deepEqual(diskTypeOrder(f), storedTypeOrder([secondTypeId, typeId]));
+  assert.deepEqual(plain(store.getSnapshot().types.map(item => [item.id, item.order])), [[secondTypeId, 0], [typeId, 1]]);
+  assert.deepEqual(f.calls.filter(call => call.args.path === orderPath).map(call => call.command), ["create_project_file"],
+    "the first move creates only the small ordering file");
+
+  store.dispose();
+  await controller.dispose();
+
+  const reopenedController = f.files();
+  const reopened = storeFor(reopenedController.service);
+  assert.equal(await reopened.load(), true);
+  assert.deepEqual(plain(reopened.getSnapshot().types.map(item => [item.id, item.order])), [[secondTypeId, 0], [typeId, 1]],
+    "the saved ID order is applied after reopening the project");
+  assert.deepEqual(f.disk.get(f.key("/book", path)), originalSchemaBytes);
+  reopened.dispose();
+  await reopenedController.dispose();
+});
+
+test("order files ignore removed IDs and append templates they do not list", async () => {
+  const thirdTypeId = "10000000-0000-4000-8000-000000000005";
+  const removedTypeId = "10000000-0000-4000-8000-000000000006";
+  const f = byteStorageFixture();
+  seedFile(f, path, JSON.stringify(storedSchema([
+    type(typeId, {name: "功法", order: 0}),
+    type(secondTypeId, {name: "兵器", order: 1}),
+    type(thirdTypeId, {name: "丹药", order: 2}),
+  ])));
+  seedFile(f, orderPath, JSON.stringify(storedTypeOrder([thirdTypeId, removedTypeId, typeId])));
+  const controller = f.files();
+  const store = storeFor(controller.service);
+
+  assert.equal(await store.load(), true);
+  assert.deepEqual(plain(store.getSnapshot().types.map(item => item.id)), [thirdTypeId, typeId, secondTypeId]);
+  assert.equal(store.getSnapshot().orderBlocked, false);
+
+  store.dispose();
+  await controller.dispose();
+});
+
+test("a corrupt order file leaves schema readable and retry reads repaired external order data", async () => {
+  const f = byteStorageFixture();
+  const schemaContents = JSON.stringify(storedSchema([
+    type(typeId, {name: "功法", order: 0}),
+    type(secondTypeId, {name: "兵器", order: 1}),
+  ]));
+  const corruptOrderFile = "{broken order JSON";
+  seedFile(f, path, schemaContents);
+  seedFile(f, orderPath, corruptOrderFile);
+  const originalOrderBytes = [...f.disk.get(f.key("/book", orderPath))];
+  const controller = f.files();
+  const store = storeFor(controller.service);
+
+  assert.equal(await store.load(), true, "a broken ordering sidecar does not block asset data");
+  assert.equal(store.getSnapshot().blocked, false);
+  assert.equal(store.getSnapshot().orderBlocked, true);
+  assert.match(store.getSnapshot().error, /顺序/);
+  assert.deepEqual(plain(store.getSnapshot().types.map(item => [item.id, item.order])), [[typeId, 0], [secondTypeId, 1]]);
+  assert.equal(await store.moveType(secondTypeId, -1), false, "sorting stays disabled until repair");
+  assert.deepEqual(f.disk.get(f.key("/book", orderPath)), originalOrderBytes,
+    "loading does not overwrite malformed order data automatically");
+
+  const repairedOrder = new TextEncoder().encode(JSON.stringify(storedTypeOrder([secondTypeId, typeId])));
+  assert.equal(controller.service.write(orderPath, repairedOrder, {preferByteView: true}), true,
+    "an external correction can replace the malformed sidecar");
+  assert.equal(await controller.service.save(orderPath), true);
+  assert.equal(await store.retry(), true);
+  assert.equal(store.getSnapshot().orderBlocked, false);
+  assert.equal(store.getSnapshot().error, null);
+  assert.deepEqual(diskTypeOrder(f), storedTypeOrder([secondTypeId, typeId]));
+  assert.equal(new TextDecoder().decode(new Uint8Array(f.disk.get(f.key("/book", path)))), schemaContents,
+    "repairing the order file leaves the asset schema unchanged");
+  store.dispose();
+  await controller.dispose();
+});
+
+test("template reordering skips re-enumerating unchanged asset properties", async () => {
+  const assetId = "60000000-0000-4000-8000-000000000091";
+  const stored = storedSchema([
+    type(typeId, {name: "功法", order: 0}),
+    type(secondTypeId, {name: "兵器", order: 1}),
+  ], [textField()], {assets: [{id: assetId, name: "青霜剑", description: "旧物", typeId,
+    values: {[fieldId]: "玄铁"}}]});
+  const f = byteStorageFixture();
+  seedFile(f, path, JSON.stringify(stored));
+  const controller = f.files();
+  const store = storeFor(forbidLegacyByteProjection(controller.service));
+  assert.equal(await store.load(), true);
+  const assets = store.getSnapshot().assets;
+  const fields = store.getSnapshot().fields;
+  const values = assets[0].values;
+  validationWatch.objects.add(values);
+  const beforeReorder = parseStats.decodes;
+
+  validationWatch.rejectEntries = true;
+  let reordered;
+  try {
+    reordered = await store.moveType(secondTypeId, -1);
+  } finally {
+    validationWatch.rejectEntries = false;
+  }
+
+  assert.equal(reordered, true);
+  assert.strictEqual(store.getSnapshot().assets, assets, "sorting keeps the existing asset records");
+  assert.strictEqual(store.getSnapshot().fields, fields, "sorting keeps the existing field definitions");
+  assert.strictEqual(store.getSnapshot().assets[0].values, values, "sorting keeps the existing property values");
+  assert.deepEqual(diskSchema(f).types.map(item => [item.id, item.order]), [[typeId, 0], [secondTypeId, 1]]);
+  assert.deepEqual(diskTypeOrder(f), storedTypeOrder([secondTypeId, typeId]));
+  assert.equal(parseStats.decodes, beforeReorder, "the store does not reparse its own reordered bytes");
+  assert.ok(f.transports.some(({command}) => command === "read_project_file_base64"), "legacy files load through compact byte reads");
+
+  const externalSchema = diskSchema(f);
+  externalSchema.assets[0].values["20000000-0000-4000-8000-000000000099"] = "未定义字段";
+  const beforeExternalWrite = parseStats.decodes;
+  assert.equal(controller.service.write(path, new TextEncoder().encode(JSON.stringify(externalSchema))), true);
+  assert.equal(parseStats.decodes, beforeExternalWrite + 1, "an external replacement is parsed and validated");
+  assert.equal(store.getSnapshot().blocked, true);
+  assert.match(store.getSnapshot().error, /未定义的属性字段/);
+  store.dispose();
+  await controller.dispose();
+});
+
+test("failed template reordering remains dirty and can be retried", async () => {
+  let failSave = false;
+  const assetId = "60000000-0000-4000-8000-000000000092";
+  const stored = storedSchema([
+    type(typeId, {name: "功法", order: 0}),
+    type(secondTypeId, {name: "兵器", order: 1}),
+  ], [textField()], {assets: [{id: assetId, name: "青霜剑", description: "旧物", typeId,
+    values: {[fieldId]: "玄铁"}}]});
+  const f = byteStorageFixture({onInvoke(command) {
+    if (failSave && command === "save_project_file") throw new Error("模板顺序暂不可保存");
+  }});
+  seedFile(f, path, JSON.stringify(stored));
+  seedFile(f, orderPath, JSON.stringify(storedTypeOrder([typeId, secondTypeId])));
+  const controller = f.files();
+  const store = storeFor(forbidLegacyByteProjection(controller.service));
+  assert.equal(await store.load(), true);
+  const assets = store.getSnapshot().assets;
+  const fields = store.getSnapshot().fields;
+
+  failSave = true;
+  assert.equal(await store.moveType(secondTypeId, -1), false);
+  assert.equal(store.getSnapshot().dirty, true);
+  assert.deepEqual(plain(store.getSnapshot().types.map(item => [item.id, item.order])), [[secondTypeId, 0], [typeId, 1]]);
+  assert.strictEqual(store.getSnapshot().assets, assets);
+  assert.strictEqual(store.getSnapshot().fields, fields);
+  assert.deepEqual(diskTypeOrder(f), storedTypeOrder([typeId, secondTypeId]), "a failed save preserves the old order file");
+
+  failSave = false;
+  assert.equal(await store.retry(), true);
+  assert.equal(store.getSnapshot().dirty, false);
+  assert.deepEqual(diskSchema(f).types.map(item => [item.id, item.order]), [[typeId, 0], [secondTypeId, 1]]);
+  assert.deepEqual(diskTypeOrder(f), storedTypeOrder([secondTypeId, typeId]), "retry saves the new order file");
+  store.dispose();
+  await controller.dispose();
+});
+
+test("template reorder accumulates another move while the first save is pending", async () => {
+  const thirdTypeId = "10000000-0000-4000-8000-000000000003";
+  const entered = deferred();
+  const release = deferred();
+  let pauseFirstSave = true;
+  const f = byteStorageFixture({async onInvoke(command) {
+    if (command === "save_project_file" && pauseFirstSave) {
+      pauseFirstSave = false;
+      entered.resolve();
+      await release.promise;
+    }
+  }});
+  seedFile(f, path, JSON.stringify(storedSchema([
+    type(typeId, {name: "功法", order: 0}),
+    type(secondTypeId, {name: "兵器", order: 1}),
+    type(thirdTypeId, {name: "丹药", order: 2}),
+  ])));
+  seedFile(f, orderPath, JSON.stringify(storedTypeOrder([typeId, secondTypeId, thirdTypeId])));
+  const controller = f.files();
+  const store = storeFor(controller.service);
+  assert.equal(await store.load(), true);
+
+  const firstMove = store.moveType(thirdTypeId, -1);
+  await entered.promise;
+  assert.deepEqual(plain(store.getSnapshot().types.map(item => [item.id, item.order])), [
+    [typeId, 0], [thirdTypeId, 1], [secondTypeId, 2],
+  ]);
+
+  const secondMove = store.moveType(thirdTypeId, -1);
+  assert.deepEqual(plain(store.getSnapshot().types.map(item => [item.id, item.order])), [
+    [thirdTypeId, 0], [typeId, 1], [secondTypeId, 2],
+  ], "a second click immediately applies to the latest in-memory order");
+  release.resolve();
+  assert.deepEqual(await Promise.all([firstMove, secondMove]), [true, true]);
+  assert.deepEqual(diskTypeOrder(f), storedTypeOrder([thirdTypeId, typeId, secondTypeId]),
+    "the save queue persists the final order in its sidecar");
+  assert.deepEqual(diskSchema(f).types.map(item => [item.id, item.order]), [[typeId, 0], [secondTypeId, 1], [thirdTypeId, 2]]);
+  assert.equal(store.getSnapshot().dirty, false);
+  store.dispose();
+  await controller.dispose();
+});
+
+test("template reorder accumulates while its first order file is being created", async () => {
+  const thirdTypeId = "10000000-0000-4000-8000-000000000007";
+  const entered = deferred();
+  const release = deferred();
+  let pauseCreate = true;
+  const f = byteStorageFixture({async onInvoke(command, args) {
+    if (command === "create_project_file" && args.path === orderPath && pauseCreate) {
+      pauseCreate = false;
+      entered.resolve();
+      await release.promise;
+    }
+  }});
+  seedFile(f, path, JSON.stringify(storedSchema([
+    type(typeId, {name: "功法", order: 0}),
+    type(secondTypeId, {name: "兵器", order: 1}),
+    type(thirdTypeId, {name: "丹药", order: 2}),
+  ])));
+  const controller = f.files();
+  const store = storeFor(controller.service);
+  assert.equal(await store.load(), true);
+
+  const firstMove = store.moveType(thirdTypeId, -1);
+  await entered.promise;
+  const secondMove = store.moveType(thirdTypeId, -1);
+  assert.deepEqual(plain(store.getSnapshot().types.map(item => [item.id, item.order])), [
+    [thirdTypeId, 0], [typeId, 1], [secondTypeId, 2],
+  ]);
+  release.resolve();
+  assert.deepEqual(await Promise.all([firstMove, secondMove]), [true, true]);
+  assert.deepEqual(diskTypeOrder(f), storedTypeOrder([thirdTypeId, typeId, secondTypeId]));
+  assert.deepEqual(diskSchema(f).types.map(item => [item.id, item.order]), [[typeId, 0], [secondTypeId, 1], [thirdTypeId, 2]]);
+  store.dispose();
+  await controller.dispose();
+});
+
+test("a failed first order file creation can be retried", async () => {
+  let failCreate = true;
+  const f = byteStorageFixture({onInvoke(command, args) {
+    if (failCreate && command === "create_project_file" && args.path === orderPath) throw new Error("创建顺序文件失败");
+  }});
+  seedFile(f, path, JSON.stringify(storedSchema([
+    type(typeId, {name: "功法", order: 0}),
+    type(secondTypeId, {name: "兵器", order: 1}),
+  ])));
+  const originalSchemaBytes = [...f.disk.get(f.key("/book", path))];
+  const controller = f.files();
+  const store = storeFor(controller.service);
+  assert.equal(await store.load(), true);
+
+  assert.equal(await store.moveType(secondTypeId, -1), false);
+  assert.equal(store.getSnapshot().dirty, true);
+  assert.deepEqual(plain(store.getSnapshot().types.map(item => item.id)), [secondTypeId, typeId]);
+  assert.equal(f.disk.has(f.key("/book", orderPath)), false);
+  assert.deepEqual(f.disk.get(f.key("/book", path)), originalSchemaBytes);
+
+  failCreate = false;
+  assert.equal(await store.retry(), true);
+  assert.deepEqual(diskTypeOrder(f), storedTypeOrder([secondTypeId, typeId]));
+  assert.deepEqual(f.disk.get(f.key("/book", path)), originalSchemaBytes);
+  store.dispose();
+  await controller.dispose();
+});
+
+test("a failed first save keeps later template moves dirty for retry", async () => {
+  const thirdTypeId = "10000000-0000-4000-8000-000000000004";
+  const entered = deferred();
+  const release = deferred();
+  let pauseFirstSave = true;
+  let failSaves = true;
+  const f = byteStorageFixture({async onInvoke(command) {
+    if (command !== "save_project_file") return;
+    if (pauseFirstSave) {
+      pauseFirstSave = false;
+      entered.resolve();
+      await release.promise;
+    }
+    if (failSaves) throw new Error("首次排序保存失败");
+  }});
+  seedFile(f, path, JSON.stringify(storedSchema([
+    type(typeId, {name: "功法", order: 0}),
+    type(secondTypeId, {name: "兵器", order: 1}),
+    type(thirdTypeId, {name: "丹药", order: 2}),
+  ])));
+  seedFile(f, orderPath, JSON.stringify(storedTypeOrder([typeId, secondTypeId, thirdTypeId])));
+  const controller = f.files();
+  const store = storeFor(controller.service);
+  assert.equal(await store.load(), true);
+
+  const firstMove = store.moveType(thirdTypeId, -1);
+  await entered.promise;
+  const secondMove = store.moveType(thirdTypeId, -1);
+  assert.deepEqual(plain(store.getSnapshot().types.map(item => [item.id, item.order])), [
+    [thirdTypeId, 0], [typeId, 1], [secondTypeId, 2],
+  ]);
+  release.resolve();
+
+  assert.deepEqual(await Promise.all([firstMove, secondMove]), [false, false]);
+  assert.equal(store.getSnapshot().dirty, true, "the latest order remains marked unsaved");
+  assert.deepEqual(plain(store.getSnapshot().types.map(item => [item.id, item.order])), [
+    [thirdTypeId, 0], [typeId, 1], [secondTypeId, 2],
+  ]);
+
+  failSaves = false;
+  assert.equal(await store.retry(), true);
+  assert.equal(store.getSnapshot().dirty, false);
+  assert.deepEqual(diskTypeOrder(f), storedTypeOrder([thirdTypeId, typeId, secondTypeId]),
+    "retry writes the latest accumulated order to its sidecar");
   store.dispose();
   await controller.dispose();
 });

@@ -1,0 +1,25 @@
+{
+  "identifier": "com.lodestory.desktop.e2e",
+  "build": {
+    "beforeBuildCommand": "pnpm run build:packages && pnpm exec tsc && pnpm exec vite build --outDir .desktop-e2e/dist",
+    "frontendDist": "../.desktop-e2e/dist"
+  },
+  "app": {
+    "appDirectoriesOverride": { "config": "$CONFIG/Lodestory-desktop-e2e" },
+    "withGlobalTauri": true,
+    "windows": [
+      { "title": "Lodestory", "width": 1440, "height": 900, "minWidth": 960, "minHeight": 640, "theme": "Dark", "incognito": true }
+    ],
+    "security": {
+      "capabilities": [
+        "default",
+        {
+          "identifier": "desktop-e2e",
+          "description": "WebdriverIO access for the isolated desktop test build",
+          "windows": ["main"],
+          "permissions": ["wdio:default", "wdio-webdriver:default", "core:window:allow-set-focus"]
+        }
+      ]
+    }
+  }
+}

@@ -9,7 +9,18 @@ const host = process.env.TAURI_DEV_HOST;
 const require = createRequire(import.meta.url);
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    ...(process.env.LODESTORY_DESKTOP_E2E === "1" ? [{
+      name: "desktop-e2e-driver",
+      transformIndexHtml: {
+        order: "pre" as const,
+        handler() {
+          return [{tag: "script", attrs: {type: "module", src: "/tests/desktop/driver.js"}, injectTo: "head-prepend" as const}];
+        }
+      }
+    }] : [])
+  ],
   // The browser export uses document.createElement, which is unavailable in workers.
   // The package's default export provides the same decoding without a DOM.
   resolve: { alias: { "decode-named-character-reference": require.resolve("decode-named-character-reference") } },

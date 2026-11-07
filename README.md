@@ -32,6 +32,8 @@ pnpm test
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
 
+Run the desktop WebView tests with `pnpm test:desktop`. The command builds a separate debug application with the WebdriverIO Tauri plugins and runs Mocha specs in `tests/desktop`; pass WebdriverIO options such as `--spec tests/desktop/smoke.spec.mjs` to select a test. The test build uses a separate configuration directory and an incognito WebView, skips legacy configuration migration, and keeps build output under `.desktop-e2e`. Its automation plugins are unavailable in normal builds and the test feature cannot be used in release builds. Native system dialogs are outside WebView test coverage.
+
 The development-only `/tests/fixtures/project-index.html` page uses Tauri IPC mocks to verify project-entry UI without modifying real directories or the index. Add `?scenario=cancel` or `?scenario=corrupt` to check cancellation and error states. Native directory dialogs require separate desktop validation.
 
 The same fixture also supports document creation and writing; `?scenario=create-error`, `?scenario=save-error`, and `?scenario=slow-save` exercise document failure and pending-save flows without touching actual files.

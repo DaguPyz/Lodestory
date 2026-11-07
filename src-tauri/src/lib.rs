@@ -1,3 +1,4 @@
+#[cfg(any(not(feature = "desktop-e2e"), test))]
 mod app_config;
 mod app_tasks;
 mod asset_tasks;
@@ -10,6 +11,9 @@ mod project_files;
 mod project_index;
 mod system_fonts;
 
+#[cfg(all(feature = "desktop-e2e", not(debug_assertions)))]
+compile_error!("desktop-e2e is restricted to debug builds");
+
 use tauri::Manager;
 
 #[tauri::command]
@@ -19,14 +23,23 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(feature = "desktop-e2e")]
+    let builder = builder
+        .plugin(tauri_plugin_wdio::init())
+        .plugin(tauri_plugin_wdio_webdriver::init());
+
+    builder
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             app.manage(app_tasks::create()?);
             let directory = app.path().app_config_dir()?;
-            let legacy = app.path().config_dir()?.join("com.lodestory.app");
-            app_config::migrate_legacy_directory(&directory, &legacy)?;
+            #[cfg(not(feature = "desktop-e2e"))]
+            {
+                let legacy = app.path().config_dir()?.join("com.lodestory.app");
+                app_config::migrate_legacy_directory(&directory, &legacy)?;
+            }
             let path = directory.join(project_index::INDEX_FILENAME);
             app.manage(project_index::ProjectIndex::new(path));
             app.manage(documents::Documents::default());

@@ -4,6 +4,7 @@ import {assetCatalogKey, type AssetCatalog} from "@lodestory/sdk/asset-catalog";
 import {layoutKey} from "@lodestory/sdk/layout";
 import {projectStorageKey, type ProjectFiles} from "@lodestory/sdk/project-storage";
 import {workbenchKey} from "@lodestory/sdk/workbench";
+import {backgroundTasksKey} from "@lodestory/sdk/background-tasks";
 import {projectSearchKey} from "@lodestory/sdk/project-search";
 import {Icon} from "@lodestory/ui";
 import {createAssetSchemaStore, type AssetSchemaStore} from "./assetSchemaStore";
@@ -11,6 +12,7 @@ import {AssetTypeEditor, AssetTypeNavigation} from "./AssetManagementView";
 import {AssetRecordsEditor} from "./AssetRecordsView";
 import {displayedValue} from "./assetDisplayValue";
 import {createAssetCatalog} from "./assetCatalog";
+import {encodeAssetGroupFallback, VALIDATE_AND_ENCODE_GROUP} from "./assetObjectFiles";
 import "./asset-management.css";
 
 const MAIN_CONTENT_ID = "asset-management.types";
@@ -31,11 +33,12 @@ export function createAssetManagementPlugin(): Plugin {
   let removeMain: (() => void) | undefined;
   let removeAssets: (() => void) | undefined;
   let removeParticipant: (() => Promise<void>) | undefined;
+  let removeTaskFallback: (() => void) | undefined;
   const sessions = new Map<string, AssetSessionResources>();
 
   return {
     id: "asset-management",
-    requires: [layoutKey, workbenchKey, projectStorageKey, contextMenuKey, projectSearchKey],
+    requires: [layoutKey, workbenchKey, projectStorageKey, contextMenuKey, projectSearchKey, backgroundTasksKey],
     provides: [assetCatalogKey],
     async activate(context) {
       alive = true;
@@ -44,6 +47,8 @@ export function createAssetManagementPlugin(): Plugin {
       const storage = context.get(projectStorageKey);
       const contextMenus = context.get(contextMenuKey);
       const search = context.get(projectSearchKey);
+      const tasks = context.get(backgroundTasksKey);
+      removeTaskFallback = tasks.registerFallback(VALIDATE_AND_ENCODE_GROUP, encodeAssetGroupFallback);
       context.provide(assetCatalogKey, Object.freeze({
         getCatalog(sessionId: string) { return sessions.get(sessionId)?.catalog ?? null; },
       }));
@@ -85,7 +90,7 @@ export function createAssetManagementPlugin(): Plugin {
             }
             const files: ProjectFiles | null = storage.getFiles(session.id);
             if (!files) throw new Error(`Project storage for session '${session.id}' is unavailable.`);
-            const store = createAssetSchemaStore(files);
+            const store = createAssetSchemaStore(files, (id, data) => tasks.execute(VALIDATE_AND_ENCODE_GROUP, {id, data}));
             const catalogController = createAssetCatalog(store);
             const resource: AssetSessionResources = {
               store,
@@ -176,6 +181,8 @@ export function createAssetManagementPlugin(): Plugin {
         });
       } catch (error) {
         alive = false;
+        removeTaskFallback?.();
+        removeTaskFallback = undefined;
         const cleanupErrors: unknown[] = [];
         for (const remove of [removeAssets, removeMain, removeNavigation]) {
           try { remove?.(); } catch (cleanupError) { cleanupErrors.push(cleanupError); }
@@ -205,6 +212,8 @@ export function createAssetManagementPlugin(): Plugin {
       const unregister = removeParticipant;
       removeParticipant = undefined;
       try { await unregister?.(); } catch (error) { errors.push(error); }
+      removeTaskFallback?.();
+      removeTaskFallback = undefined;
       if (errors.length) throw Object.assign(new Error("Asset management failed to stop."), {errors});
     },
   };

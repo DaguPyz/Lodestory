@@ -1,4 +1,7 @@
 mod app_config;
+mod app_tasks;
+mod asset_tasks;
+mod background_tasks;
 mod document_commands;
 mod documents;
 mod project_commands;
@@ -20,6 +23,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            app.manage(app_tasks::create()?);
             let directory = app.path().app_config_dir()?;
             let legacy = app.path().config_dir()?.join("com.lodestory.app");
             app_config::migrate_legacy_directory(&directory, &legacy)?;
@@ -31,6 +35,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             greet,
+            background_tasks::run_background_task,
             project_commands::list_recent_projects,
             project_commands::open_project,
             project_commands::create_project,

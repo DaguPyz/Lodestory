@@ -405,6 +405,10 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
           isTauri: () => tauri,
           async invoke(command, args, options) {
             tauriCalls.push({ command, args, ...(options === undefined ? {} : {options}) });
+            if (command === "run_background_task") {
+              if (args.name !== "asset-management/validate-and-encode-group") throw new Error("Unknown background task");
+              return new TextEncoder().encode(`${JSON.stringify(args.input.data, null, 2)}\n`).buffer;
+            }
             if (invokeHandler) return invokeHandler(command, args, options);
             if (command === "list_project_directory") return {exists: false, entries: [], issues: []};
             if (command === "list_documents") return [];

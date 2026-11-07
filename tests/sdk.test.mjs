@@ -16,6 +16,7 @@ import * as packageWorkbench from "@lodestory/sdk/workbench";
 import * as packageConfig from "@lodestory/sdk/config";
 import * as packageDocuments from "@lodestory/sdk/documents";
 import * as packageStorage from "@lodestory/sdk/project-storage";
+import * as packageBackgroundTasks from "@lodestory/sdk/background-tasks";
 import * as packageSearch from "@lodestory/sdk/project-search";
 import * as packageBodyEditor from "@lodestory/sdk/body-editor";
 import * as packageCanvas from "@lodestory/sdk/canvas";
@@ -29,7 +30,7 @@ const packageManifest = JSON.parse(readFileSync(new URL("../packages/sdk/package
 
 test("SDK package exposes ESM root and all public capability entry points", () => {
   assert.equal(packageManifest.type, "module");
-  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./asset-catalog", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./layout", "./navigation-layout", "./project-search", "./project-storage", "./settings", "./shortcuts", "./theme", "./timeline", "./ui", "./window-shell", "./workbench"]);
+  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./asset-catalog", "./background-tasks", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./layout", "./navigation-layout", "./project-search", "./project-storage", "./settings", "./shortcuts", "./theme", "./timeline", "./ui", "./window-shell", "./workbench"]);
 
   assert.equal(packageManifest.exports["./body-editor"].import, "./dist/body-editor.js");
   assert.equal(packageManifest.exports["./body-editor"].types, "./dist/body-editor.d.ts");
@@ -50,6 +51,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
     ["./shortcuts", "shortcuts"],
     ["./documents", "documents"],
     ["./project-storage", "project-storage"],
+    ["./background-tasks", "background-tasks"],
     ["./project-search", "project-search"],
     ["./canvas", "canvas"],
     ["./timeline", "timeline"],
@@ -79,6 +81,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.deepEqual(Object.keys(packageStorage), ["projectStorageKey"]);
   assert.deepEqual(Object.keys(packageSearch).sort(), ["projectSearchKey", "projectSearchRequested"]);
   assert.equal(packageStorage.projectStorageKey.id, "app/project-storage");
+  assert.equal(packageBackgroundTasks.backgroundTasksKey.id, "app/background-tasks");
   assert.deepEqual(Object.keys(packageBodyEditor).sort(), ["bodyEditorContentIds", "bodyEditorDefaultEditorsConfig", "bodyEditorKey"]);
   assert.deepEqual(Object.keys(packageCanvas), ["canvasKey"], "canvas behavior types do not add runtime exports");
   assert.deepEqual(Object.keys(packageTimeline), ["timelineKey"], "timeline behavior types do not add runtime exports");

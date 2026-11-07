@@ -1,4 +1,4 @@
-import {createAssetObjectFiles, parseGroupManifest, type AssetGroupData, type AssetGroupId} from "./assetObjectFiles";
+import {createAssetObjectFiles, parseGroupManifest, type AssetGroupData, type AssetGroupId, type EncodeAssetGroup} from "./assetObjectFiles";
 import {createAssetTemplateStore, readLegacyTypeOrder, validateAssetTemplates} from "./assetTemplateStore";
 import type {ProjectByteView, ProjectDirectoryListing, ProjectFile, ProjectFileData, ProjectFiles, ProjectSaveState} from "@lodestory/sdk/project-storage";
 
@@ -502,7 +502,7 @@ function sameFieldInput(field: AssetFieldDefinition, input: CreateAssetFieldInpu
   return JSON.stringify(current) === JSON.stringify(candidate);
 }
 
-export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
+export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: EncodeAssetGroup): AssetSchemaStore {
   const listeners = new Set<() => void>();
   let schema = freezeSchema([], [], []);
   let selectedTypeId: string | null = null;
@@ -529,7 +529,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
   let generation = 0;
   let loadOperation: Promise<boolean> | null = null;
   let mutationOperation: Promise<boolean> | null = null;
-  const objectFiles = createAssetObjectFiles(files);
+  const objectFiles = createAssetObjectFiles(files, encodeGroup);
   // null denotes an inline legacy body (or a new project without a manifest).
   let manifestGroups: readonly AssetGroupId[] | null = null;
   let groups = new Map<AssetGroupId, AssetGroupData>();
@@ -887,7 +887,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
       // any files created before a failure, even if the next edit is different.
       for (const id of nextIds) {
         if (!alive || snapshot.blocked) return false;
-        if (!manifestGroups?.includes(id)) await objectFiles.saveGroup(id, legacyGroups.get(id) ?? emptyGroup, false);
+        if (!manifestGroups?.includes(id)) await objectFiles.saveGroup(id, legacyGroups.get(id) ?? emptyGroup, false, ensureCurrentManifest);
       }
       ensureCurrentManifest();
       const ids = [...nextIds];
@@ -912,7 +912,7 @@ export function createAssetSchemaStore(files: ProjectFiles): AssetSchemaStore {
     ensureCurrentManifest();
     if (objectFiles.read(id) !== acceptedGroups.get(id)) throw new Error("当前模板的对象文件在编辑期间被修改，已保留待保存的内容。");
     try {
-      await objectFiles.saveGroup(id, data, true);
+      await objectFiles.saveGroup(id, data, true, ensureCurrentManifest);
     } catch (error) {
       const buffered = objectFiles.read(id);
       if (JSON.stringify(buffered) === JSON.stringify(data)) acceptedGroups.set(id, buffered);

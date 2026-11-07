@@ -12,6 +12,7 @@ import {createWelcomePlugin} from "../plugins/welcome/welcomePlugin";
 import {createWorkbenchPlugin} from "../plugins/workbench/workbenchPlugin";
 import {createDocumentsPlugin} from "../plugins/documents/documentsPlugin";
 import {createProjectStoragePlugin} from "../plugins/project-storage/projectStoragePlugin";
+import {createBackgroundTasksPlugin} from "../plugins/background-tasks/backgroundTasksPlugin";
 import {createProjectManagementPlugin} from "../plugins/project-management/projectManagementPlugin";
 import {createOutlineDesignPlugin} from "../plugins/outline-design/outlineDesignPlugin";
 import {createAssetManagementPlugin} from "../plugins/asset-management/assetManagementPlugin";
@@ -47,6 +48,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createWorkbenchPlugin(),
         createProjectSearchPlugin(),
         createProjectStoragePlugin(),
+        createBackgroundTasksPlugin(),
         createDocumentsPlugin(),
         createProjectManagementPlugin(),
         createCanvasPlugin(),

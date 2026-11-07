@@ -21,6 +21,17 @@ type ParsedGroup = Readonly<{
   data: AssetGroupData;
 }>;
 
+export const VALIDATE_AND_ENCODE_GROUP = "asset-management/validate-and-encode-group";
+export type EncodeAssetGroup = (id: AssetGroupId, data: AssetGroupData) => Promise<Uint8Array>;
+
+/** Browser implementation of the same task used by the desktop Rust executor. */
+export function encodeAssetGroupFallback(input: unknown): Uint8Array {
+  if (!isRecord(input) || !(input.id === null || typeof input.id === "string")) {
+    throw new Error("资产对象分组 ID 必须是 UUID 或空类型。");
+  }
+  return encode(validateGroupData(input.id, input.data));
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -199,10 +210,11 @@ export function assetGroupPath(id: AssetGroupId): string {
   return `${DIRECTORY}/${id ?? "unclassified"}.json`;
 }
 
-export function createAssetObjectFiles(files: ProjectFiles) {
+export function createAssetObjectFiles(files: ProjectFiles, encodeGroup: EncodeAssetGroup = async (id, data) => encodeAssetGroupFallback({id, data})) {
   const parsed = new Map<AssetGroupId, ParsedGroup>();
   const attempts = new Map<string, PendingWrite>();
   const safeEmptyOrphans = new Set<AssetGroupId>();
+  let disposed = false;
 
   function read(id: AssetGroupId): AssetGroupData {
     const path = assetGroupPath(id);
@@ -277,9 +289,8 @@ export function createAssetObjectFiles(files: ProjectFiles) {
 
     read,
 
-    async saveGroup(id: AssetGroupId, data: AssetGroupData, existing: boolean): Promise<void> {
+    async saveGroup(id: AssetGroupId, data: AssetGroupData, existing: boolean, checkCurrent?: () => void): Promise<void> {
       const path = assetGroupPath(id);
-      const validated = validateGroupData(id, data);
       let updateExisting = existing;
       if (updateExisting) read(id);
       else if (safeEmptyOrphans.has(id)) {
@@ -289,9 +300,21 @@ export function createAssetObjectFiles(files: ProjectFiles) {
         }
         updateExisting = true;
       }
-      await saveBytes(files, attempts, path, encode(validated), updateExisting, "保存资产对象分组失败，请重试。");
+      const before = pathFile(files, path);
+      const beforeBytes = before && fileData(before);
+      const bytes = await encodeGroup(id, data);
+      if (disposed) throw new Error("资产对象分组已关闭，待保存内容已保留。");
+      checkCurrent?.();
+      const current = pathFile(files, path);
+      if (beforeBytes !== (current && fileData(current))) {
+        throw new Error("当前模板的对象文件在编辑期间被修改，已保留待保存的内容。");
+      }
+      await saveBytes(files, attempts, path, bytes, updateExisting, "保存资产对象分组失败，请重试。");
       safeEmptyOrphans.delete(id);
-      read(id);
+      const saved = pathFile(files, path);
+      if (saved) parsed.set(id, {bytes: fileData(saved), data: Object.freeze({
+        assets: Object.freeze(data.assets), fields: Object.freeze(data.fields),
+      })});
     },
 
     async saveManifest(groups: readonly AssetGroupId[], existing: boolean): Promise<void> {
@@ -320,6 +343,7 @@ export function createAssetObjectFiles(files: ProjectFiles) {
     },
 
     dispose(): void {
+      disposed = true;
       parsed.clear();
       attempts.clear();
       safeEmptyOrphans.clear();

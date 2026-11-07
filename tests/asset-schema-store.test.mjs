@@ -145,6 +145,61 @@ function projectFilesWithOverlay(base, overlay) {
   });
 }
 
+test("background group encoding preserves a concurrent file edit", async () => {
+  const started = deferred();
+  const release = deferred();
+  const f = byteStorageFixture();
+  const assetId = "40000000-0000-4000-8000-000000000001";
+  const asset = {id: assetId, name: "原名称", description: "", typeId, values: {}};
+  seedFile(f, templatesPath, JSON.stringify([type()]));
+  seedFile(f, path, JSON.stringify(manifestSchema([typeId])));
+  seedGroup(f, typeId, [asset]);
+  const controller = f.files();
+  const store = createAssetSchemaStore(controller.service, async (id, data) => {
+    started.resolve();
+    await release.promise;
+    return objectFilesExports.encodeAssetGroupFallback({id, data});
+  });
+  assert.equal(await store.load(), true);
+  const pending = store.updateAsset(assetId, {name: "我的修改"});
+  await started.promise;
+  const external = {assets: [{...asset, name: "其他修改"}], fields: []};
+  assert.equal(controller.service.write(groupPath(typeId), new TextEncoder().encode(JSON.stringify(external)), {preferByteView: true}), true);
+  release.resolve();
+  assert.equal(await pending, false);
+  assert.equal(store.getSnapshot().dirty, true);
+  assert.equal(store.getSnapshot().assets[0].name, "我的修改");
+  const file = controller.service.getSnapshot().files.find(item => item.path === groupPath(typeId));
+  const bytes = new Uint8Array(file.byteView.byteLength);
+  file.byteView.copyTo(bytes);
+  assert.equal(JSON.parse(new TextDecoder().decode(bytes)).assets[0].name, "其他修改");
+  await store.dispose();
+  await controller.dispose();
+});
+
+test("failed background group encoding retains the draft for retry", async () => {
+  const f = byteStorageFixture();
+  const assetId = "40000000-0000-4000-8000-000000000001";
+  seedFile(f, templatesPath, JSON.stringify([type()]));
+  seedFile(f, path, JSON.stringify(manifestSchema([typeId])));
+  seedGroup(f, typeId, [{id: assetId, name: "原名称", description: "", typeId, values: {}}]);
+  const controller = f.files();
+  let fail = true;
+  const store = createAssetSchemaStore(controller.service, async (id, data) => {
+    if (fail) throw new Error("后台任务失败");
+    return objectFilesExports.encodeAssetGroupFallback({id, data});
+  });
+  assert.equal(await store.load(), true);
+  assert.equal(await store.updateAsset(assetId, {name: "新名称"}), false);
+  assert.equal(store.getSnapshot().dirty, true);
+  assert.equal(groupDiskData(f, typeId).assets[0].name, "原名称");
+  fail = false;
+  assert.equal(await store.retry(), true);
+  assert.equal(groupDiskData(f, typeId).assets[0].name, "新名称");
+  await store.dispose();
+  await controller.dispose();
+});
+
 function forbidLegacyByteProjection(files) {
   return Object.freeze({...files,
     getSnapshot() {

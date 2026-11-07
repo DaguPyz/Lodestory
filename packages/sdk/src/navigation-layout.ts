@@ -39,7 +39,7 @@ export type NavigationLayoutService = {
      * 再移除布局登记；首版沿用 UI 的整树卸载规则，不支持运行中增删。
      */
     registerPage(page: NavigationLayoutPage): () => void;
-    /** 启动期登记独立操作；与页面共享 ID 空间和停止时先撤销 UI 的规则。 */
+    /** 登记独立操作；与页面共享 ID 空间，撤销时同步更新现有导航。 */
     registerAction(action: NavigationLayoutAction): () => void;
 };
 

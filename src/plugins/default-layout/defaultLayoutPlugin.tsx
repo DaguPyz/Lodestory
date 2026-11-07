@@ -1,4 +1,5 @@
 import type {Plugin} from "@lodestory/sdk";
+import {flushSync} from "react-dom";
 import {layoutKey, type LayoutService} from "@lodestory/sdk/layout";
 import {uiKey} from "@lodestory/sdk/ui";
 import {themeKey} from "@lodestory/sdk/theme";
@@ -20,7 +21,7 @@ export function createDefaultLayoutPlugin(): Plugin {
       const {ErrorBoundary} = context.get(errorUiKey);
       const widths = createNavigationWidthModel(context.get(configKey));
       let removeWrapper: (() => void) | undefined;
-      const store = createLayoutStore(() => removeWrapper?.());
+      const store = createLayoutStore(remove => flushSync(remove));
       cleanup = () => {
         try { removeWrapper?.(); }
         finally { try { store.dispose(); } finally { widths.dispose(); } }

@@ -189,7 +189,7 @@ test("a page registered by a failed plugin activation is removed during startup 
   assert.equal(fixture.createdCores.at(-1).isMounted("example.partial-page"), false);
 });
 
-test("navigation registration validates atomically, rejects duplicate and late entries, and cleans up pages", async () => {
+test("navigation validates registrations and allows runtime actions", async () => {
   const fixture = createMainFixture();
   const {createNavigationLayoutPlugin} = fixture.loadModule("plugins/navigation-layout/navigationLayoutPlugin.tsx");
   const {navigationLayoutKey} = fixture.requireSdk("@lodestory/sdk/navigation-layout");
@@ -323,7 +323,14 @@ test("navigation registration validates atomically, rejects duplicate and late e
   ready = true;
   const lateSnapshot = [...registrations.keys()];
   assert.throws(() => service.registerPage(validPage("late", 0)), /pluginsReady/);
-  assert.throws(() => service.registerAction({id: "late-action", navigation: {label: "迟到"}, run() {}}), /pluginsReady/);
+  let changes = 0;
+  const unsubscribe = navigationLayout.props.subscribeItems(() => { changes++; });
+  const removeLate = service.registerAction({id: "late-action", navigation: {label: "新增"}, run() {}});
+  assert.ok(navigationLayout.props.getItems().some(item => item.id === "late-action"));
+  removeLate();
+  assert.ok(!navigationLayout.props.getItems().some(item => item.id === "late-action"));
+  assert.equal(changes, 2);
+  unsubscribe();
   assert.deepEqual([...registrations.keys()], lateSnapshot, "a rejected late registration leaves no UI or navigation entry");
 
   plugin.deactivate();

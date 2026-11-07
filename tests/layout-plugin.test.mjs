@@ -5,7 +5,7 @@ import {createMainFixture, flushStartup} from "./helpers/mainStartupFixture.mjs"
 function registry() {
   const f = createMainFixture();
   let removals = 0;
-  const store = f.loadModule("plugins/default-layout/layoutStore.ts").createLayoutStore(() => removals++);
+  const store = f.loadModule("plugins/default-layout/layoutStore.ts").createLayoutStore(remove => { removals++; remove(); });
   return {f, store, removals: () => removals};
 }
 
@@ -51,7 +51,7 @@ test("layout descriptions are snapshotted, sorted independently of registration 
   assert.equal(renders, 0);
 });
 
-test("layout rejects malformed and duplicate registrations atomically and seals additions at ready", () => {
+test("layout rejects malformed and duplicate registrations and accepts additions after ready", () => {
   const {store} = registry();
   store.registerContent(content("valid"));
   const snapshot = store.getSnapshot();
@@ -62,7 +62,9 @@ test("layout rejects malformed and duplicate registrations atomically and seals 
   assert.throws(() => store.registerContent(content("valid")), /already registered/);
   assert.throws(() => store.show("valid"), /not ready/);
   store.start();
-  assert.throws(() => store.registerContent(content("late")), /before pluginsReady/);
+  const removeLate = store.registerContent(content("late"));
+  assert.ok(store.getSnapshot().contents.some(entry => entry.id === "late"));
+  removeLate();
   assert.throws(() => store.show("missing"), /not registered/);
   assert.throws(() => store.hide("missing"), /not registered/);
 });
@@ -140,14 +142,13 @@ test("disposers are idempotent and stale-safe, and stop rendering before revokin
   assert.throws(() => store.subscribe(() => {}), /no longer active/);
 });
 
-test("layout cleanup still revokes a descriptor when stopping UI fails", () => {
+test("layout retains a descriptor when stopping its view fails", () => {
   const f = createMainFixture();
   const store = f.loadModule("plugins/default-layout/layoutStore.ts").createLayoutStore(() => { throw new Error("stop failed"); });
   const remove = store.registerContent(content("one"));
   store.start();
   assert.throws(remove, /stop failed/);
-  assert.equal(store.getSnapshot().contents.length, 0);
-  remove();
+  assert.equal(store.getSnapshot().contents.length, 1);
 });
 
 test("outline navigation switches independently while preserving editor contents and the workbench session", async () => {
@@ -220,6 +221,36 @@ test("outline navigation switches independently while preserving editor contents
   assert.equal(startupWorkbench.getSnapshot().busy, false, "editor participants finish initialization before the layout lifecycle checks");
   const session = workbench.getSnapshot().session;
   assert.ok(session, "opening the editor establishes a workbench session");
+  const core = f.createdCores.at(-1);
+  let removeDynamic;
+  await core.mount({
+    id: "example.dynamic-layout", requires: [layoutKey], provides: [],
+    activate(context) {
+      removeDynamic = context.get(layoutKey).registerContent(content("example.dynamic", "auxiliary", 99));
+    },
+    deactivate() { removeDynamic(); },
+  });
+  assert.ok(layout.getSnapshot().contents.some(entry => entry.id === "example.dynamic"));
+  assert.strictEqual(workbench.getSnapshot().session, session);
+  assert.equal(f.logs.filter(entry => entry === "root.unmount").length, 0);
+  await core.unmount("example.dynamic-layout");
+  assert.ok(!layout.getSnapshot().contents.some(entry => entry.id === "example.dynamic"));
+  assert.strictEqual(workbench.getSnapshot().session, session);
+  assert.equal(f.logs.filter(entry => entry === "root.unmount").length, 0,
+    "removing the dynamic contribution keeps the existing UI root mounted");
+  let removeFailed;
+  await assert.rejects(core.mount({
+    id: "example.failed-layout", requires: [layoutKey], provides: [],
+    activate(context) {
+      removeFailed = context.get(layoutKey).registerContent(content("example.failed", "auxiliary", 99));
+      throw new Error("activation failed");
+    },
+    deactivate() { removeFailed?.(); },
+  }), /activation failed/);
+  assert.ok(!layout.getSnapshot().contents.some(entry => entry.id === "example.failed"));
+  assert.strictEqual(workbench.getSnapshot().session, session);
+  assert.equal(f.logs.filter(entry => entry === "root.unmount").length, 0,
+    "rolling back a failed contribution keeps the existing UI root mounted");
   const editorContents = ["body-editor.main", "document-tabs.tabs"];
   for (const id of editorContents) assert.ok(layout.getSnapshot().shownIds.includes(id), `${id} starts visible`);
   layout.show(outline.id);
@@ -252,7 +283,6 @@ test("outline navigation switches independently while preserving editor contents
   assert.equal(layout.getSnapshot().shownIds.includes("project-management.files"), true, "opening settings does not reset layout selection");
   assert.equal(layout.getSnapshot().shownIds.includes(outline.id), false);
   assert.strictEqual(workbench.getSnapshot().session, session, "opening settings retains the current project session");
-  const core = f.createdCores.at(-1);
   await core.unmount("outline-design");
   assert.ok(!layout.getSnapshot().contents.some(({id}) => id === outline.id), "unmounting outline-design revokes its contribution");
   assert.ok(layout.getSnapshot().contents.some(({id}) => id === canvas.id), "unmounting outline-design leaves the timeline-owned canvas registered");

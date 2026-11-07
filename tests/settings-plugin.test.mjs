@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {createMainFixture} from "./helpers/mainStartupFixture.mjs";
 
-test("settings sections are contributed during startup and released before their services", () => {
+test("settings sections can be added after startup and released before their services", () => {
   const fixture = createMainFixture();
   const {createSettingsStore} = fixture.loadModule("plugins/settings/settingsStore.ts");
   const store = createSettingsStore();
@@ -15,7 +15,9 @@ test("settings sections are contributed during startup and released before their
   assert.throws(() => store.service.registerSection(section("a", 0)), /already registered/);
   assert.deepEqual(Array.from(store.getSnapshot().sections, item => item.id), ["b", "a"]);
   store.start();
-  assert.throws(() => store.service.registerSection(section("late", 0)), /pluginsReady/);
+  const removeLate = store.service.registerSection(section("late", 0));
+  assert.ok(store.getSnapshot().sections.some(item => item.id === "late"));
+  removeLate();
   assert.equal(store.service.open("unknown"), false);
   assert.equal(store.service.open("a"), true);
   assert.equal(store.getSnapshot().selectedId, "a");

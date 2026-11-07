@@ -5,7 +5,7 @@ type PanelRole = "navigation" | "auxiliary";
 type Preference = "auto" | "open" | "closed";
 
 /** 默认布局的目录和展示策略；不包含文档、文件树或其他业务知识。 */
-export function createLayoutStore(beforeRemove: () => void) {
+export function createLayoutStore(commitRemoval: (remove: () => void) => void) {
   const entries = new Map<string, LayoutContent>();
   const listeners = new Set<() => void>();
   const selected = new Map<LayoutRole, string>();
@@ -47,7 +47,9 @@ export function createLayoutStore(beforeRemove: () => void) {
     if (changed) snapshot = Object.freeze({contents: Object.freeze(contents), shownIds: Object.freeze(shownIds)});
     if (!changed && state.navigationDocked === navigationDocked && state.auxiliaryDocked === auxiliaryDocked) return;
     state = Object.freeze({snapshot, navigationDocked, auxiliaryDocked});
-    for (const listener of [...listeners]) listener();
+    for (const listener of [...listeners]) {
+      try { listener(); } catch (error) { console.error("Layout subscriber failed.", {error}); }
+    }
   }
 
   function getEntry(id: string) {
@@ -67,7 +69,6 @@ export function createLayoutStore(beforeRemove: () => void) {
   return {
     registerContent(content: LayoutContent) {
       checkActive();
-      if (started) throw new Error("Layout contents must be registered before pluginsReady.");
       // 固定描述，避免调用方修改对象绕过校验或影响排序。
       const entry = Object.freeze({id: content.id, title: content.title, icon: content.icon, role: content.role, order: content.order ?? 0, render: content.render});
       if (typeof entry.id !== "string" || !entry.id.trim()) throw new TypeError("Layout content id cannot be empty.");
@@ -80,14 +81,14 @@ export function createLayoutStore(beforeRemove: () => void) {
       publish();
       return () => {
         if (!alive || entries.get(entry.id) !== entry) return;
-        try {
-          // 当前 UI 不支持运行中卸载贡献；先停止消费这些资源的整棵 UI 树。
-          if (started) beforeRemove();
-        } finally {
+        const remove = () => {
           entries.delete(entry.id);
           hidden.delete(entry.id);
           publish();
-        }
+        };
+        // The owner may release its services immediately after this returns.
+        if (started) commitRemoval(remove);
+        else remove();
       };
     },
     start() {

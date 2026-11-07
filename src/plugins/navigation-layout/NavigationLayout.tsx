@@ -1,4 +1,4 @@
-import {useEffect, useState, type ReactNode} from "react";
+import {useEffect, useState, useSyncExternalStore, type ReactNode} from "react";
 import type {NavigationGroup} from "@lodestory/sdk/navigation-layout";
 import {BrandLogo} from "@lodestory/ui";
 import "../../styles.css";
@@ -17,12 +17,15 @@ type NavigationLayoutProps = {
   readonly pageId: string;
   readonly active: boolean;
   readonly items: readonly RegisteredNavigationItem[];
+  readonly subscribeItems: (listener: () => void) => () => void;
+  readonly getItems: () => readonly RegisteredNavigationItem[];
   readonly onNavigate: (id: string) => Promise<boolean>;
   readonly children: ReactNode;
 };
 
 /** 默认导航外观；不认识作品、设置或其他具体页面。 */
-export function NavigationLayout({pageId, active, items, onNavigate, children}: NavigationLayoutProps) {
+export function NavigationLayout({pageId, active, subscribeItems, getItems, onNavigate, children}: NavigationLayoutProps) {
+  const items = useSyncExternalStore(subscribeItems, getItems, getItems);
   const [navigationFailed, setNavigationFailed] = useState(false);
   useEffect(() => { if (!active) setNavigationFailed(false); }, [active]);
 

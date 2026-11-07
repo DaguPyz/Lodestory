@@ -38,7 +38,7 @@ export type LayoutSnapshot = {
 export type LayoutService = {
   /** 稳定的页面内组件，不创建 React root；已展示内容隐藏时必须保留组件实例。 */
   readonly View: ComponentType<LayoutViewProps>;
-  /** 启动期间登记内容，重复 ID 或无效描述抛错；返回幂等、不会影响后续同名登记的撤销函数。 */
+  /** 登记内容，重复 ID 或无效描述抛错；撤销时先停止其组件，其他内容保留。 */
   registerContent(content: LayoutContent): () => void;
   /** 展示内容，必要时展开容器或切换标签；main 为单选，展示新 main 时隐藏原 main 并保留其实例。
    * 未知 ID 抛错，不负责切换应用页面或聚焦正文。
@@ -52,5 +52,5 @@ export type LayoutService = {
   subscribe(listener: () => void): () => void;
 };
 
-/** 同一次装配由一个布局插件提供。首版启动后不新增内容；撤销正在使用的贡献须先停止 UI。 */
+/** 同一次装配由一个布局插件提供。 */
 export const layoutKey = createServiceKey<LayoutService>("app/layout");

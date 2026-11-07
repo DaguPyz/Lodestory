@@ -1,4 +1,5 @@
 import type {Plugin} from "@lodestory/sdk";
+import {flushSync} from "react-dom";
 import {navigationLayoutKey, type NavigationLayoutService} from "@lodestory/sdk/navigation-layout";
 import {uiKey} from "@lodestory/sdk/ui";
 import {themeKey} from "@lodestory/sdk/theme";
@@ -17,11 +18,23 @@ export function createNavigationLayoutPlugin(): Plugin {
             const ui = context.get(uiKey);
             const WindowShell = context.get(windowShellKey).View;
             const entries = new Map<string, { item: RegisteredNavigationItem; run?: () => void | Promise<void>; remove: () => void }>();
+            const listeners = new Set<() => void>();
+            let snapshot: readonly RegisteredNavigationItem[] = Object.freeze([]);
             let active = true;
 
             const items = () => [...entries.values()].map(entry => entry.item).sort((a, b) =>
                 (a.group === b.group ? 0 : a.group === "primary" ? -1 : 1)
                 || a.order - b.order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+            const publish = () => {
+                snapshot = Object.freeze(items());
+                for (const listener of [...listeners]) {
+                    try { listener(); } catch (error) { console.error("Navigation subscriber failed.", {error}); }
+                }
+            };
+            const subscribe = (listener: () => void) => {
+                listeners.add(listener);
+                return () => { listeners.delete(listener); };
+            };
 
             cleanup = () => {
                 // UI 撤销会先卸载组件；条目及页面资源保留到撤销完成。
@@ -30,6 +43,7 @@ export function createNavigationLayoutPlugin(): Plugin {
                     try { entry.remove(); } catch (error) { errors.push(error); }
                 }
                 active = false;
+                listeners.clear();
                 if (errors.length) throw Object.assign(new Error("Navigation layout failed to stop."), {errors});
             };
 
@@ -59,6 +73,8 @@ export function createNavigationLayoutPlugin(): Plugin {
                             pageId={id}
                             active={pageContext.active}
                             items={items()}
+                            subscribeItems={subscribe}
+                            getItems={() => snapshot}
                             onNavigate={async target => {
                                 const entry = entries.get(target);
                                 if (!entry) return false;
@@ -74,9 +90,11 @@ export function createNavigationLayoutPlugin(): Plugin {
                             if (entries.get(id) !== entry) return;
                             removePage();
                             entries.delete(id);
+                            publish();
                         },
                     };
                     entries.set(id, entry);
+                    publish();
                     return entry.remove;
                 },
                 registerAction(action) {
@@ -91,16 +109,15 @@ export function createNavigationLayoutPlugin(): Plugin {
                     if (!Number.isFinite(item.order)) throw new Error("Navigation order must be finite.");
                     if (typeof run !== "function") throw new Error("Navigation action must have a run function.");
                     if (entries.has(id)) throw new Error(`Navigation entry '${id}' is already registered.`);
-                    // UI owns the startup registration boundary and unmounts before an action is withdrawn.
-                    const removeUiContribution = ui.addWrapper({id: `navigation-layout.action.${id}`, order: 0, wrap: children => children});
                     const entry = {
                         item, run,
                         remove() {
                             if (entries.get(id) !== entry) return;
-                            try { removeUiContribution(); } finally { entries.delete(id); }
+                            flushSync(() => { entries.delete(id); publish(); });
                         },
                     };
                     entries.set(id, entry);
+                    publish();
                     return entry.remove;
                 },
             };

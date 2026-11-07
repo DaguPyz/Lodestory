@@ -37,7 +37,6 @@ export function createSettingsStore() {
     },
     registerSection(section) {
       if (!active) throw new Error("Settings service is no longer active.");
-      if (started) throw new Error("Settings sections must be registered before pluginsReady.");
       if (!section || typeof section !== "object") throw new TypeError("Settings section must be an object.");
       if (typeof section.id !== "string" || !section.id.trim()) throw new Error("Settings section id cannot be empty.");
       if (typeof section.group !== "string" || !section.group.trim()) throw new Error("Settings section group cannot be empty.");

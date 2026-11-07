@@ -11,12 +11,12 @@ export function createMarkdownEditorPlugin(): Plugin {
     provides: [],
     activate(context) {
       const bodyEditor = context.get(bodyEditorKey);
-      removeEditor = bodyEditor.registerEditor({
+      removeEditor = context.track(bodyEditor.registerEditor({
         id: "milkdown",
         formats: ["markdown"],
         async getSearchText(content, _format, signal) { return (await import("./markdownSearchClient")).extractMarkdownSearchText(content, signal); },
         load: () => import("./MarkdownEditor"),
-      });
+      }));
     },
     deactivate() {
       const remove = removeEditor;

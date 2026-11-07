@@ -58,8 +58,8 @@ export function createProjectSearchPlugin(): Plugin {
       removeEvent = context.on(projectSearchRequested, request => {
         void shortcuts.execute(shortcutCommandIds.projectSearch, request).catch(error => console.error("Could not execute project search.", error));
       });
-      removeWrapper = ui.addWrapper({id: "project-search.dialog", order: 50,
-        wrap: children => <>{children}<ProjectSearch search={index} workbench={workbench} requests={requests}/></>});
+      removeWrapper = context.track(ui.addWrapper({id: "project-search.dialog", order: 50,
+        wrap: children => <>{children}<ProjectSearch search={index} workbench={workbench} requests={requests}/></>}));
     },
     deactivate() { const stop = dispose; dispose = undefined; stop?.(); },
   };

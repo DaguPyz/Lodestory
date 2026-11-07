@@ -86,6 +86,7 @@ function setup({rejectContentId, editorDefaults = {markdown: "milkdown", "plain-
     },
   };
   const context = {
+    track: value => value,
     get(key) {
       if (provided.has(key)) return provided.get(key);
       if (key === configKey) return config;

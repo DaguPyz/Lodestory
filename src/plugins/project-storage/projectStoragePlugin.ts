@@ -53,7 +53,7 @@ export function createProjectStoragePlugin(): Plugin {
                 await removeParticipant?.();
                 sessions.clear();
             };
-            removeParticipant = workbench.registerParticipant({
+            removeParticipant = context.track(workbench.registerParticipant({
                 id: "project-storage",
                 label: "项目存储",
                 start(session) {
@@ -96,7 +96,7 @@ export function createProjectStoragePlugin(): Plugin {
                         },
                     };
                 },
-            });
+            }));
         },
         async deactivate() {
             const stop = cleanup;

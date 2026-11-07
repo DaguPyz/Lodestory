@@ -68,7 +68,7 @@ test("writing status follows the public body main visibility and preserves the p
   };
   const services = new Map([[workbenchKey, workbench], [documentsKey, documents], [bodyEditorKey, bodyEditor], [layoutKey, layout]]);
   const plugin = fixture.loadModule("plugins/writing-status/writingStatusPlugin.tsx").createWritingStatusPlugin();
-  plugin.activate({get: key => services.get(key)});
+  plugin.activate({get: key => services.get(key), track: contribution => contribution});
 
   function visibilityProp() {
     const contentElement = layout.content.render({active: true});

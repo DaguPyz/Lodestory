@@ -7,18 +7,26 @@ import process from "node:process";
 
 const host = process.env.TAURI_DEV_HOST;
 const require = createRequire(import.meta.url);
+const desktopE2e = process.env.LODESTORY_DESKTOP_E2E === "1";
 
 export default defineConfig({
   plugins: [
     react(),
-    ...(process.env.LODESTORY_DESKTOP_E2E === "1" ? [{
+    ...(desktopE2e ? [{
       name: "desktop-e2e-driver",
       transformIndexHtml: {
         order: "pre" as const,
         handler() {
           return [{tag: "script", attrs: {type: "module", src: "/tests/desktop/driver.js"}, injectTo: "head-prepend" as const}];
         }
-      }
+      },
+      transform(code: string, id: string) {
+        if (!id.endsWith("/src/main.tsx")) return;
+        const start = "await createAppRuntime(createAppPlugins());";
+        if (!code.includes(start)) throw new Error("Desktop test bridge could not find the application startup call.");
+        return code.replace(start, `const runtime = await createAppRuntime(createAppPlugins());
+          (await import("/tests/desktop/lifecycle-entry.js")).installLifecycleTest(runtime);`);
+      },
     }] : [])
   ],
   // The browser export uses document.createElement, which is unavailable in workers.

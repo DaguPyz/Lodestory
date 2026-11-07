@@ -7,6 +7,7 @@ type PageRegistry = {
     start(initialPage?: string): void;
     previewOpen(id: string, params?: unknown, historyMode?: "push" | "reset"): UiNavigationRequest | null;
     previewBack(): UiNavigationRequest | null;
+    alternative(id: string, accept?: (candidate: string) => boolean): string | undefined;
     commitNavigation(request: UiNavigationRequest): void;
     getSnapshot(): UiSnapshot;
     subscribe(listener: Listener): () => void;
@@ -126,6 +127,14 @@ export function createPageRegistry(): PageRegistry {
             const previous = history[history.length - 1];
             if (!previous) return null;
             return Object.freeze({from: current, to: previous, kind: "back" as const});
+        },
+
+        alternative(id, accept = () => true) {
+            for (let index = history.length - 1; index >= 0; index -= 1) {
+                const candidate = history[index].id;
+                if (candidate !== id && pages.has(candidate) && accept(candidate)) return candidate;
+            }
+            return [...pages.keys()].find(candidate => candidate !== id && accept(candidate));
         },
 
         commitNavigation(request) {

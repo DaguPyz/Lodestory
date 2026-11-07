@@ -119,7 +119,7 @@ function persistenceFixture({failFirstRead = false, deferAxisSave = false, failE
       throw new Error(`Unexpected command: ${command}`);
     },
   });
-  return {f, disk, bytesOf, keyOf, calls, axisSaveStarted, finishAxisSave: () => finishAxisSave?.(),
+  return {f, disk, bytesOf, keyOf, calls, allowEventCreate: () => { failEventCreate = false; }, axisSaveStarted, finishAxisSave: () => finishAxisSave?.(),
     eventCreateStarted, finishEventCreate: () => finishEventCreate?.()};
 }
 
@@ -498,7 +498,7 @@ test("timeline summaries reuse unchanged entries and only scan the changed timel
 });
 
 test("a failed event write blocks project leave and retains its event draft", async () => {
-  const {f} = persistenceFixture({failEventCreate: true});
+  const {f, allowEventCreate} = persistenceFixture({failEventCreate: true});
   f.start(); await flushStartup();
   const {workbench, layout, model} = services(f);
   await openReadyProject(workbench, project);
@@ -518,7 +518,45 @@ test("a failed event write blocks project leave and retains its event draft", as
   assert.equal(workbench.getSnapshot().session.id, sessionId);
   assert.equal(list.getSnapshot().entries[0].eventCount, 1);
   assert.equal(events.getSnapshot().events[0].summary, "待重试");
+  await assert.rejects(f.createdCores.at(-1).unmountAll(), error => error.pluginId === "workbench" && error.phase === "withdraw");
+  assert.equal(workbench.getSnapshot().session.id, sessionId);
+  assert.equal(events.getSnapshot().events[0].summary, "待重试");
+  assert.equal(f.logs.filter(entry => entry === "root.unmount").length, 0);
+  allowEventCreate();
+  assert.equal(await events.retry(), true);
   await f.createdCores.at(-1).unmountAll();
+});
+
+test("timeline unload preserves the project on save failure and removes only its own session after retry", async () => {
+  const {f, allowEventCreate} = persistenceFixture({failEventCreate: true});
+  f.start(); await flushStartup();
+  const {workbench, layout, model} = services(f);
+  await openReadyProject(workbench, project);
+  const list = model();
+  list.beginCreate();
+  list.updateCreateDraft({title: "时间线"});
+  assert.equal(await list.create(), true);
+  const timelineId = list.getSnapshot().selectedId;
+  const sessionId = workbench.getSnapshot().session.id;
+  const resource = layout.getSnapshot().contents.find(entry => entry.id === "timeline.main").render({active: true}).props.sessions.get(sessionId);
+  const events = resource.events.get(timelineId);
+  assert.equal(await events.load(), true);
+  assert.equal(await events.upsert({id: "00000000-0000-4000-8000-000000000203", title: "保留", summary: "待保存", offset: 4, placement: "above", important: false, assetIds: []}), false);
+  const core = f.createdCores.at(-1);
+  await core.unmount("outline-design");
+  await assert.rejects(core.unmount("timeline"), error => error.pluginId === "timeline" && error.phase === "prepare");
+  assert.equal(core.isMounted("timeline"), true);
+  assert.equal(workbench.getSnapshot().session.id, sessionId);
+  assert.equal(events.getSnapshot().events[0].summary, "待保存");
+  assert.equal(f.logs.filter(entry => entry === "root.unmount").length, 0);
+  allowEventCreate();
+  assert.equal(await events.retry(), true);
+  await core.unmount("timeline");
+  assert.equal(core.isMounted("timeline"), false);
+  assert.equal(workbench.getSnapshot().session.id, sessionId);
+  assert.equal(layout.getSnapshot().contents.some(entry => entry.id === "timeline.main"), false);
+  assert.equal(f.logs.filter(entry => entry === "root.unmount").length, 0);
+  await core.unmountAll();
 });
 
 test("deleting a timeline waits for dirty events to reach project storage", async () => {

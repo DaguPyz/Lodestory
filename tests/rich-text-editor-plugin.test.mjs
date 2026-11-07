@@ -42,7 +42,7 @@ test("rich text editor instances register independently and revoke only their ow
     };
   }
   function context(service) {
-    return {get(key) {
+    return {track: value => value, get(key) {
       if (key === bodyEditorKey) return service;
       if (key === uiInteractionKey) return interaction;
       assert.fail(`unexpected capability ${key.id}`);

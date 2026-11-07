@@ -1,6 +1,7 @@
 import type {ComponentType} from "react";
 import type {ConfigItem} from "./config.js";
 import {createServiceKey} from "./ServiceKey.js";
+import type {PluginContribution} from "./Plugin.js";
 
 /** 持久化到文档工作区的正文格式。 */
 export type EditorFormat = "markdown" | "plain-text" | "rich-delta";
@@ -76,8 +77,8 @@ export type EditorConversion = Readonly<{
 
 /** 正文宿主使用的编辑器注册表能力。 */
 export type BodyEditorService = {
-    /** 登记一个编辑器；返回可重复调用的撤销函数。 */
-    registerEditor(definition: EditorDefinition): () => void;
+    /** 登记一个编辑器并将句柄交给 context.track；启动完成后暂不支持单独在线撤回。 */
+    registerEditor(definition: EditorDefinition): PluginContribution;
     getText(fileName: string, content: string): string | undefined;
     getSearchText(fileName: string, content: string, signal?: AbortSignal): Promise<string | undefined>;
     revealSearchTarget(sessionId: string, target: EditorSearchTarget): boolean;

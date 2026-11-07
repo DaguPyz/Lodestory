@@ -70,7 +70,7 @@ const bodyEditorService: BodyEditorService = {
     void editorId;
     void formats;
     void load;
-    return () => {};
+    return Object.assign(() => {}, {associate() {}, check() {}, withdraw() {}});
   },
   getText(fileName, content) {
     void fileName;

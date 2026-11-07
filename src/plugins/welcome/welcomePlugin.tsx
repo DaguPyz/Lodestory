@@ -20,14 +20,14 @@ export function createWelcomePlugin(): Plugin {
             const navigation = context.get(navigationLayoutKey);
             const workbench = context.get(workbenchKey);
             const {ErrorBoundary} = context.get(errorUiKey);
-            removePage = navigation.registerPage({
+            removePage = context.track(navigation.registerPage({
                 id: appPages.welcome,
                 navigation: {label: "作品", icon: <Icon name="folder" />, group: "primary", order: 0},
                 render: ({active}) => <ErrorBoundary><WelcomePage
                     active={active}
                     onOpenProject={(project) => workbench.openProject(project)}
                 /></ErrorBoundary>,
-            });
+            }));
         },
 
         deactivate() {

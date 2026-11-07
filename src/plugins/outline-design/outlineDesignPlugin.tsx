@@ -19,7 +19,7 @@ export function createOutlineDesignPlugin(): Plugin {
       const workbench = context.get(workbenchKey);
       const contextMenus = context.get(contextMenuKey);
       const timelines = context.get(timelineKey);
-      removeContent = layout.registerContent({
+      removeContent = context.track(layout.registerContent({
         id: "outline-design.navigation",
         title: "大纲设计",
         role: "navigation",
@@ -27,7 +27,7 @@ export function createOutlineDesignPlugin(): Plugin {
         icon: <Icon name="outline"/>,
         render: ({active}) => <OutlineDesignPanel workbench={workbench} contextMenus={contextMenus}
           timelines={timelines} active={active}/>,
-      });
+      }));
     },
     deactivate() {
       const remove = removeContent;

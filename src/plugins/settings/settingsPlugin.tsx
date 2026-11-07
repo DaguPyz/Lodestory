@@ -48,16 +48,16 @@ export function createSettingsPlugin(): Plugin {
         render: () => <MotionSettings config={config} model={motion}/>,
       }));
       context.provide(settingsKey, store.service);
-      removeWrapper = ui.addWrapper({
+      removeWrapper = context.track(ui.addWrapper({
         id: "settings.dialog", order: 30,
         prepare: store.start,
         wrap: children => <SettingsDialog store={store} ErrorBoundary={ErrorBoundary}>{children}</SettingsDialog>,
-      });
-      removeAction = navigation.registerAction({
+      }));
+      removeAction = context.track(navigation.registerAction({
         id: "settings",
         navigation: {label: "设置", icon: <Icon name="settings"/>, group: "secondary", order: 0},
         run: () => { if (!store.service.open()) throw new Error("Settings are unavailable."); },
-      });
+      }));
     },
     async deactivate() { const stop = cleanup; cleanup = undefined; await stop?.(); },
   };

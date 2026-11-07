@@ -251,6 +251,36 @@ test("stop keeps cleaning all plugins and reuses its rejected promise", async ()
   assert.throws(() => f.createdCores[0].get(key), /not registered/);
 });
 
+test("stop can be retried when a participant rejects preparation", async () => {
+  const f = loadAppRuntime();
+  let allow = false;
+  let deactivated = 0;
+  const runtime = await f.createAppRuntime([plugin({
+    id: "guarded", requires: [], provides: [],
+    activate(context) { context.onStop({check() { if (!allow) throw new Error("unsaved"); }}); },
+    deactivate() { deactivated += 1; },
+  })]);
+  await assert.rejects(runtime.stop(), /stop check failed/);
+  assert.equal(deactivated, 0);
+  allow = true;
+  await runtime.stop();
+  assert.equal(deactivated, 1);
+});
+
+test("a stop blocked by an in-flight plugin removal can be retried", async () => {
+  const f = loadAppRuntime();
+  let finish;
+  const gate = new Promise(resolve => {finish = resolve;});
+  const runtime = await f.createAppRuntime([plugin({
+    id: "slow", requires: [], provides: [], activate() {}, async deactivate() {await gate;},
+  })]);
+  const removing = runtime.unmount("slow");
+  await assert.rejects(runtime.stop(), /changing state/);
+  finish();
+  await removing;
+  await runtime.stop();
+});
+
 test("the TypeScript contract infers the service type from its key", () => {
   assertTypeFixtureCompiles();
 });

@@ -133,16 +133,22 @@ export function createBodyEditorRegistry(
       entry.definition = Object.freeze({...source, load: () => load(entry)});
       entries.set(source.id, entry);
       notify();
-      return () => {
+      const dispose = () => {
         if (!alive || entries.get(source.id) !== entry) return;
-        try {
-          if (started) beforeRemove();
-        } finally {
-          if (entries.get(source.id) === entry) entries.delete(source.id);
-          entry.pending = undefined;
-          notify();
-        }
+        if (started) beforeRemove();
+        if (entries.get(source.id) === entry) entries.delete(source.id);
+        entry.pending = undefined;
+        notify();
       };
+      return Object.assign(dispose, {
+        associate() {},
+        check(scope: "plugin" | "application") {
+          if (scope === "plugin" && alive && started && entries.get(source.id) === entry) {
+            throw new Error(`Editor '${source.id}' cannot be removed while editor sessions are running.`);
+          }
+        },
+        withdraw(scope: "plugin" | "application") { if (scope === "plugin") dispose(); },
+      });
     },
     getText(fileName, content) {
       if (!alive || !started) return undefined;

@@ -417,7 +417,7 @@ test("toolbar plugin registers its actions content and independent recovery wrap
   assert.equal(plugin.id, "workbench-toolbar");
   assert.deepEqual(Array.from(plugin.requires, key => key.id), ["app/workbench", "app/ui", "app/layout", "app/shortcuts", "app/settings"]);
   assert.deepEqual(Array.from(plugin.provides), []);
-  assert.throws(() => plugin.activate({get(key) {
+  assert.throws(() => plugin.activate({track: value => value, get(key) {
     if (key === workbenchKey) return workbench;
     if (key === uiKey) return ui;
     if (key === layoutKey) return layout;
@@ -449,7 +449,7 @@ test("the UI wrapper keeps a separate recovery component that calls the session 
   const registered = [];
   layout.registerContent = entry => { registered.push(entry); return () => {}; };
   const service = {...workbench.service, registerParticipant(value) { participant = value; return async () => {}; }};
-  plugin.activate({get(key) {
+  plugin.activate({track: value => value, get(key) {
     if (key === workbenchKey) return service;
     if (key === uiKey) return ui;
     if (key === layoutKey) return layout;
@@ -483,7 +483,7 @@ test("each workbench session owns a separate toolbar model and stale models cann
   let participant;
   const registered = [];
   layout.registerContent = entry => { registered.push(entry); return () => {}; };
-  plugin.activate({get(key) {
+  plugin.activate({track: value => value, get(key) {
     if (key === workbenchKey) return {...workbench.service, registerParticipant(value) { participant = value; return async () => {}; }};
     if (key === uiKey) return {openPage: async () => true, addWrapper: () => () => {}};
     if (key === layoutKey) return layout;

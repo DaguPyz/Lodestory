@@ -23,7 +23,7 @@ export function createWorkbenchToolbarPlugin(): Plugin {
       const layout = context.get(layoutKey);
       const shortcuts = context.get(shortcutsKey);
       const settings = context.get(settingsKey);
-      removeParticipant = workbench.registerParticipant({
+      removeParticipant = context.track(workbench.registerParticipant({
         id: "workbench-toolbar",
         label: "工具栏",
         start(session) {
@@ -36,19 +36,19 @@ export function createWorkbenchToolbarPlugin(): Plugin {
             },
           };
         },
-      });
-      removeViews.push(layout.registerContent({
+      }));
+      removeViews.push(context.track(layout.registerContent({
         id: workbenchToolbarId,
         title: "工作台工具栏",
         role: "actions",
         render: ({active}) => <WorkbenchToolbar workbench={workbench} layout={layout} models={models} active={active} shortcuts={shortcuts}
           onSearch={sessionId => { void shortcuts.execute(shortcutCommandIds.projectSearch, {sessionId}).catch(error => console.error("Could not open project search.", error)); }}/>,
-      }));
-      removeViews.push(ui.addWrapper({
+      })));
+      removeViews.push(context.track(ui.addWrapper({
         id: "workbench-toolbar.recovery",
         order: 50,
         wrap: children => <>{children}<ToolbarRecovery workbench={workbench} layout={layout} models={models}/></>,
-      }));
+      })));
     },
     async deactivate() {
       const errors: unknown[] = [];

@@ -97,8 +97,8 @@ export function createShortcutsPlugin(): Plugin {
           id: "shortcuts.keymap", group: "操作", title: "快捷键", order: 30,
           render: () => <ShortcutSettings shortcuts={shortcuts} model={model}/>,
         });
-        removeWrapper = ui.addWrapper({id: "shortcuts.key-listener", order: 5,
-          wrap: children => <ShortcutListener hasActiveOverlay={interaction.hasActiveOverlay} handleKeyDown={store!.handleKeyDown}>{children}</ShortcutListener>});
+        removeWrapper = context.track(ui.addWrapper({id: "shortcuts.key-listener", order: 5,
+          wrap: children => <ShortcutListener hasActiveOverlay={interaction.hasActiveOverlay} handleKeyDown={store!.handleKeyDown}>{children}</ShortcutListener>}));
       } catch (error) {
         dispose = undefined;
         try { await stop(); } catch (cleanupError) {

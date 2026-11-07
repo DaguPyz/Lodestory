@@ -36,7 +36,7 @@ export function createDefaultLayoutPlugin(): Plugin {
         subscribe: store.subscribe,
       };
       context.provide(layoutKey, Object.freeze(service));
-      removeWrapper = ui.addWrapper({id: "default-layout", order: 30, prepare: store.start, wrap: children => children});
+      removeWrapper = context.track(ui.addWrapper({id: "default-layout", order: 30, prepare: store.start, wrap: children => children}));
     },
     deactivate() {
       const stop = cleanup;

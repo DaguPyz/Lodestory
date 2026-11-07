@@ -293,31 +293,21 @@ test("outline navigation switches independently while preserving editor contents
   assert.ok(!layout.getSnapshot().contents.some(({id}) => id === assetManagement.id), "unmounting asset-management revokes its contribution");
   assert.ok(!layout.getSnapshot().contents.some(({id}) => id === assetTypes.id), "unmounting asset-management revokes its main contribution");
   assert.ok(layout.getSnapshot().contents.some(({id}) => id === "body-editor.main"), "unmounting asset-management leaves the editor registered");
-  assert.equal(workbench.getSnapshot().session, null, "revoking the asset participant stops the view and releases project-session resources");
-  await core.unmount("workbench-toolbar");
+  assert.strictEqual(workbench.getSnapshot().session, session, "revoking an asset participant retains the current project session");
+  await assert.rejects(core.unmount("workbench-toolbar"), error => error.phase === "check");
   assert.ok(layout.getSnapshot().contents.some(({id}) => id === "workbench.loading"),
     "unmounting the toolbar plugin leaves the workbench-owned loading contribution registered");
   assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
-    "body-editor.main", "document-tabs.tabs", "project-management.files", "workbench.loading", "writing-status.status",
+    "body-editor.main", "document-tabs.tabs", "project-management.files", "workbench-toolbar.main", "workbench.loading", "writing-status.status",
   ]);
   await f.createdCores.at(-1).unmount("writing-status");
-  await f.createdCores.at(-1).unmount("rich-text-editor");
-  await f.createdCores.at(-1).unmount("markdown-editor");
-  await f.createdCores.at(-1).unmount("plain-text-editor");
-  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
-    "body-editor.main", "document-tabs.tabs", "project-management.files", "workbench.loading",
-  ]);
-  await f.createdCores.at(-1).unmount("document-search");
-  await f.createdCores.at(-1).unmount("body-editor");
-  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), [
-    "document-tabs.tabs", "project-management.files", "workbench.loading",
-  ]);
-  await f.createdCores.at(-1).unmount("project-management");
-  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id).sort(), ["document-tabs.tabs", "workbench.loading"]);
+  await assert.rejects(f.createdCores.at(-1).unmount("rich-text-editor"), error => error.phase === "check");
+  await assert.rejects(f.createdCores.at(-1).unmount("markdown-editor"), error => error.phase === "check");
+  await assert.rejects(f.createdCores.at(-1).unmount("plain-text-editor"), error => error.phase === "check");
+  await assert.rejects(f.createdCores.at(-1).unmount("project-management"), /required by plugins/);
   await f.createdCores.at(-1).unmount("document-tabs");
-  assert.deepEqual(Array.from(layout.getSnapshot().contents, ({id}) => id), ["workbench.loading"],
-    "the workbench loading contribution remains until its owner is unmounted");
-  assert.equal(f.logs.filter(entry => entry === "root.unmount").length, 1);
+  assert.ok(layout.getSnapshot().contents.some(({id}) => id === "workbench.loading"));
+  assert.equal(f.logs.filter(entry => entry === "root.unmount").length, 0);
   await f.createdCores.at(-1).unmountAll();
   assert.throws(() => layout.getSnapshot(), /no longer active/);
   assert.equal(f.logs.filter(entry => entry === "root.unmount").length, 1);
@@ -339,11 +329,12 @@ test("another provider of layoutKey receives the editor contributions and is inj
       contributions.push(entry);
       contents = [...contents, entry];
       publish();
-      return () => {
+      const remove = () => {
         removed.push(entry.id);
         contents = contents.filter(current => current !== entry);
         publish();
       };
+      return Object.assign(remove, {associate() {}, check() {}, withdraw(scope) {if (scope === "plugin") remove();}});
     },
     show(id) {
       if (!contents.some(entry => entry.id === id)) throw new Error(`Layout content '${id}' is not registered.`);

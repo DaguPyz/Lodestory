@@ -27,6 +27,32 @@ function viewSessions(layout, id) {
 
 const project = {id: "startup-test", name: "启动测试", path: "/projects/startup-test"};
 
+test("workbench can stop cleanly before its startup preparation runs", async () => {
+  const f = createMainFixture();
+  const {createWorkbenchPlugin} = f.loadModule("plugins/workbench/workbenchPlugin.tsx");
+  let stop;
+  const empty = () => () => {};
+  const ui = {registerNavigationGuard: empty, registerPage: empty, addWrapper: empty, stopForApplication() {}};
+  const layout = {registerContent: empty};
+  const shortcuts = {registerScope: empty};
+  const plugin = createWorkbenchPlugin();
+  plugin.activate({
+    get(key) {
+      if (key.id === "app/ui") return ui;
+      if (key.id === "app/layout") return layout;
+      if (key.id === "app/error-ui") return {ErrorBoundary: ({children}) => children};
+      if (key.id === "app/window-shell") return {View: ({children}) => children};
+      if (key.id === "app/shortcuts") return shortcuts;
+      throw new Error(`Unexpected service ${key.id}`);
+    },
+    provide() {},
+    track: contribution => contribution,
+    onStop(participant) {stop = participant; return () => {};},
+  });
+  await stop.withdraw("application");
+  await plugin.deactivate();
+});
+
 function assetStoreMock(loadGate, loadStarted, records) {
   return {
     createAssetSchemaStore() {

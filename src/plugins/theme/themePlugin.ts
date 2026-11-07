@@ -29,7 +29,7 @@ export function createThemePlugin(config: ThemeConfig = themeConfig): Plugin {
                 retry: store.retryTheme,
             };
             context.provide(themeKey, service);
-            removeUiWrapper = context.get(uiKey).addWrapper({
+            removeUiWrapper = context.track(context.get(uiKey).addWrapper({
                 id: "theme",
                 order: 20,
                 async prepare() {
@@ -37,7 +37,7 @@ export function createThemePlugin(config: ThemeConfig = themeConfig): Plugin {
                     await store.whenNativeThemeReady();
                 },
                 wrap: (children) => createElement(ThemeProvider, {service, children}),
-            });
+            }));
         },
 
         deactivate() {

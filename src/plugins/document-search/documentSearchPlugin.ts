@@ -15,7 +15,7 @@ export function createDocumentSearchPlugin(): Plugin {
             const workbench = context.get(workbenchKey), documents = context.get(documentsKey);
             const catalogs = context.get(projectDocumentCatalogKey), editor = context.get(bodyEditorKey),
                 search = context.get(projectSearchKey);
-            removeParticipant = workbench.registerParticipant({
+            removeParticipant = context.track(workbench.registerParticipant({
                 id: "document-search", label: "正文搜索", start(session) {
                     const catalog = catalogs.getCatalog(session.id), workspace = documents.getWorkspace(session.id);
                     if (!catalog || !workspace) throw new Error("文档搜索所需的项目会话不可用。");
@@ -37,7 +37,7 @@ export function createDocumentSearchPlugin(): Plugin {
                         }
                     };
                 }
-            });
+            }));
         },
         async deactivate() {
             const remove = removeParticipant;

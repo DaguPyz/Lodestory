@@ -27,7 +27,7 @@ export function createWritingStatusPlugin(): Plugin {
         role: "status",
         render: () => <WritingStatusContent workbench={workbench} documents={documents} bodyEditor={bodyEditor} layout={layout}/>,
       };
-      removeContent = layout.registerContent(content);
+      removeContent = context.track(layout.registerContent(content));
     },
     deactivate() {
       const remove = removeContent;

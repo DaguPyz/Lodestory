@@ -51,7 +51,7 @@ test("settings plugin registers one shell and an action, and cleans up partial a
     [navigationLayoutKey, {registerAction(value) { action = value; return () => events.push("action removed"); }}],
     [themeKey, {}], [configKey, {}], [errorUiKey, {ErrorBoundary: () => null}],
   ]);
-  plugin.activate({get: key => services.get(key), provide(key, value) { assert.equal(key, settingsKey); service = value; }});
+  plugin.activate({get: key => services.get(key), track: value => value, provide(key, value) { assert.equal(key, settingsKey); service = value; }});
   assert.equal(service.open(), false, "the shell waits until startup preparation");
   wrapper.prepare();
   action.run();
@@ -65,7 +65,7 @@ test("settings plugin registers one shell and an action, and cleans up partial a
 
   const failed = fixture.loadModule("plugins/settings/settingsPlugin.tsx").createSettingsPlugin();
   services.set(navigationLayoutKey, {registerAction() { throw new Error("action failed"); }});
-  assert.throws(() => failed.activate({get: key => services.get(key), provide() {}}), /action failed/);
+  assert.throws(() => failed.activate({get: key => services.get(key), track: value => value, provide() {}}), /action failed/);
   await failed.deactivate();
   assert.deepEqual(events, ["unmount", "action removed", "unmount"]);
 });

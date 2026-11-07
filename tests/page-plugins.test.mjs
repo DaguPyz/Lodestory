@@ -324,52 +324,25 @@ test("navigation waits for an asynchronous participant decision before committin
   assert.equal(ui.getSnapshot().current.id, "editor");
 });
 
-test("page plugins revoke their route contributions and the UI root unmounts only once", async () => {
+test("online plugin removal preserves other pages and rejects root-wrapper removal", async () => {
   const fixture = await startFixture();
   const core = fixture.createdCores.at(-1);
   const uiKey = fixture.requireSdk("@lodestory/sdk/ui").uiKey;
   const ui = core.get(uiKey);
 
   await ui.openPage("editor", { project: project("novel-1", "第一本", "/stories/first") });
+  await waitForWorkbench(getWorkbench(fixture));
   assert.equal(getSettings(fixture).open(), true);
-  await core.unmount("workbench-toolbar");
+  await assert.rejects(core.unmount("workbench-toolbar"), error => error.phase === "check" && /Root wrapper/.test(error.cause.message));
   await assert.rejects(core.unmount("settings"), /required by plugins: 'shortcuts'/);
   assert.equal(core.isMounted("settings"), true, "the settings provider stays alive for the shortcut contribution");
-  assert.deepEqual(Array.from(ui.getSnapshot().pages, ({ id }) => id), ["welcome"],
-    "removing the toolbar participant first stops the workbench view");
-  assert.equal(fixture.logs.filter((entry) => entry === "root.unmount").length, 1);
-  assert.throws(() => ui.openPage("settings"), /mounted page container/);
-
+  await core.unmount("writing-status");
   await core.unmount("welcome");
   assert.equal(core.isMounted("welcome"), false);
-  assert.deepEqual(Array.from(ui.getSnapshot().pages, ({ id }) => id), []);
-  assert.equal(core.isMounted("workbench-toolbar"), false);
-  await core.unmount("document-search");
-  // Release workbench consumers and body-editor implementations before their providers.
-  await core.unmount("outline-design");
-  await core.unmount("writing-status");
-  await core.unmount("timeline");
-  await core.unmount("asset-management");
-  await core.unmount("markdown-editor");
-  await core.unmount("plain-text-editor");
-  await core.unmount("rich-text-editor");
-  await core.unmount("document-tabs");
-  await core.unmount("body-editor");
-  assert.equal(core.isMounted("body-editor"), false);
-  await core.unmount("project-management");
-  assert.equal(core.isMounted("project-management"), false);
-  await core.unmount("documents");
-  assert.equal(core.isMounted("documents"), false);
-  await core.unmount("canvas");
-  await core.unmount("project-storage");
-  await core.unmount("project-search");
-  await core.unmount("workbench");
-  assert.equal(core.isMounted("workbench"), false);
-  await core.unmount("shortcuts");
-  await core.unmount("settings");
-  assert.equal(core.isMounted("settings"), false);
-  assert.deepEqual(Array.from(ui.getSnapshot().pages), []);
-  assert.equal(fixture.logs.filter((entry) => entry === "root.unmount").length, 1);
+  assert.equal(core.isMounted("workbench-toolbar"), true);
+  assert.equal(ui.getSnapshot().current.id, "editor");
+  assert.deepEqual(Array.from(ui.getSnapshot().pages, ({id}) => id), ["editor"]);
+  assert.equal(fixture.logs.filter((entry) => entry === "root.unmount").length, 0);
 
   await core.unmountAll();
   assert.equal(fixture.logs.filter((entry) => entry === "root.unmount").length, 1);

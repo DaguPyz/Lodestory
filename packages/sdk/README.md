@@ -44,6 +44,10 @@ UI 服务拥有当前窗口的交互浮层状态。交互接入插件通过 `uiI
 
 宿主创建 `EngineCore` 并挂载插件时调用 `activate(context)`。插件在其中用 `provide` 注册声明过的能力，用 `get` 读取声明的依赖，用 `on` 订阅事件，也可用 `emit` 发布事件。卸载或激活失败时，宿主调用可选的 `deactivate()`，并撤销该插件的能力和订阅。
 
+页面、导航、根包装和布局内容等登记接口返回 `PluginContribution`。贡献者必须在 `activate` 中用 `context.track(登记结果)` 关联所有权，并保留句柄供激活失败及停用清理。单插件停用依次执行所有参与者的 `check`、`prepare` 和 `withdraw`，撤回完成后才调用 `deactivate`；检查、准备或撤回失败会保留插件及依赖，重试不会重复已成功撤回的登记。`context.onStop` 可登记其他通用参与者，`prepare` 适合保存检查，失败时必须保留用户数据。整窗停止使用 `application` 范围，单插件使用 `plugin` 范围；根包装层拒绝单插件在线撤回。React 组件的异步清理须由参与者明确等待，不能依赖普通 Effect 清理返回 Promise。当前仍只在启动期登记页面与根包装，不提供运行中安装。
+
+正文格式编辑器的登记句柄也必须交给 `context.track`。目前正文宿主会拒绝在运行中单独撤回格式编辑器，避免正在使用的编辑器和未提交输入被意外销毁；整窗停止仍可释放它。
+
 能力和事件 key 含有一个 `Symbol` token，运行时按 token 查找；`id` 只用于说明和诊断。同一项能力或事件的参与方必须导入契约包中同一个 key 实例。重新调用工厂创建同名 key 会得到不同 token，无法互相匹配；不要为了复用而把 `Symbol` 改成全局注册。
 
 ```ts
@@ -154,10 +158,10 @@ export const pagePlugin: Plugin = {
   provides: [],
   activate(context) {
     const ui = context.get(uiKey);
-    removePage = ui.registerPage({
+    removePage = context.track(ui.registerPage({
       id: "example",
       render: ({ params, active }) => <main hidden={!active}>{String(params ?? "")}</main>,
-    });
+    }));
   },
   deactivate() {
     removePage?.();
@@ -211,11 +215,11 @@ export const inkThemePlugin: Plugin = {
 
 `navigation-layout` 插件通过共享单例 `navigationLayoutKey` 提供应用级导航布局（ID：`app/navigation-layout`），与工作台内部的 `layoutKey` 分开。`registerPage` 登记页面及导航信息；`registerAction` 登记不切换页面的导航操作。两者共享 ID 空间和 `navigation: { label, icon?, order?, group?: "primary" | "secondary" }`；默认实现按分组、顺序和 ID 排列，登记均返回撤销函数。
 
-欢迎插件登记页面，设置插件登记打开弹框的操作。点击页面入口由布局调用 `ui.openPage(id)`；点击操作入口则调用贡献者提供的函数，不改变路由或历史。两类贡献都在启动期登记，当前撤销已挂载贡献会先停止 UI，尚不支持无损热卸载。替换导航布局时须同时实现页面和操作契约。
+欢迎插件登记页面，设置插件登记打开弹框的操作。点击页面入口由布局调用 `ui.openPage(id)`；点击操作入口则调用贡献者提供的函数，不改变路由或历史。两类贡献在启动期登记，通过 `context.track` 关联的句柄支持受控在线撤回。替换导航布局时须同时实现页面、操作和生命周期句柄契约。
 
 替代实现须保留页面 ID、`params` 和 `active` 语义，并在切页后保留已访问页面的组件实例，以兼容 UI 服务的页面生命周期。
 
-页面只在启动期间登记。撤销页面时先调用 UI 页面撤销函数；页面已挂载时，UI 会卸载整棵 React 树，再移除导航条目。整体停止时，运行时按逆依赖顺序停用消费者，消费者在各自清理中撤销页面登记；`navigation-layout` 自身清理再按登记逆序撤销残余页面并释放服务。当前 UI 不支持运行中热装卸或撤销后的自动重新挂载。实现位于 [`src/plugins/navigation-layout/`](../../src/plugins/navigation-layout/README.md)。
+页面只在启动期间登记。单插件停用时 UI 先经守卫离开目标页面，再移除页面和导航条目，其他页面保留。整体停止时先完成保存检查并卸载根视图，再按逆依赖顺序释放插件。运行中新增页面尚不支持。实现位于 [`src/plugins/navigation-layout/`](../../src/plugins/navigation-layout/README.md)。
 
 ## 窗口外壳
 
@@ -231,7 +235,7 @@ export const inkThemePlugin: Plugin = {
 
 登记描述可附带 `icon?: ReactNode` 作为入口的装饰图标，由贡献插件提供，不绑定宿主图标集合。默认布局用于左侧导航入口；未提供时沿用文件图标，其他布局也可使用文字入口。图标不替代 `title` 和无障碍名称。
 
-隐藏内容保留组件实例，并传入 `active: false`；工作台切到后台时所有内容也收到 false。登记函数必须在启动准备前调用，并在插件停用时调用返回的撤销函数。当前 UI 不支持热卸载，撤销已准备好的布局贡献会先停止 UI；布局实现的替换发生在下一次装配。此入口也只有 React 类型依赖，不导入 React 运行时代码。
+隐藏内容保留组件实例，并传入 `active: false`；工作台切到后台时所有内容也收到 false。登记函数须在激活时调用，并将返回句柄交给 `context.track`；单插件停用时布局同步撤回该内容并保留其他内容。布局实现的替换仍发生在下一次装配。此入口也只有 React 类型依赖，不导入 React 运行时代码。
 
 `main` 内容按用途互斥：`show(id)` 选择当前 main 项，布局快照的 `shownIds` 只包含选中的 main。标签等相关区域若只适用于某个 main，应订阅 `layoutKey` 的 `getSnapshot()` / `subscribe()`，并使用对应功能公开的内容 ID 判断是否展示；布局不解释 ID 的业务含义，也不需要增加业务事件。
 
@@ -251,7 +255,7 @@ export const inkThemePlugin: Plugin = {
 
 ## 工作台服务
 
-工作台通过 `workbenchKey` 提供项目会话服务。`openProject(project)` 在离开检查通过后提交工作台页面，并在后台启动会话；其 `true` 表示页面已进入，不表示项目已加载完毕。`closeProject()` 检查并结束当前会话。离开被拒绝时返回 `false`，导航错误以 Promise rejection 报告。`getSnapshot()` 与 `subscribe()` 提供 `{session, active, busy, loading}` 状态：`loading` 提供完成数、总数、可选阶段名称和失败信息；启动成功后为 `null`。失败时工作台继续保持 `busy`，可通过 `retryProject()` 重试或 `returnProject()` 返回原项目／欢迎页。`registerParticipant()` 登记应用级参与者并返回异步撤销函数 `() => Promise<void>`。工作台运行中撤销参与者会先停止 UI，并等待会话数据清理。
+工作台通过 `workbenchKey` 提供项目会话服务。`openProject(project)` 在离开检查通过后提交工作台页面，并在后台启动会话；其 `true` 表示页面已进入，不表示项目已加载完毕。`closeProject()` 检查并结束当前会话。离开被拒绝时返回 `false`，导航错误以 Promise rejection 报告。`getSnapshot()` 与 `subscribe()` 提供 `{session, active, busy, loading}` 状态：`loading` 提供完成数、总数、可选阶段名称和失败信息；启动成功后为 `null`。失败时工作台继续保持 `busy`，可通过 `retryProject()` 重试或 `returnProject()` 返回原项目／欢迎页。`registerParticipant()` 返回异步生命周期句柄，须用 `context.track` 关联所有者。单插件停用会执行其资源的 `beforeLeave("unload")`，检查通过并撤回该插件视图后只清理其资源；其他参与者和项目会话保留。
 
 项目会话由 `{id, project: {id, name, path}}` 构成。参与者在页面进入后按登记顺序执行 `start(session)`，返回 `beforeLeave(reason)` 和 `dispose()`；可选 `label` 用于展示当前加载阶段。参与者负责清理未成功返回的部分资源；项目真正结束时工作台在视图停止使用后按启动逆序清理已返回资源。`suspend` 代表暂时离开工作台，检查通过后保留会话和资源；切换项目时旧会话保留到新会话准备成功，失败可返回旧会话。`busy` 期间 UI 应阻止新的编辑操作，已有保存继续执行。统一离开检查覆盖 UI 页面 `open`、`back`、同页项目替换和原生窗口关闭。详细规则见[工作台插件设计](../../文档/需求设计/工作台插件.md)。
 
@@ -272,7 +276,7 @@ export const editorPlugin: Plugin = {
   activate(context) {
     const documents = context.get(documentsKey);
     const workbench = context.get(workbenchKey);
-    removeParticipant = workbench.registerParticipant({
+    removeParticipant = context.track(workbench.registerParticipant({
       id: "example.editor",
       start(session) {
         const workspace = documents.getWorkspace(session.id);
@@ -285,7 +289,7 @@ export const editorPlugin: Plugin = {
         // 编辑时调用 workspace.update(document.id, nextContent)。
         return { dispose: stop };
       },
-    });
+    }));
   },
   async deactivate() { await removeParticipant?.(); },
 };
@@ -303,7 +307,7 @@ import {workbenchKey} from "@lodestory/sdk/workbench";
 
 const storage = context.get(projectStorageKey);
 const workbench = context.get(workbenchKey);
-const removeParticipant = workbench.registerParticipant({
+const removeParticipant = context.track(workbench.registerParticipant({
   id: "example.storage-consumer",
   start(session) {
     const files = storage.getFiles(session.id);
@@ -314,7 +318,7 @@ const removeParticipant = workbench.registerParticipant({
     });
     return {dispose: unsubscribe};
   },
-});
+}));
 ```
 
 `ProjectStorageService.getFiles(sessionId)` 返回稳定的 `ProjectFiles`，提供 `read`、`create`、`write`、`save`、`saveAll`、`delete`、`list`、`createDirectory`、`renamePath`、`subscribePathChanges`、`clearError` 和可选的 `captureBytes`。同一会话同一路径共享一个缓冲、保存队列、冲突检查和 700 毫秒自动保存。`read(path)` 使用完整相对路径；`create(path, bytes, options)` 使用调用方给定的完整路径和字节；目录是否递归创建及相同内容重试由显式选项决定。项目存储不解码 UTF-8、不解释 JSON，也不根据扩展名推断格式。

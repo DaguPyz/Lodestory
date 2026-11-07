@@ -11,7 +11,7 @@ export function createPlainTextEditorPlugin(): Plugin {
     provides: [],
     activate(context) {
       const bodyEditor = context.get(bodyEditorKey);
-      removeEditor = bodyEditor.registerEditor({
+      removeEditor = context.track(bodyEditor.registerEditor({
         id: "plain-text",
         formats: ["plain-text"],
         replaces: [{id: "quill", format: "plain-text"}],
@@ -20,7 +20,7 @@ export function createPlainTextEditorPlugin(): Plugin {
           return content;
         },
         load: () => import("./PlainTextEditor"),
-      });
+      }));
     },
     deactivate() {
       const remove = removeEditor;

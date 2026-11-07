@@ -48,7 +48,7 @@ export function createDocumentsPlugin(): Plugin {
       removeSubscription = workbench.subscribe(() => {
         for (const session of sessions.values()) session.workspace.refreshBlocked();
       });
-      removeParticipant = workbench.registerParticipant({
+      removeParticipant = context.track(workbench.registerParticipant({
         id: "documents",
         label: "文稿",
         start(session) {
@@ -95,7 +95,7 @@ export function createDocumentsPlugin(): Plugin {
             dispose,
           };
         },
-      });
+      }));
 
       registrations.push(shortcuts.registerCommand({
         id: shortcutCommandIds.saveAll,

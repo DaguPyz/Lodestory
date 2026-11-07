@@ -19,6 +19,7 @@ test("the application bridge registers nested interactions and releases them whe
     hasActiveOverlay: () => registrations.size > 0,
   };
   plugin.activate({
+    track: value => value,
     get(key) { assert.equal(key, uiKey); return ui; },
     provide(key, value) { assert.equal(key, uiInteractionKey); service = value; },
   });
@@ -62,6 +63,7 @@ test("a failed wrapper registration can release partially created interactions",
     },
   };
   assert.throws(() => plugin.activate({
+    track: value => value,
     get(key) { assert.equal(key, uiKey); return ui; },
     provide() {},
   }), /registration failed/);

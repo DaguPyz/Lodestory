@@ -1,7 +1,7 @@
 import type {LeaveReason, WorkbenchLoading, WorkbenchParticipant, WorkbenchParticipation, WorkbenchProject, WorkbenchService, WorkbenchSession, WorkbenchSnapshot} from "@lodestory/sdk/workbench";
 import type {UiLocation, UiNavigationApproval, UiNavigationRequest, UiService} from "@lodestory/sdk/ui";
 
-type Resource = {value: WorkbenchParticipation; disposed: boolean; disposal?: Promise<void>};
+type Resource = {owner: Registration; value: WorkbenchParticipation; disposed: boolean; disposal?: Promise<void>};
 type Registration = {id: string; label?: string; start: WorkbenchParticipant["start"]};
 type Options = {editorPage: string; welcomePage: string; stopView: () => void; flushView?: (update: () => void) => void};
 type Startup = {target: WorkbenchSession; previous: WorkbenchSnapshot; previousLocation: UiLocation | null;
@@ -38,6 +38,7 @@ export function createWorkbenchStore(ui: UiService, options: Options) {
   let sequence = 0;
   let generation = 0;
   let revoking = 0;
+  let revokingOwner: symbol | undefined;
   let preparing: Promise<boolean | UiNavigationApproval> | undefined;
   let starting: Promise<void> | undefined;
   let shuttingDown: Promise<boolean> | undefined;
@@ -130,7 +131,7 @@ export function createWorkbenchStore(ui: UiService, options: Options) {
         publish({...snapshot, busy: true,
           loading: loadingState(index, entries.length, entry.label ?? null)});
         const value = await entry.start(start.target);
-        if (value && typeof value.dispose === "function") created.push({value, disposed: false});
+        if (value && typeof value.dispose === "function") created.push({owner: entry, value, disposed: false});
         if (!value || typeof value.dispose !== "function" || (value.beforeLeave !== undefined && typeof value.beforeLeave !== "function")) {
           throw Object.assign(new TypeError(`Workbench participant '${entry.id}' must return a disposable participation.`),
             {participantId: entry.id});
@@ -350,30 +351,67 @@ export function createWorkbenchStore(ui: UiService, options: Options) {
       const entry = Object.freeze({id: participant.id, ...(participant.label ? {label: participant.label} : {}), start: participant.start});
       participants.set(entry.id, entry);
       let removal: Promise<void> | undefined;
-      return () => removal ??= (async () => {
-        if (!alive || participants.get(entry.id) !== entry) return;
-        if (ready) {
-          // 首版撤销贡献先停止整棵 UI，不能在视图仍使用资源时热移除。
+      let owner: symbol | undefined;
+      let locked = false;
+      let target: Resource | undefined;
+      function unlock() {
+        if (!locked) return;
+        locked = false;
+        revoking--;
+        if (!revoking) revokingOwner = undefined;
+        publish({...snapshot, busy: revoking > 0});
+      }
+      const remove = () => {
+        if (removal) return removal;
+        const attempt = (async () => {
+          if (!alive || participants.get(entry.id) !== entry) return;
+          if (ready && (snapshot.busy || resources.some(resource => resource.owner === entry))) {
+            throw new Error(`Workbench participant '${entry.id}' must be withdrawn through the plugin lifecycle.`);
+          }
+          participants.delete(entry.id);
+        })();
+        removal = attempt;
+        void attempt.catch(() => { if (removal === attempt) removal = undefined; });
+        return attempt;
+      };
+      return Object.assign(remove, {
+        associate(token: symbol) {
+          if (owner !== undefined && owner !== token) throw new Error(`Workbench participant '${entry.id}' already has an owner.`);
+          owner = token;
+        },
+        withdrawOrder: 1000,
+        check(scope: "plugin" | "application") {
+          if (scope === "plugin" && alive && ready && participants.get(entry.id) === entry && snapshot.busy) {
+            throw new Error("Workbench is busy; retry plugin removal after the transition completes.");
+          }
+        },
+        async prepare(scope: "plugin" | "application") {
+          if (scope !== "plugin" || !alive || !ready || participants.get(entry.id) !== entry) return;
+          if (snapshot.busy && (!revoking || revokingOwner !== owner)) throw new Error("Workbench is busy.");
+          target = resources.find(resource => resource.owner === entry);
+          if (!target) return;
+          locked = true;
+          revokingOwner = owner;
           revoking++;
           publish({...snapshot, busy: true});
-          const errors: unknown[] = [];
-          try { options.stopView(); } catch (error) { errors.push(error); }
-          generation++;
-          await preparing?.catch(() => {});
-          await starting?.catch(() => {});
-          await shuttingDown?.catch(() => {});
-          try { await pending?.cancel?.(); } catch (error) { errors.push(error); }
-          try { await release(resources); } catch (error) { errors.push(error); }
-          finally {
-            resources = [];
-            participants.delete(entry.id);
-            revoking--;
-            publish({session: null, active: false, busy: false, loading: null});
+          try {
+            if (!target.disposed && target.value.beforeLeave && !await target.value.beforeLeave("unload")) {
+              throw new Error(`Workbench participant '${entry.id}' declined removal.`);
+            }
+          } catch (error) { unlock(); target = undefined; throw error; }
+        },
+        cancel(scope: "plugin" | "application") { if (scope === "plugin") { target = undefined; unlock(); } },
+        async withdraw(scope: "plugin" | "application") {
+          if (scope !== "plugin" || !alive || participants.get(entry.id) !== entry) return;
+          if (target) {
+            await release([target]);
+            resources = resources.filter(resource => resource !== target);
           }
-          if (errors.length) throw Object.assign(new Error("Workbench participant failed to revoke."), {errors});
-        }
-        participants.delete(entry.id);
-      })();
+          participants.delete(entry.id);
+          target = undefined;
+          unlock();
+        },
+      });
     },
   };
 

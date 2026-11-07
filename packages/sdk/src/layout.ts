@@ -1,5 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 import { createServiceKey } from "./ServiceKey.js";
+import type { PluginContribution } from "./Plugin.js";
 
 /** 内容的用途；不表示上下左右的位置，所有兼容布局必须支持这些用途。 */
 export type LayoutRole = "main" | "tabs" | "navigation" | "auxiliary" | "actions" | "status";
@@ -38,8 +39,8 @@ export type LayoutSnapshot = {
 export type LayoutService = {
   /** 稳定的页面内组件，不创建 React root；已展示内容隐藏时必须保留组件实例。 */
   readonly View: ComponentType<LayoutViewProps>;
-  /** 登记内容，重复 ID 或无效描述抛错；撤销时先停止其组件，其他内容保留。 */
-  registerContent(content: LayoutContent): () => void;
+  /** 登记内容并将句柄交给 context.track；撤销时先停止其组件，其他内容保留。 */
+  registerContent(content: LayoutContent): PluginContribution;
   /** 展示内容，必要时展开容器或切换标签；main 为单选，展示新 main 时隐藏原 main 并保留其实例。
    * 未知 ID 抛错，不负责切换应用页面或聚焦正文。
    */

@@ -58,7 +58,7 @@ test("motion preference keeps the effective selection after a failed write and r
   assert.equal(findElement(retried, "Select").props.value, "reduce");
   assert.equal(findByRole(retried, "alert"), undefined);
   await model.dispose();
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("motion settings finish queued writes before releasing their resources", async () => {

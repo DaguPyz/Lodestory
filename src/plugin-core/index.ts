@@ -1,4 +1,4 @@
-export { EngineCore, PluginActivationError, PluginBatchActivationError, PluginBatchDeactivationError, StartupError } from "./EngineCore";
+export { EngineCore, PluginActivationError, PluginBatchActivationError, PluginBatchDeactivationError, PluginStopPreparationError, StartupError } from "./EngineCore";
 export { CapabilityRegistry } from "./CapabilityRegistry";
 export { createServiceKey, createEventKey } from "@lodestory/sdk";
 export { EventBus, EventDispatchError } from "./EventBus";

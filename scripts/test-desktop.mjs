@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -17,4 +18,15 @@ function run(args) {
 }
 
 run(["exec", "tauri", "build", "--debug", "--no-bundle", "--features", "desktop-e2e", "--config", "src-tauri/tauri.e2e.conf.json"]);
+// The embedded driver otherwise defaults to a shared fixed port and can connect
+// to a different running Tauri test application instead of the one just built.
+env.TAURI_WEBDRIVER_PORT = String(await new Promise((resolve, reject) => {
+  const server = createServer();
+  server.once("error", reject);
+  server.listen(0, "127.0.0.1", () => {
+    const address = server.address();
+    if (!address || typeof address === "string") { server.close(); reject(new Error("Could not allocate a desktop test port.")); return; }
+    server.close(error => error ? reject(error) : resolve(address.port));
+  });
+}));
 run(["exec", "wdio", "run", "wdio.conf.mjs", ...process.argv.slice(2)]);

@@ -19,7 +19,7 @@ test("plain text editor registers only TXT and loads its own component on demand
   const plugin = createPlainTextEditorPlugin();
   assert.equal(plugin.id, "plain-text-editor");
   assert.deepEqual(Array.from(plugin.requires), [bodyEditorKey]);
-  plugin.activate({get(key) { assert.strictEqual(key, bodyEditorKey); return service; }});
+  plugin.activate({track: value => value, get(key) { assert.strictEqual(key, bodyEditorKey); return service; }});
 
   const definition = definitions.get("plain-text");
   assert.ok(definition);

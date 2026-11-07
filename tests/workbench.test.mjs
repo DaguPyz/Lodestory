@@ -137,6 +137,10 @@ test("participant registration is validated and snapshots are immutable", async 
   assert.ok(Object.isFrozen(first.session.project));
   assert.equal(store.service.getSnapshot(), first, "unchanged state returns the same snapshot");
   assert.throws(() => { first.session.project.name = "changed"; }, TypeError);
+  remove.associate(Symbol("probe"));
+  remove.check("plugin");
+  await remove.prepare("plugin");
+  await remove.withdraw("plugin");
   await remove();
 });
 
@@ -727,7 +731,7 @@ test("store disposal must wait for a pending shutdown leave check before disposi
   assert.equal(disposed, true);
 });
 
-test("participant revocation must wait for a pending shutdown leave check before disposal", async () => {
+test("participant revocation is rejected during a pending shutdown leave check", async () => {
   const {store} = createWorkbench();
   const gate = deferred();
   let disposed = false;
@@ -745,11 +749,12 @@ test("participant revocation must wait for a pending shutdown leave check before
 
   const shutdown = store.shutdown();
   await new Promise(resolve => setImmediate(resolve));
-  const removing = remove();
+  assert.throws(() => remove.check("plugin"), /Workbench is busy/);
   await new Promise(resolve => setImmediate(resolve));
   const disposedBeforeCheckFinished = disposed;
   gate.resolve(true);
-  await Promise.allSettled([shutdown, removing]);
+  await shutdown;
+  await remove();
 
   assert.equal(disposedBeforeCheckFinished, false, "revocation must serialize behind an in-flight shutdown check");
   assert.equal(disposed, true);
@@ -775,7 +780,10 @@ test("shutdown must not inspect a participant while its revocation cleanup is pe
   store.start();
   await openReady(store.service, project("a"));
 
-  const removing = remove();
+  remove.associate(Symbol("participant"));
+  remove.check("plugin");
+  await remove.prepare("plugin");
+  const removing = remove.withdraw("plugin");
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(disposeStarted, true);
   const shutdown = store.shutdown();
@@ -813,7 +821,7 @@ test("disposing while participant start is pending prevents the late session fro
   assert.throws(() => store.service.getSnapshot(), /no longer active/);
 });
 
-test("async participant revocation stops the view, awaits cleanup, and shares its promise", async () => {
+test("async participant withdrawal keeps the view and awaits only its own cleanup", async () => {
   let stopViewCalls = 0;
   const {store} = createWorkbench({stopView: () => { stopViewCalls++; }});
   const cleanup = deferred();
@@ -825,18 +833,45 @@ test("async participant revocation stops the view, awaits cleanup, and shares it
   });
   store.start();
   await openReady(store.service, project("a"));
-  const removal = remove();
-  assert.equal(remove(), removal, "repeated revocation shares the same promise");
+  remove.associate(Symbol("replaceable"));
+  remove.check("plugin");
+  await remove.prepare("plugin");
+  const removal = remove.withdraw("plugin");
   void removal.then(() => { removed = true; });
   await new Promise(resolve => setImmediate(resolve));
-  assert.equal(stopViewCalls, 1);
+  assert.equal(stopViewCalls, 0);
   assert.equal(cleanupStarted, true);
   assert.equal(removed, false);
   cleanup.resolve();
   await removal;
   assert.equal(removed, true);
-  assert.equal(stopViewCalls, 1);
-  assert.equal(store.service.getSnapshot().session, null);
+  assert.equal(stopViewCalls, 0);
+  assert.equal(store.service.getSnapshot().session.project.id, "a");
+  assert.equal(remove(), remove(), "repeated final cleanup shares one promise");
+  await remove();
+});
+
+test("failed participant cleanup keeps the session and cannot be mistaken for a successful retry", async () => {
+  let stopViewCalls = 0;
+  const {store} = createWorkbench({stopView: () => { stopViewCalls++; }});
+  const remove = store.service.registerParticipant({
+    id: "failing-cleanup",
+    start: () => ({beforeLeave: () => true, dispose() {throw new Error("cleanup failed");}}),
+  });
+  store.start();
+  await openReady(store.service, project("a"));
+  remove.associate(Symbol("owner"));
+  remove.check("plugin");
+  await remove.prepare("plugin");
+  await assert.rejects(remove.withdraw("plugin"), /Workbench resources failed to clean up/);
+  remove.cancel("plugin");
+  assert.equal(store.service.getSnapshot().session.project.id, "a");
+  assert.equal(store.service.getSnapshot().busy, false);
+  assert.equal(stopViewCalls, 0);
+  await remove.prepare("plugin");
+  await assert.rejects(remove.withdraw("plugin"), /Workbench resources failed to clean up/);
+  remove.cancel("plugin");
+  assert.equal(store.service.getSnapshot().session.project.id, "a");
 });
 
 test("an old idempotent disposer cannot remove a later registration with the same id", async () => {

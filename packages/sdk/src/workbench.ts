@@ -1,4 +1,5 @@
 import {createServiceKey} from "./ServiceKey.js";
+import type {PluginAsyncContribution} from "./Plugin.js";
 
 /** 已由项目管理功能打开的项目；工作台不负责创建目录或维护最近项目。 */
 export type WorkbenchProject = {
@@ -30,7 +31,7 @@ export type WorkbenchLoading = Readonly<{
   error: Readonly<{participantId: string; message: string}> | null;
 }>;
 
-export type LeaveReason = "suspend" | "switch" | "close" | "shutdown";
+export type LeaveReason = "suspend" | "switch" | "close" | "shutdown" | "unload";
 type Awaitable<T> = T | Promise<T>;
 
 /** 每次 start 返回独立资源；检查可以保存数据，dispose 在停止视图使用后执行。 */
@@ -54,8 +55,8 @@ export type WorkbenchService = {
   returnProject(): Promise<boolean>;
   getSnapshot(): WorkbenchSnapshot;
   subscribe(listener: () => void): () => void;
-  /** 启动期登记；撤销幂等。撤销正在使用的参与者会先停止 UI，再等待资源清理。 */
-  registerParticipant(participant: WorkbenchParticipant): () => Promise<void>;
+  /** 启动期登记，句柄须由贡献插件用 context.track 关联；在线停用只检查和释放此参与者的会话资源。 */
+  registerParticipant(participant: WorkbenchParticipant): PluginAsyncContribution;
 };
 
 /** 一个应用装配一个工作台；业务插件不依赖具体工作台实现。 */

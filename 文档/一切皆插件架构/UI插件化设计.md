@@ -4,7 +4,7 @@
 
 本文保留 UI 插件化的原始设计推导，正文中的入口示例和落地表描述设计时的起点，新增扩展接口仍是草案。
 
-当前已实现合并后的 `ui` 插件：其他插件通过 `uiKey` 登记页面和 Provider，`pluginsReady` 后装配单个 React 根，页面通过 `openPage`、`back` 切换并保留已访问页面的组件实例。欢迎页、编辑页和设置页由各自插件登记；应用级导航由 `navigation-layout` 插件提供，工作台内部布局由 `default-layout` 插件提供。窗口外壳 `PageShell` 已由 `window-shell` 插件通过 `@lodestory/sdk/window-shell` 提供，`.app-shell` 和 `.window-titlebar` 专属样式归该插件；公共样式仍留在 `src/styles.css`，由导航布局和工作台显式导入。实际接口和停用边界见 [UI 插件说明](/Users/yinzhenpu/projects/Lodestory/src/plugins/ui/README.md)；本文提出的通用扩展项批次提交、在线增删和撤回失败保留依赖尚未实现。
+当前已实现合并后的 `ui` 插件：其他插件通过 `uiKey` 登记页面和 Provider，`pluginsReady` 后装配单个 React 根，页面通过 `openPage`、`back` 切换并保留已访问页面的组件实例。欢迎页、编辑页和设置页由各自插件登记；应用级导航由 `navigation-layout` 插件提供，工作台内部布局由 `default-layout` 插件提供。窗口外壳 `PageShell` 已由 `window-shell` 插件通过 `@lodestory/sdk/window-shell` 提供。当前已提供 `context.track` 和 `context.onStop` 协调已登记贡献的单插件撤回，检查或撤回失败时保留插件和依赖；根包装层不允许在线撤回。实际接口和边界见 [UI 插件说明](/Users/yinzhenpu/projects/Lodestory/src/plugins/ui/README.md)。本文其余部分保留原设计推导，其中 `contribute`、批次提交和运行中新增 UI 仍是未实现的设计，不应与当前实现混同。
 
 ## 1. 从当前入口找到缺少的能力
 
@@ -173,7 +173,7 @@ React 不会等待普通 Effect 清理函数中的异步工作。需要等待的
 
 发生撤回失败时，可以继续清理独立插件；仍被保留插件依赖的提供者必须留下。若整个 React 根未能确认卸载，则所有可能仍被这棵树使用的相关插件都不能提前释放。错误应保留阶段、插件 ID 和原始异常，不能用最终的一项清理错误覆盖前面的失败。
 
-**这一规则改变当前 Core 的行为。** 现有代码在 `deactivate` 后，无论是否失败都会撤销登记；它还没有“先撤回 UI、失败则保留依赖”的阶段。当前入口在 React 卸载报错后仍尝试停止运行实例，也需要随新停止协议一起调整。
+当前 Core 已通过 `context.onStop` 和 `context.track` 增加停用检查、准备及撤回阶段；撤回失败时保留插件和依赖，并允许重试。`deactivate` 失败后仍沿用撤销内核登记的规则。本文示意的 `context.contribute` 与扩展项批次提交并未实现。
 
 ## 7. 根结构变化为什么需要受控重建
 

@@ -52,7 +52,7 @@ test("document tabs follow the public body content visibility and restore the op
   };
   const services = new Map([[layoutKey, layout], [documentsKey, documents], [workbenchKey, workbench], [shortcutsKey, shortcuts]]);
   const plugin = fixture.loadModule("plugins/document-tabs/documentTabsPlugin.tsx").createDocumentTabsPlugin();
-  plugin.activate({get: key => services.get(key), emit: async () => {}});
+  plugin.activate({get: key => services.get(key), track: value => value, emit: async () => {}});
   assert.equal(bodyEditorContentIds.main, "body-editor.main");
   assert.equal(registeredScopes.get(shortcutScopeIds.document).parentId, shortcutScopeIds.workbench);
   assert.equal(registeredScopes.get(shortcutScopeIds.document).active(), true, "the document scope activates only for a usable open document");

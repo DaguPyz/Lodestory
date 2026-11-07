@@ -95,7 +95,20 @@ export function createNavigationLayoutPlugin(): Plugin {
                     };
                     entries.set(id, entry);
                     publish();
-                    return entry.remove;
+                    return Object.assign(entry.remove, {
+                        associate: (owner: symbol) => removePage.associate(owner),
+                        withdrawOrder: (scope: "plugin" | "application") => {
+                            const order = removePage.withdrawOrder;
+                            return typeof order === "function" ? order(scope) : (order ?? 0);
+                        },
+                        check: (scope: "plugin" | "application") => removePage.check(scope),
+                        async withdraw(scope: "plugin" | "application") {
+                            await removePage.withdraw(scope);
+                            if (scope === "plugin" && entries.get(id) === entry) {
+                                flushSync(() => { entries.delete(id); publish(); });
+                            }
+                        },
+                    });
                 },
                 registerAction(action) {
                     if (!active) throw new Error("Navigation layout service is no longer active.");
@@ -118,7 +131,11 @@ export function createNavigationLayoutPlugin(): Plugin {
                     };
                     entries.set(id, entry);
                     publish();
-                    return entry.remove;
+                    return Object.assign(entry.remove, {
+                        associate() {},
+                        check() {},
+                        withdraw(scope: "plugin" | "application") { if (scope === "plugin") entry.remove(); },
+                    });
                 },
             };
             context.provide(navigationLayoutKey, Object.freeze(service));

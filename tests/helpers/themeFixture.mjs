@@ -233,12 +233,13 @@ export function fixture({ saved = null, preference, system = "dark", desktop = t
               const record = { kind: "wrapper", wrapper, active: true };
               uiRegistrations.push(record);
               uiLifecycle.push(`add:${wrapper.id}`);
-              return () => {
+              const remove = () => {
                 if (!record.active) return;
                 record.active = false;
                 uiLifecycle.push(`remove:${wrapper.id}`);
                 if (controls.uiDisposeError) throw new Error("UI wrapper disposer failed");
               };
+              return Object.assign(remove, {associate() {}, check() {}, withdraw() {}});
             },
           };
           context.provide(uiContract.uiKey, uiService);

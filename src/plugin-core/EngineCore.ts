@@ -1,5 +1,5 @@
 import {CapabilityRegistry, type PendingRegistration} from "./CapabilityRegistry";
-import type {Plugin, PluginContext, ServiceKey, EventKey, EventListener} from "@lodestory/sdk";
+import type {Plugin, PluginContext, PluginStopParticipant, PluginStopScope, ServiceKey, EventKey, EventListener} from "@lodestory/sdk";
 import {preparePlugin, sortPlugins, type PluginPlan} from "./PluginPlan";
 import {EventBus} from "./EventBus";
 import {pluginsReady} from "./runtimeEvents";
@@ -10,7 +10,10 @@ type MountedPlugin = {
   plugin: Plugin;
   /** 使上下文失效，阻止卸载后继续操作能力或订阅、发布事件。 */
   revokeContext(): void;
+  participants: StopRegistration[];
 };
+
+type StopRegistration = {participant: PluginStopParticipant; active: boolean; prepared: PluginStopScope | undefined; withdrawn: boolean};
 
 /**
  * 管理插件从挂载到卸载的过程：检查能力声明和必需依赖后调用 activate；成功后以插件 ID 为键，
@@ -31,6 +34,8 @@ export class EngineCore {
     private readonly dependencies = new Map<string, ReadonlySet<string>>();
     /** 批量装配、初次启动或停用独占生命周期操作，直到执行或失败清理全部结束。 */
     private batchOperation: "mounting" | "starting" | "unmounting" | undefined;
+    /** A single stop also excludes other lifecycle mutations until its UI withdrawal completes. */
+    private stopInProgress = false;
     /** 初次启动是一次性操作；失败后同一 Core 也不能再次发送 pluginsReady。 */
     private startAttempted = false;
     /** 普通挂载曾成功后，即使全部卸载，也不再允许把该 Core 当作初始启动实例。 */
@@ -47,6 +52,7 @@ export class EngineCore {
     /** 整批预检和排序后逐个激活；失败时仅逆序撤销本批次已挂载的插件。 */
     async mountAll(plugins: readonly Plugin[]): Promise<void> {
         this.checkBatchInactive();
+        if (this.stopInProgress && !this.busy.size) throw new Error("Cannot mount plugin batch while a plugin is changing state.");
         this.batchOperation = "mounting";
         try {
             await this.mountBatch(plugins);
@@ -147,13 +153,41 @@ export class EngineCore {
             owners.add(ownerId);
         }
 
+        if (this.stopInProgress) throw new Error("Cannot mount a plugin while another plugin is being unmounted.");
+
         this.busy.add(id);
         this.dependencies.set(id, owners);
         let contextActive = true;
         let activated = false;
+        const stopOwner = Symbol(id);
+        const participants: StopRegistration[] = [];
         const pending = new Map<symbol, PendingRegistration>();
         const checkContext = () => {
             if (!contextActive) throw new Error(`Plugin '${id}' context is no longer active.`);
+        };
+        const registerStop = (participant: PluginStopParticipant) => {
+            checkContext();
+            if (activated) throw new Error(`Plugin '${id}' must register stop participants during activation.`);
+            if (!participant || (typeof participant !== "object" && typeof participant !== "function")
+                || (participant.check !== undefined && typeof participant.check !== "function")
+                || (participant.prepare !== undefined && typeof participant.prepare !== "function")
+                || (participant.cancel !== undefined && typeof participant.cancel !== "function")
+                || (participant.withdrawOrder !== undefined && typeof participant.withdrawOrder !== "function"
+                    && !Number.isFinite(participant.withdrawOrder))
+                || (participant.withdraw !== undefined && typeof participant.withdraw !== "function")) {
+                throw new TypeError("Invalid plugin stop participant.");
+            }
+            const snapshot: PluginStopParticipant = Object.freeze({
+                ...(participant.withdrawOrder === undefined ? {} : {withdrawOrder: typeof participant.withdrawOrder === "function"
+                    ? participant.withdrawOrder.bind(participant) : participant.withdrawOrder}),
+                ...(participant.check ? {check: participant.check.bind(participant)} : {}),
+                ...(participant.prepare ? {prepare: participant.prepare.bind(participant)} : {}),
+                ...(participant.cancel ? {cancel: participant.cancel.bind(participant)} : {}),
+                ...(participant.withdraw ? {withdraw: participant.withdraw.bind(participant)} : {}),
+            });
+            const registration: StopRegistration = {participant: snapshot, active: true, prepared: undefined, withdrawn: false};
+            participants.push(registration);
+            return () => { registration.active = false; };
         };
         const context: PluginContext = {
             provide: <T>(key: ServiceKey<T>, value: T) => {
@@ -192,6 +226,25 @@ export class EngineCore {
                 }
                 await this.eventBus.emit(key, payload);
             },
+            onStop: registerStop,
+            track: participant => {
+                if (typeof participant.associate !== "function" || typeof participant.check !== "function" || typeof participant.withdraw !== "function") {
+                    try { participant(); } catch (error) {
+                        throw Object.assign(new Error("Invalid tracked contribution could not be cleaned up."), {cause: error});
+                    }
+                    throw new TypeError("Tracked contributions must support stop checks and withdrawal.");
+                }
+                participant.associate(stopOwner);
+                try {
+                    registerStop(participant);
+                } catch (error) {
+                    try { participant(); } catch (cleanupError) {
+                        throw Object.assign(new Error("Contribution tracking and cleanup both failed."), {cause: error, cleanupError});
+                    }
+                    throw error;
+                }
+                return participant;
+            },
         };
 
         try {
@@ -205,7 +258,7 @@ export class EngineCore {
             pending.clear();
             activated = true;
             this.mounted.set(id, {
-                plugin, revokeContext: () => {
+                plugin, participants, revokeContext: () => {
                     contextActive = false;
                 }
             });
@@ -236,18 +289,40 @@ export class EngineCore {
     /** 停用插件；即使停用逻辑失败，也会撤销能力和订阅并使旧 context 失效。 */
     async unmount(id: string): Promise<void> {
         this.checkBatchInactive();
-        await this.unmountPlugin(id);
+        if (this.busy.size) {
+            if (this.busy.has(id)) throw new Error(`Plugin '${id}' is changing state.`);
+            const dependents = [...this.dependencies].filter(([, owners]) => owners.has(id)).map(([dependent]) => `'${dependent}'`);
+            if (dependents.length) throw new Error(`Plugin '${id}' cannot be unmounted; required by plugins: ${dependents.join(", ")}.`);
+            throw new Error(`Cannot unmount plugin while plugins are changing state: ${[...this.busy].map(changing => `'${changing}'`).join(", ")}.`);
+        }
+        if (this.stopInProgress) throw new Error("Cannot unmount plugin while another plugin is changing state.");
+        this.stopInProgress = true;
+        try {
+            await this.unmountPlugin(id, true);
+        } finally {
+            this.stopInProgress = false;
+        }
     }
 
     /** 按实际激活顺序逆序停用所有插件；清理失败仍继续，最后汇总错误。 */
     async unmountAll(): Promise<void> {
         this.checkBatchInactive();
+        if (this.stopInProgress && !this.busy.size) throw new Error("Cannot unmount plugin batch while a plugin is changing state.");
         if (this.busy.size) {
             throw new Error(`Cannot unmount plugin batch while plugins are changing state: ${[...this.busy].map(id => `'${id}'`).join(", ")}.`);
         }
 
         this.batchOperation = "unmounting";
         try {
+            const entries = [...this.mounted.entries()].reverse();
+            try {
+                await this.checkStop(entries, "application");
+                await this.prepareStop(entries, "application");
+                await this.withdrawStop(entries, "application");
+            } catch (error) {
+                await this.resetStopPreparation(entries, "application", error);
+                throw error;
+            }
             // 提供者先激活、使用者后激活，因此先停用使用者，才能安全停用提供者。
             const cleanupErrors = await this.unmountBatch([...this.mounted.keys()]);
             if (cleanupErrors.length) throw new PluginBatchDeactivationError(cleanupErrors);
@@ -256,7 +331,7 @@ export class EngineCore {
         }
     }
 
-    private async unmountPlugin(id: string): Promise<void> {
+    private async unmountPlugin(id: string, prepareStop = false): Promise<void> {
         if (this.busy.has(id)) throw new Error(`Plugin '${id}' is changing state.`);
         const entry = this.mounted.get(id);
         if (!entry) throw new Error(`Plugin '${id}' is not mounted.`);
@@ -270,6 +345,17 @@ export class EngineCore {
 
         this.busy.add(id);
         try {
+            if (prepareStop) {
+                await this.checkStop([[id, entry]], "plugin");
+                await this.prepareStop([[id, entry]], "plugin");
+                await this.withdrawStop([[id, entry]], "plugin");
+            }
+        } catch (error) {
+            await this.resetStopPreparation([[id, entry]], "plugin", error);
+            this.busy.delete(id);
+            throw error;
+        }
+        try {
             await entry.plugin.deactivate?.();
         } finally {
             entry.revokeContext();
@@ -281,6 +367,62 @@ export class EngineCore {
         }
     }
 
+    private async checkStop(entries: readonly [string, MountedPlugin][], scope: PluginStopScope): Promise<void> {
+        for (const [id, entry] of entries) {
+            for (const registration of [...entry.participants].reverse()) {
+                if (!registration.active || registration.withdrawn) continue;
+                try { await registration.participant.check?.(scope); }
+                catch (error) { throw new PluginStopPreparationError(id, "check", error); }
+            }
+        }
+    }
+
+    private async withdrawStop(entries: readonly [string, MountedPlugin][], scope: PluginStopScope): Promise<void> {
+        const ordered = entries.flatMap(([id, entry]) => [...entry.participants].reverse()
+            .filter(registration => registration.active && !registration.withdrawn).map(registration => {
+            try {
+                const source = registration.participant.withdrawOrder;
+                const order = typeof source === "function" ? source(scope) : (source ?? 0);
+                if (!Number.isFinite(order)) throw new TypeError("Stop withdrawal order must be finite.");
+                return {id, registration, order};
+            } catch (error) { throw new PluginStopPreparationError(id, "withdraw", error); }
+            }));
+        ordered.sort((a, b) => a.order - b.order);
+        for (const {id, registration} of ordered) {
+            if (!registration.active || registration.withdrawn) continue;
+            try {
+                await registration.participant.withdraw?.(scope);
+                registration.withdrawn = true;
+            } catch (error) {
+                throw new PluginStopPreparationError(id, "withdraw", error);
+            }
+        }
+    }
+
+    private async prepareStop(entries: readonly [string, MountedPlugin][], scope: PluginStopScope): Promise<void> {
+        for (const [id, entry] of entries) {
+            for (const registration of [...entry.participants].reverse()) {
+                if (!registration.active || registration.prepared === scope || registration.withdrawn) continue;
+                try {
+                    await registration.participant.prepare?.(scope);
+                    registration.prepared = scope;
+                } catch (error) { throw new PluginStopPreparationError(id, "prepare", error); }
+            }
+        }
+    }
+
+    private async resetStopPreparation(entries: readonly [string, MountedPlugin][], scope: PluginStopScope, originalError: unknown): Promise<void> {
+        const errors: unknown[] = [];
+        for (const [, entry] of [...entries].reverse()) {
+            for (const registration of entry.participants) {
+                if (registration.withdrawn || registration.prepared !== scope) continue;
+                try { await registration.participant.cancel?.(scope); } catch (error) { errors.push(error); }
+                registration.prepared = undefined;
+            }
+        }
+        if (errors.length && originalError instanceof Error) Object.assign(originalError, {cancellationErrors: errors});
+    }
+
     /** 供宿主调用插件公开的能力；业务插件仍通过自己的 context 查询。 */
     get<T>(key: ServiceKey<T>): T {
         return this.capabilityRegistry.get(key);
@@ -288,6 +430,14 @@ export class EngineCore {
 
     isMounted(id: string): boolean {
         return this.mounted.has(id);
+    }
+}
+
+/** 停止准备失败时插件及其能力仍然可用；完成的撤回不会在重试时重复执行。 */
+export class PluginStopPreparationError extends Error {
+    constructor(readonly pluginId: string, readonly phase: "check" | "prepare" | "withdraw", readonly cause: unknown) {
+        super(`Plugin '${pluginId}' stop ${phase} failed.`);
+        this.name = "PluginStopPreparationError";
     }
 }
 

@@ -126,7 +126,7 @@ export function createProjectManagementPlugin(): Plugin {
                 if (!active || workbench.getSnapshot().session?.id !== request.sessionId) return;
                 models.get(request.sessionId)?.reconcileDocument(request.documentId);
             }));
-            removeParticipant = workbench.registerParticipant({
+            removeParticipant = context.track(workbench.registerParticipant({
                 id: "project-management",
                 label: "项目文件",
                 async start(session) {
@@ -180,15 +180,15 @@ export function createProjectManagementPlugin(): Plugin {
                         }
                     };
                 },
-            });
-            removers.push(layout.registerContent({
+            }));
+            removers.push(context.track(layout.registerContent({
                 id: "project-management.files", title: "工程文件", role: "navigation",
                 render: ({active: visible}) => <ProjectFiles workbench={workbench} models={models} shortcuts={shortcuts} active={visible}/>,
-            }));
-            removers.push(ui.addWrapper({
+            })));
+            removers.push(context.track(ui.addWrapper({
                 id: "project-management.dialogs", order: 50,
                 wrap: children => <>{children}<ProjectDialogs workbench={workbench} models={models}/></>,
-            }));
+            })));
         },
         async deactivate() {
             const stop = cleanup;

@@ -45,6 +45,7 @@ function setup({bindingCleanupError} = {}) {
   const workbench = {getSnapshot() { return snapshot; }};
   const events = new Map(), removedEvents = [];
   const context = {
+    track: value => value,
     provide(key, service) { if (key === projectSearchKey) providedSearch = service; },
     get(key) {
       if (key === uiKey) return ui;

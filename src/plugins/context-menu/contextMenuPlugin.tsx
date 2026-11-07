@@ -15,11 +15,11 @@ export function createContextMenuPlugin(): Plugin {
 
         activate(context) {
             context.provide(contextMenuKey, {Region: ContextMenuRegion});
-            removeUiWrapper = context.get(uiKey).addWrapper({
+            removeUiWrapper = context.track(context.get(uiKey).addWrapper({
                 id: "context-menu",
                 order: 10,
                 wrap: (children) => <ContextMenuProvider>{children}</ContextMenuProvider>,
-            });
+            }));
         },
 
         deactivate() {

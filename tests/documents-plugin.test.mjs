@@ -228,6 +228,7 @@ function createFixture() {
   const emitted = [];
   const provided = new Map();
   const context = {
+    track: value => value,
     get(key) {
       if (key === workbenchKey) return workbench;
       if (key === projectStorageKey) return {getFiles: sessionId => storageFor(sessionId).files};

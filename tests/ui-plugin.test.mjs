@@ -35,6 +35,7 @@ function manualUiContext(f, motionValue) {
       },
       provide() {},
       on() {},
+      onStop() { return () => {}; },
     },
   };
 }
@@ -176,7 +177,7 @@ test("activation waits for ready, mounts one page container, and allows navigati
   assert.equal(f.roots[0].renderCalls.length, 1, "a repeated ready event must not render again");
 
   await f.core.unmount("home");
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("a no-argument UI plugin resolves #root at ready and defaults to the first registered page", async () => {
@@ -199,7 +200,7 @@ test("a no-argument UI plugin resolves #root at ready and defaults to the first 
   assert.equal(f.roots[0].container, f.documentRoot);
   assert.equal(service.getSnapshot().current.id, "first");
   assert.deepEqual(Array.from(service.getSnapshot().pages, ({ id }) => id), ["first"]);
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("a missing default #root fails EngineCore startup before createRoot and rolls UI back", async () => {
@@ -251,8 +252,8 @@ test("overlay registrations stay local to each UI and release independently", as
   assert.equal(ui.hasActiveOverlay(), true);
   closeDialog();
   assert.equal(ui.hasActiveOverlay(), false);
-  await first.core.unmount("ui");
-  await second.core.unmount("ui");
+  await first.core.unmountAll();
+  await second.core.unmountAll();
 });
 
 test("page registration validates descriptors and wrappers remain unique", async () => {
@@ -274,7 +275,7 @@ test("page registration validates descriptors and wrappers remain unique", async
   disposePage();
   disposePage();
   disposeWrapper();
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("ready fails without a page and closes startup registration", async () => {
@@ -288,7 +289,7 @@ test("ready fails without a page and closes startup registration", async () => {
   await f.notifyReady();
   assert.equal(f.roots.length, 0, "a failed ready notification is not retried in the same activation");
 
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("ready rejects an unknown initial page without creating a React root", async () => {
@@ -298,7 +299,7 @@ test("ready rejects an unknown initial page without creating a React root", asyn
 
   await assert.rejects(f.notifyReady(), startupError(/page 'missing' is not registered/));
   assert.equal(f.roots.length, 0);
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("the configured page is read after every wrapper has prepared", async () => {
@@ -330,7 +331,7 @@ test("the configured page is read after every wrapper has prepared", async () =>
 
   assert.deepEqual(preparationOrder, ["first", "last"]);
   assert.equal(service.getSnapshot().current.id, "late");
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("initial page config validates its shape and runtime updates wait for restart", async () => {
@@ -351,7 +352,7 @@ test("initial page config validates its shape and runtime updates wait for resta
 
   await f.config.set(f.uiInitialPageConfig, "settings");
   assert.equal(service.getSnapshot().current.id, "home", "a restart-only setting must not navigate the running UI");
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("live motion preference updates the root, preserves the last saved value on write failure, and restores its prior attribute", async () => {
@@ -375,7 +376,7 @@ test("live motion preference updates the root, preserves the last saved value on
   f.configFaults.writeError = null;
   await f.config.set(f.uiMotionConfig, "system");
   assert.equal(f.documentRoot.getAttribute("data-ui-motion"), null);
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
   assert.equal(f.documentRoot.getAttribute("data-ui-motion"), "before-ui");
   assert.throws(() => f.config.getSnapshot(f.uiMotionConfig), /not registered/);
 });
@@ -390,7 +391,7 @@ test("a second UI instance cannot replace the active instance's configuration or
   assert.equal(f.config.getSnapshot(f.uiMotionConfig), "reduce");
   assert.equal(f.documentRoot.getAttribute("data-ui-motion"), "reduce");
   assert.equal(f.core.isMounted("ui"), true);
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
   assert.equal(f.documentRoot.getAttribute("data-ui-motion"), null);
 });
 
@@ -422,7 +423,7 @@ test("a config read error fails UI startup before creating the root", async () =
 
   await assert.rejects(f.notifyReady(), startupError(/configuration read failed/));
   assert.equal(f.roots.length, 0);
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("visited A/B/C pages receive params, hide inactive views, and back restores the previous location", async () => {
@@ -499,10 +500,11 @@ test("visited A/B/C pages receive params, hide inactive views, and back restores
   assert.equal(f.roots.length, 1, "A/B/C navigation must reuse one React root");
   assert.equal(f.roots[0].renderCalls.length, 1);
 
-  for (const dispose of disposers) dispose();
-  assert.equal(f.roots[0].unmountCalls, 1, "disposing a visited page first unmounts the whole tree");
-  assert.throws(() => service.openPage("C"), /navigation requires .*after pluginsReady/);
-  await f.core.unmount("ui");
+  assert.throws(() => disposers[0](), /must be withdrawn through the plugin lifecycle/);
+  for (const dispose of disposers.slice(1)) dispose();
+  assert.equal(f.roots[0].unmountCalls, 0, "removing inactive pages preserves the root");
+  assert.equal(service.getSnapshot().current.id, "A");
+  await f.core.unmountAll();
 });
 
 test("navigation guards can reject open and back without changing the route or history", async () => {
@@ -537,7 +539,7 @@ test("navigation guards can reject open and back without changing the route or h
   assert.equal(await service.back(), true);
   assert.equal(service.getSnapshot().current.id, "A");
   assert.equal(service.getSnapshot().canGoBack, false);
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("reset navigation clears history only after guard approval and does not push the prior page", async () => {
@@ -570,7 +572,7 @@ test("reset navigation clears history only after guard approval and does not pus
   assert.equal(await service.back(), true);
   assert.equal(service.getSnapshot().current.id, "welcome", "back cannot reopen the closed project page");
 
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("same-page reset is guarded and clears existing history", async () => {
@@ -607,7 +609,7 @@ test("same-page reset is guarded and clears existing history", async () => {
   assert.equal(requests.filter(({ history }) => history === "reset").length, 2,
     "same-page reset is a real guarded navigation while history exists");
 
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("same-page parameter changes are guarded and rejected changes preserve the prior location", async () => {
@@ -640,7 +642,7 @@ test("same-page parameter changes are guarded and rejected changes preserve the 
   assert.equal(service.getSnapshot().canGoBack, true);
   assert.equal(await service.back(), true);
   assert.equal(service.getSnapshot().current.params, undefined);
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("later guard rejection cancels earlier approvals in reverse order", async () => {
@@ -674,7 +676,7 @@ test("later guard rejection cancels earlier approvals in reverse order", async (
   ]);
   assert.equal(service.getSnapshot().current.id, "home");
   assert.equal(service.getSnapshot().canGoBack, false);
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("rollback restores synchronous guard state inside flushSync before async cleanup", async () => {
@@ -708,7 +710,7 @@ test("rollback restores synchronous guard state inside flushSync before async cl
   assert.deepEqual(f.flushSyncEvents, [
     "start", "restore-old-session", "end", "dispose-candidate-session",
   ]);
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("guard commits and route publication flush before completion cleanup", async () => {
@@ -731,7 +733,7 @@ test("guard commits and route publication flush before completion cleanup", asyn
 
   assert.equal(await service.openPage("next"), true);
   assert.deepEqual(f.flushSyncEvents, ["prepare", "start", "commit", "route", "end", "complete"]);
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("completion failures reject after route commit and do not skip remaining cleanup", async () => {
@@ -772,7 +774,7 @@ test("completion failures reject after route commit and do not skip remaining cl
   shouldFail = false;
   assert.equal(await service.back(), true, "the navigation lock is released after complete rejects");
   assert.equal(service.getSnapshot().current.id, "home");
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("a throwing commit cancels every approval in reverse order, including prior commits", async () => {
@@ -821,7 +823,7 @@ test("a throwing commit cancels every approval in reverse order, including prior
   ]);
   assert.equal(service.getSnapshot().current.id, "home");
   assert.equal(service.getSnapshot().canGoBack, false);
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("a throwing guard rejects the transition and cancels prior approvals", async () => {
@@ -846,7 +848,7 @@ test("a throwing guard rejects the transition and cancels prior approvals", asyn
   assert.equal(service.getSnapshot().current.id, "home");
   assert.equal(service.getSnapshot().canGoBack, false);
   assert.ok(f.logs.some(([message, detail]) => message === "UI navigation guard failed." && detail.guardId === "throws"));
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("concurrent navigation requests return false while the first guard is pending", async () => {
@@ -869,7 +871,7 @@ test("concurrent navigation requests return false while the first guard is pendi
   release();
   assert.equal(await first, true);
   assert.equal(service.getSnapshot().current.id, "next");
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("deactivation during an awaited guard cancels its late approval without committing", async () => {
@@ -894,7 +896,7 @@ test("deactivation during an awaited guard cancels its late approval without com
   await f.notifyReady();
 
   const pending = service.openPage("next");
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
   release();
   assert.equal(await pending, false);
   assert.deepEqual(calls, ["cancel"]);
@@ -930,8 +932,8 @@ test("disposing an awaited guard invalidates its pending navigation before commi
   release();
   assert.equal(await pending, false);
   assert.deepEqual(calls, ["cancel"]);
-  assert.equal(f.roots[0].unmountCalls, 1);
-  await f.core.unmount("ui");
+  assert.equal(f.roots[0].unmountCalls, 0);
+  await f.core.unmountAll();
 });
 
 test("mid-commit invalidation cancels all approvals, including one already committed", async () => {
@@ -965,8 +967,8 @@ test("mid-commit invalidation cancels all approvals, including one already commi
   assert.deepEqual(calls, ["commit:first", "cancel:second", "cancel:first"]);
   assert.equal(service.getSnapshot().current.id, "home");
   assert.equal(service.getSnapshot().canGoBack, false);
-  assert.equal(f.roots[0].unmountCalls, 1);
-  await f.core.unmount("ui");
+  assert.equal(f.roots[0].unmountCalls, 0);
+  await f.core.unmountAll();
 });
 
 test("wrappers surround the real UiPages tree and ThemeProvider receives its registered service", async () => {
@@ -1031,10 +1033,9 @@ test("wrappers surround the real UiPages tree and ThemeProvider receives its reg
   assert.match(markup, /data-same-service="true"/, "ThemeProvider exposes the exact service supplied by its plugin");
   assert.match(markup, />ready<\/span>/);
 
-  disposeFirst();
-  disposeFirst();
-  assert.equal(f.roots[0].unmountCalls, 1, "removing a rendered contribution unmounts the tree first");
-  await f.core.unmount("ui");
+  assert.throws(() => disposeFirst(), /cannot be removed while the UI is running/);
+  assert.equal(f.roots[0].unmountCalls, 0);
+  await f.core.unmountAll();
 });
 
 test("disposing an unvisited page before ready removes it from the initial snapshot", async () => {
@@ -1052,7 +1053,7 @@ test("disposing an unvisited page before ready removes it from the initial snaps
 
   assert.equal(removedPageRendered, false);
   assert.deepEqual(Array.from(service.getSnapshot().pages, ({ id }) => id), ["home"]);
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("deactivation invalidates the previous service while a fresh activation gets a new registry", async () => {
@@ -1064,10 +1065,12 @@ test("deactivation invalidates the previous service while a fresh activation get
   const oldUi = f.core.get(f.uiKey);
   const oldDispose = oldUi.registerPage(page("old"));
   await f.notifyReady();
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
   assert.equal(f.roots[0].unmountCalls, 1);
   assert.throws(() => oldUi.openPage("old"), /no longer active/);
 
+  await f.core.mount(f.createConfigPlugin());
+  await f.core.mount(f.createErrorUiPlugin());
   await f.core.mount(plugin);
   const newUi = f.core.get(f.uiKey);
   assert.notEqual(newUi, oldUi);
@@ -1076,7 +1079,7 @@ test("deactivation invalidates the previous service while a fresh activation get
   await f.notifyReady();
   assert.equal(f.roots.length, 2);
   assert.equal(newUi.getSnapshot().current.id, "new");
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 });
 
 test("a synchronous initial render failure replaces the tree in the same root and leaves peer plugins active", async () => {
@@ -1146,7 +1149,7 @@ test("uncaught and early render callbacks recover once and preserve the caller o
   assert.equal(observations[1].errorInfo, errorInfo);
   assert.ok(f.logs.some(([message, detail]) => message === "UI render error observer failed." && detail.error === callbackError));
   assert.equal(renderedErrorPage(f, root).props.role, "alert");
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
 
   const early = uiPluginFixture({ renderErrorOnce: new Error("synchronous") });
   const { service: earlyUi } = await early.mountUi();
@@ -1157,7 +1160,7 @@ test("uncaught and early render callbacks recover once and preserve the caller o
   assert.equal(early.roots[0].renderCalls.length, 2, "an error raised during the initial render recovers after ready notification");
   assert.equal(early.core.isMounted("ui"), true);
   assert.equal(early.roots[0].unmountCalls, 0);
-  await early.core.unmount("ui");
+  await early.core.unmountAll();
 });
 
 test("a persistent error page render failure is logged once without retrying or unmounting", async () => {
@@ -1171,7 +1174,7 @@ test("a persistent error page render failure is logged once without retrying or 
   assert.equal(f.roots[0].renderCalls.length, 2, "the failed fallback is not retried");
   assert.equal(f.roots[0].unmountCalls, 0);
   assert.equal(f.logs.filter(([message]) => message === "UI root fallback rendering failed.").length, 1);
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
   assert.equal(f.roots[0].unmountCalls, 1);
 });
 
@@ -1184,13 +1187,14 @@ test("deactivation cancels a pending recovery and ignores later uncaught callbac
   const onUncaughtError = root.options.onUncaughtError;
 
   onUncaughtError(new Error("queued before stop"), { componentStack: "" });
-  await f.core.unmount("ui");
+  await f.core.unmountAll();
   assert.equal(root.unmountCalls, 1);
+  const renderCountAtStop = root.renderCalls.length;
   await flushUiMicrotasks();
   onUncaughtError(new Error("late after stop"), { componentStack: "" });
   await flushUiMicrotasks();
 
-  assert.equal(root.renderCalls.length, 1, "neither the queued recovery nor a late callback revives the root");
+  assert.equal(root.renderCalls.length, renderCountAtStop, "a late callback cannot revive the stopped root");
   assert.equal(root.unmountCalls, 1);
   assert.throws(() => ui.openPage("home"), /no longer active/);
 });

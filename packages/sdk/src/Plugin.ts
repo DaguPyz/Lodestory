@@ -1,6 +1,39 @@
 import type { EventKey, EventListener } from "./EventKey.js";
 import type { CapabilityKey, ServiceKey } from "./ServiceKey.js";
 
+/** 一次停止影响单个插件，或整个运行实例。 */
+export type PluginStopScope = "plugin" | "application";
+
+/**
+ * 插件拥有的可撤回资源。检查阶段不得撤回资源；撤回失败时内核保留插件和依赖，
+ * 并允许重试。withdraw 必须可重复调用，且只能在成功后报告完成。
+ */
+export type PluginStopParticipant = {
+  /** 撤回顺序，默认 0；可以根据当前状态计算，数值较小者先撤回，同值按登记逆序。 */
+  readonly withdrawOrder?: number | ((scope: PluginStopScope) => number);
+  check?(scope: PluginStopScope): void | Promise<void>;
+  /** 检查全部通过后执行必要的保存或退出准备；失败时必须保留可恢复的数据和服务。 */
+  prepare?(scope: PluginStopScope): void | Promise<void>;
+  /** 后续阶段失败时释放 prepare 持有的临时锁，不撤销用户数据。 */
+  cancel?(scope: PluginStopScope): void | Promise<void>;
+  withdraw?(scope: PluginStopScope): void | Promise<void>;
+};
+
+/** 可供旧式清理代码调用，也可由内核在停用前协调的登记句柄。 */
+export type PluginContribution = (() => void) & PluginStopParticipant & {
+  /** 由内核提供不透明的本次激活标识，用于识别同一插件的一组贡献。 */
+  associate(owner: symbol): void;
+  check(scope: PluginStopScope): void | Promise<void>;
+  withdraw(scope: PluginStopScope): void | Promise<void>;
+};
+
+/** 可异步撤销的登记句柄；其撤回顺序与其他参与者相同。 */
+export type PluginAsyncContribution = (() => Promise<void>) & PluginStopParticipant & {
+  associate(owner: symbol): void;
+  check(scope: PluginStopScope): void | Promise<void>;
+  withdraw(scope: PluginStopScope): void | Promise<void>;
+};
+
 /** EngineCore 提供给单个插件的能力和事件入口；能力与订阅自动记录归属。 */
 export type PluginContext = {
   /**
@@ -31,6 +64,13 @@ export type PluginContext = {
    * @throws 上下文失效或监听处理失败时拒绝 Promise。
    */
   emit<T>(key: EventKey<T>, payload: T): Promise<void>;
+  /**
+   * 登记本插件的停用参与者。检查全部通过后，内核先等待撤回完成，再调用 deactivate。
+   * 返回取消登记函数；只允许在 activate 期间登记。激活失败时由插件的 deactivate 清理资源。
+   */
+  onStop(participant: PluginStopParticipant): () => void;
+  /** 把公开登记接口返回的句柄关联到本插件，并原样返回句柄供失败清理使用。 */
+  track<T extends PluginContribution | PluginAsyncContribution>(participant: T): T;
 };
 
 /** 插件声明能力关系和生命周期；具体业务接口通过 ServiceKey 另行定义。 */

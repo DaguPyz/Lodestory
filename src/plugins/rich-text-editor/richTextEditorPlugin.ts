@@ -17,7 +17,7 @@ export function createRichTextEditorPlugin(): Plugin {
       const bodyEditor = context.get(bodyEditorKey);
       const interaction = context.get(uiInteractionKey);
       const loadFontFamilies = createSystemFontLoader();
-      removeEditor = bodyEditor.registerEditor({
+      removeEditor = context.track(bodyEditor.registerEditor({
         id: "quill",
         formats: ["rich-delta"],
         scrollMode: "editor",
@@ -43,7 +43,7 @@ export function createRichTextEditorPlugin(): Plugin {
             createElement(module.default, {...props, loadFontFamilies, interaction});
           return {default: EditorWithSystemFonts};
         },
-      });
+      }));
     },
     deactivate() {
       const remove = removeEditor;

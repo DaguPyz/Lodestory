@@ -44,14 +44,18 @@ function alternateProvider(sdk, registered, removed = []) {
             id: page.id,
             render: pageContext => ({type: View, props: {children: page.render(pageContext)}}),
           });
-          return () => {
+          const dispose = () => {
             remove();
             removed.push(page.id);
           };
+          return Object.assign(dispose, {associate: owner => remove.associate(owner), check: scope => remove.check(scope),
+            withdrawOrder: scope => typeof remove.withdrawOrder === "function" ? remove.withdrawOrder(scope) : (remove.withdrawOrder ?? 0),
+            async withdraw(scope) {await remove.withdraw(scope); if (scope === "plugin") removed.push(page.id);}});
         },
         registerAction(action) {
           registered.push({id: action.id, navigation: action.navigation, run: action.run});
-          return () => { removed.push(action.id); };
+          const remove = () => { removed.push(action.id); };
+          return Object.assign(remove, {associate() {}, check() {}, withdraw(scope) {if (scope === "plugin") remove();}});
         },
       }));
     },

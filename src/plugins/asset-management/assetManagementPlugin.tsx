@@ -56,7 +56,7 @@ export function createAssetManagementPlugin(): Plugin {
       const onOpenAssets = () => layout.show(ASSETS_CONTENT_ID);
 
       try {
-        removeNavigation = layout.registerContent({
+        removeNavigation = context.track(layout.registerContent({
           id: "asset-management.navigation",
           title: "资产管理",
           role: "navigation",
@@ -64,24 +64,24 @@ export function createAssetManagementPlugin(): Plugin {
           icon: <Icon name="assets"/>,
           render: ({active}) => <AssetTypeNavigation workbench={workbench} sessions={sessions} contextMenus={contextMenus}
             active={active} onOpenTypes={onOpenTypes} onOpenAssets={onOpenAssets}/>,
-        });
-        removeMain = layout.registerContent({
+        }));
+        removeMain = context.track(layout.registerContent({
           id: MAIN_CONTENT_ID,
           title: "模板设置",
           role: "main",
           order: 20,
           render: ({active}) => <AssetTypeEditor workbench={workbench} sessions={sessions} contextMenus={contextMenus}
             active={active} onOpenTypes={onOpenTypes} onOpenAssets={onOpenAssets}/>,
-        });
-        removeAssets = layout.registerContent({
+        }));
+        removeAssets = context.track(layout.registerContent({
           id: ASSETS_CONTENT_ID,
           title: "对象管理",
           role: "main",
           order: 21,
           render: ({active}) => <AssetRecordsEditor workbench={workbench} sessions={sessions} contextMenus={contextMenus}
             active={active} onOpenTypes={onOpenTypes}/>,
-        });
-        removeParticipant = workbench.registerParticipant({
+        }));
+        removeParticipant = context.track(workbench.registerParticipant({
           id: "asset-management",
           label: "资产管理",
           async start(session) {
@@ -178,7 +178,7 @@ export function createAssetManagementPlugin(): Plugin {
               },
             };
           },
-        });
+        }));
       } catch (error) {
         alive = false;
         removeTaskFallback?.();

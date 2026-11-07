@@ -96,6 +96,7 @@ function setup({wrapperError, invokeHandler} = {}) {
     return () => { lifecycle.push("wrapper.remove"); wrappers.splice(wrappers.indexOf(value), 1); };
   }};
   const context = {
+    track: value => value,
     provide() {},
     get(key) {
       if (key === workbenchKey) return workbench;

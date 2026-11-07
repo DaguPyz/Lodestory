@@ -136,8 +136,8 @@ test("stale and repeated removers are idempotent, and started removal clears the
   const remove = failingCleanup.service.registerEditor(definition("editor", ["markdown"]));
   failingCleanup.start();
   assert.throws(remove, /cleanup failed/);
-  assert.equal(failingCleanup.resolve("markdown"), undefined, "the definition is removed even when UI cleanup throws");
-  failingCleanup.dispose();
+  assert.equal(failingCleanup.resolve("markdown").id, "editor", "the definition remains available when UI cleanup fails");
+  assert.throws(() => failingCleanup.dispose(), /cleanup failed/);
 });
 
 test("editor loads are shared, cached only while pending, and retry after failure", async () => {

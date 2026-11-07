@@ -98,6 +98,7 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
             }
             // 每次激活使用独立登记和状态，旧服务和旧撤销函数不能影响下一次激活。
             const pages = createPageRegistry();
+            const pageOwners = new Map<string, symbol>();
             const wrappers = new Map<string, UiWrapper>();
             const navigationGuards = new Map<string, UiNavigationGuard>();
             const overlays = new Set<{element: HTMLElement}>();
@@ -113,16 +114,23 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
             let rootFallbackFailureReported = false;
 
             function unmount() {
+                const root = reactRoot;
+                root?.unmount();
                 navigationAllowed = false;
                 navigationGeneration += 1;
-                const root = reactRoot;
                 reactRoot = undefined;
-                try {
-                    root?.unmount();
-                } finally {
-                    overlays.clear();
-                }
+                overlays.clear();
             }
+
+            context.onStop({
+                withdrawOrder: -999,
+                check(scope) {
+                    if (scope === "plugin" && reactRoot) throw new Error("The UI root cannot be stopped while the application is running.");
+                },
+                withdraw(scope) {
+                    if (scope === "application") unmount();
+                },
+            });
 
             cleanup = () => {
                 active = false;
@@ -131,6 +139,7 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                 } finally {
                     try {
                         pages.clear();
+                        pageOwners.clear();
                         wrappers.clear();
                         navigationGuards.clear();
                     } finally {
@@ -357,18 +366,45 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                 registerPage(page) {
                     checkRegistrationAllowed();
                     const remove = pages.registerPage(page);
+                    const pageId = page.id;
                     let registered = true;
+                    let owner: symbol | undefined;
+                    const alternative = () => pages.alternative(pageId, candidate => owner === undefined || pageOwners.get(candidate) !== owner);
 
-                    return () => {
+                    const dispose = () => {
                         if (!registered) return;
-                        registered = false;
-                        // 在贡献者释放资源之前，先停止消费这些资源的 React 组件。
-                        try {
-                            unmount();
-                        } finally {
-                            remove();
+                        if (reactRoot && pages.getSnapshot().current?.id === pageId) {
+                            throw new Error(`Active page '${pageId}' must be withdrawn through the plugin lifecycle.`);
                         }
+                        if (reactRoot) flushSync(() => remove());
+                        else remove();
+                        registered = false;
+                        pageOwners.delete(pageId);
                     };
+                    return Object.assign(dispose, {
+                        associate(token: symbol) {
+                            if (owner !== undefined && owner !== token) throw new Error(`Page '${pageId}' is already owned by another plugin.`);
+                            owner = token;
+                            pageOwners.set(pageId, token);
+                        },
+                        withdrawOrder: () => pages.getSnapshot().current?.id === pageId ? -200 : -100,
+                        check(scope: "plugin" | "application") {
+                            if (scope === "plugin" && registered && reactRoot && pages.getSnapshot().current?.id === pageId
+                                && !alternative()) throw new Error(`Cannot remove the last active page '${pageId}'.`);
+                        },
+                        async withdraw(scope: "plugin" | "application") {
+                            if (scope !== "plugin" || !registered) return;
+                            if (pages.getSnapshot().current?.id === pageId) {
+                                const target = alternative();
+                                if (!target) throw new Error(`Cannot remove the last active page '${pageId}'.`);
+                                const request = pages.previewOpen(target, undefined, "reset");
+                                if (request && !await navigate(request)) throw new Error(`Navigation away from page '${pageId}' was rejected.`);
+                            }
+                            flushSync(() => remove());
+                            registered = false;
+                            pageOwners.delete(pageId);
+                        },
+                    });
                 },
                 addWrapper(wrapper) {
                     checkRegistrationAllowed();
@@ -381,14 +417,20 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                     if (wrappers.has(entry.id)) throw new Error(`UI wrapper '${entry.id}' is already registered.`);
                     wrappers.set(entry.id, entry);
 
-                    return () => {
+                    const dispose = () => {
                         if (wrappers.get(entry.id) !== entry) return;
-                        try {
-                            unmount();
-                        } finally {
-                            wrappers.delete(entry.id);
-                        }
+                        if (reactRoot) throw new Error(`Root wrapper '${entry.id}' cannot be removed while the UI is running.`);
+                        wrappers.delete(entry.id);
                     };
+                    return Object.assign(dispose, {
+                        associate() {},
+                        check(scope: "plugin" | "application") {
+                            if (scope === "plugin" && reactRoot && wrappers.get(entry.id) === entry) {
+                                throw new Error(`Root wrapper '${entry.id}' cannot be removed while the UI is running.`);
+                            }
+                        },
+                        withdraw() {},
+                    });
                 },
                 registerNavigationGuard(guard) {
                     checkRegistrationAllowed();
@@ -400,17 +442,26 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                     navigationGuards.set(entry.id, entry);
                     let registered = true;
 
-                    return () => {
+                    const dispose = () => {
                         if (!registered) return;
                         registered = false;
                         if (navigationGuards.get(entry.id) !== entry) return;
-                        try {
-                            // Invalidate any awaited guard before its eventual result can commit.
-                            unmount();
-                        } finally {
-                            navigationGuards.delete(entry.id);
-                        }
+                        // Invalidate any awaited guard before its eventual result can commit.
+                        navigationGeneration += 1;
+                        navigationGuards.delete(entry.id);
                     };
+                    return Object.assign(dispose, {
+                        associate() {},
+                        withdrawOrder: 100,
+                        check(scope: "plugin" | "application") {
+                            if (scope === "plugin" && registered && navigationInFlight) throw new Error("Cannot remove a navigation guard while navigation is in progress.");
+                        },
+                        withdraw(scope: "plugin" | "application") {
+                            if (scope !== "plugin" || !registered) return;
+                            registered = false;
+                            if (navigationGuards.get(entry.id) === entry) navigationGuards.delete(entry.id);
+                        },
+                    });
                 },
                 openPage(id, params, options) {
                     checkNavigationAllowed();
@@ -427,6 +478,10 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                 subscribe(listener) {
                     checkActive();
                     return pages.subscribe(listener);
+                },
+                stopForApplication() {
+                    checkActive();
+                    unmount();
                 },
             };
 

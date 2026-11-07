@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import type { ConfigItem } from "./config.js";
+import type { PluginContribution } from "./Plugin.js";
 import { createServiceKey } from "./ServiceKey.js";
 
 /** UI 启动时选择的首页；null 表示沿用第一个登记页面。 */
@@ -105,12 +106,12 @@ export type UiService = {
   registerOverlay(element: HTMLElement): () => void;
   /** 当前 UI 实例中是否有可见、可交互的浮层。嵌套浮层独立登记。 */
   hasActiveOverlay(): boolean;
-  /** 登记页面，保存函数而不立即调用；返回可重复调用的撤销函数。 */
-  registerPage(page: UiPage): () => void;
-  /** 登记包装规则，保存函数而不立即调用；返回可重复调用的撤销函数。 */
-  addWrapper(wrapper: UiWrapper): () => void;
-  /** 登记导航守卫；只允许在 pluginsReady 前调用，撤销已挂载守卫会先卸载整棵 UI 树。 */
-  registerNavigationGuard(guard: UiNavigationGuard): () => void;
+  /** 登记页面并将句柄交给 context.track；当前页面须经停用流程撤回，直接调用句柄会拒绝。 */
+  registerPage(page: UiPage): PluginContribution;
+  /** 登记根包装并将句柄交给 context.track；运行中的根包装不能直接或单插件撤回。 */
+  addWrapper(wrapper: UiWrapper): PluginContribution;
+  /** 登记导航守卫并将句柄交给 context.track；直接撤销会使正在等待的导航失效。 */
+  registerNavigationGuard(guard: UiNavigationGuard): PluginContribution;
   /** 切换到已登记页面并传入参数；默认记录上一页，可用 history: "reset" 清空历史。并发导航会返回 false。 */
   openPage(id: string, params?: unknown, options?: {readonly history?: "push" | "reset"}): Promise<boolean>;
   /** 恢复上一页及其参数；没有上一页时返回 true 且不改变状态。 */
@@ -119,11 +120,13 @@ export type UiService = {
   getSnapshot(): UiSnapshot;
   /** 订阅页面状态变化，返回取消订阅函数。 */
   subscribe(listener: () => void): () => void;
+  /** 整个应用关闭时，在保存检查通过后停止根视图。不得用于单个插件的在线停用。 */
+  stopForApplication(): void;
 };
 
 /**
- * 提供者和使用者共享这个标识。使用者在 deactivate 中撤销自己的登记，
- * 再释放组件使用的资源；撤销已挂载贡献会先卸载整棵树，本版不支持运行中增删贡献。
+ * 提供者和使用者共享这个标识。使用者须用 context.track 登记贡献句柄，
+ * 在线停用时先撤回页面和守卫；根包装层在运行中不可撤回。新增贡献仍仅限启动期。
  */
 export const uiKey = createServiceKey<UiService>("app/ui");
 

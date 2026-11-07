@@ -1,6 +1,7 @@
 import type {ReactNode} from "react";
 import {createServiceKey} from "./ServiceKey.js";
 import type {UiPage} from "./ui.js";
+import type {PluginContribution} from "./Plugin.js";
 
 /** 导航用途分组；具体位置由布局实现决定，不表示固定的上下左右。 */
 export type NavigationGroup = "primary" | "secondary";
@@ -35,12 +36,12 @@ export type NavigationLayoutAction = {
 export type NavigationLayoutService = {
     /**
      * 启动期同时登记导航和 UI 页面；重复 ID 或无效描述抛错，失败不留下部分登记。
-     * 返回幂等撤销函数，旧句柄不影响后续同名登记。撤销先停止消费页面资源的 UI，
-     * 再移除布局登记；首版沿用 UI 的整树卸载规则，不支持运行中增删。
+     * 返回生命周期句柄，须交给 context.track。在线停用先经导航守卫离开当前页面，
+     * 再撤回页面和导航登记；根视图与其他页面保留。新增页面仍仅限启动期。
      */
-    registerPage(page: NavigationLayoutPage): () => void;
+    registerPage(page: NavigationLayoutPage): PluginContribution;
     /** 登记独立操作；与页面共享 ID 空间，撤销时同步更新现有导航。 */
-    registerAction(action: NavigationLayoutAction): () => void;
+    registerAction(action: NavigationLayoutAction): PluginContribution;
 };
 
 /** 默认实现由应用显式装配；页面插件声明依赖并导入同一个 key。 */

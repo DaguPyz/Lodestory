@@ -40,17 +40,17 @@ export function createBodyEditorPlugin(): Plugin {
       }, (sessionId, target) => models.get(sessionId)?.revealSearchTarget(target) ?? false);
       registry = editorRegistry;
       context.provide(bodyEditorKey, editorRegistry.service);
-      removeDefaultEditor = editorRegistry.service.registerEditor({
+      removeDefaultEditor = context.track(editorRegistry.service.registerEditor({
         id: "textarea",
         formats: ["markdown", "plain-text"],
         load: async () => ({default: TextareaEditor}),
-      });
-      removeRegistryUiWrapper = ui.addWrapper({
+      }));
+      removeRegistryUiWrapper = context.track(ui.addWrapper({
         id: "body-editor-registry",
         order: 20,
         prepare: editorRegistry.start,
         wrap: children => children,
-      });
+      }));
       const resolveEditor = (format: EditorFormat) => editorRegistry.resolve(format);
       const resolveConversions = (format: EditorFormat) => editorRegistry.getConversions(format);
       removeContents.push(context.on(documentRevealRequested, request => {
@@ -58,7 +58,7 @@ export function createBodyEditorPlugin(): Plugin {
         if (!session || session.id !== request.sessionId) return;
         models.get(session.id)?.revealDocument(request.documentId);
       }));
-      removeParticipant = workbench.registerParticipant({
+      removeParticipant = context.track(workbench.registerParticipant({
         id: "body-editor",
         label: "编辑器",
         start(session) {
@@ -76,15 +76,15 @@ export function createBodyEditorPlugin(): Plugin {
             },
           };
         },
-      });
+      }));
       const contents: LayoutContent[] = [
         {id: bodyEditorContentIds.main, title: "正文编辑", role: "main", render: props => <BodyEditor {...props}/>},
       ];
       for (const content of contents) {
-        removeContents.push(layout.registerContent({...content, render: props =>
+        removeContents.push(context.track(layout.registerContent({...content, render: props =>
           <BodyEditorContentProvider workbench={workbench} models={models} resolveEditor={resolveEditor} resolveConversions={resolveConversions}>
             {content.render(props)}
-          </BodyEditorContentProvider>}));
+          </BodyEditorContentProvider>})));
       }
     },
     async deactivate() {

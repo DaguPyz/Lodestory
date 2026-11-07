@@ -43,7 +43,7 @@ export function createUiInteractionPlugin(): Plugin {
         if (errors.length) throw Object.assign(new Error("UI interaction bridge failed to stop."), {errors});
       };
       context.provide(uiInteractionKey, service);
-      removeWrapper = ui.addWrapper({id: "ui-interaction", order: 0, wrap});
+      removeWrapper = context.track(ui.addWrapper({id: "ui-interaction", order: 0, wrap}));
     },
     deactivate() { const stop = cleanup; cleanup = undefined; stop?.(); },
   };

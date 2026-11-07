@@ -79,7 +79,7 @@ export function createLayoutStore(commitRemoval: (remove: () => void) => void) {
       if (entries.has(entry.id)) throw new Error(`Layout content '${entry.id}' is already registered.`);
       entries.set(entry.id, entry);
       publish();
-      return () => {
+      const dispose = () => {
         if (!alive || entries.get(entry.id) !== entry) return;
         const remove = () => {
           entries.delete(entry.id);
@@ -90,6 +90,11 @@ export function createLayoutStore(commitRemoval: (remove: () => void) => void) {
         if (started) commitRemoval(remove);
         else remove();
       };
+      return Object.assign(dispose, {
+        associate() {},
+        check() {},
+        withdraw(scope: "plugin" | "application") { if (scope === "plugin") dispose(); },
+      });
     },
     start() {
       checkActive();

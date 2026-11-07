@@ -20,6 +20,7 @@ function createBodyEditorService() {
 
 function createContext(bodyEditorKey, bodyEditorService) {
   return {
+    track: value => value,
     get(key) {
       assert.strictEqual(key, bodyEditorKey);
       return bodyEditorService;

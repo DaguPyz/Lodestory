@@ -50,7 +50,7 @@ export function createDocumentTabsPlugin(): Plugin {
           shortcuts={shortcuts}
         />,
       };
-      removeContent = layout.registerContent(content);
+      removeContent = context.track(layout.registerContent(content));
     },
     deactivate() {
       const remove = removeContent;

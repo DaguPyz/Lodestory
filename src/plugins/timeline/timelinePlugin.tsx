@@ -164,7 +164,7 @@ export function createTimelinePlugin(): Plugin {
         for (const listener of [...resource.searchListeners]) listener();
       }
 
-      removeParticipant = workbench.registerParticipant({
+      removeParticipant = context.track(workbench.registerParticipant({
         id: "timeline",
         label: "大纲时间线",
         async start(session) {
@@ -337,7 +337,7 @@ export function createTimelinePlugin(): Plugin {
             },
           };
         },
-      });
+      }));
 
       const service: TimelineService = {
         getModel(sessionId) { return sessions.get(sessionId)?.publicModel ?? null; },
@@ -364,7 +364,7 @@ export function createTimelinePlugin(): Plugin {
       };
       context.provide(timelineKey, service);
 
-      removeMain = layout.registerContent({
+      removeMain = context.track(layout.registerContent({
         id: MAIN_CONTENT_ID,
         title: "时间线画布",
         role: "main",
@@ -376,7 +376,7 @@ export function createTimelinePlugin(): Plugin {
             if (editing) resource.editing.add(timelineId);
             else resource.editing.delete(timelineId);
           }}/>,
-      });
+      }));
     },
     async deactivate() {
       alive = false;

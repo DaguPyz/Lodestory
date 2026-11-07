@@ -34,10 +34,20 @@ export function createWorkbenchPlugin(): Plugin {
       let removeStatus: (() => void) | undefined;
       let removeShortcutScope: (() => void) | undefined;
       let alive = true;
+      let ready = false;
       const store = createWorkbenchStore(ui, {
         editorPage: appPages.editor, welcomePage: appPages.welcome,
-        stopView: () => flushSync(() => removePage?.()),
+        stopView: () => flushSync(() => ui.stopForApplication()),
         flushView: update => flushSync(update),
+      });
+      context.onStop({
+        // Save and detach the project before any other contribution withdraws.
+        withdrawOrder: -1000,
+        async withdraw(scope) {
+          if (scope === "application" && ready && !await store.shutdown()) {
+            throw new Error("Workbench declined shutdown; project content remains available.");
+          }
+        },
       });
       cleanup = async () => {
         alive = false;
@@ -56,21 +66,22 @@ export function createWorkbenchPlugin(): Plugin {
           return alive && !!state.session && state.active && !state.busy && !state.loading;
         },
       });
-      removeStatus = layout.registerContent({
+      removeStatus = context.track(layout.registerContent({
         id: "workbench.loading", title: "项目加载进度", role: "status", order: 100,
         render: () => <WorkbenchLoadingStatus workbench={store.service}/>,
-      });
-      removeGuard = ui.registerNavigationGuard({id: "workbench", prepare: store.prepareNavigation});
-      removePage = ui.registerPage({
+      }));
+      removeGuard = context.track(ui.registerNavigationGuard({id: "workbench", prepare: store.prepareNavigation}));
+      removePage = context.track(ui.registerPage({
         id: appPages.editor,
         render: ({active}) => <ErrorBoundary><WindowShell showBrowserTitlebar={false}>
           <WorkbenchPage workbench={store.service} layout={layout} active={active}/>
         </WindowShell></ErrorBoundary>,
-      });
-      removeWrapper = ui.addWrapper({
+      }));
+      removeWrapper = context.track(ui.addWrapper({
         id: "workbench", order: 40, wrap: children => children,
         async prepare() {
           store.start();
+          ready = true;
           if (!isTauri()) return;
           const stop = await getCurrentWindow().onCloseRequested(async event => {
             try { if (!alive || !await store.shutdown()) event.preventDefault(); }
@@ -83,7 +94,7 @@ export function createWorkbenchPlugin(): Plugin {
           if (alive) removeCloseListener = stop;
           else stop();
         },
-      });
+      }));
     },
     async deactivate() {
       const stop = cleanup;

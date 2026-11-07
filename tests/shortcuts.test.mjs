@@ -44,6 +44,7 @@ function fixture() {
     return exports;
   }
   const context = {
+    track: value => value,
     services: new Map(),
     get(key) {
       if (key === sdkConfig.configKey) return config.service;

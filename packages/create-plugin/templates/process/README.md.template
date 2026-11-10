@@ -1,0 +1,13 @@
+# __PROJECT_NAME__
+
+这是由 Lodestory 脚手架生成的 Rust 独立程序后端示例，可由 A 加载。
+
+```sh
+cargo build
+```
+
+编译后的程序位于 `target/debug/__PROJECT_NAME__`（Windows 为 `target/debug/__PROJECT_NAME__.exe`）。当前需要应用中的代码将该文件的绝对路径交给 A。
+
+`src/protocol.rs` 中提供了 `ping` 示例，可以在此扩展后端操作。程序通过标准输入接收逐行 JSON，并把协议消息写到标准输出；日志应写到标准错误输出。收到退出请求时应先完成资源清理，再回复并退出；清理失败时应保留资源并回复错误，以允许重试。
+
+此目录只包含后端项目，不是可直接安装的完整 Lodestory 插件包。

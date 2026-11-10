@@ -1,0 +1,13 @@
+# __PROJECT_NAME__
+
+这是由 Lodestory 脚手架生成的 Rust 动态库后端示例，可由 B 加载。
+
+```sh
+cargo build
+```
+
+编译产物位于 `target/debug/`：macOS 为 `lib__LIBRARY_NAME__.dylib`，Linux 为 `lib__LIBRARY_NAME__.so`，Windows 为 `__LIBRARY_NAME__.dll`。当前需要应用中的代码将动态库文件的绝对路径交给 B。
+
+`src/protocol.rs` 中提供了 `ping` 示例，可以在此扩展后端操作。`src/lib.rs` 中的函数使用 C 调用约定；返回缓冲区由动态库分配和释放。新增后台任务或资源时，须在成功退出前停止并释放；若退出失败，要保持实例有效以便重试。不要让 panic 跨接口传播。
+
+此目录只包含后端项目，不是可直接安装的完整 Lodestory 插件包。

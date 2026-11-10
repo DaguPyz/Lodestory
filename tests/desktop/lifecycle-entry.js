@@ -45,6 +45,22 @@ export function installLifecycleTest(runtime) {
        await backend.close();
      }
    },
+   async testScaffoldBackend(type, entry) {
+     if (type !== "process" && type !== "dynamic-library") throw new Error("Unknown scaffold backend type.");
+     const key = type === "process" ? nativeProcessLoaderKey : nativeLibraryLoaderKey;
+     const backend = await runtime.get(key).load(entry);
+     try {
+       const success = await backend.call({requestId: "scaffold-1", operation: "ping", schemaVersion: "1.0.0", params: {text: "来自桌面测试"}});
+       const error = await backend.call({requestId: "scaffold-2", operation: "unknown", schemaVersion: "1.0.0", params: null});
+       await backend.close();
+       let afterClose;
+       try {await backend.call({requestId: "scaffold-3", operation: "ping", schemaVersion: "1.0.0", params: null});}
+       catch (cause) {afterClose = String(cause);}
+       return {success, error, afterClose};
+     } finally {
+       await backend.close();
+     }
+   },
    async startNativeProcessForClose(entry, markerPath) {
      const backend = await runtime.get(nativeProcessLoaderKey).load(entry);
      return backend.call({requestId: "configure", operation: "configureShutdown", schemaVersion: "1.0.0", params: {markerPath, rejectOnce: true}});

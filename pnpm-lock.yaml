@@ -94,6 +94,8 @@ importers:
         specifier: 9.33.1
         version: 9.33.1
 
+  packages/create-plugin: {}
+
   packages/sdk:
     devDependencies:
       '@types/react':

@@ -1,0 +1,19 @@
+{
+  "name": "@lodestory/create-plugin",
+  "version": "0.1.0",
+  "description": "Create a Lodestory Rust backend project",
+  "license": "UNLICENSED",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "bin": {
+    "create-plugin": "./bin/create-plugin.mjs"
+  },
+  "files": [
+    "bin",
+    "lib",
+    "templates",
+    "README.md"
+  ]
+}

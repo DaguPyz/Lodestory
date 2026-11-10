@@ -14,6 +14,7 @@ import {createDocumentsPlugin} from "../plugins/documents/documentsPlugin";
 import {createProjectStoragePlugin} from "../plugins/project-storage/projectStoragePlugin";
 import {createBackgroundTasksPlugin} from "../plugins/background-tasks/backgroundTasksPlugin";
 import {createNativeProcessLoaderPlugin} from "../plugins/native-process-loader/nativeProcessLoaderPlugin";
+import {createNativeLibraryLoaderPlugin} from "../plugins/native-library-loader/nativeLibraryLoaderPlugin";
 import {createProjectManagementPlugin} from "../plugins/project-management/projectManagementPlugin";
 import {createOutlineDesignPlugin} from "../plugins/outline-design/outlineDesignPlugin";
 import {createAssetManagementPlugin} from "../plugins/asset-management/assetManagementPlugin";
@@ -51,6 +52,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createProjectStoragePlugin(),
         createBackgroundTasksPlugin(),
         createNativeProcessLoaderPlugin(),
+        createNativeLibraryLoaderPlugin(),
         createDocumentsPlugin(),
         createProjectManagementPlugin(),
         createCanvasPlugin(),

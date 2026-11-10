@@ -6,6 +6,7 @@
   "type": "module",
   "files": [
     "dist",
+    "native",
     "README.md"
   ],
   "main": "./dist/index.js",
@@ -62,6 +63,10 @@
     "./native-process-loader": {
       "types": "./dist/native-process-loader.d.ts",
       "import": "./dist/native-process-loader.js"
+    },
+    "./native-library-loader": {
+      "types": "./dist/native-library-loader.d.ts",
+      "import": "./dist/native-library-loader.js"
     },
     "./documents": {
       "types": "./dist/documents.d.ts",

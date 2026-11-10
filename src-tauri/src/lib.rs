@@ -11,6 +11,7 @@ mod project_files;
 mod project_index;
 mod system_fonts;
 mod native_process;
+mod native_library;
 
 #[cfg(all(feature = "desktop-e2e", not(debug_assertions)))]
 compile_error!("desktop-e2e is restricted to debug builds");
@@ -46,6 +47,7 @@ pub fn run() {
             app.manage(documents::Documents::default());
             app.manage(project_files::ProjectFiles::default());
             app.manage(std::sync::Arc::new(native_process::NativeProcesses::default()));
+            app.manage(std::sync::Arc::new(native_library::NativeLibraries::default()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -76,6 +78,10 @@ pub fn run() {
             native_process::native_process_write,
             native_process::native_process_wait,
             native_process::native_process_abort_start,
+            native_library::native_library_open,
+            native_library::native_library_ready,
+            native_library::native_library_call,
+            native_library::native_library_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

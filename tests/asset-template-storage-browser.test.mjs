@@ -227,19 +227,26 @@ test("template deletion waits for field cleanup and retries the template-list wr
     await waitFor(() => evaluate(`Boolean([...document.querySelectorAll('[role="dialog"]')].find(item => item.textContent.includes("删除资产模板")))`),
       "The deletion confirmation did not appear.");
     const confirm = `([...document.querySelectorAll('[role="dialog"] button')].find(button => button.textContent.trim() === "确认删除"))`;
-    await evaluate(`${confirm}.click()`);
-    await waitFor(() => evaluate(`Boolean(document.querySelector('[role="dialog"] [role="alert"]'))`),
-      "The injected template-list write failure was not displayed.");
-
-    const schemaPath = ".lodestory/assets/schema.json";
     const templatesPath = ".lodestory/assets/templates.json";
     const targetId = "10000000-0000-4000-8000-000000000001";
     const targetFieldId = "20000000-0000-4000-8000-000000000001";
     const targetGroupPath = `.lodestory/assets/objects/${targetId}.json`;
+    const originalGroup = await evaluate(`window.__projectFixture.readJson(${JSON.stringify(targetGroupPath)})`);
+    assert.ok(originalGroup.fields.some(field => field.id === targetFieldId), "the template initially owns the field to be removed");
+    assert.equal(originalGroup.assets.length, 0, "no objects prevent this template from being deleted");
+    const callsBeforeDelete = await evaluate("window.__projectFixture.calls()");
+    await evaluate(`${confirm}.click()`);
+    const alert = await waitFor(() => evaluate(`document.querySelector('[role="dialog"] [role="alert"]')?.textContent?.trim()`),
+      "The injected template-list write failure was not displayed.");
+    assert.match(alert, /类型删除保存失败：模拟首次写入失败，请重试。/);
+
     const pendingTemplates = await evaluate(`window.__projectFixture.readJson(${JSON.stringify(templatesPath)})`);
     const cleanedGroup = await evaluate(`window.__projectFixture.readJson(${JSON.stringify(targetGroupPath)})`);
-    assert.ok(pendingTemplates.some(template => template.id === targetId), "the template remains until field cleanup is durable");
+    const failedCalls = (await evaluate("window.__projectFixture.calls()")).slice(callsBeforeDelete.length);
+    assert.ok(pendingTemplates.some(template => template.id === targetId), "the template remains when the template-list save fails");
     assert.ok(!cleanedGroup.fields.some(field => field.id === targetFieldId), "the owned field is saved before the template record is removed");
+    assert.deepEqual(failedCalls.filter(call => call.command === "save_project_file").map(call => call.path),
+      [targetGroupPath, templatesPath], "the owned fields are saved before the template-list save fails");
 
     const retry = `([...document.querySelectorAll('[role="dialog"] button')].find(button => /确认删除|重试保存/.test(button.textContent.trim())))`;
     await evaluate(`${retry}.click()`);

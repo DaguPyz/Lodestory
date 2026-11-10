@@ -16,6 +16,7 @@ base64 = "0.22.1"
 chrono = { version = "0.4", features = ["serde"] }
 dunce = "1"
 font-kit = "0.14.3"
+libloading = "0.7.4"
 same-file = "1"
 rustix = { version = "1.1.5", features = ["fs"] }
 serde = { version = "1", features = ["derive"] }

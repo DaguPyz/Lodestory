@@ -9,16 +9,25 @@ const root = fileURLToPath(new URL("../../", import.meta.url));
 const fixtureRoot = path.join(root, "tests", "fixtures", "native-process-c");
 const target = path.join(root, ".desktop-e2e", "native-fixture");
 const executable = path.join(target, "debug", process.platform === "win32" ? "lodestory-test-plugin-c.exe" : "lodestory-test-plugin-c");
+const libraryFixture = path.join(root, "tests", "fixtures", "native-library-d");
+const libraryTarget = path.join(root, ".desktop-e2e", "native-library-normal");
+const libraryName = process.platform === "win32" ? "lodestory_test_library_d.dll"
+  : process.platform === "darwin" ? "liblodestory_test_library_d.dylib" : "liblodestory_test_library_d.so";
+const library = path.join(libraryTarget, "debug", libraryName);
 
 describe("独立 Rust 程序的窗口关闭", function () {
   before(function () {
     const build = spawnSync("cargo", ["build", "--locked", "--manifest-path", path.join(fixtureRoot, "Cargo.toml"), "--target-dir", target], {cwd: root, encoding: "utf8"});
     if (build.error) throw build.error;
     assert.equal(build.status, 0, build.stderr);
+    const libraryBuild = spawnSync("cargo", ["build", "--locked", "--manifest-path", path.join(libraryFixture, "Cargo.toml"), "--target-dir", libraryTarget], {cwd: root, encoding: "utf8"});
+    if (libraryBuild.error) throw libraryBuild.error;
+    assert.equal(libraryBuild.status, 0, libraryBuild.stderr);
   });
   it("窗口关闭等待后端退出，失败后保留提示并可重试", async function () {
     const parent = await mkdtemp(path.join(tmpdir(), "lodestory-native-close-"));
     const marker = path.join(parent, "backend-exited");
+    const libraryMarker = path.join(parent, "library-cleaned");
     let pid;
     try {
       await browser.waitUntil(() => browser.execute(() => !!window.__lodestoryLifecycleTest), {timeout: 30000});
@@ -36,19 +45,27 @@ describe("独立 Rust 程序的窗口关闭", function () {
         window.__lodestoryLifecycleTest.startNativeProcessForClose(entry, markerPath), executable, marker);
       assert.equal(configured.status, "success");
       pid = configured.result.pid;
+      const libraryConfigured = await browser.execute((entry, markerPath) =>
+        window.__lodestoryLifecycleTest.startNativeLibraryForClose(entry, markerPath), library, libraryMarker);
+      assert.equal(libraryConfigured.status, "success");
       // 真实关闭请求仍经过原生窗口；拦住最终销毁以便 WebDriver 完成会话。
       await browser.execute(() => window.__lodestoryLifecycleTest.holdWindowDestroy());
       await browser.execute(() => window.__lodestoryLifecycleTest.requestWindowClose());
       const notice = await $(".app-shutdown-error");
       await notice.waitForDisplayed({timeout: 30000});
-      assert.match(await notice.getText(), /模拟后端清理失败/);
+      assert.match(await notice.getText(), /动态库清理失败/);
       assert.equal(await readFile(path.join(parent, "生命周期测试", "正文.txt"), "utf8"), "关闭失败时已保存的正文");
       process.kill(pid, 0);
       await assert.rejects(readFile(marker), error => error.code === "ENOENT");
+      await assert.rejects(readFile(libraryMarker), error => error.code === "ENOENT");
 
       const retry = await $(".app-shutdown-error button");
       assert.equal(await retry.getText(), "重试关闭");
       await retry.click();
+      await browser.waitUntil(async () => /模拟后端清理失败/.test(await (await $(".app-shutdown-error")).getText()), {timeout: 10000});
+      assert.equal(await readFile(libraryMarker, "utf8"), "D 已清理");
+      assert.equal(await browser.execute(() => window.__lodestoryLifecycleTest.destroyCalls()), 0);
+      await (await $(".app-shutdown-error button")).click();
       let markerContent;
       for (let attempt = 0; attempt < 100; attempt++) {
         try { markerContent = await readFile(marker, "utf8"); } catch (error) { if (error.code !== "ENOENT") throw error; }

@@ -2245,6 +2245,7 @@ dependencies = [
  "chrono",
  "dunce",
  "font-kit",
+ "libloading",
  "rustix",
  "same-file",
  "serde",

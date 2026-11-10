@@ -1,0 +1,16 @@
+[package]
+name = "lodestory-test-library-d"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+incompatible-abi = []
+fail-init = []
+fail-init-retry = ["fail-init"]
+
+[dependencies]
+serde_json = "1"

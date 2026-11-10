@@ -18,6 +18,7 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/asset-catalog`：按工作台会话读取只读资产目录快照，以及共享单例 `assetCatalogKey`。
 - `@lodestory/sdk/workbench`：项目与工作台会话、参与者生命周期、快照和服务类型，以及共享单例 `workbenchKey`。
 - `@lodestory/sdk/project-storage`：项目字节文件缓冲与存储服务类型，以及共享单例 `projectStorageKey`。
+- `@lodestory/sdk/native-library-loader`：可信动态库的加载、调用和关闭契约，以及共享 `nativeLibraryLoaderKey`；原生函数约定见 [ABI 头文件](native/lodestory_native_library.h)。
 - `@lodestory/sdk/project-search`：按会话登记搜索来源、查询与打开结果的契约，以及共享 `projectSearchKey` 和 `projectSearchRequested` 事件。
 - `@lodestory/sdk/documents`：打开文档与文档工作区类型，以及 `documentsKey` 和新建/显示请求事件。
 - `@lodestory/sdk/body-editor`：正文格式、编辑器定义与宿主传入的编辑器属性、正文 main 内容 ID；`EditorHandle` 可按需贡献通用上下文菜单操作，格式插件可通过 `EditorDefinition.conversions` 声明转换，由正文宿主统一提供另存为入口。插件可通过 `EditorDefinition.replaces` 声明按格式替代的旧编辑器映射，由注册表兼容读取已有配置。

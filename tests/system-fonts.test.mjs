@@ -7,6 +7,12 @@ function loadSystemFontLoader(fixture) {
   return createSystemFontLoader();
 }
 
+function assertFamiliesEqual(actual, expected) {
+  assert.ok(Array.isArray(actual), "font families are returned as an array");
+  // The loader runs in a VM; compare its array contents in this test's realm.
+  assert.deepEqual(Array.from(actual), expected);
+}
+
 test("a loader preserves, deduplicates, sorts, and caches the native font family list", async () => {
   let resolveFonts;
   const fixture = createMainFixture({
@@ -33,9 +39,9 @@ test("a loader preserves, deduplicates, sorts, and caches the native font family
   ]);
 
   const expected = ["  Edge Space Family  ", " Noto Sans CJK SC ", "Arial", "O'Connor Sans", "宋体"];
-  assert.deepEqual(await first, expected);
-  assert.deepEqual(await second, expected);
-  assert.deepEqual(await loadFamilies(), expected);
+  assertFamiliesEqual(await first, expected);
+  assertFamiliesEqual(await second, expected);
+  assertFamiliesEqual(await loadFamilies(), expected);
   assert.equal(fixture.tauriCalls.length, 1, "concurrent and later reads reuse the completed request");
 });
 
@@ -52,7 +58,7 @@ test("a failed native enumeration can be retried, while browser mode rejects wit
   const loadFamilies = loadSystemFontLoader(fixture);
 
   await assert.rejects(loadFamilies(), /native font service unavailable/);
-  assert.deepEqual(await loadFamilies(), ["Arial"]);
+  assertFamiliesEqual(await loadFamilies(), ["Arial"]);
   assert.equal(attempts, 2);
 
   const browserFixture = createMainFixture({tauri: false});
@@ -80,9 +86,9 @@ test("separate loader instances keep independent successful caches", async () =>
   const loadFirst = loadSystemFontLoader(fixture);
   const loadSecond = loadSystemFontLoader(fixture);
 
-  assert.deepEqual(await loadFirst(), ["Font 1"]);
-  assert.deepEqual(await loadSecond(), ["Font 2"]);
-  assert.deepEqual(await loadFirst(), ["Font 1"]);
-  assert.deepEqual(await loadSecond(), ["Font 2"]);
+  assertFamiliesEqual(await loadFirst(), ["Font 1"]);
+  assertFamiliesEqual(await loadSecond(), ["Font 2"]);
+  assertFamiliesEqual(await loadFirst(), ["Font 1"]);
+  assertFamiliesEqual(await loadSecond(), ["Font 2"]);
   assert.equal(attempts, 2, "each loader caches its own successful result");
 });

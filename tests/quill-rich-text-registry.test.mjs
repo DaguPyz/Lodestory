@@ -159,6 +159,7 @@ function replaceGlobals(values) {
 
 async function loadRealQuillRegistry() {
   const restoreGlobals = replaceGlobals({
+    window: {},
     document: {addEventListener() {}, removeEventListener() {}},
     Node: {ELEMENT_NODE: 1, TEXT_NODE: 3},
     navigator: {platform: ""},
@@ -175,7 +176,8 @@ async function loadRealQuillRegistry() {
     "./richTextFormatting": richTextFormatting,
   });
   const {createRichTextRegistry} = loadTypeScript("quillRichTextRegistry.ts", {
-    quill: quillModule,
+    // The VM runs CommonJS output, so expose the real ESM namespace as such.
+    quill: {__esModule: true, ...quillModule},
     "./richDeltaFormat": richDeltaFormat,
     "./richTextFormatting": richTextFormatting,
   });

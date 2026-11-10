@@ -19,6 +19,7 @@ import { errorUiKey, type ErrorUiService } from "@lodestory/sdk/error";
 import { themeKey, type ThemeConfig, type ThemeService } from "@lodestory/sdk/theme";
 import { workbenchKey, type LeaveReason, type WorkbenchProject, type WorkbenchService, type WorkbenchSession } from "@lodestory/sdk/workbench";
 import { configKey, type ConfigItem, type ConfigService, type ConfigValue } from "@lodestory/sdk/config";
+import {nativeLibraryLoaderKey, type NativeLibraryInstance, type NativeLibraryResponse} from "@lodestory/sdk/native-library-loader";
 import {
   documentsKey,
   documentCreateRequested,
@@ -396,3 +397,13 @@ const themeConfig: ThemeConfig = {
 void themeConfig;
 const jsonConfig: ConfigValue = { values: [null, true, 1, "ok"] };
 void jsonConfig;
+
+async function nativeLibraryTypes(pluginContext: PluginContext) {
+  const backend: NativeLibraryInstance = await pluginContext.get(nativeLibraryLoaderKey).load("/library");
+  const response: NativeLibraryResponse = await backend.call({requestId: "one", operation: "ping", schemaVersion: "1.0.0", params: {text: "hello"}});
+  if (response.status === "error") {const code: string = response.error.code; void code;}
+  await backend.close();
+  // @ts-expect-error Dynamic-library requests require a schema version.
+  await backend.call({requestId: "one", operation: "ping", params: null});
+}
+void nativeLibraryTypes;

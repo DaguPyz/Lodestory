@@ -10,6 +10,7 @@
     <script type="module">
       // Development-only IPC fixture. No native directory or index is modified.
       import { mockIPC, mockWindows } from "@tauri-apps/api/mocks";
+      import { encodeAssetGroupFallback, VALIDATE_AND_ENCODE_GROUP } from "/src/plugins/asset-management/assetObjectFiles.ts";
       const query = new URLSearchParams(location.search);
       const scenario = query.get("scenario");
       const encode = text => Array.from(new TextEncoder().encode(text));
@@ -271,6 +272,11 @@
       const projectTreeGate = new Promise(resolve => { releaseProjectTree = resolve; });
       if (scenario === "project-loading-gate") window.__releaseProjectTree = releaseProjectTree;
       mockIPC(async (command, args) => {
+        if (command === "run_background_task") {
+          if (args.name !== VALIDATE_AND_ENCODE_GROUP) throw new Error(`Unknown background task: ${args.name}`);
+          const bytes = encodeAssetGroupFallback(args.input);
+          return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        }
         // Adapt the native byte transports to the same in-memory conflict checks.
         const encodedCreate = command === "create_project_file_base64";
         if (encodedCreate) {

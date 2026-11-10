@@ -3,6 +3,7 @@ import {workbenchKey} from "@lodestory/sdk/workbench";
 import {documentsKey} from "@lodestory/sdk/documents";
 import {layoutKey} from "@lodestory/sdk/layout";
 import {nativeProcessLoaderKey} from "@lodestory/sdk/native-process-loader";
+import {nativeLibraryLoaderKey} from "@lodestory/sdk/native-library-loader";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 export function installLifecycleTest(runtime) {
   const workbench = runtime.get(workbenchKey);
@@ -47,6 +48,29 @@ export function installLifecycleTest(runtime) {
    async startNativeProcessForClose(entry, markerPath) {
      const backend = await runtime.get(nativeProcessLoaderKey).load(entry);
      return backend.call({requestId: "configure", operation: "configureShutdown", schemaVersion: "1.0.0", params: {markerPath, rejectOnce: true}});
+   },
+   async testNativeLibrary(entry, markerPath) {
+     const backend = await runtime.get(nativeLibraryLoaderKey).load(entry);
+     try {
+       const success = await backend.call({requestId: "lib-1", operation: "ping", schemaVersion: "1.0.0", params: {text: "来自 B 的请求"}});
+       const error = await backend.call({requestId: "lib-2", operation: "unknown", schemaVersion: "1.0.0", params: null});
+       await backend.call({requestId: "lib-3", operation: "configureShutdown", schemaVersion: "1.0.0", params: {markerPath, rejectOnce: false}});
+       const delayed = backend.call({requestId: "lib-4", operation: "delay", schemaVersion: "1.0.0", params: {milliseconds: 100}});
+       await backend.close();
+       const completed = await delayed;
+       let afterClose;
+       try {await backend.call({requestId: "lib-5", operation: "ping", schemaVersion: "1.0.0", params: null});}
+       catch (error) {afterClose = String(error);}
+       return {success, error, completed, afterClose};
+     } finally {await backend.close();}
+   },
+   async tryNativeLibraryLoad(entry) {
+     try {const backend = await runtime.get(nativeLibraryLoaderKey).load(entry); await backend.close(); return null;}
+     catch (error) {return String(error);}
+   },
+   async startNativeLibraryForClose(entry, markerPath) {
+     const backend = await runtime.get(nativeLibraryLoaderKey).load(entry);
+     return backend.call({requestId: "configure-lib", operation: "configureShutdown", schemaVersion: "1.0.0", params: {markerPath, rejectOnce: true}});
    },
    requestWindowClose() {return getCurrentWindow().close();},
    holdWindowDestroy() {

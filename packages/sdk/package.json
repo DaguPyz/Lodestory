@@ -59,6 +59,10 @@
       "types": "./dist/background-tasks.d.ts",
       "import": "./dist/background-tasks.js"
     },
+    "./native-process-loader": {
+      "types": "./dist/native-process-loader.d.ts",
+      "import": "./dist/native-process-loader.js"
+    },
     "./documents": {
       "types": "./dist/documents.d.ts",
       "import": "./dist/documents.js"

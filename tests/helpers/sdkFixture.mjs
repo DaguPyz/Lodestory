@@ -16,6 +16,7 @@ const publicEntries = {
   "@lodestory/sdk/documents": ["documents.ts"],
   "@lodestory/sdk/project-storage": ["project-storage.ts"],
   "@lodestory/sdk/background-tasks": ["background-tasks.ts"],
+  "@lodestory/sdk/native-process-loader": ["native-process-loader.ts"],
   "@lodestory/sdk/project-search": ["project-search.ts"],
   "@lodestory/sdk/shortcuts": ["shortcuts.ts"],
   "@lodestory/sdk": ["index.ts"],

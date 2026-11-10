@@ -63,7 +63,8 @@ test("SDK package exposes ESM root and all public capability entry points", () =
     assert.equal(packageManifest.exports[specifier].types, `./dist/${target}.d.ts`);
   }
 
-  assert.deepEqual(Object.keys(packageRoot).sort(), ["createEventKey", "createServiceKey"]);
+  assert.deepEqual(Object.keys(packageRoot).sort(), ["PluginStopCancelledError", "createEventKey", "createServiceKey"]);
+  assert.equal(new packageRoot.PluginStopCancelledError().name, "PluginStopCancelledError");
   assert.deepEqual(Object.keys(packageUi).sort(), ["UiNavigationCompleteError", "uiInitialPageConfig", "uiInteractionKey", "uiKey", "uiMotionConfig"]);
   assert.equal(typeof packageUi.UiNavigationCompleteError, "function");
   assert.deepEqual(Object.keys(packageError), ["errorUiKey"]);

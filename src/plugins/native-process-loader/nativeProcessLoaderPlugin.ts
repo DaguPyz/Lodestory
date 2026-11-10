@@ -25,6 +25,9 @@ const desktopBridge: ProcessBridge = {
 type Pending = {promise: Promise<NativeProcessResponse>; resolve(value: NativeProcessResponse): void; reject(reason: Error): void};
 const TIMEOUT_MS = 30_000;
 
+/** 后端明确拒绝退出，仍可处理下一次退出请求。 */
+class ShutdownRejectedError extends Error {}
+
 function asError(value: unknown): Error {
   return value instanceof Error ? value : new Error(typeof value === "string" ? value : "后端通信失败。");
 }
@@ -101,7 +104,7 @@ async function openInstance(bridge: ProcessBridge, entry: string, onClosed: (ins
         pending.delete(response.requestId);
         item.resolve(response);
         // 退出响应后，剩余工作是等待进程结束，不再读取输出。
-        if (response.requestId === shutdownId) return;
+        if (response.requestId === shutdownId && response.status === "success") return;
       }
     } catch (error) { fail(error); }
   }
@@ -114,7 +117,7 @@ async function openInstance(bridge: ProcessBridge, entry: string, onClosed: (ins
     },
     close() {
       if (state === "closed") return Promise.resolve();
-      if (state === "failed") return Promise.reject(new Error(`${failure?.message ?? "后端退出失败。"} 请重启应用。`));
+      if (state === "failed") return Promise.reject(new Error(`${failure?.message ?? "后端退出失败。"} 无法确认后端已完成清理。`));
       if (!closeWork) {
         state = "closing";
         closeWork = (async () => {
@@ -122,14 +125,24 @@ async function openInstance(bridge: ProcessBridge, entry: string, onClosed: (ins
           if (failure) throw failure;
           shutdownId = `shutdown-${++sequence}`;
           const response = await send(shutdownId, {type: "shutdown", requestId: shutdownId});
-          if (response.status === "error") throw new Error(`后端清理失败：${response.error.message}。请重启应用。`);
+          if (response.status === "error") throw new ShutdownRejectedError(`后端清理失败：${response.error.message}`);
           const exitCode = await bridge.wait(id);
-          if (exitCode !== 0) throw new Error("后端退出状态异常，请重启应用。");
+          if (exitCode !== 0) throw new Error("后端退出状态异常，无法确认清理已完成。");
           state = "closed";
           onClosed(instance);
-        })().catch(error => { fail(error); throw new Error(`${asError(error).message} 请重启应用。`); });
+        })().catch(error => {
+          if (error instanceof ShutdownRejectedError && state !== "failed") {
+            // 后端拒绝退出后仍保持通信，允许用户处理问题并重新请求退出。
+            state = "running";
+            shutdownId = undefined;
+            closeWork = undefined;
+          } else {
+            fail(error);
+          }
+          throw asError(error);
+        });
       }
-      return timeout(closeWork, "等待后端退出超过 30 秒，请处理未完成的工作或重启应用。");
+      return timeout(closeWork, "等待后端退出超过 30 秒，请处理未完成的工作后重试。");
     },
   };
   return instance;

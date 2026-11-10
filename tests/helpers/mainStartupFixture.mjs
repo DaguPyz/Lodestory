@@ -42,6 +42,11 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const themeApplications = [];
   const rootElement = { children: [], textContent: "", innerHTML: "", append(child) { this.children.push(child); } };
   rootElement.replaceChildren = (...children) => { rootElement.children = children; };
+  rootElement.hasChildNodes = () => rootElement.children.length > 0 || roots.some(root => root.mounted);
+  const body = {
+    children: [],
+    append(child) { child.parent = this; this.children.push(child); },
+  };
   const documentRootAttributes = new Map();
   const documentRoot = {
     dataset: {},
@@ -61,6 +66,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   };
   const document = {
     documentElement: documentRoot,
+    body,
     getElementById(id) { return id === "root" && !missingRoot ? rootElement : null; },
     createElement(tagName) {
       return {
@@ -69,7 +75,8 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         type: "",
         attributes: {},
         setAttribute(name, value) { this.attributes[name] = value; },
-        append(...children) { this.children = [...(this.children ?? []), ...children]; },
+        append(...children) { for (const child of children) child.parent = this; this.children = [...(this.children ?? []), ...children]; },
+        remove() { if (this.parent) this.parent.children = this.parent.children.filter(child => child !== this); this.parent = undefined; },
         addEventListener(name, listener) { this[`on${name}`] = listener; },
         click() { this.onclick?.(); },
       };
@@ -107,6 +114,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     location: { reloadCalls: 0, reload() { this.reloadCalls += 1; } },
   };
   const appWindow = {
+    async destroy() { logs.push("window.destroy"); if (faults.destroyError) throw faults.destroyError; },
     async setTheme(mode) {
       nativeCalls.push(mode);
       if (nativeSetGate) await nativeSetGate;
@@ -183,6 +191,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         renderCalls: [],
         render(tree) {
           logs.push("root.render");
+          this.mounted = true;
           this.renderCalls.push(tree);
           if (faults.uncaughtErrorDuringRender) {
             const error = faults.uncaughtErrorDuringRender;
@@ -200,6 +209,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         unmount() {
           logs.push("root.unmount");
           if (faults.unmountError) throw faults.unmountError;
+          this.mounted = false;
         },
       };
       roots.push(root);
@@ -554,6 +564,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     rootCalls,
     roots,
     rootElement,
+    body,
     nativeCalls,
     tauriCalls,
     themeApplications,

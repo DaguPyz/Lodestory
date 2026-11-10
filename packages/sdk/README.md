@@ -4,7 +4,7 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 
 ## 导出入口
 
-- `@lodestory/sdk`：`Plugin`、`PluginContext`、能力 key 与事件 key 类型和创建函数。
+- `@lodestory/sdk`：`Plugin`、`PluginContext`、`PluginStopCancelledError`、能力 key 与事件 key 类型和创建函数。
 - `@lodestory/sdk/config`：JSON 配置值、配置项、配置服务类型，以及共享单例 `configKey`。
 - `@lodestory/sdk/shortcuts`：命令、默认按键、作用域及用户覆盖接口，共享 `shortcutsKey`、命令 ID 和作用域 ID；实现见[快捷键插件](../../src/plugins/shortcuts/README.md)。
 - `@lodestory/sdk/ui`：UI 服务类型与共享单例 `uiKey`。
@@ -45,6 +45,8 @@ UI 服务拥有当前窗口的交互浮层状态。交互接入插件通过 `uiI
 宿主创建 `EngineCore` 并挂载插件时调用 `activate(context)`。插件在其中用 `provide` 注册声明过的能力，用 `get` 读取声明的依赖，用 `on` 订阅事件，也可用 `emit` 发布事件。卸载或激活失败时，宿主调用可选的 `deactivate()`，并撤销该插件的能力和订阅。
 
 页面、导航、根包装和布局内容等登记接口返回 `PluginContribution`。贡献者必须在 `activate` 中用 `context.track(登记结果)` 关联所有权，并保留句柄供激活失败及停用清理。单插件停用依次执行所有参与者的 `check`、`prepare` 和 `withdraw`，撤回完成后才调用 `deactivate`；检查、准备或撤回失败会保留插件及依赖，重试不会重复已成功撤回的登记。`context.onStop` 可登记其他通用参与者，`prepare` 适合保存检查，失败时必须保留用户数据。整窗停止使用 `application` 范围，单插件使用 `plugin` 范围；根包装层拒绝单插件在线撤回。React 组件的异步清理须由参与者明确等待，不能依赖普通 Effect 清理返回 Promise。当前仍只在启动期登记页面与根包装，不提供运行中安装。
+
+用户主动取消停止时，参与者可以抛出 `PluginStopCancelledError`；应用会保留窗口，不将取消当作错误提示。实际保存或清理失败应返回具体错误，不使用这个类型掩盖失败。
 
 正文格式编辑器的登记句柄也必须交给 `context.track`。目前正文宿主会拒绝在运行中单独撤回格式编辑器，避免正在使用的编辑器和未提交输入被意外销毁；整窗停止仍可释放它。
 

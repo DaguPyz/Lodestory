@@ -22,9 +22,9 @@ export default defineConfig({
       },
       transform(code: string, id: string) {
         if (!id.endsWith("/src/main.tsx")) return;
-        const start = "await createAppRuntime(createAppPlugins());";
+        const start = "await startApplication(createAppPlugins(), showUiShutdownError);";
         if (!code.includes(start)) throw new Error("Desktop test bridge could not find the application startup call.");
-        return code.replace(start, `const runtime = await createAppRuntime(createAppPlugins());
+        return code.replace(start, `const runtime = ${start}
           (await import("/tests/desktop/lifecycle-entry.js")).installLifecycleTest(runtime);`);
       },
     }] : [])

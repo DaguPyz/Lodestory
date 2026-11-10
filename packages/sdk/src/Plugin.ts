@@ -4,6 +4,14 @@ import type { CapabilityKey, ServiceKey } from "./ServiceKey.js";
 /** 一次停止影响单个插件，或整个运行实例。 */
 export type PluginStopScope = "plugin" | "application";
 
+/** 用户取消或拒绝了停止；调用方应保留当前窗口，不把它显示为异常。 */
+export class PluginStopCancelledError extends Error {
+  constructor() {
+    super("Plugin stop was cancelled.");
+    this.name = "PluginStopCancelledError";
+  }
+}
+
 /**
  * 插件拥有的可撤回资源。检查阶段不得撤回资源；撤回失败时内核保留插件和依赖，
  * 并允许重试。withdraw 必须可重复调用，且只能在成功后报告完成。

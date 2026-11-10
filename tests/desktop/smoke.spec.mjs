@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 
 describe("Lodestory desktop", () => {
   it("loads the welcome page and opens and closes the new project dialog", async () => {
+    await browser.waitUntil(() => browser.execute(() => !!window.__lodestoryLifecycleTest), {timeout: 30000});
+    await browser.execute(() => window.__lodestoryLifecycleTest.focusWindow());
     const heading = await $("#welcome-page-heading");
     await heading.waitForDisplayed({ timeout: 30000 });
     assert.equal(await heading.getText(), "欢迎使用 Lodestory");

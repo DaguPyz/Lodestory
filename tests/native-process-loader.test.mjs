@@ -8,14 +8,18 @@ import {createSdkLoader} from "./helpers/sdkFixture.mjs";
 const sdk = createSdkLoader();
 const source = readFileSync(new URL("../src/plugins/native-process-loader/nativeProcessLoaderPlugin.ts", import.meta.url), "utf8");
 const compiled = ts.transpileModule(source, {compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS}}).outputText;
-const exports = {};
-vm.runInNewContext(compiled, {exports, Promise, Error, Map, Set, JSON, Object, Array, setTimeout, clearTimeout,
-  require(name) {
-    if (name === "@tauri-apps/api/core") return {isTauri: () => false, invoke: () => { throw new Error("unexpected invoke"); }};
-    return sdk.requireSdk(name);
-  }});
+function loadPlugin(timers = {setTimeout, clearTimeout}) {
+  const exports = {};
+  vm.runInNewContext(compiled, {exports, Promise, Error, Map, Set, JSON, Object, Array, ...timers,
+    require(name) {
+      if (name === "@tauri-apps/api/core") return {isTauri: () => false, invoke: () => { throw new Error("unexpected invoke"); }};
+      return sdk.requireSdk(name);
+    }});
+  return exports.createNativeProcessLoaderPlugin;
+}
+const createPlugin = loadPlugin();
 
-function setup() {
+function setup(factory = createPlugin) {
   const queue = [], readers = [], writes = [], aborts = [];
   let participant, loader;
   const bridge = {
@@ -25,7 +29,7 @@ function setup() {
     async wait() { return 0; },
     async abortStart(id) { aborts.push(id); },
   };
-  const plugin = exports.createNativeProcessLoaderPlugin(bridge);
+  const plugin = factory(bridge);
   plugin.activate({provide(_key, value) {loader = value;}, onStop(value) {participant = value;}});
   function push(value) { const message = value === null ? null : JSON.stringify(value); const reader = readers.shift(); if (reader) reader(message); else queue.push(message); }
   return {loader, participant, plugin, push, writes, aborts};
@@ -58,6 +62,48 @@ test("invalid ready cleans the partially started process", async () => {
   f.push({type: "ready", protocolVersion: "2.0.0"});
   await assert.rejects(f.loader.load("/trusted/backend"), /协议版本无效/);
   assert.deepEqual(f.aborts, ["process-1"]);
+});
+
+test("a backend can reject shutdown and accept a later retry", async () => {
+  const f = setup();
+  f.push({type: "ready", protocolVersion: "1.0.0"});
+  await f.loader.load("/trusted/backend");
+  const first = f.participant.withdraw();
+  await tick();
+  const firstId = f.writes.at(-1).requestId;
+  f.push({type: "response", requestId: firstId, status: "error", error: {code: "BUSY", message: "仍在保存"}});
+  await assert.rejects(first, /仍在保存/);
+
+  const second = f.participant.withdraw();
+  await tick();
+  const secondId = f.writes.at(-1).requestId;
+  assert.notEqual(secondId, firstId);
+  f.push({type: "response", requestId: secondId, status: "success", result: null});
+  await second;
+});
+
+test("retry after a shutdown timeout waits for the same request", async () => {
+  let nextTimer = 0;
+  const timers = new Map();
+  const factory = loadPlugin({
+    setTimeout(callback) { const id = ++nextTimer; timers.set(id, callback); return id; },
+    clearTimeout(id) { timers.delete(id); },
+  });
+  const f = setup(factory);
+  f.push({type: "ready", protocolVersion: "1.0.0"});
+  const instance = await f.loader.load("/trusted/backend");
+  const first = instance.close();
+  await tick();
+  const shutdownId = f.writes.at(-1).requestId;
+  for (const callback of [...timers.values()]) callback();
+  timers.clear();
+  await assert.rejects(first, /超过 30 秒/);
+
+  const retry = instance.close();
+  await tick();
+  assert.equal(f.writes.filter(message => message.type === "shutdown").length, 1);
+  f.push({type: "response", requestId: shutdownId, status: "success", result: null});
+  await retry;
 });
 
 test("unexpected process output rejects the pending call and prevents successful stop", async () => {

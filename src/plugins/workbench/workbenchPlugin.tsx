@@ -1,4 +1,4 @@
-import type {Plugin} from "@lodestory/sdk";
+import {PluginStopCancelledError, type Plugin} from "@lodestory/sdk";
 import {workbenchKey} from "@lodestory/sdk/workbench";
 import {uiKey} from "@lodestory/sdk/ui";
 import {layoutKey} from "@lodestory/sdk/layout";
@@ -6,8 +6,6 @@ import {themeKey} from "@lodestory/sdk/theme";
 import {errorUiKey} from "@lodestory/sdk/error";
 import {windowShellKey} from "@lodestory/sdk/window-shell";
 import {shortcutsKey, shortcutScopeIds} from "@lodestory/sdk/shortcuts";
-import {isTauri} from "@tauri-apps/api/core";
-import {getCurrentWindow} from "@tauri-apps/api/window";
 import {flushSync} from "react-dom";
 import {appPages} from "../../app/pages";
 import "../../styles.css";
@@ -30,7 +28,6 @@ export function createWorkbenchPlugin(): Plugin {
       let removePage: (() => void) | undefined;
       let removeGuard: (() => void) | undefined;
       let removeWrapper: (() => void) | undefined;
-      let removeCloseListener: (() => void) | undefined;
       let removeStatus: (() => void) | undefined;
       let removeShortcutScope: (() => void) | undefined;
       let alive = true;
@@ -45,14 +42,14 @@ export function createWorkbenchPlugin(): Plugin {
         withdrawOrder: -1000,
         async withdraw(scope) {
           if (scope === "application" && ready && !await store.shutdown()) {
-            throw new Error("Workbench declined shutdown; project content remains available.");
+            throw new PluginStopCancelledError();
           }
         },
       });
       cleanup = async () => {
         alive = false;
         const errors: unknown[] = [];
-        for (const remove of [removeCloseListener, removePage, removeShortcutScope, removeStatus, removeGuard, removeWrapper]) {
+        for (const remove of [removePage, removeShortcutScope, removeStatus, removeGuard, removeWrapper]) {
           try { remove?.(); } catch (error) { errors.push(error); }
         }
         try { await store.dispose(); } catch (error) { errors.push(error); }
@@ -82,17 +79,6 @@ export function createWorkbenchPlugin(): Plugin {
         async prepare() {
           store.start();
           ready = true;
-          if (!isTauri()) return;
-          const stop = await getCurrentWindow().onCloseRequested(async event => {
-            try { if (!alive || !await store.shutdown()) event.preventDefault(); }
-            catch (error) {
-              // 保存检查失败仍保留窗口；会话已提交关闭后的清理错误仅报告，避免留下已卸载的空窗口。
-              if (!alive || store.service.getSnapshot().session) event.preventDefault();
-              console.error("Workbench could not close the application.", {error});
-            }
-          });
-          if (alive) removeCloseListener = stop;
-          else stop();
         },
       }));
     },

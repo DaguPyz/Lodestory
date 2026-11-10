@@ -283,7 +283,7 @@ test("normal window close uses the same asynchronous leave checks and preserves 
   });
   const workbench = getWorkbench(fixture);
   const activeProject = project("novel-1", "第一本", "/stories/first");
-  assert.equal(fixture.closeRequestListeners.size, 1, "the workbench should install a native close listener");
+  assert.equal(fixture.closeRequestListeners.size, 1, "the host should install one native close listener");
   assert.equal(await workbench.openProject(activeProject), true);
   await waitForWorkbench(workbench);
   const sessionId = workbench.getSnapshot().session.id;
@@ -296,8 +296,9 @@ test("normal window close uses the same asynchronous leave checks and preserves 
 
   gate.allowed = true;
   const closed = await fixture.requestWindowClose();
-  assert.equal(closed.prevented, false);
-  assert.equal(workbench.getSnapshot().session, null);
+  assert.equal(closed.prevented, true, "the host explicitly destroys the window after stopping");
+  assert.equal(fixture.logs.includes("window.destroy"), true);
+  assert.throws(() => workbench.getSnapshot(), /no longer active/);
   assert.deepEqual(gate.disposed, [sessionId]);
 });
 
@@ -362,7 +363,7 @@ test("the workbench rejects direct editor navigation without a complete project 
 });
 
 
-test("a cleanup failure after an approved native close does not leave an unmounted window open", async () => {
+test("a cleanup failure after an approved native close remains visible and is not mistaken for success", async () => {
   const gate = {
     allowed: true, started: [], reasons: [], disposed: [],
     disposeError: new Error("participant cleanup failed"),
@@ -374,10 +375,15 @@ test("a cleanup failure after an approved native close does not leave an unmount
   await openWorkbenchProject(workbench, project("novel-1", "第一本", "/stories/first"));
 
   const closed = await fixture.requestWindowClose();
-  assert.equal(closed.prevented, false, "save approval has already committed the close");
+  assert.equal(closed.prevented, true, "a cleanup failure must not be reported as a successful close");
   assert.equal(workbench.getSnapshot().session, null);
   assert.equal(gate.disposed.length, 1);
-  assert.ok(fixture.logs.some(entry => entry?.level === "error" && entry.args[0] === "Workbench could not close the application."));
+  assert.equal(fixture.rootElement.hasChildNodes(), false);
+  assert.equal(fixture.logs.some(entry => entry?.level === "error" && entry.args[0] === "Application could not close."), true);
+  assert.equal(fixture.body.children[0].children[0].textContent, "应用未能关闭");
+  const retry = await fixture.requestWindowClose();
+  assert.equal(retry.prevented, true);
+  assert.equal(gate.disposed.length, 1, "already disposed resources are not destroyed twice");
 });
 
 test("project file UI and the independent dialog wrapper connect through the SDK to document workspaces", async () => {

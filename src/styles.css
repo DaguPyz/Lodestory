@@ -116,6 +116,38 @@ p {
 .app-startup-error > button:hover:not(:disabled) { color: var(--ui-state-hover-foreground); background: var(--ui-surface-hover); }
 .app-startup-error > button:active:not(:disabled) { color: var(--ui-state-pressed-foreground); background: var(--ui-surface-pressed); }
 
+.app-shutdown-error {
+  position: fixed;
+  z-index: 10000;
+  top: var(--ui-space-8);
+  right: var(--ui-space-8);
+  max-width: 32rem;
+  padding: var(--ui-space-8);
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-workspace);
+  border: 1px solid var(--ui-text-secondary);
+  border-radius: var(--ui-radius-row);
+}
+.app-shutdown-error--standalone {
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  max-width: none;
+  border: 0;
+}
+.app-shutdown-error > p { margin-block: var(--ui-space-6); color: var(--ui-text-secondary); }
+.app-shutdown-error > button {
+  margin-right: var(--ui-space-4);
+  padding: var(--ui-space-4) var(--ui-space-6);
+  color: var(--ui-text-primary);
+  background: transparent;
+  border: 1px solid var(--ui-text-secondary);
+  border-radius: var(--ui-radius-row);
+}
+.app-shutdown-error > button:hover { background: var(--ui-surface-hover); }
+
 .welcome-workspace {
   display: flex;
   flex: 1;

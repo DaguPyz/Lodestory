@@ -1,10 +1,10 @@
-import {createAppRuntime} from "./app/createAppRuntime";
 import {createAppPlugins} from "./app/appPlugins";
-import {showUiStartupError} from "./plugins/ui";
+import {startApplication} from "./app/startApplication";
+import {showUiShutdownError, showUiStartupError} from "./plugins/ui";
 
 async function start() {
     try {
-        await createAppRuntime(createAppPlugins());
+        await startApplication(createAppPlugins(), showUiShutdownError);
     } catch (error) {
         // The core has already rolled back plugins when startup fails.
         showUiStartupError(error);

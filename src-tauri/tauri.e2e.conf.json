@@ -17,7 +17,7 @@
           "identifier": "desktop-e2e",
           "description": "WebdriverIO access for the isolated desktop test build",
           "windows": ["main"],
-          "permissions": ["wdio:default", "wdio-webdriver:default", "core:window:allow-set-focus"]
+          "permissions": ["wdio:default", "wdio-webdriver:default", "core:window:allow-set-focus", "core:window:allow-close"]
         }
       ]
     }

@@ -174,7 +174,7 @@ export async function createProject(options, fs = filesystem) {
     version: "0.1.0",
     private: true,
     type: "module",
-    scripts: {build: "node scripts/build.mjs build", package: "node scripts/build.mjs package"},
+    scripts: {build: "node scripts/build.mjs build", package: "node scripts/build.mjs package", dev: "node scripts/build.mjs dev"},
     devDependencies: {
       jszip: "^3.10.1",
       semver: "^7.8.5",

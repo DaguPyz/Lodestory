@@ -10,7 +10,7 @@ try {
   } else {
     const destination = await createProject(options);
     console.log("已创建插件项目：" + destination);
-    console.log("进入项目目录后安装依赖，再运行 npm run build 或 npm run package。");
+    console.log("进入项目目录后安装依赖，再运行 npm run dev、npm run build 或 npm run package。");
     if (!options.id || options.id.startsWith("com.example.")) {
       console.log("当前插件 ID 是示例，请在交付前更新 plugin.json。");
     }

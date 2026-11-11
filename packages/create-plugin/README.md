@@ -22,14 +22,25 @@ node packages/create-plugin/bin/create-plugin.mjs --name my-both --frontend --ty
 
 ## 生成项目和交付包
 
-项目中的 `plugin.json` 由开发者维护，记录插件身份、兼容范围、依赖和前后端选择。安装依赖后，`package.json` 提供构建及打包命令：
+项目中的 `plugin.json` 由开发者维护，记录插件身份、兼容范围、依赖和前后端选择。安装依赖后，`package.json` 提供构建、开发监听和打包命令：
 
 ```sh
 npm run build
+npm run dev
 npm run package
 ```
 
-`build` 将本次结果写入 `build/run-*`；`package` 会重新构建，并在 `release/` 生成 ZIP。打包工具根据 `plugin.json` 和实际产物生成 ZIP 根目录内的 `manifest.json`，其中 `files` 记录每个产物的路径、大小和 SHA-256；开发者不需要手写交付清单。同名 ZIP 不会被覆盖。首版限制 ZIP 最大 256 MiB、解压后最大 512 MiB、清单最大 256 KiB，文件和目录总数最多 4096。
+`build` 将本次结果写入 `build/run-*`；`package` 会重新构建，并在 `release/` 生成 ZIP。打包工具根据 `plugin.json` 和实际产物生成 ZIP 根目录内的 `manifest.json`，其中 `files` 记录每个产物的路径、大小和 SHA-256；开发者不需要手写交付清单。同名 ZIP 不会被覆盖。`dev` 会监视插件源码，初次和每次保存后自动构建，不生成 ZIP。成功版本写入 `build/dev/<revision>/`，然后原子更新 `build/dev/current.json`；失败时保留上一版并在终端显示原因。`build/dev/status.json` 会显示构建、就绪、失败或停止状态，错误文本不超过 8192 个字符。终端运行期间按 Ctrl+C 停止监听。首版限制 ZIP 最大 256 MiB、解压后最大 512 MiB、清单最大 256 KiB，文件和目录总数最多 4096。
+
+从早期脚手架项目升级时，在项目目录先备份构建脚本，再更新开发命令并复制仓库中新版模板：
+
+```sh
+cp scripts/build.mjs scripts/build.mjs.bak
+npm pkg set "scripts.dev=node scripts/build.mjs dev"
+cp "/path/to/Lodestory/packages/create-plugin/templates/project/build.mjs" scripts/build.mjs
+```
+
+这只替换构建工具脚本并添加开发命令，会保留 `plugin.json`、前后端源码和依赖。
 
 前端使用 React，按公开 SDK 契约登记工作台内容，React 和 `@lodestory/sdk` 保留为外部依赖，由宿主提供同一实例。前端源码位于 `frontend/src`；可把静态文件放在 `frontend/assets`，引用的样式和图片等资源也会一起打包。生成的样式文件会记录在交付清单的 `frontend.styles` 中。
 
@@ -41,4 +52,4 @@ npm run package
 
 在桌面版“设置 → 插件”选择 ZIP 后，应用会检查并启用插件；之前导入的包可点“加载”。已启用的包会在下次启动时恢复。包含前后端时，工厂收到的 `options.backend.call(...)` 使用相同的请求格式调用两种后端；生成的前端面板提供 `ping` 示例。
 
-目前外部插件可声明 `lodestory/layout@0` 或 `lodestory/navigation-layout@0` 作为所需能力；插件依赖、对外提供能力、运行中停用和更新尚不支持。前端入口必须默认导出返回 `Plugin` 的工厂，并且代码中的能力声明须与清单一致。当前桌面联调在 macOS arm64 完成，Windows 和 Linux 尚未验证。
+目前外部插件可声明 `lodestory/layout@0` 或 `lodestory/navigation-layout@0` 作为所需能力。插件依赖、对外提供能力和安装包更新尚未接入。前端入口必须默认导出返回 `Plugin` 的工厂，并且代码中的能力声明须与清单一致。当前桌面联调在 macOS arm64 完成，Windows 和 Linux 尚未验证。

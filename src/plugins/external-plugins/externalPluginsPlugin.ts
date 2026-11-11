@@ -6,22 +6,25 @@ import {externalPluginsKey, type ExternalPluginOptions, type ExternalPluginStatu
 import {layoutExternalCapability, layoutKey, type LayoutContent, type LayoutService} from "@lodestory/sdk/layout";
 import {navigationLayoutExternalCapability, navigationLayoutKey, type NavigationLayoutPage, type NavigationLayoutService} from "@lodestory/sdk/navigation-layout";
 import {errorUiKey} from "@lodestory/sdk/error";
-import {pluginPackagesKey, type PreparedPluginPackage} from "@lodestory/sdk/plugin-packages";
+import {pluginPackagesKey, type DevelopmentPluginBuild, type PreparedPluginPackage} from "@lodestory/sdk/plugin-packages";
 import {pluginRuntimeKey} from "@lodestory/sdk/plugin-runtime";
 import {nativeProcessLoaderKey, type NativeProcessInstance} from "@lodestory/sdk/native-process-loader";
 import {nativeLibraryLoaderKey} from "@lodestory/sdk/native-library-loader";
-import type {UiPageContribution} from "@lodestory/sdk/ui";
+import {uiKey, type UiPageContribution} from "@lodestory/sdk/ui";
 import {PluginStopPreparationError, pluginsReady} from "../../plugin-core";
 import {installSharedModules} from "./sharedModules";
+import {createPluginDevelopment} from "./pluginDevelopment";
 
 type Staged = {content: LayoutContent; handle: PluginContribution; attach(handle: PluginContribution): void; removed(): boolean};
 type LocalErrorBoundary = ComponentType<{children?: ReactNode; fallback?: ReactNode}>;
 type RunningPlugin = {
-  stopRequested: boolean;
+  stopRequested?: "persistent" | "temporary";
   recordedDisabled: boolean;
   deactivating: boolean;
   pages(): ExternalPluginStatus["pages"];
+  contents(): string[];
 };
+type PluginSource = {kind: "installed"; restoring: boolean} | {kind: "development"; build: DevelopmentPluginBuild};
 
 function failureView() {return createElement("p", {role: "alert"}, "插件界面显示失败，请检查该插件。");}
 
@@ -79,7 +82,6 @@ function stageLayout(layout: LayoutService, ErrorBoundary: LocalErrorBoundary, o
     if (!content || typeof content.render !== "function") throw new Error("插件内容必须提供渲染函数。");
     const safeContent = {...content, render: (contentContext: Parameters<LayoutContent["render"]>[0]) =>
       createElement(ErrorBoundary, {fallback: failureView()}, createElement(Content, {content, contentContext}))};
-    if (committed) return owned.add(layout.registerContent(safeContent));
     let actual: PluginContribution | undefined;
     let owner: symbol | undefined;
     let disposed = false;
@@ -92,11 +94,13 @@ function stageLayout(layout: LayoutService, ErrorBoundary: LocalErrorBoundary, o
         if (scope === "plugin") disposed = true;
       },
     }));
-    staged.push({content: safeContent, handle, removed: () => disposed, attach(value) {
+    const item: Staged = {content: safeContent, handle, removed: () => disposed, attach(value) {
       actual = value;
       if (owner) actual.associate(owner);
       if (disposed) actual();
-    }});
+    }};
+    if (committed) item.attach(layout.registerContent(safeContent));
+    staged.push(item);
     return handle;
   }
   const service: LayoutService = {
@@ -108,6 +112,7 @@ function stageLayout(layout: LayoutService, ErrorBoundary: LocalErrorBoundary, o
   };
   return {
     service,
+    contents() {return staged.filter(item => !item.removed()).map(item => item.content.id);},
     commit() {
       const pending = staged.filter(item => !item.removed());
       if (!pending.length) {committed = true; return;}
@@ -212,9 +217,9 @@ async function loadStyles(id: string, revision: string, paths: readonly string[]
 
 /** Coordinates package preparation, the existing native loaders and Core activation. */
 export function createExternalPluginsPlugin(): Plugin {
-  let cleanup: (() => void) | undefined;
+  let cleanup: (() => Promise<void>) | undefined;
   return {
-    id: "external-plugins", requires: [pluginPackagesKey, pluginRuntimeKey, nativeProcessLoaderKey, nativeLibraryLoaderKey, layoutKey, navigationLayoutKey, errorUiKey],
+    id: "external-plugins", requires: [pluginPackagesKey, pluginRuntimeKey, nativeProcessLoaderKey, nativeLibraryLoaderKey, layoutKey, navigationLayoutKey, uiKey, errorUiKey],
     provides: [externalPluginsKey],
     activate(context) {
       const packages = context.get(pluginPackagesKey);
@@ -223,6 +228,7 @@ export function createExternalPluginsPlugin(): Plugin {
       const libraryLoader = context.get(nativeLibraryLoaderKey);
       const layout = context.get(layoutKey);
       const navigation = context.get(navigationLayoutKey);
+      const ui = context.get(uiKey);
       const {ErrorBoundary} = context.get(errorUiKey);
       const listeners = new Set<() => void>();
       const running = new Map<string, RunningPlugin>();
@@ -232,17 +238,19 @@ export function createExternalPluginsPlugin(): Plugin {
       let stopping = false;
       let queue = Promise.resolve();
       let restoreTimer: ReturnType<typeof setTimeout> | undefined;
+      function notify() {
+        for (const listener of [...listeners]) {try {listener();} catch (error) {console.error("插件状态通知失败。", error);}}
+      }
       function update(id: string, status?: ExternalPluginStatus) {
         const next = {...snapshot};
-        if (status) next[id] = Object.freeze(status);
-        else delete next[id];
-        snapshot = Object.freeze(next);
-        for (const listener of [...listeners]) {try {listener();} catch (error) {console.error("插件状态通知失败。", error);}}
+        delete next[id];
+        snapshot = Object.freeze(status ? {...next, [id]: Object.freeze(status)} : next);
+        notify();
       }
       function checkRecovery(id: string) {
         if (recoveryNeeded.has(id)) throw new Error("上次插件清理未完成，请保存内容并重新启动应用后再试。");
       }
-      async function enable(id: string, restoring: boolean) {
+      async function enable(id: string, source: PluginSource) {
         checkRecovery(id);
         if (running.has(id)) {
           if (snapshot[id]?.state === "enabled") return;
@@ -253,13 +261,16 @@ export function createExternalPluginsPlugin(): Plugin {
         let backend: NativeProcessInstance | undefined;
         let links: HTMLLinkElement[] = [];
         let mounted = false;
-        let persisted = restoring;
+        let persisted = false;
         let stage: ReturnType<typeof stageLayout> | undefined;
         let pageStage: ReturnType<typeof stageNavigation> | undefined;
         let child: Plugin | undefined;
         let cleanupOwnedByCore = false;
+        const releaseAssets = () => source.kind === "development"
+          ? packages.releaseDevelopmentAssets(source.build.token) : packages.releaseAssets(id);
         try {
-          prepared = await packages.prepare(id);
+          prepared = source.kind === "development"
+            ? await packages.prepareDevelopmentBuild(source.build.token) : await packages.prepare(id);
           if (prepared.provides.length) throw new Error("当前版本尚不支持外部插件提供共享能力。");
           const contracts = new Map<string, symbol>([[layoutExternalCapability.id, layoutKey.token], [navigationLayoutExternalCapability.id, navigationLayoutKey.token]]);
           if (prepared.requires.some(key => !contracts.has(key))) throw new Error("插件声明了尚不支持的能力。");
@@ -292,8 +303,9 @@ export function createExternalPluginsPlugin(): Plugin {
           const navigationStage = pageStage;
           const styles = links;
           const current: RunningPlugin = {
-            stopRequested: false, recordedDisabled: false, deactivating: false,
+            recordedDisabled: false, deactivating: false,
             pages: () => Object.freeze(navigationStage.pages()),
+            contents: contributionStage.contents,
           };
           const wrapper: Plugin = {
             id,
@@ -312,8 +324,10 @@ export function createExternalPluginsPlugin(): Plugin {
                     if (scope === "plugin" && current.stopRequested && !current.recordedDisabled) {
                       // Child save hooks run first. Leave the current page through its normal guards.
                       await navigationStage.leave();
-                      await packages.setEnabled(id, false, true);
-                      current.recordedDisabled = true;
+                      if (current.stopRequested === "persistent") {
+                        await packages.setEnabled(id, false, true);
+                        current.recordedDisabled = true;
+                      }
                     }
                   } catch (error) {
                     owned.resume();
@@ -350,7 +364,7 @@ export function createExternalPluginsPlugin(): Plugin {
               for (const link of styles) link.remove();
               try {await instance?.close();} catch (error) {errors.push(error);}
               if (!errors.length) {
-                try {await packages.releaseAssets(id);} catch (error) {errors.push(error);}
+                try {await releaseAssets();} catch (error) {errors.push(error);}
               }
               if (errors.length) {
                 recoveryNeeded.add(id);
@@ -360,7 +374,10 @@ export function createExternalPluginsPlugin(): Plugin {
           };
           await runtime.mount(wrapper);
           mounted = true;
-          if (!restoring) {await packages.setEnabled(id, true); persisted = true;}
+          if (source.kind === "installed" && !source.restoring) {
+            await packages.setEnabled(id, true);
+            persisted = true;
+          }
           flushSync(() => {
             try {
               pageStage!.commit();
@@ -388,10 +405,10 @@ export function createExternalPluginsPlugin(): Plugin {
             for (const link of links) link.remove();
             try {await backend?.close();} catch (cleanupError) {failures.push(`后端清理未完成：${text(cleanupError)}`);}
             if (prepared && !failures.length) {
-              try {await packages.releaseAssets(id);} catch (cleanupError) {failures.push(`资源清理未完成：${text(cleanupError)}`);}
+              try {await releaseAssets();} catch (cleanupError) {failures.push(`资源清理未完成：${text(cleanupError)}`);}
             }
           }
-          if (persisted && !restoring && !unmountFailed) try {await packages.setEnabled(id, false);} catch (recordError) {failures.push(`启用记录回滚失败：${text(recordError)}`);}
+          if (persisted && !unmountFailed) try {await packages.setEnabled(id, false);} catch (recordError) {failures.push(`启用记录回滚失败：${text(recordError)}`);}
           const recovery = failures.length > 0;
           if (recovery) recoveryNeeded.add(id);
           const message = [text(error), ...failures, ...(recovery ? ["请保存内容并重新启动应用后再试。"] : [])].join("；");
@@ -399,13 +416,48 @@ export function createExternalPluginsPlugin(): Plugin {
           throw new Error(message);
         }
       }
+      async function stopTemporarily(id: string) {
+        checkRecovery(id);
+        const current = running.get(id);
+        if (!current) return;
+        const location = ui.getSnapshot().current;
+        const wasOnPluginPage = current.pages()?.some(page => page.id === location?.id);
+        const previousContents = current.contents();
+        const shown = layout.getSnapshot().shownIds.filter(id => previousContents.includes(id));
+        current.stopRequested = "temporary";
+        try {
+          await runtime.unmount(id);
+          update(id);
+        } catch (error) {
+          if (current.deactivating || (error instanceof PluginStopPreparationError && error.phase === "withdraw")) {
+            update(id, {state: "stop-error", error: text(error), canRetry: !current.deactivating});
+          }
+          throw error instanceof PluginStopPreparationError ? error.cause : error;
+        } finally {
+          current.stopRequested = undefined;
+        }
+        const fallback = ui.getSnapshot().current;
+        const shownAfterStop = layout.getSnapshot().shownIds;
+        return async () => {
+          const next = running.get(id);
+          if (!next || ui.getSnapshot().current !== fallback) return;
+          const contents = next.contents();
+          const currentShown = layout.getSnapshot().shownIds.filter(id => !contents.includes(id));
+          if (currentShown.length === shownAfterStop.length && currentShown.every(id => shownAfterStop.includes(id))) {
+            for (const content of shown) if (contents.includes(content)) layout.show(content);
+          }
+          if (wasOnPluginPage && location && next.pages()?.some(page => page.id === location.id)) {
+            if (!await ui.openPage(location.id, location.params)) throw new Error("插件已更新，原插件页面暂时无法打开。");
+          }
+        };
+      }
       async function stopInstalled(id: string, operation: "disabling" | "uninstalling") {
         checkRecovery(id);
         const current = running.get(id);
         update(id, {state: operation});
         try {
           if (current) {
-            current.stopRequested = true;
+            current.stopRequested = "persistent";
             await runtime.unmount(id);
           } else if (operation === "disabling") {
             await packages.setEnabled(id, false, true);
@@ -424,7 +476,7 @@ export function createExternalPluginsPlugin(): Plugin {
             pages: current && !current.recordedDisabled && !current.deactivating ? current.pages() : undefined});
           throw Object.assign(new Error(message), {cause: error});
         } finally {
-          if (current) current.stopRequested = false;
+          if (current) current.stopRequested = undefined;
         }
       }
       async function uninstall(id: string) {
@@ -445,13 +497,33 @@ export function createExternalPluginsPlugin(): Plugin {
         queue = operation.catch(() => {});
         return operation;
       }
+      const development = createPluginDevelopment(packages, {
+        status: id => snapshot[id], updateStatus: update, isRunning: id => running.has(id),
+        stop: stopTemporarily,
+        load: build => enable(build.id, {kind: "development", build}),
+        loadInstalled: id => enable(id, {kind: "installed", restoring: true}),
+      }, enqueue, notify);
+      function checkInstalledOperation(id: string) {
+        if (development.owns(id)) throw new Error("此插件正在开发模式中，请先退出开发模式。");
+      }
       const service: ExternalPluginsService = {
-        enable: id => enqueue(() => enable(id, false)),
+        enable: id => enqueue(async () => {
+          checkInstalledOperation(id);
+          await enable(id, {kind: "installed", restoring: false});
+        }),
         disable: id => enqueue(async () => {
+          checkInstalledOperation(id);
           await stopInstalled(id, "disabling");
           update(id, {state: "disabled"});
         }),
-        uninstall: id => enqueue(() => uninstall(id)),
+        uninstall: id => enqueue(async () => {checkInstalledOperation(id); await uninstall(id);}),
+        async startDevelopment(folder) {
+          const selected = folder ?? await packages.pickDevelopmentFolder();
+          if (selected !== null) await enqueue(async () => {development.start(selected);});
+        },
+        retryDevelopment: () => enqueue(() => development.retry()),
+        stopDevelopment: () => enqueue(() => development.stop()),
+        getDevelopmentSnapshot: development.getSnapshot,
         getSnapshot: () => snapshot,
         subscribe(listener) {listeners.add(listener); return () => {listeners.delete(listener);};},
       };
@@ -463,14 +535,29 @@ export function createExternalPluginsPlugin(): Plugin {
             const items = await packages.list();
             for (const item of items) {
               if (!active || stopping) break;
-              if (item.enabled && !item.removalPending) await enable(item.id, true).catch(() => {});
+              if (item.enabled && !item.removalPending && !development.owns(item.id)) {
+                await enable(item.id, {kind: "installed", restoring: true}).catch(() => {});
+              }
             }
           }).catch(error => console.error("恢复插件失败。", error));
         }, 0);
       });
-      context.onStop({async prepare() {stopping = true; await queue;}, cancel() {stopping = false;}});
-      cleanup = () => {active = false; stopping = true; if (restoreTimer) clearTimeout(restoreTimer); listeners.clear();};
+      context.onStop({
+        async prepare() {stopping = true; development.pause(); await queue;},
+        cancel() {stopping = false; development.resume();},
+      });
+      cleanup = async () => {
+        active = false;
+        stopping = true;
+        if (restoreTimer) clearTimeout(restoreTimer);
+        listeners.clear();
+        await development.dispose();
+      };
     },
-    deactivate() {cleanup?.(); cleanup = undefined;},
+    async deactivate() {
+      const dispose = cleanup;
+      cleanup = undefined;
+      await dispose?.();
+    },
   };
 }

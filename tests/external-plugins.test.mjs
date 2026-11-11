@@ -11,6 +11,7 @@ function loaderFixture({mountFailure = false, recordFailure = false, closeFailur
   const {nativeLibraryLoaderKey} = fixture.requireSdk("@lodestory/sdk/native-library-loader");
   const {layoutKey} = fixture.requireSdk("@lodestory/sdk/layout");
   const {navigationLayoutKey} = fixture.requireSdk("@lodestory/sdk/navigation-layout");
+  const {uiKey} = fixture.requireSdk("@lodestory/sdk/ui");
   const {errorUiKey} = fixture.requireSdk("@lodestory/sdk/error");
   const {externalPluginsKey} = fixture.requireSdk("@lodestory/sdk/external-plugins");
   const calls = [];
@@ -66,6 +67,7 @@ function loaderFixture({mountFailure = false, recordFailure = false, closeFailur
     [nativeLibraryLoaderKey, {async load() {throw new Error("不应使用动态库");}}],
     [layoutKey, {registerContents() {return [];}}],
     [navigationLayoutKey, {registerPages() {return [];}}],
+    [uiKey, {getSnapshot() {return {current: null};}}],
     [errorUiKey, {ErrorBoundary: ({children}) => children}],
   ]);
   let service;

@@ -1,5 +1,5 @@
 import {spawnSync} from "node:child_process";
-import {createHash} from "node:crypto";
+import {createHash, randomUUID} from "node:crypto";
 import * as fs from "node:fs/promises";
 import path from "node:path";
 import {createRequire} from "node:module";
@@ -9,6 +9,11 @@ import semver from "semver";
 const root = fileURLToPath(new URL("../", import.meta.url));
 const require = createRequire(import.meta.url);
 const action = process.argv[2];
+const DEV_POLL_MS = 400;
+const DEV_STABLE_POLLS = 2;
+const DEV_MAX_ERROR_LENGTH = 8192;
+const DEV_RETAIN_REVISIONS = 4;
+const DEV_REVISION_GRACE_MS = 30_000;
 
 function object(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value);
@@ -317,13 +322,226 @@ async function savePackage(config, result) {
   console.log("交付包已生成：" + destination);
 }
 
+async function sourceSnapshot() {
+  const snapshot = [];
+  const skippedDirectories = new Set([".git", "node_modules", "target", "build", "dist", "release", ".lodestory-frontend-output"]);
+
+  async function visit(file, relative) {
+    let info;
+    try {info = await fs.lstat(file);}
+    catch (error) {
+      if (error.code === "ENOENT") {
+        snapshot.push([relative, "missing"]);
+        return;
+      }
+      throw error;
+    }
+    if (info.isDirectory()) {
+      snapshot.push([relative, "directory"]);
+      const entries = await fs.readdir(file, {withFileTypes: true});
+      entries.sort((left, right) => left.name.localeCompare(right.name));
+      for (const entry of entries) {
+        if (entry.isDirectory() && skippedDirectories.has(entry.name)) continue;
+        await visit(path.join(file, entry.name), relative + "/" + entry.name);
+      }
+      return;
+    }
+    if (info.isFile()) {
+      const contents = await fs.readFile(file);
+      snapshot.push([relative, createHash("sha256").update(contents).digest("hex")]);
+      return;
+    }
+    if (info.isSymbolicLink()) {
+      snapshot.push([relative, "link:" + await fs.readlink(file)]);
+      return;
+    }
+    snapshot.push([relative, "unsupported"]);
+  }
+
+  await visit(path.join(root, "plugin.json"), "plugin.json");
+  await visit(path.join(root, "frontend"), "frontend");
+  await visit(path.join(root, "backend"), "backend");
+  return JSON.stringify(snapshot);
+}
+
+function boundedError(error) {
+  const message = error instanceof Error ? error.message : String(error);
+  return message.length > DEV_MAX_ERROR_LENGTH ? message.slice(0, DEV_MAX_ERROR_LENGTH) : message;
+}
+
+async function writeAtomic(file, value) {
+  const temporary = file + "." + process.pid + ".tmp";
+  await fs.writeFile(temporary, JSON.stringify(value) + "\n", {flag: "w"});
+  try {await fs.rename(temporary, file);}
+  catch (error) {
+    try {await fs.rm(temporary, {force: true});} catch {}
+    throw error;
+  }
+}
+
+function packageFiles(config, result) {
+  const manifest = Buffer.from(JSON.stringify(manifestFor(config, result), null, 2) + "\n");
+  return [{path: "manifest.json", bytes: manifest, executable: false}, ...result.files];
+}
+
+function validateDevelopmentOutput(files) {
+  const manifest = files[0].bytes;
+  if (manifest.byteLength > 256 * 1024) throw new Error("插件清单超过 256 KiB 的大小限制。");
+  const totalBytes = files.slice(1).reduce((total, file) => total + file.bytes.byteLength, 0);
+  if (totalBytes + manifest.byteLength > 512 * 1024 * 1024) throw new Error("解压后的插件文件超过 512 MiB 的大小限制。");
+
+  const paths = new Set(["manifest.json"]);
+  for (const file of files.slice(1)) {
+    if (!portablePath(file.path) || paths.has(file.path.toLowerCase())) {
+      throw new Error("插件构建产物包含无效或重名资源。");
+    }
+    paths.add(file.path.toLowerCase());
+    let parent = path.posix.dirname(file.path);
+    while (parent !== ".") {
+      paths.add(parent.toLowerCase());
+      parent = path.posix.dirname(parent);
+    }
+  }
+  if (paths.size > 4096) throw new Error("插件包中的文件和目录超过 4096 个。");
+}
+
+async function writeDevelopmentRevision(config, result) {
+  const directory = path.join(root, "build", "dev");
+  const revision = randomUUID().replaceAll("-", "");
+  const revisionDirectory = path.join(directory, revision);
+  const files = packageFiles(config, result);
+  validateDevelopmentOutput(files);
+  await fs.mkdir(revisionDirectory, {recursive: false});
+  try {
+    for (const file of files) {
+      const destination = path.join(revisionDirectory, ...file.path.split("/"));
+      await fs.mkdir(path.dirname(destination), {recursive: true});
+      await fs.writeFile(destination, file.bytes, {flag: "wx", mode: file.executable ? 0o755 : 0o644});
+    }
+    return {revision, revisionDirectory};
+  } catch (error) {
+    try {await fs.rm(revisionDirectory, {recursive: true});}
+    catch (cleanup) {throw new Error("开发构建发布失败，且无法清理本次临时产物：" + cleanup.message, {cause: error});}
+    throw error;
+  }
+}
+
+function wait(milliseconds) {
+  return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+async function waitForStableInputs(snapshot) {
+  let stablePolls = 0;
+  while (!stopRequested && stablePolls < DEV_STABLE_POLLS) {
+    await wait(DEV_POLL_MS);
+    const latest = await sourceSnapshot();
+    if (latest === snapshot) stablePolls += 1;
+    else {snapshot = latest; stablePolls = 0;}
+  }
+  return snapshot;
+}
+
+let stopRequested = false;
+const ownedRevisions = new Map();
+function stopDevelopment() {stopRequested = true;}
+
+async function pruneDevelopmentRevisions(directory) {
+  const recent = [...ownedRevisions.keys()].slice(-DEV_RETAIN_REVISIONS);
+  const keep = new Set(recent);
+  let marker;
+  try {marker = JSON.parse(await fs.readFile(path.join(directory, "current.json"), "utf8"));}
+  catch {return;}
+  if (typeof marker.revision === "string" && /^[a-f0-9]{32}$/.test(marker.revision)) keep.add(marker.revision);
+
+  const cutoff = Date.now() - DEV_REVISION_GRACE_MS;
+  for (const [revision, publishedAt] of ownedRevisions) {
+    if (stopRequested || keep.has(revision) || publishedAt > cutoff) continue;
+    try {
+      const latest = JSON.parse(await fs.readFile(path.join(directory, "current.json"), "utf8"));
+      if (latest.revision === revision) continue;
+      await fs.rm(path.join(directory, revision), {recursive: true});
+      ownedRevisions.delete(revision);
+    } catch {
+      // Pruning is best-effort. Host staging can retry from the current revision.
+    }
+  }
+}
+
+async function runDevelopment() {
+  const directory = path.join(root, "build", "dev");
+  await fs.mkdir(directory, {recursive: true});
+  let snapshot = await sourceSnapshot();
+  await writeAtomic(path.join(directory, "status.json"), {state: "building"});
+  console.log("正在监视插件源码。保存文件后会自动构建并发布可加载版本，按 Ctrl+C 停止。");
+
+  while (!stopRequested) {
+    await writeAtomic(path.join(directory, "status.json"), {state: "building"});
+    try {
+      const config = JSON.parse(await fs.readFile(path.join(root, "plugin.json"), "utf8"));
+      validate(config);
+      const result = await build(config);
+      const latest = await sourceSnapshot();
+      if (latest !== snapshot) {
+        snapshot = await waitForStableInputs(latest);
+        continue;
+      }
+      const published = await writeDevelopmentRevision(config, result);
+      ownedRevisions.set(published.revision, Date.now());
+      if (stopRequested) {
+        try {await fs.rm(published.revisionDirectory, {recursive: true});} catch {}
+        ownedRevisions.delete(published.revision);
+        break;
+      }
+      const afterPublish = await sourceSnapshot();
+      if (afterPublish !== snapshot) {
+        try {await fs.rm(published.revisionDirectory, {recursive: true});} catch {}
+        ownedRevisions.delete(published.revision);
+        snapshot = await waitForStableInputs(afterPublish);
+        continue;
+      }
+      await writeAtomic(path.join(directory, "current.json"), {revision: published.revision});
+      await writeAtomic(path.join(directory, "status.json"), {state: "ready"});
+      await pruneDevelopmentRevisions(directory);
+      console.log("开发版本已就绪：" + published.revision);
+    } catch (error) {
+      const latest = await sourceSnapshot().catch(() => snapshot);
+      if (latest !== snapshot) {
+        snapshot = await waitForStableInputs(latest);
+        continue;
+      }
+      const message = boundedError(error);
+      console.error("开发构建失败，继续保留上一个成功版本。\n" + (error instanceof Error ? error.stack ?? error.message : String(error)));
+      await writeAtomic(path.join(directory, "status.json"), {state: "error", error: message});
+    }
+
+    while (!stopRequested) {
+      await wait(DEV_POLL_MS);
+      const latest = await sourceSnapshot();
+      if (latest === snapshot) continue;
+      snapshot = await waitForStableInputs(latest);
+      break;
+    }
+  }
+
+  await writeAtomic(path.join(directory, "status.json"), {state: "stopped"});
+}
+
 try {
-  if (!["build", "package"].includes(action)) throw new Error("请使用 npm run build 或 npm run package。");
-  const config = JSON.parse(await fs.readFile(path.join(root, "plugin.json"), "utf8"));
-  validate(config);
-  const result = await build(config);
-  if (action === "build") await saveBuild(result.files);
-  else await savePackage(config, result);
+  if (!["build", "package", "dev"].includes(action)) throw new Error("请使用 npm run build、npm run package 或 npm run dev。");
+  if (action === "dev") {
+    process.once("SIGINT", stopDevelopment);
+    process.once("SIGTERM", stopDevelopment);
+    await runDevelopment();
+    process.removeListener("SIGINT", stopDevelopment);
+    process.removeListener("SIGTERM", stopDevelopment);
+    process.exitCode = 0;
+  } else {
+    const config = JSON.parse(await fs.readFile(path.join(root, "plugin.json"), "utf8"));
+    validate(config);
+    const result = await build(config);
+    if (action === "build") await saveBuild(result.files);
+    else await savePackage(config, result);
+  }
 } catch (error) {
   console.error("构建失败：" + (error instanceof Error ? error.message : String(error)));
   process.exitCode = 1;

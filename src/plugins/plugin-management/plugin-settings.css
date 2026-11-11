@@ -5,6 +5,42 @@
   font-size: var(--ui-font-size-body);
   line-height: var(--ui-line-height-body);
 }
+.plugin-settings-development {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--ui-space-4);
+  margin-top: var(--ui-space-7);
+  padding: var(--ui-space-4) 0;
+  border-top: 1px solid var(--ui-border-divider);
+  border-bottom: 1px solid var(--ui-border-divider);
+}
+.plugin-settings-development-copy { display: flex; flex-direction: column; min-width: 0; gap: var(--ui-space-1); }
+.plugin-settings-development-copy h3 {
+  margin: 0 0 var(--ui-space-1);
+  font-size: var(--ui-font-size-body);
+  line-height: var(--ui-line-height-body);
+  font-weight: 600;
+}
+.plugin-settings-development-copy p {
+  margin: 0;
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+.plugin-settings-development-folder, .plugin-settings-development-id {
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+  overflow-wrap: anywhere;
+}
+.plugin-settings-development-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--ui-space-3);
+}
 .plugin-settings-list { margin-top: var(--ui-space-8); }
 .plugin-settings-list h3 {
   margin: 0 0 var(--ui-space-2);
@@ -34,5 +70,7 @@
 .plugin-settings-hint, .plugin-settings-error { margin: var(--ui-space-3) 0 0; }
 .plugin-settings-error, .plugin-settings-identity .plugin-settings-error { color: var(--ui-status-danger); overflow-wrap: anywhere; }
 @container settings-content (max-width: 23rem) {
+  .plugin-settings-development { flex-direction: column; gap: var(--ui-space-2); }
+  .plugin-settings-development-actions { justify-content: flex-start; }
   .plugin-settings-row { align-items: flex-start; flex-direction: column; gap: var(--ui-space-2); }
 }

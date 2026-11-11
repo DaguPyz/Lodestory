@@ -1,7 +1,7 @@
 import {version as reactVersion} from "react";
 import {invoke, isTauri} from "@tauri-apps/api/core";
 import type {Plugin} from "@lodestory/sdk";
-import {pluginHostApiVersion, pluginPackagesKey, type ExternalCapability, type ImportedPluginPackage, type PluginPackagesService, type PreparedPluginPackage} from "@lodestory/sdk/plugin-packages";
+import {pluginHostApiVersion, pluginPackagesKey, type DevelopmentBuildStatus, type DevelopmentPluginBuild, type ExternalCapability, type ImportedPluginPackage, type PluginPackagesService, type PreparedPluginPackage} from "@lodestory/sdk/plugin-packages";
 
 type Compatibility = Readonly<{
   hostApi: string;
@@ -11,11 +11,17 @@ type Compatibility = Readonly<{
 
 export type PackageBridge = Readonly<{
   pick(): Promise<string | null>;
+  pickDevelopmentFolder(): Promise<string | null>;
   list(): Promise<ImportedPluginPackage[]>;
   importPackage(path: string, compatibility: Compatibility): Promise<ImportedPluginPackage>;
   prepare(id: string, compatibility: Compatibility): Promise<PreparedPluginPackage>;
   setEnabled(id: string, enabled: boolean, explicitDisable?: boolean): Promise<void>;
   remove(id: string): Promise<void>;
+  readDevelopmentStatus(folder: string): Promise<DevelopmentBuildStatus>;
+  stageDevelopmentBuild(folder: string, revision: string, compatibility: Compatibility): Promise<DevelopmentPluginBuild>;
+  prepareDevelopmentBuild(token: string): Promise<PreparedPluginPackage>;
+  releaseDevelopmentAssets(token: string): Promise<void>;
+  discardDevelopmentBuild(token: string): Promise<void>;
   releaseAssets(id: string): Promise<void>;
 }>;
 
@@ -23,6 +29,10 @@ const desktopBridge: PackageBridge = {
   pick() {
     if (!isTauri()) return Promise.reject(new Error("请在 Lodestory 桌面应用中导入插件。"));
     return invoke("pick_plugin_package");
+  },
+  pickDevelopmentFolder() {
+    if (!isTauri()) return Promise.reject(new Error("插件开发模式只能在桌面应用中使用。"));
+    return invoke("pick_plugin_development_folder");
   },
   list() {
     if (!isTauri()) return Promise.reject(new Error("请在 Lodestory 桌面应用中查看插件。"));
@@ -32,6 +42,11 @@ const desktopBridge: PackageBridge = {
   prepare(id, compatibility) {return invoke("prepare_plugin_package", {id, compatibility});},
   setEnabled(id, enabled, explicitDisable = false) {return invoke("set_plugin_enabled", {id, enabled, explicitDisable});},
   remove(id) {return invoke("remove_plugin_package", {id});},
+  readDevelopmentStatus(folder) {return invoke("read_plugin_development_status", {folder});},
+  stageDevelopmentBuild(folder, revision, compatibility) {return invoke("stage_plugin_development_build", {folder, revision, compatibility});},
+  prepareDevelopmentBuild(token) {return invoke("prepare_plugin_development_build", {token});},
+  releaseDevelopmentAssets(token) {return invoke("release_plugin_development_assets", {token});},
+  discardDevelopmentBuild(token) {return invoke("discard_plugin_development_build", {token});},
   releaseAssets(id) {return invoke("release_plugin_assets", {id});},
 };
 
@@ -99,6 +114,23 @@ export function createPluginPackagesPlugin(bridge: PackageBridge = desktopBridge
             try {await bridge.remove(id);}
             finally {notify();}
           });
+        },
+        pickDevelopmentFolder() {return run(() => bridge.pickDevelopmentFolder());},
+        readDevelopmentStatus(folder) {
+          if (!active) return Promise.reject(new Error("插件包服务已停止。"));
+          return bridge.readDevelopmentStatus(folder);
+        },
+        stageDevelopmentBuild(folder, revision) {
+          return run(() => bridge.stageDevelopmentBuild(folder, revision, compatibility()));
+        },
+        prepareDevelopmentBuild(token) {return run(() => bridge.prepareDevelopmentBuild(token));},
+        releaseDevelopmentAssets(token) {
+          if (!active) return Promise.reject(new Error("插件包服务已停止。"));
+          return bridge.releaseDevelopmentAssets(token);
+        },
+        discardDevelopmentBuild(token) {
+          if (!active) return Promise.reject(new Error("插件包服务已停止。"));
+          return bridge.discardDevelopmentBuild(token);
         },
         // Loaded plugins release resources after stop preparation has begun.
         releaseAssets(id) {

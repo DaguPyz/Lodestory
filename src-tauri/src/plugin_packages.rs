@@ -112,13 +112,61 @@ struct Artifact {
 
 pub struct PluginPackages {
     root: PathBuf,
-    assets: RwLock<HashMap<String, PreparedAssets>>,
+    assets: RwLock<HashMap<(String, String), PreparedAssets>>,
+    development_builds: RwLock<HashMap<String, StagedDevelopmentBuild>>,
 }
 
 struct PreparedAssets {
+    root: PathBuf,
     revision: String,
     files: HashMap<String, (u64, String)>,
+    source: AssetSource,
     _leases: Vec<File>,
+}
+
+enum AssetSource {
+    Installed,
+    Development(String),
+}
+
+struct StagedDevelopmentBuild {
+    folder: PathBuf,
+    id: String,
+    revision: String,
+    directory: TempDir,
+    manifest: Manifest,
+    files: HashMap<String, (u64, String)>,
+    compatibility: Compatibility,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DevelopmentBuildStatus {
+    pub revision: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub state: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DevelopmentBuildCandidate {
+    pub token: String,
+    pub id: String,
+    pub revision: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct CurrentDevelopmentBuild {
+    revision: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct DevelopmentWatcherStatus {
+    state: String,
+    #[serde(default)]
+    error: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -150,6 +198,7 @@ impl PluginPackages {
         Self {
             root,
             assets: RwLock::new(HashMap::new()),
+            development_builds: RwLock::new(HashMap::new()),
         }
     }
 
@@ -338,7 +387,7 @@ impl PluginPackages {
                 (bytes.len() as u64, format!("{:x}", Sha256::digest(&bytes))),
             );
         }
-        validate(&manifest, &root, &files, compatibility)?;
+        validate(&manifest, &root, &files, compatibility, true)?;
         let frontend = manifest.frontend.as_ref().map(|item| PreparedFrontend {
             entry: item.entry.clone(),
             styles: item.styles.clone(),
@@ -392,16 +441,19 @@ impl PluginPackages {
             .collect();
         let revision = record.sha256.clone();
         let mut registered = self.assets.write().map_err(|_| "插件资源状态不可用。")?;
+        let key = (id.to_owned(), revision.clone());
         let mut leases = registered
-            .remove(id)
+            .remove(&key)
             .map(|prepared| prepared._leases)
             .unwrap_or_default();
         leases.push(lease);
         registered.insert(
-            id.to_owned(),
+            key,
             PreparedAssets {
+                root: root.clone(),
                 revision: revision.clone(),
                 files: assets,
+                source: AssetSource::Installed,
                 _leases: leases,
             },
         );
@@ -423,6 +475,314 @@ impl PluginPackages {
                 .map(|item| item.id.clone())
                 .collect(),
         })
+    }
+
+    pub fn development_status(folder: &Path) -> Result<DevelopmentBuildStatus, String> {
+        let folder = folder
+            .canonicalize()
+            .map_err(|error| format!("插件项目目录无法读取：{error}"))?;
+        if !fs::metadata(&folder).map_err(io_error)?.is_dir() {
+            return Err("请选择插件项目目录。".into());
+        }
+        let current = match read_optional_regular(&folder, "build/dev/current.json", 64 * 1024)? {
+            Some(bytes) => {
+                let marker: CurrentDevelopmentBuild =
+                    serde_json::from_slice(&bytes).map_err(|_| "开发构建版本标记无效。")?;
+                if !valid_development_revision(&marker.revision) {
+                    return Err("开发构建版本号无效。".into());
+                }
+                Some(marker.revision)
+            }
+            None => None,
+        };
+        let watcher = match read_optional_regular(&folder, "build/dev/status.json", 64 * 1024)? {
+            Some(bytes) => {
+                let status: DevelopmentWatcherStatus =
+                    serde_json::from_slice(&bytes).map_err(|_| "开发构建状态文件无效。")?;
+                if !["building", "ready", "error", "stopped"].contains(&status.state.as_str()) {
+                    return Err("开发构建状态无效。".into());
+                }
+                if let Some(error) = &status.error {
+                    // The scaffold truncates the status error to 8192 UTF-16 code units.
+                    // A worst-case UTF-8 encoding uses four bytes per scalar value.
+                    if error.len() > 32 * 1024 {
+                        return Err("开发构建错误信息无效。".into());
+                    }
+                }
+                Some(status)
+            }
+            None => None,
+        };
+        let state = watcher
+            .as_ref()
+            .map(|status| status.state.clone())
+            .or_else(|| current.as_ref().map(|_| "ready".to_owned()));
+        let error = watcher.and_then(|status| status.error);
+        Ok(DevelopmentBuildStatus {
+            revision: current,
+            state,
+            error,
+        })
+    }
+
+    pub fn stage_development_build(
+        &self,
+        folder: &Path,
+        revision: &str,
+        compatibility: Compatibility,
+    ) -> Result<DevelopmentBuildCandidate, String> {
+        if !valid_development_revision(revision) {
+            return Err("开发构建版本号无效。".into());
+        }
+        let folder = folder
+            .canonicalize()
+            .map_err(|error| format!("插件项目目录无法读取：{error}"))?;
+        let status = Self::development_status(&folder)?;
+        if status.revision.as_deref() != Some(revision) {
+            return Err("插件正在生成新版本，请等待构建完成。".into());
+        }
+        if status.state.as_deref() == Some("building") {
+            return Err("插件正在生成新版本，请等待构建完成。".into());
+        }
+        if let Some(error) = status.error {
+            if status.state.as_deref() == Some("error") {
+                return Err(format!("插件构建失败：{error}"));
+            }
+        }
+        if let Some(existing) = self
+            .development_builds
+            .read()
+            .map_err(|_| "插件开发构建状态不可用。")?
+            .iter()
+            .find(|(_, build)| build.folder == folder && build.revision == revision)
+        {
+            return Ok(DevelopmentBuildCandidate {
+                token: existing.0.clone(),
+                id: existing.1.id.clone(),
+                revision: existing.1.revision.clone(),
+            });
+        }
+
+        let source_root = folder.join("build").join("dev").join(revision);
+        let metadata = fs::symlink_metadata(&source_root).map_err(io_error)?;
+        if metadata.file_type().is_symlink() || !metadata.is_dir() {
+            return Err("开发构建目录无效。".into());
+        }
+        let manifest_bytes = read_regular(&source_root, "manifest.json", MAX_MANIFEST)?;
+        let manifest: Manifest =
+            serde_json::from_slice(&manifest_bytes).map_err(|_| "开发构建清单无效。")?;
+        let declared = manifest.files.as_ref().ok_or("开发构建文件清单缺失。")?;
+        if declared.len() > MAX_ENTRIES
+            || declared
+                .iter()
+                .try_fold(manifest_bytes.len() as u64, |size, item| {
+                    size.checked_add(item.size)
+                })
+                .filter(|size| *size <= MAX_UNPACKED)
+                .is_none()
+        {
+            return Err("开发构建超过宿主大小限制。".into());
+        }
+        let mut files = HashMap::new();
+        files.insert(
+            "manifest.json".to_owned(),
+            (
+                manifest_bytes.len() as u64,
+                format!("{:x}", Sha256::digest(&manifest_bytes)),
+            ),
+        );
+        for item in declared {
+            let bytes = read_regular(&source_root, &item.path, item.size)?;
+            files.insert(
+                item.path.clone(),
+                (bytes.len() as u64, format!("{:x}", Sha256::digest(&bytes))),
+            );
+        }
+        verify_development_inventory(&source_root, &files)?;
+        validate(&manifest, &source_root, &files, &compatibility, false)?;
+
+        let development_root = self.root.join("development");
+        fs::create_dir_all(&development_root).map_err(io_error)?;
+        let directory = Builder::new()
+            .prefix("plugin-dev-")
+            .tempdir_in(development_root)
+            .map_err(io_error)?;
+        let package_root = directory.path().join("package");
+        let manifest_file = files.get("manifest.json").ok_or("开发构建清单校验失败。")?;
+        copy_development_file(&source_root, &package_root, "manifest.json", manifest_file)?;
+        for item in declared {
+            let expected = files.get(&item.path).ok_or("开发构建文件清单不一致。")?;
+            copy_development_file(&source_root, &package_root, &item.path, expected)?;
+        }
+        let root = directory.path().join("package");
+        validate(&manifest, &root, &files, &compatibility, true)?;
+        let token = uuid::Uuid::new_v4().simple().to_string();
+        let candidate = DevelopmentBuildCandidate {
+            token: token.clone(),
+            id: manifest.id.clone(),
+            revision: revision.to_owned(),
+        };
+        self.development_builds
+            .write()
+            .map_err(|_| "插件开发构建状态不可用。")?
+            .insert(
+                token,
+                StagedDevelopmentBuild {
+                    folder,
+                    id: manifest.id.clone(),
+                    revision: revision.to_owned(),
+                    directory,
+                    manifest,
+                    files,
+                    compatibility,
+                },
+            );
+        Ok(candidate)
+    }
+
+    pub fn prepare_development_build(&self, token: &str) -> Result<PreparedPackage, String> {
+        let staged = self
+            .development_builds
+            .read()
+            .map_err(|_| "插件开发构建状态不可用。")?;
+        let build = staged.get(token).ok_or("开发构建已失效。")?;
+        let root = build.directory.path().join("package");
+        validate(
+            &build.manifest,
+            &root,
+            &build.files,
+            &build.compatibility,
+            true,
+        )?;
+        let frontend = build
+            .manifest
+            .frontend
+            .as_ref()
+            .map(|item| PreparedFrontend {
+                entry: item.entry.clone(),
+                styles: item.styles.clone(),
+            });
+        let backend = build
+            .manifest
+            .backend
+            .as_ref()
+            .map(|item| {
+                let os = std::env::consts::OS;
+                let arch = if std::env::consts::ARCH == "aarch64" {
+                    "arm64"
+                } else {
+                    "x64"
+                };
+                let artifact = item
+                    .artifacts
+                    .iter()
+                    .find(|a| {
+                        a.os == os && a.arch == arch && a.target == env!("LODESTORY_BUILD_TARGET")
+                    })
+                    .ok_or("插件后端与当前系统或处理器不兼容。")?;
+                let entry = root
+                    .join(&artifact.entry)
+                    .to_str()
+                    .ok_or("后端路径无法表示。")?
+                    .to_owned();
+                Ok::<_, String>(PreparedBackend {
+                    kind: item.kind.clone(),
+                    entry,
+                })
+            })
+            .transpose()?;
+        let backend_files: HashSet<&str> = build
+            .manifest
+            .backend
+            .as_ref()
+            .into_iter()
+            .flat_map(|backend| {
+                backend
+                    .artifacts
+                    .iter()
+                    .map(|artifact| artifact.entry.as_str())
+            })
+            .collect();
+        let assets = build
+            .manifest
+            .files
+            .as_ref()
+            .unwrap()
+            .iter()
+            .filter(|item| !backend_files.contains(item.path.as_str()))
+            .map(|item| (item.path.clone(), (item.size, item.sha256.clone())))
+            .collect();
+        self.assets
+            .write()
+            .map_err(|_| "插件资源状态不可用。")?
+            .insert(
+                (build.id.clone(), token.to_owned()),
+                PreparedAssets {
+                    root: root.join(""),
+                    revision: token.to_owned(),
+                    files: assets,
+                    source: AssetSource::Development(token.to_owned()),
+                    _leases: Vec::new(),
+                },
+            );
+        Ok(PreparedPackage {
+            id: build.id.clone(),
+            asset_revision: token.to_owned(),
+            frontend,
+            backend,
+            requires: build
+                .manifest
+                .dependencies
+                .requires
+                .iter()
+                .map(|item| item.id.clone())
+                .collect(),
+            provides: build
+                .manifest
+                .dependencies
+                .provides
+                .iter()
+                .map(|item| item.id.clone())
+                .collect(),
+        })
+    }
+
+    pub fn release_development_assets(&self, token: &str) -> Result<(), String> {
+        let id = self
+            .development_builds
+            .read()
+            .map_err(|_| "插件开发构建状态不可用。")?
+            .get(token)
+            .map(|build| build.id.clone());
+        let Some(id) = id else {
+            return Ok(());
+        };
+        let mut assets = self.assets.write().map_err(|_| "插件资源状态不可用。")?;
+        if matches!(
+            assets.get(&(id.clone(), token.to_owned())).map(|entry| &entry.source),
+            Some(AssetSource::Development(owner)) if owner == token
+        ) {
+            assets.remove(&(id, token.to_owned()));
+        }
+        Ok(())
+    }
+
+    pub fn discard_development_build(&self, token: &str) -> Result<(), String> {
+        let mut builds = self
+            .development_builds
+            .write()
+            .map_err(|_| "插件开发构建状态不可用。")?;
+        let Some(build) = builds.get(token) else {
+            return Ok(());
+        };
+        let key = (build.id.clone(), token.to_owned());
+        let assets = self.assets.read().map_err(|_| "插件资源状态不可用。")?;
+        if assets.contains_key(&key) {
+            return Err("插件开发构建仍有运行资源，请先停用。".into());
+        }
+        drop(assets);
+        builds.remove(token);
+        Ok(())
     }
 
     pub fn set_enabled(
@@ -457,7 +817,7 @@ impl PluginPackages {
         }
         let _lock = self.lock()?;
         let mut assets = self.assets.write().map_err(|_| "插件资源状态不可用。")?;
-        if assets.contains_key(id) {
+        if assets.keys().any(|(package_id, _)| package_id == id) {
             return Err("插件仍有已准备的运行资源，请先停用后再卸载。".into());
         }
 
@@ -518,7 +878,7 @@ impl PluginPackages {
             let _ = fs::remove_dir_all(&tombstone);
             return Err(format!("无法移出插件安装目录：{error}"));
         }
-        assets.remove(id);
+        assets.retain(|(package_id, _), _| package_id != id);
         cleanup_removal_tombstone(&tombstone)
             .map_err(|error| format!("插件已停用，安装文件清理未完成，可重试卸载：{error}"))
     }
@@ -568,7 +928,9 @@ impl PluginPackages {
 
     pub fn release_assets(&self, id: &str) {
         if let Ok(mut assets) = self.assets.write() {
-            assets.remove(id);
+            assets.retain(|(package_id, _), prepared| {
+                package_id != id || matches!(prepared.source, AssetSource::Development(_))
+            });
         }
     }
 
@@ -579,25 +941,21 @@ impl PluginPackages {
             .assets
             .read()
             .map_err(|_| "插件资源状态不可用。")?
-            .get(id)
-            .map(|assets| assets.revision.clone())
+            .keys()
+            .find(|(package_id, _)| package_id == id)
+            .map(|(_, revision)| revision.clone())
             .ok_or("插件资源不存在。")?;
         self.asset_revision(id, &revision, path)
     }
 
     pub fn asset_revision(&self, id: &str, revision: &str, path: &str) -> Result<Vec<u8>, String> {
         let assets = self.assets.read().map_err(|_| "插件资源状态不可用。")?;
-        let expected = assets
-            .get(id)
+        let prepared = assets
+            .get(&(id.to_owned(), revision.to_owned()))
             .filter(|assets| assets.revision == revision)
-            .and_then(|assets| assets.files.get(path))
             .ok_or("插件资源不存在。")?;
-        let root = self
-            .root
-            .join("installed")
-            .join(format!("plugin-{}", id.to_ascii_lowercase()))
-            .join("package");
-        let bytes = read_regular(&root, path, expected.0)?;
+        let expected = prepared.files.get(path).ok_or("插件资源不存在。")?;
+        let bytes = read_regular(&prepared.root, path, expected.0)?;
         if bytes.len() as u64 != expected.0 || format!("{:x}", Sha256::digest(&bytes)) != expected.1
         {
             return Err("插件资源校验失败。".into());
@@ -672,7 +1030,7 @@ impl PluginPackages {
         }
         let manifest: Manifest = serde_json::from_reader(manifest_file)
             .map_err(|error| format!("插件清单格式无效：{error}"))?;
-        validate(&manifest, &package_dir, &unpacked, compatibility)?;
+        validate(&manifest, &package_dir, &unpacked, compatibility, true)?;
         let package = ImportedPackage {
             id: manifest.id,
             name: manifest.name,
@@ -788,6 +1146,102 @@ fn read_regular(root: &Path, name: &str, limit: u64) -> Result<Vec<u8>, String> 
         return Err("插件文件过大。".into());
     }
     Ok(bytes)
+}
+
+fn read_optional_regular(root: &Path, name: &str, limit: u64) -> Result<Option<Vec<u8>>, String> {
+    match fs::symlink_metadata(root.join(name)) {
+        Ok(_) => read_regular(root, name, limit).map(Some),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(io_error(error)),
+    }
+}
+
+fn valid_development_revision(revision: &str) -> bool {
+    revision.len() == 32
+        && revision
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+fn copy_development_file(
+    source_root: &Path,
+    destination_root: &Path,
+    name: &str,
+    expected: &(u64, String),
+) -> Result<(), String> {
+    let bytes = read_regular(source_root, name, expected.0)?;
+    if bytes.len() as u64 != expected.0 || format!("{:x}", Sha256::digest(&bytes)) != expected.1 {
+        return Err(format!("开发构建文件在复制时发生变化：{name}"));
+    }
+    let destination = destination_root.join(name);
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent).map_err(io_error)?;
+    }
+    let mut output = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(destination)
+        .map_err(io_error)?;
+    output.write_all(&bytes).map_err(io_error)?;
+    output.sync_all().map_err(io_error)
+}
+
+fn verify_development_inventory(
+    root: &Path,
+    declared: &HashMap<String, (u64, String)>,
+) -> Result<(), String> {
+    fn visit(
+        root: &Path,
+        directory: &Path,
+        declared: &HashMap<String, (u64, String)>,
+        seen: &mut HashSet<String>,
+        entries: &mut usize,
+    ) -> Result<(), String> {
+        for result in fs::read_dir(directory).map_err(io_error)? {
+            *entries += 1;
+            if *entries > MAX_ENTRIES + 1024 {
+                return Err("开发构建目录包含过多文件和目录。".into());
+            }
+            let entry = result.map_err(io_error)?;
+            let kind = entry.file_type().map_err(io_error)?;
+            let path = entry.path();
+            if kind.is_symlink() {
+                return Err("开发构建不能包含符号链接。".into());
+            }
+            if kind.is_dir() {
+                visit(root, &path, declared, seen, entries)?;
+                continue;
+            }
+            if !kind.is_file() {
+                return Err("开发构建包含不支持的文件类型。".into());
+            }
+            let relative = path
+                .strip_prefix(root)
+                .map_err(|_| "开发构建文件路径无效。")?
+                .components()
+                .map(|part| match part {
+                    std::path::Component::Normal(value) => value
+                        .to_str()
+                        .ok_or("开发构建文件路径无法表示。".to_owned()),
+                    _ => Err("开发构建文件路径无效。".into()),
+                })
+                .collect::<Result<Vec<_>, String>>()?
+                .join("/");
+            if !safe_path(&relative) || !declared.contains_key(&relative) {
+                return Err(format!("开发构建包含未声明的文件：{relative}"));
+            }
+            seen.insert(relative);
+        }
+        Ok(())
+    }
+
+    let mut seen = HashSet::new();
+    let mut entries = 0;
+    visit(root, root, declared, &mut seen, &mut entries)?;
+    if seen.len() != declared.len() {
+        return Err("开发构建文件与清单不一致。".into());
+    }
+    Ok(())
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -1033,6 +1487,7 @@ fn validate(
     root: &Path,
     unpacked: &HashMap<String, (u64, String)>,
     current: &Compatibility,
+    make_executable: bool,
 ) -> Result<(), String> {
     if manifest.manifest_version != "1.0" {
         return Err("不支持此插件清单格式。".into());
@@ -1126,13 +1581,13 @@ fn validate(
         }
         let entry = selected.ok_or("插件后端与当前系统或处理器不兼容。")?;
         #[cfg(unix)]
-        if backend.kind == "process" {
+        if make_executable && backend.kind == "process" {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(root.join(entry), fs::Permissions::from_mode(0o755))
                 .map_err(io_error)?;
         }
         #[cfg(not(unix))]
-        let _ = entry;
+        let _ = (entry, make_executable);
     }
     for (label, entries) in [
         ("插件依赖", &manifest.dependencies.plugins),
@@ -1242,6 +1697,143 @@ mod tests {
             ("dist/frontend/index.js", b"throw new Error('not executed')"),
             ("dist/frontend/index.css", b"body{}"),
         ]
+    }
+
+    fn development_build(folder: &Path, revision: &str, files: &[(&str, &[u8])]) {
+        let root = folder.join("build/dev").join(revision);
+        fs::create_dir_all(&root).unwrap();
+        let mut package_manifest = manifest();
+        package_manifest["files"] = Value::Array(
+            files
+                .iter()
+                .map(|(path, bytes)| {
+                    json!({
+                        "path": path,
+                        "size": bytes.len(),
+                        "sha256": format!("{:x}", Sha256::digest(bytes)),
+                    })
+                })
+                .collect(),
+        );
+        fs::write(root.join("manifest.json"), package_manifest.to_string()).unwrap();
+        for (path, bytes) in files {
+            let file = root.join(path);
+            fs::create_dir_all(file.parent().unwrap()).unwrap();
+            fs::write(file, bytes).unwrap();
+        }
+        fs::write(
+            folder.join("build/dev/current.json"),
+            json!({"revision": revision}).to_string(),
+        )
+        .unwrap();
+        fs::write(
+            folder.join("build/dev/status.json"),
+            json!({"state": "ready"}).to_string(),
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn development_builds_are_staged_by_revision_without_installing_a_package() {
+        let temp = tempfile::tempdir().unwrap();
+        let project = temp.path().join("plugin-project");
+        let first_revision = "a".repeat(32);
+        let next_revision = "b".repeat(32);
+        development_build(&project, &first_revision, &front_files());
+
+        let store = PluginPackages::new(temp.path().join("store"));
+        let status = PluginPackages::development_status(&project).unwrap();
+        assert_eq!(status.revision.as_deref(), Some(first_revision.as_str()));
+        assert_eq!(status.state.as_deref(), Some("ready"));
+
+        let first = store
+            .stage_development_build(&project, &first_revision, compatibility())
+            .unwrap();
+        let prepared_first = store.prepare_development_build(&first.token).unwrap();
+        assert_eq!(prepared_first.id, "com.example.front");
+        assert_eq!(prepared_first.asset_revision, first.token);
+        assert_eq!(
+            store
+                .asset_revision(
+                    &prepared_first.id,
+                    &prepared_first.asset_revision,
+                    "dist/frontend/index.css",
+                )
+                .unwrap(),
+            b"body{}"
+        );
+
+        let second_files = [
+            ("dist/frontend/index.js", b"next entry".as_slice()),
+            ("dist/frontend/index.css", b"next css".as_slice()),
+        ];
+        development_build(&project, &next_revision, &second_files);
+        let second = store
+            .stage_development_build(&project, &next_revision, compatibility())
+            .unwrap();
+        let prepared_second = store.prepare_development_build(&second.token).unwrap();
+
+        assert_ne!(first.token, second.token);
+        assert_eq!(
+            store
+                .asset_revision(
+                    &prepared_first.id,
+                    &prepared_first.asset_revision,
+                    "dist/frontend/index.css",
+                )
+                .unwrap(),
+            b"body{}"
+        );
+        assert_eq!(
+            store
+                .asset_revision(
+                    &prepared_second.id,
+                    &prepared_second.asset_revision,
+                    "dist/frontend/index.css",
+                )
+                .unwrap(),
+            b"next css"
+        );
+        assert!(store.list().unwrap().is_empty());
+
+        store.release_development_assets(&first.token).unwrap();
+        assert!(store
+            .asset_revision(
+                &prepared_first.id,
+                &prepared_first.asset_revision,
+                "dist/frontend/index.css",
+            )
+            .is_err());
+        store.discard_development_build(&first.token).unwrap();
+        store.release_development_assets(&second.token).unwrap();
+        store.discard_development_build(&second.token).unwrap();
+    }
+
+    #[test]
+    fn development_builds_reject_unlisted_files_and_wait_while_building() {
+        let temp = tempfile::tempdir().unwrap();
+        let project = temp.path().join("plugin-project");
+        let revision = "c".repeat(32);
+        development_build(&project, &revision, &front_files());
+        let build_root = project.join("build/dev").join(&revision);
+        fs::write(build_root.join("leftover.txt"), b"not listed").unwrap();
+
+        let store = PluginPackages::new(temp.path().join("store"));
+        assert!(store
+            .stage_development_build(&project, &revision, compatibility())
+            .unwrap_err()
+            .contains("未声明的文件"));
+
+        fs::remove_file(build_root.join("leftover.txt")).unwrap();
+        fs::write(
+            project.join("build/dev/status.json"),
+            json!({"state": "building"}).to_string(),
+        )
+        .unwrap();
+        assert!(store
+            .stage_development_build(&project, &revision, compatibility())
+            .unwrap_err()
+            .contains("正在生成新版本"));
     }
 
     #[test]

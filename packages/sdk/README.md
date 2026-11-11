@@ -10,8 +10,8 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/ui`：UI 服务类型与共享单例 `uiKey`。
 - `@lodestory/sdk/navigation-layout`：应用导航布局服务、页面与导航元数据类型，以及共享单例 `navigationLayoutKey`。
 - `@lodestory/sdk/settings`：设置分类贡献与打开弹框的契约，以及共享 `settingsKey`。
-- `@lodestory/sdk/plugin-packages`：本地插件包导入、安装记录、安装文件移除和外部能力声明契约，以及共享 `pluginPackagesKey`。
-- `@lodestory/sdk/external-plugins`：外部插件启用、停用和卸载操作及状态。插件工厂可从 `ExternalPluginOptions.backend` 调用自身后端。
+- `@lodestory/sdk/plugin-packages`：本地插件包导入、安装记录、文件移除、开发产物校验与暂存，以及共享 `pluginPackagesKey`。
+- `@lodestory/sdk/external-plugins`：外部插件启用、停用、卸载和开发模式的操作及状态。插件工厂可从 `ExternalPluginOptions.backend` 调用自身后端。
 - `@lodestory/sdk/plugin-runtime`：宿主通用的运行中插件激活和停用能力。
 - `@lodestory/sdk/window-shell`：窗口外壳属性与服务类型，以及共享单例 `windowShellKey`。
 - `@lodestory/sdk/error`：错误边界服务与共享单例 `errorUiKey`。

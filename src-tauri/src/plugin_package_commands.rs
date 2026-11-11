@@ -1,4 +1,7 @@
-use crate::plugin_packages::{Compatibility, ImportedPackage, PluginPackages, PreparedPackage};
+use crate::plugin_packages::{
+    Compatibility, DevelopmentBuildCandidate, DevelopmentBuildStatus, ImportedPackage,
+    PluginPackages, PreparedPackage,
+};
 use std::path::Path;
 use tauri::{AppHandle, Manager, WebviewWindow};
 use tauri_plugin_dialog::DialogExt;
@@ -27,6 +30,96 @@ pub async fn pick_plugin_package(
     })
     .await
     .map_err(|error| format!("打开文件选择器失败：{error}"))?
+}
+
+#[tauri::command]
+pub async fn pick_plugin_development_folder(
+    app: AppHandle,
+    window: WebviewWindow,
+) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .set_title("选择插件项目目录")
+            .set_parent(&window)
+            .blocking_pick_folder()
+            .map(|selected| {
+                let path = selected
+                    .into_path()
+                    .map_err(|error| format!("所选目录无效：{error}"))?;
+                path.to_str()
+                    .map(str::to_owned)
+                    .ok_or_else(|| "所选目录路径无法表示，请选择其他目录。".to_owned())
+            })
+            .transpose()
+    })
+    .await
+    .map_err(|error| format!("打开目录选择器失败：{error}"))?
+}
+
+#[tauri::command]
+pub async fn read_plugin_development_status(
+    folder: String,
+) -> Result<DevelopmentBuildStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        PluginPackages::development_status(Path::new(&folder))
+    })
+    .await
+    .map_err(|error| format!("读取插件开发状态失败：{error}"))?
+}
+
+#[tauri::command]
+pub async fn stage_plugin_development_build(
+    app: AppHandle,
+    folder: String,
+    revision: String,
+    compatibility: Compatibility,
+) -> Result<DevelopmentBuildCandidate, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<PluginPackages>().stage_development_build(
+            Path::new(&folder),
+            &revision,
+            compatibility,
+        )
+    })
+    .await
+    .map_err(|error| format!("准备插件开发版本失败：{error}"))?
+}
+
+#[tauri::command]
+pub async fn prepare_plugin_development_build(
+    app: AppHandle,
+    token: String,
+) -> Result<PreparedPackage, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<PluginPackages>()
+            .prepare_development_build(&token)
+    })
+    .await
+    .map_err(|error| format!("校验插件开发版本失败：{error}"))?
+}
+
+#[tauri::command]
+pub async fn release_plugin_development_assets(
+    app: AppHandle,
+    token: String,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<PluginPackages>()
+            .release_development_assets(&token)
+    })
+    .await
+    .map_err(|error| format!("释放插件开发资源失败：{error}"))?
+}
+
+#[tauri::command]
+pub async fn discard_plugin_development_build(app: AppHandle, token: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        app.state::<PluginPackages>()
+            .discard_development_build(&token)
+    })
+    .await
+    .map_err(|error| format!("清理插件开发版本失败：{error}"))?
 }
 
 #[tauri::command]

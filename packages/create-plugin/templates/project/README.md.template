@@ -4,14 +4,17 @@
 
 仅后端项目运行 `npm install` 安装依赖。`@lodestory/sdk` 尚未发布到 npm；包含前端时，需要先从 Lodestory 源码本地打包 SDK，再在本项目运行 `npm install --save-dev /SDK包路径/lodestory-sdk-0.1.0.tgz` 来安装依赖。SDK 正式发布后，可改用其发布版本。
 
-依赖安装完成后，构建和打包：
+依赖安装完成后，可构建、监听开发改动或打包：
 
 ```sh
 npm run build
+npm run dev
 npm run package
 ```
 
 `build` 在 `build/` 下输出一次构建结果；`package` 会重新构建并在 `release/` 中生成 ZIP。已有同名 ZIP 不会被覆盖。包含 Rust 后端时需要 Rust 和 Cargo；第一版按当前 Rust 工具链的宿主目标构建，识别 macOS、Windows 和 Linux 的 x64、arm64。
+
+`dev` 会监听 `plugin.json`、`frontend/` 和 `backend/` 的源码变化。它初次会立即构建，之后在源码稳定保存后自动重新构建；有错误时终端显示原因，并保留上一个成功版本。成功构建的清单和文件写入 `build/dev/<revision>/`，完成后更新 `build/dev/current.json`，供 Lodestory 开发模式读取。终端运行期间按 Ctrl+C 停止监听。
 
 有前端时，`frontend/src/Panel.tsx` 是界面示例，通过公开 SDK 登记工作台内容。有后端时，`backend/src/protocol.rs` 提供 `ping` 操作；同时包含前后端时，前端示例通过工厂收到的 `options.backend.call` 调用它。独立程序的标准输出只用于协议消息，日志写到标准错误；动态库须自行释放返回缓冲区，不能让 panic 跨接口传播。
 

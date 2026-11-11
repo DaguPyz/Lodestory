@@ -29,6 +29,18 @@ export type PreparedPluginPackage = Readonly<{
   provides: string[];
 }>;
 
+export type DevelopmentBuildStatus = Readonly<{
+  revision: string | null;
+  state?: "building" | "ready" | "error" | "stopped";
+  error?: string;
+}>;
+
+export type DevelopmentPluginBuild = Readonly<{
+  token: string;
+  id: string;
+  revision: string;
+}>;
+
 export type PluginPackagesService = Readonly<{
   /** Capability providers register only contracts they actually implement. */
   registerCapability(capability: ExternalCapability): () => void;
@@ -44,6 +56,18 @@ export type PluginPackagesService = Readonly<{
   setEnabled(id: string, enabled: boolean, explicitDisable?: boolean): Promise<void>;
   /** Removes an inactive package and retries cleanup of a pending removal. */
   remove(id: string): Promise<void>;
+  /** Chooses a local generated plugin project directory. */
+  pickDevelopmentFolder(): Promise<string | null>;
+  /** Reads the latest successful build revision and optional watcher status. */
+  readDevelopmentStatus(folder: string): Promise<DevelopmentBuildStatus>;
+  /** Validates and stages one immutable build revision into app-owned storage. */
+  stageDevelopmentBuild(folder: string, revision: string): Promise<DevelopmentPluginBuild>;
+  /** Serves staged assets and returns normal frontend/backend preparation metadata. */
+  prepareDevelopmentBuild(token: string): Promise<PreparedPluginPackage>;
+  /** Releases active assets while retaining staged files for rollback. */
+  releaseDevelopmentAssets(token: string): Promise<void>;
+  /** Discards a staged build after its assets have been released. */
+  discardDevelopmentBuild(token: string): Promise<void>;
   releaseAssets(id: string): Promise<void>;
 }>;
 

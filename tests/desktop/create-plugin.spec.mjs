@@ -1,30 +1,34 @@
 import assert from "node:assert/strict";
-import {spawnSync} from "node:child_process";
+import {mkdir, readFile, readdir, writeFile} from "node:fs/promises";
+import {createRequire} from "node:module";
 import path from "node:path";
 import {prepareCreatePluginPackage} from "../helpers/createPluginPackage.mjs";
 
-describe("npm 脚手架生成的后端", function () {
+describe("npm 脚手架生成的插件包", function () {
   let fixture;
   const entries = {};
 
   before(async function () {
     this.timeout(120000);
     fixture = await prepareCreatePluginPackage();
-    const target = path.join(fixture.directory, "target");
     for (const [type, name] of [["process", "my-c"], ["dynamic-library", "my-d"]]) {
       const generated = fixture.run(["--type", type, "--name", name]);
       assert.equal(generated.status, 0, generated.stderr);
-      const manifest = path.join(fixture.consumer, name, "Cargo.toml");
-      const build = spawnSync("cargo", ["build", "--manifest-path", manifest, "--target-dir", target], {
-        cwd: fixture.consumer, env: fixture.env, encoding: "utf8",
-      });
-      if (build.error) throw build.error;
-      assert.equal(build.status, 0, build.stderr);
+      const project = path.join(fixture.consumer, name);
+      await fixture.installTestDependencies(project);
+      const packaged = fixture.runProject(project, "package");
+      assert.equal(packaged.status, 0, packaged.stderr + packaged.stdout);
+      const [filename] = await readdir(path.join(project, "release"));
+      const require = createRequire(path.join(project, "package.json"));
+      const zip = await require("jszip").loadAsync(await readFile(path.join(project, "release", filename)));
+      const manifest = JSON.parse(await zip.file("manifest.json").async("string"));
+      const artifact = manifest.backend.artifacts[0];
+      assert.equal(manifest.backend.type, type);
+      const entry = path.join(fixture.directory, "unpacked", name, ...artifact.entry.split("/"));
+      await mkdir(path.dirname(entry), {recursive: true});
+      await writeFile(entry, await zip.file(artifact.entry).async("nodebuffer"), {mode: type === "process" ? 0o755 : 0o644});
+      entries[type] = entry;
     }
-    entries.process = path.join(target, "debug", process.platform === "win32" ? "my-c.exe" : "my-c");
-    const library = process.platform === "win32" ? "my_d.dll"
-      : process.platform === "darwin" ? "libmy_d.dylib" : "libmy_d.so";
-    entries["dynamic-library"] = path.join(target, "debug", library);
   });
 
   after(async function () {

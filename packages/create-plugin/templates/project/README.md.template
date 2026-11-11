@@ -1,0 +1,20 @@
+# __PROJECT_NAME__
+
+这是由 Lodestory 脚手架生成的插件项目。`plugin.json` 保存插件信息和选择的前后端；打包工具根据它和实际构建结果生成交付包内的 `manifest.json`。
+
+仅后端项目运行 `npm install` 安装依赖。`@lodestory/sdk` 尚未发布到 npm；包含前端时，需要先从 Lodestory 源码本地打包 SDK，再在本项目运行 `npm install --save-dev /SDK包路径/lodestory-sdk-0.1.0.tgz` 来安装依赖。SDK 正式发布后，可改用其发布版本。
+
+依赖安装完成后，构建和打包：
+
+```sh
+npm run build
+npm run package
+```
+
+`build` 在 `build/` 下输出一次构建结果；`package` 会重新构建并在 `release/` 中生成 ZIP。已有同名 ZIP 不会被覆盖。包含 Rust 后端时需要 Rust 和 Cargo；第一版按当前 Rust 工具链的宿主目标构建，识别 macOS、Windows 和 Linux 的 x64、arm64。
+
+有前端时，`frontend/src/Panel.tsx` 是界面示例，通过公开 SDK 登记工作台内容。有后端时，`backend/src/protocol.rs` 提供 `ping` 操作。独立程序的标准输出只用于协议消息，日志写到标准错误；动态库须自行释放返回缓冲区，不能让 panic 跨接口传播。
+
+插件停用或初始化失败时，前端须撤回登记，后端须停止任务并释放资源；清理失败时应保留可重试状态。
+
+默认插件 ID、宿主接口版本和跨包能力 ID 都是示例；正式发布前须根据正式契约修改 `plugin.json`。`@lodestory/sdk` 和外部插件加载、安装机制尚未正式发布；当前生成的 ZIP 不能直接在 Lodestory 中安装，前后端也尚无自动连接的统一接口。

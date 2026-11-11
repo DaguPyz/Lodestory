@@ -1,7 +1,7 @@
 {
   "name": "@lodestory/create-plugin",
   "version": "0.1.0",
-  "description": "Create a Lodestory Rust backend project",
+  "description": "Create a Lodestory plugin project",
   "license": "UNLICENSED",
   "type": "module",
   "engines": {
@@ -15,5 +15,10 @@
     "lib",
     "templates",
     "README.md"
-  ]
+  ],
+  "devDependencies": {
+    "esbuild": "0.28.2",
+    "jszip": "3.10.2",
+    "semver": "7.8.6"
+  }
 }

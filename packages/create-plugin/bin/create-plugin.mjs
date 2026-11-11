@@ -9,8 +9,11 @@ try {
     console.log(usage);
   } else {
     const destination = await createProject(options);
-    console.log("已创建 Rust 后端项目：" + destination);
-    console.log("进入项目目录后运行 cargo build。");
+    console.log("已创建插件项目：" + destination);
+    console.log("进入项目目录后安装依赖，再运行 npm run build 或 npm run package。");
+    if (!options.id || options.id.startsWith("com.example.")) {
+      console.log("当前插件 ID 是示例，请在交付前更新 plugin.json。");
+    }
   }
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

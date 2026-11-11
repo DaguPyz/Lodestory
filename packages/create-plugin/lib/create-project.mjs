@@ -16,10 +16,10 @@ const reservedNames = new Set([
 
 export const usage = [
   "用法：create-plugin",
-  "      create-plugin --type <process|dynamic-library> --name <项目名> [--output <目录>]",
+  "      create-plugin --name <项目名> [--id <插件 ID>] [--frontend] [--type <process|dynamic-library>] [--output <目录>]",
   "",
-  "不带选项时按提示选择类型和填写项目名。",
-  "process：生成独立程序后端；dynamic-library：生成动态库后端。",
+  "不带选项时按提示选择前端和后端，并填写项目名称及插件 ID。",
+  "--frontend 添加前端；--type 选择独立程序或动态库后端，至少选择其中一项。",
   "项目名须以小写英文字母开头，只包含小写字母、数字、连字符或下划线。",
   "默认在当前目录下创建与项目同名的目录；目标目录不能已存在。",
 ].join("\n");
@@ -31,7 +31,12 @@ function validName(name) {
     && !reservedNames.has(name.replaceAll("-", "_"));
 }
 
-/** Ask for the two required options without writing files until both are valid. */
+function validId(id) {
+  return typeof id === "string" && id.length <= 200
+    && /^[A-Za-z0-9_][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_][A-Za-z0-9_-]*)+$/.test(id);
+}
+
+/** Ask for project options without writing files until the inputs are valid. */
 export async function promptOptions(input, output) {
   const reader = createInterface({input, crlfDelay: Infinity});
   const lines = reader[Symbol.asyncIterator]();
@@ -42,8 +47,14 @@ export async function promptOptions(input, output) {
     return value.trim();
   }
   try {
+    let composition;
+    while (!composition) {
+      const choice = await ask("选择项目组成（1：仅前端；2：仅后端；3：前端和后端）：");
+      if (["1", "2", "3"].includes(choice)) composition = choice;
+      else output.write("请输入 1、2 或 3。\n");
+    }
     let type;
-    while (!type) {
+    while (composition !== "1" && !type) {
       const choice = await ask("选择后端类型（1：独立程序 C；2：动态库 D）：");
       if (choice === "1") type = "process";
       else if (choice === "2") type = "dynamic-library";
@@ -54,7 +65,14 @@ export async function promptOptions(input, output) {
       name = await ask("项目名称：");
       if (!validName(name)) output.write(nameError + "\n");
     }
-    return {type, name};
+    let id;
+    const example = "com.example." + name;
+    while (!id) {
+      const answer = await ask("插件 ID（例如 com.example.my-plugin，留空使用 " + example + "）：");
+      if (!answer || validId(answer)) id = answer || example;
+      else output.write("插件 ID 需要至少两段，用英文、数字、下划线或连字符表示，以点分隔。\n");
+    }
+    return {type, name, id, frontend: composition !== "2"};
   } finally {
     reader.close();
   }
@@ -62,10 +80,15 @@ export async function promptOptions(input, output) {
 
 export function parseArgs(args) {
   if (args.length === 1 && (args[0] === "--help" || args[0] === "-h")) return {help: true};
-  const allowed = new Map([["--type", "type"], ["--name", "name"], ["--output", "output"]]);
+  const allowed = new Map([["--type", "type"], ["--name", "name"], ["--id", "id"], ["--output", "output"]]);
   const result = {};
   for (let index = 0; index < args.length; index++) {
     const option = args[index];
+    if (option === "--frontend") {
+      if (result.frontend) throw new Error("选项不能重复：" + option);
+      result.frontend = true;
+      continue;
+    }
     const key = allowed.get(option);
     if (!key) throw new Error("未知选项：" + option);
     if (Object.hasOwn(result, key)) throw new Error("选项不能重复：" + option);
@@ -77,8 +100,13 @@ export function parseArgs(args) {
 }
 
 function validate(options) {
-  if (!types.has(options.type)) throw new Error("--type 必须是 process 或 dynamic-library。");
+  if (options.type !== undefined && !types.has(options.type)) throw new Error("--type 必须是 process 或 dynamic-library。");
+  if (options.frontend !== undefined && typeof options.frontend !== "boolean") throw new Error("前端选项无效。");
+  if (!options.frontend && !options.type) throw new Error("请通过 --frontend 或 --type 选择前端和后端。");
   if (!validName(options.name)) throw new Error(nameError);
+  if (options.id !== undefined && !validId(options.id)) {
+    throw new Error("插件 ID 需要至少两段，用英文、数字、下划线或连字符表示，以点分隔。");
+  }
   if (options.output !== undefined && (typeof options.output !== "string" || !options.output.trim())) {
     throw new Error("输出目录不能为空。");
   }
@@ -97,18 +125,27 @@ async function cleanCreated(fs, files, directories) {
   return errors;
 }
 
-/** Create a new standalone backend directory; existing paths are never overwritten. */
+/** Create a new plugin project directory; existing paths are never overwritten. */
 export async function createProject(options, fs = filesystem) {
   validate(options);
   const destination = path.resolve(options.output ?? options.name);
   const templateFiles = [
-    ["shared/gitignore.template", ".gitignore"],
-    ["shared/protocol.rs", "src/protocol.rs"],
-    [options.type + "/Cargo.toml.template", "Cargo.toml"],
-    [options.type + "/README.md.template", "README.md"],
-    [options.type + (options.type === "process" ? "/main.rs" : "/lib.rs"),
-      options.type === "process" ? "src/main.rs" : "src/lib.rs"],
+    ["project/gitignore.template", ".gitignore"],
+    ["project/README.md.template", "README.md"],
+    ["project/build.mjs", "scripts/build.mjs"],
   ];
+  if (options.frontend) templateFiles.push(
+    ["frontend/index.tsx", "frontend/src/index.tsx"],
+    ["frontend/Panel.tsx", "frontend/src/Panel.tsx"],
+    ["frontend/globals.d.ts", "frontend/src/globals.d.ts"],
+    ["frontend/tsconfig.json", "frontend/tsconfig.json"],
+  );
+  if (options.type) templateFiles.push(
+    ["shared/protocol.rs", "backend/src/protocol.rs"],
+    [options.type + "/Cargo.toml.template", "backend/Cargo.toml"],
+    [options.type + (options.type === "process" ? "/main.rs" : "/lib.rs"),
+      options.type === "process" ? "backend/src/main.rs" : "backend/src/lib.rs"],
+  );
   const values = {
     "__PROJECT_NAME__": options.name,
     "__LIBRARY_NAME__": options.name.replaceAll("-", "_"),
@@ -118,6 +155,40 @@ export async function createProject(options, fs = filesystem) {
     for (const [placeholder, value] of Object.entries(values)) content = content.replaceAll(placeholder, value);
     return {target, content};
   }));
+  const configuration = {
+    id: options.id ?? "com.example." + options.name,
+    name: options.name,
+    version: "0.1.0",
+    description: "",
+    compatibility: {hostApi: "^1.0.0", ...(options.frontend ? {react: "^19.1.0"} : {})},
+    dependencies: {
+      plugins: [],
+      requires: options.frontend ? [{id: "lodestory/layout@1", version: "^1.0.0"}] : [],
+      provides: [],
+    },
+    ...(options.frontend ? {frontend: {entry: "frontend/src/index.tsx"}} : {}),
+    ...(options.type ? {backend: {type: options.type}} : {}),
+  };
+  const packageJson = {
+    name: options.name,
+    version: "0.1.0",
+    private: true,
+    type: "module",
+    scripts: {build: "node scripts/build.mjs build", package: "node scripts/build.mjs package"},
+    devDependencies: {
+      jszip: "^3.10.1",
+      semver: "^7.8.5",
+      ...(options.frontend ? {
+        "@lodestory/sdk": "^0.1.0",
+        "@types/react": "^19.1.8",
+        esbuild: "^0.28.1",
+        react: "^19.1.0",
+        typescript: "~6.0.3",
+      } : {}),
+    },
+  };
+  rendered.push({target: "plugin.json", content: JSON.stringify(configuration, null, 2) + "\n"});
+  rendered.push({target: "package.json", content: JSON.stringify(packageJson, null, 2) + "\n"});
 
   try {
     await fs.mkdir(destination);
@@ -129,9 +200,19 @@ export async function createProject(options, fs = filesystem) {
   const createdDirectories = [destination];
   const createdFiles = [];
   try {
-    const sourceDirectory = path.join(destination, "src");
-    await fs.mkdir(sourceDirectory);
-    createdDirectories.push(sourceDirectory);
+    const directories = new Set();
+    for (const {target} of rendered) {
+      let directory = path.dirname(target);
+      while (directory !== ".") {
+        directories.add(directory);
+        directory = path.dirname(directory);
+      }
+    }
+    for (const directory of [...directories].sort((a, b) => a.split(/[\\/]/).length - b.split(/[\\/]/).length)) {
+      const absolute = path.join(destination, directory);
+      await fs.mkdir(absolute);
+      createdDirectories.push(absolute);
+    }
     for (const {target, content} of rendered) {
       const file = path.join(destination, target);
       const handle = await fs.open(file, "wx");

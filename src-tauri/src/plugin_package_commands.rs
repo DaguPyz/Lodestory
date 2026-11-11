@@ -64,12 +64,25 @@ pub async fn prepare_plugin_package(
 }
 
 #[tauri::command]
-pub async fn set_plugin_enabled(app: AppHandle, id: String, enabled: bool) -> Result<(), String> {
+pub async fn set_plugin_enabled(
+    app: AppHandle,
+    id: String,
+    enabled: bool,
+    explicit_disable: Option<bool>,
+) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || {
-        app.state::<PluginPackages>().set_enabled(&id, enabled)
+        app.state::<PluginPackages>()
+            .set_enabled(&id, enabled, explicit_disable.unwrap_or(false))
     })
     .await
     .map_err(|error| format!("保存插件状态失败：{error}"))?
+}
+
+#[tauri::command]
+pub async fn remove_plugin_package(app: AppHandle, id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || app.state::<PluginPackages>().remove(&id))
+        .await
+        .map_err(|error| format!("卸载插件包失败：{error}"))?
 }
 
 #[tauri::command]
@@ -82,9 +95,10 @@ pub fn asset_response(app: &AppHandle, path: &str) -> tauri::http::Response<Vec<
     let result = decoded
         .map_err(|_| "插件资源路径无效。".to_owned())
         .and_then(|path| {
-            let (id, file) = path.split_once('/').ok_or("插件资源路径无效。")?;
+            let (id, path) = path.split_once('/').ok_or("插件资源路径无效。")?;
+            let (revision, file) = path.split_once('/').ok_or("插件资源路径无效。")?;
             app.state::<PluginPackages>()
-                .asset(id, file)
+                .asset_revision(id, revision, file)
                 .map(|bytes| (file.to_owned(), bytes))
         });
     let mut response = tauri::http::Response::builder()

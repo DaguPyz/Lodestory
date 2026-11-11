@@ -1,6 +1,6 @@
 import type {ReactNode} from "react";
 import {createServiceKey} from "./ServiceKey.js";
-import type {UiPage} from "./ui.js";
+import type {UiPage, UiPageContribution} from "./ui.js";
 import type {PluginContribution} from "./Plugin.js";
 
 /** 导航用途分组；具体位置由布局实现决定，不表示固定的上下左右。 */
@@ -39,9 +39,9 @@ export type NavigationLayoutService = {
      * 返回生命周期句柄，须交给 context.track。在线停用先经导航守卫离开当前页面，
      * 再撤回页面和导航登记；根视图与其他页面保留。
      */
-    registerPage(page: NavigationLayoutPage): PluginContribution;
+    registerPage(page: NavigationLayoutPage): UiPageContribution;
     /** Validate and publish a group of new pages as one operation. */
-    registerPages(pages: readonly NavigationLayoutPage[]): readonly PluginContribution[];
+    registerPages(pages: readonly NavigationLayoutPage[]): readonly UiPageContribution[];
     /** 登记独立操作；与页面共享 ID 空间，撤销时同步更新现有导航。 */
     registerAction(action: NavigationLayoutAction): PluginContribution;
 };

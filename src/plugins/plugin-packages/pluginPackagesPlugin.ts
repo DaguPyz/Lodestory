@@ -14,7 +14,8 @@ export type PackageBridge = Readonly<{
   list(): Promise<ImportedPluginPackage[]>;
   importPackage(path: string, compatibility: Compatibility): Promise<ImportedPluginPackage>;
   prepare(id: string, compatibility: Compatibility): Promise<PreparedPluginPackage>;
-  setEnabled(id: string, enabled: boolean): Promise<void>;
+  setEnabled(id: string, enabled: boolean, explicitDisable?: boolean): Promise<void>;
+  remove(id: string): Promise<void>;
   releaseAssets(id: string): Promise<void>;
 }>;
 
@@ -29,7 +30,8 @@ const desktopBridge: PackageBridge = {
   },
   importPackage(path, compatibility) {return invoke("import_plugin_package", {path, compatibility});},
   prepare(id, compatibility) {return invoke("prepare_plugin_package", {id, compatibility});},
-  setEnabled(id, enabled) {return invoke("set_plugin_enabled", {id, enabled});},
+  setEnabled(id, enabled, explicitDisable = false) {return invoke("set_plugin_enabled", {id, enabled, explicitDisable});},
+  remove(id) {return invoke("remove_plugin_package", {id});},
   releaseAssets(id) {return invoke("release_plugin_assets", {id});},
 };
 
@@ -91,7 +93,13 @@ export function createPluginPackagesPlugin(bridge: PackageBridge = desktopBridge
           });
         },
         prepare(id) {return run(() => bridge.prepare(id, compatibility()));},
-        setEnabled(id, enabled) {return run(() => bridge.setEnabled(id, enabled).then(notify));},
+        setEnabled(id, enabled, explicitDisable) {return run(() => bridge.setEnabled(id, enabled, explicitDisable).then(notify));},
+        remove(id) {
+          return run(async () => {
+            try {await bridge.remove(id);}
+            finally {notify();}
+          });
+        },
         // Loaded plugins release resources after stop preparation has begun.
         releaseAssets(id) {
           if (!active) return Promise.reject(new Error("插件包服务已停止。"));

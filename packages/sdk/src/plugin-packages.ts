@@ -12,11 +12,17 @@ export type ImportedPluginPackage = Readonly<{
   version: string;
   status: "pending-load";
   /** Desired state restored on the next application startup. */
-  enabled?: boolean;
+  enabled: boolean;
+  /** Set only after the user explicitly disables the plugin. */
+  disabled?: boolean;
+  /** The package directory was detached but could not yet be deleted. */
+  removalPending?: boolean;
 }>;
 
 export type PreparedPluginPackage = Readonly<{
   id: string;
+  /** Archive digest used to invalidate stale URLs when a package ID is reimported. */
+  assetRevision: string;
   frontend: {entry: string; styles: string[]} | null;
   backend: {type: "process" | "dynamic-library"; entry: string} | null;
   requires: string[];
@@ -35,7 +41,9 @@ export type PluginPackagesService = Readonly<{
   importFromFile(): Promise<ImportedPluginPackage | null>;
   /** Revalidates the installed package and prepares its frontend resources. */
   prepare(id: string): Promise<PreparedPluginPackage>;
-  setEnabled(id: string, enabled: boolean): Promise<void>;
+  setEnabled(id: string, enabled: boolean, explicitDisable?: boolean): Promise<void>;
+  /** Removes an inactive package and retries cleanup of a pending removal. */
+  remove(id: string): Promise<void>;
   releaseAssets(id: string): Promise<void>;
 }>;
 

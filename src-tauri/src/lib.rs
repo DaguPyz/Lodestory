@@ -102,6 +102,7 @@ pub fn run() {
             plugin_package_commands::import_plugin_package,
             plugin_package_commands::prepare_plugin_package,
             plugin_package_commands::set_plugin_enabled,
+            plugin_package_commands::remove_plugin_package,
             plugin_package_commands::release_plugin_assets,
         ])
         .run(tauri::generate_context!())

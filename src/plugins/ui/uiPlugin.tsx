@@ -372,6 +372,15 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                     let owner: symbol | undefined;
                     const alternative = () => pages.alternative(pageId, candidate => owner === undefined || pageOwners.get(candidate) !== owner);
 
+                    async function leave() {
+                        if (!registered || pages.getSnapshot().current?.id !== pageId) return;
+                        const target = alternative();
+                        if (!target) throw new Error(`Cannot remove the last active page '${pageId}'.`);
+                        const back = pages.previewBack();
+                        const request = back?.to === target ? back : pages.previewOpen(target.id, target.params);
+                        if (!await navigate(request)) throw new Error(`离开页面 ${pageId} 的操作被取消。`);
+                    }
+
                     const dispose = () => {
                         if (!registered) return;
                         if (reactRoot && pages.getSnapshot().current?.id === pageId) {
@@ -383,6 +392,7 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                         pageOwners.delete(pageId);
                     };
                     return Object.assign(dispose, {
+                        leave,
                         associate(token: symbol) {
                             if (owner !== undefined && owner !== token) throw new Error(`Page '${pageId}' is already owned by another plugin.`);
                             owner = token;
@@ -395,15 +405,8 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                         },
                         async withdraw(scope: "plugin" | "application") {
                             if (scope !== "plugin" || !registered) return;
-                            if (pages.getSnapshot().current?.id === pageId) {
-                                const target = alternative();
-                                if (!target) throw new Error(`Cannot remove the last active page '${pageId}'.`);
-                                const request = pages.previewOpen(target, undefined, "reset");
-                                if (request && !await navigate(request)) throw new Error(`Navigation away from page '${pageId}' was rejected.`);
-                            }
-                            flushSync(() => remove());
-                            registered = false;
-                            pageOwners.delete(pageId);
+                            if (pages.getSnapshot().current?.id === pageId) await leave();
+                            dispose();
                         },
                     });
                 },

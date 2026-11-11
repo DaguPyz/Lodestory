@@ -18,6 +18,7 @@ export function installLifecycleTest(runtime) {
    importPluginPackage(path) {return runtime.get(pluginPackagesKey).importFromPath(path);},
    listPluginPackages() {return runtime.get(pluginPackagesKey).list();},
    enablePlugin(id) {return runtime.get(externalPluginsKey).enable(id);},
+   disablePlugin(id) {return runtime.get(externalPluginsKey).disable(id);},
    pluginStatuses() {return runtime.get(externalPluginsKey).getSnapshot();},
    showLayoutContent(id) {return runtime.get(layoutKey).show(id);},
    layoutContents() {return runtime.get(layoutKey).getSnapshot().contents.map(item => item.id);},

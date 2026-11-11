@@ -15,6 +15,7 @@ const MAX_MANIFEST: u64 = 256 * 1024;
 const MAX_ENTRIES: usize = 4096;
 const RECORD: &str = "record.json";
 const STAGING_PREFIX: &str = "plugin-stage-";
+const REMOVAL_PREFIX: &str = "plugin-remove-";
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -25,6 +26,10 @@ pub struct ImportedPackage {
     pub status: String,
     #[serde(default)]
     pub enabled: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub disabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub removal_pending: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -107,13 +112,20 @@ struct Artifact {
 
 pub struct PluginPackages {
     root: PathBuf,
-    assets: RwLock<HashMap<String, HashMap<String, (u64, String)>>>,
+    assets: RwLock<HashMap<String, PreparedAssets>>,
+}
+
+struct PreparedAssets {
+    revision: String,
+    files: HashMap<String, (u64, String)>,
+    _leases: Vec<File>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PreparedPackage {
     pub id: String,
+    pub asset_revision: String,
     pub frontend: Option<PreparedFrontend>,
     pub backend: Option<PreparedBackend>,
     pub requires: Vec<String>,
@@ -154,6 +166,7 @@ impl PluginPackages {
             .map_err(io_error)?;
         file.lock().map_err(io_error)?;
         self.clean_staging()?;
+        self.clean_removal_tombstones();
         Ok(file)
     }
 
@@ -176,6 +189,7 @@ impl PluginPackages {
     pub fn list(&self) -> Result<Vec<ImportedPackage>, String> {
         let _lock = self.lock()?;
         let mut packages = Vec::new();
+        let mut installed = HashSet::new();
         for entry in fs::read_dir(self.root.join("installed")).map_err(io_error)? {
             let entry = entry.map_err(io_error)?;
             if !entry.file_type().map_err(io_error)?.is_dir() {
@@ -196,7 +210,38 @@ impl PluginPackages {
             {
                 return Err("插件记录或文件不完整，请检查插件目录。".into());
             }
+            installed.insert(record.package.id.to_ascii_lowercase());
             packages.push(record.package);
+        }
+        for entry in fs::read_dir(self.root.join("staging")).map_err(io_error)? {
+            let entry = entry.map_err(io_error)?;
+            if !entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(REMOVAL_PREFIX)
+                || !entry.file_type().map_err(io_error)?.is_dir()
+            {
+                continue;
+            }
+            let Ok(record) = File::open(entry.path().join("removal.json"))
+                .map_err(io_error)
+                .and_then(|file| {
+                    serde_json::from_reader::<_, Record>(file).map_err(|error| error.to_string())
+                })
+            else {
+                continue;
+            };
+            let id = record.package.id.to_ascii_lowercase();
+            if record.record_version != 1
+                || record.package.status != "pending-load"
+                || !valid_plugin_id(&record.package.id)
+                || installed.contains(&id)
+            {
+                continue;
+            }
+            let mut package = record.package;
+            package.removal_pending = Some(true);
+            packages.push(package);
         }
         packages.sort_by(|a, b| a.id.to_ascii_lowercase().cmp(&b.id.to_ascii_lowercase()));
         Ok(packages)
@@ -230,6 +275,13 @@ impl PluginPackages {
     ) -> Result<PreparedPackage, String> {
         let _lock = self.lock()?;
         let (directory, record) = self.record(id)?;
+        let lease = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(directory.join(".lease"))
+            .map_err(io_error)?;
+        lease.lock_shared().map_err(io_error)?;
         let archive_bytes = read_regular(&directory, "source.zip", MAX_ARCHIVE)?;
         if format!("{:x}", Sha256::digest(&archive_bytes)) != record.sha256 {
             return Err("原始插件包校验失败。".into());
@@ -338,12 +390,24 @@ impl PluginPackages {
             .filter(|item| !backend_files.contains(item.path.as_str()))
             .map(|item| (item.path.clone(), (item.size, item.sha256.clone())))
             .collect();
-        self.assets
-            .write()
-            .map_err(|_| "插件资源状态不可用。")?
-            .insert(id.to_owned(), assets);
+        let revision = record.sha256.clone();
+        let mut registered = self.assets.write().map_err(|_| "插件资源状态不可用。")?;
+        let mut leases = registered
+            .remove(id)
+            .map(|prepared| prepared._leases)
+            .unwrap_or_default();
+        leases.push(lease);
+        registered.insert(
+            id.to_owned(),
+            PreparedAssets {
+                revision: revision.clone(),
+                files: assets,
+                _leases: leases,
+            },
+        );
         Ok(PreparedPackage {
             id: id.to_owned(),
+            asset_revision: revision,
             frontend,
             backend,
             requires: manifest
@@ -361,10 +425,20 @@ impl PluginPackages {
         })
     }
 
-    pub fn set_enabled(&self, id: &str, enabled: bool) -> Result<(), String> {
+    pub fn set_enabled(
+        &self,
+        id: &str,
+        enabled: bool,
+        explicit_disable: bool,
+    ) -> Result<(), String> {
         let _lock = self.lock()?;
         let (directory, mut record) = self.record(id)?;
         record.package.enabled = enabled;
+        if enabled {
+            record.package.disabled = None;
+        } else if explicit_disable {
+            record.package.disabled = Some(true);
+        }
         let mut file = Builder::new()
             .prefix("record-")
             .tempfile_in(&directory)
@@ -377,6 +451,121 @@ impl PluginPackages {
         Ok(())
     }
 
+    pub fn remove(&self, id: &str) -> Result<(), String> {
+        if !valid_plugin_id(id) {
+            return Err("插件 ID 无效。".into());
+        }
+        let _lock = self.lock()?;
+        let mut assets = self.assets.write().map_err(|_| "插件资源状态不可用。")?;
+        if assets.contains_key(id) {
+            return Err("插件仍有已准备的运行资源，请先停用后再卸载。".into());
+        }
+
+        let directory = self
+            .root
+            .join("installed")
+            .join(format!("plugin-{}", id.to_ascii_lowercase()));
+        if !directory.exists() {
+            return self.retry_removal(id);
+        }
+        let (directory, record) = self.record(id)?;
+        if record.package.enabled {
+            return Err("插件仍标记为启用，请先停用后再卸载。".into());
+        }
+        let lease = OpenOptions::new()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(directory.join(".lease"))
+            .map_err(io_error)?;
+        lease.try_lock().map_err(|error| match error {
+            std::fs::TryLockError::WouldBlock => {
+                "插件仍在其他 Lodestory 窗口中运行，请先停用。".to_owned()
+            }
+            std::fs::TryLockError::Error(error) => format!("无法检查插件是否仍在运行：{error}"),
+        })?;
+        drop(lease);
+
+        let tombstone_dir = Builder::new()
+            .prefix(REMOVAL_PREFIX)
+            .tempdir_in(self.root.join("staging"))
+            .map_err(io_error)?;
+        let tombstone = tombstone_dir.keep();
+        let metadata_path = tombstone.join("removal.json");
+        let mut metadata = match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&metadata_path)
+        {
+            Ok(file) => file,
+            Err(error) => {
+                let _ = fs::remove_dir_all(&tombstone);
+                return Err(io_error(error));
+            }
+        };
+        if let Err(error) = serde_json::to_writer(&mut metadata, &record)
+            .map_err(|error| error.to_string())
+            .and_then(|_| metadata.write_all(b"\n").map_err(io_error))
+            .and_then(|_| metadata.sync_all().map_err(io_error))
+        {
+            let _ = fs::remove_dir_all(&tombstone);
+            return Err(error);
+        }
+        drop(metadata);
+
+        let package_path = tombstone.join("package");
+        if let Err(error) = move_no_replace(&directory, &package_path) {
+            let _ = fs::remove_dir_all(&tombstone);
+            return Err(format!("无法移出插件安装目录：{error}"));
+        }
+        assets.remove(id);
+        cleanup_removal_tombstone(&tombstone)
+            .map_err(|error| format!("插件已停用，安装文件清理未完成，可重试卸载：{error}"))
+    }
+
+    fn retry_removal(&self, id: &str) -> Result<(), String> {
+        let staging = self.root.join("staging");
+        for entry in fs::read_dir(&staging).map_err(io_error)? {
+            let entry = entry.map_err(io_error)?;
+            if !entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(REMOVAL_PREFIX)
+                || !entry.file_type().map_err(io_error)?.is_dir()
+            {
+                continue;
+            }
+            let path = entry.path();
+            let Ok(record) = File::open(path.join("removal.json")).and_then(|file| {
+                serde_json::from_reader::<_, Record>(file).map_err(io::Error::other)
+            }) else {
+                continue;
+            };
+            if record.package.id == id {
+                cleanup_removal_tombstone(&path)
+                    .map_err(|error| format!("插件卸载清理仍未完成，可重试：{error}"))?;
+            }
+        }
+        Ok(())
+    }
+
+    fn clean_removal_tombstones(&self) {
+        let staging = self.root.join("staging");
+        let Ok(entries) = fs::read_dir(staging) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            if entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(REMOVAL_PREFIX)
+                && entry.file_type().is_ok_and(|kind| kind.is_dir())
+            {
+                let _ = cleanup_removal_tombstone(&entry.path());
+            }
+        }
+    }
+
     pub fn release_assets(&self, id: &str) {
         if let Ok(mut assets) = self.assets.write() {
             assets.remove(id);
@@ -384,11 +573,24 @@ impl PluginPackages {
     }
 
     /// Only files from a successfully prepared frontend can be served, with integrity checked again.
+    #[cfg(test)]
     pub fn asset(&self, id: &str, path: &str) -> Result<Vec<u8>, String> {
+        let revision = self
+            .assets
+            .read()
+            .map_err(|_| "插件资源状态不可用。")?
+            .get(id)
+            .map(|assets| assets.revision.clone())
+            .ok_or("插件资源不存在。")?;
+        self.asset_revision(id, &revision, path)
+    }
+
+    pub fn asset_revision(&self, id: &str, revision: &str, path: &str) -> Result<Vec<u8>, String> {
         let assets = self.assets.read().map_err(|_| "插件资源状态不可用。")?;
         let expected = assets
             .get(id)
-            .and_then(|files| files.get(path))
+            .filter(|assets| assets.revision == revision)
+            .and_then(|assets| assets.files.get(path))
             .ok_or("插件资源不存在。")?;
         let root = self
             .root
@@ -477,7 +679,15 @@ impl PluginPackages {
             version: manifest.version,
             status: "pending-load".into(),
             enabled: false,
+            disabled: None,
+            removal_pending: None,
         };
+        if self.has_pending_removal(&package.id) {
+            return Err(format!(
+                "插件 {} 仍有待完成的卸载，请先完成清理。",
+                package.id
+            ));
+        }
         let destination = self
             .root
             .join("installed")
@@ -509,6 +719,40 @@ impl PluginPackages {
         })?;
         Ok(package)
     }
+
+    fn has_pending_removal(&self, id: &str) -> bool {
+        let Ok(entries) = fs::read_dir(self.root.join("staging")) else {
+            return false;
+        };
+        entries.flatten().any(|entry| {
+            if !entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(REMOVAL_PREFIX)
+            {
+                return false;
+            }
+            File::open(entry.path().join("removal.json"))
+                .and_then(|file| {
+                    serde_json::from_reader::<_, Record>(file).map_err(io::Error::other)
+                })
+                .is_ok_and(|record| record.package.id.eq_ignore_ascii_case(id))
+        })
+    }
+}
+
+fn cleanup_removal_tombstone(path: &Path) -> io::Result<()> {
+    match fs::remove_dir_all(path.join("package")) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    match fs::remove_file(path.join("removal.json")) {
+        Ok(()) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    fs::remove_dir(path)
 }
 
 fn io_error(error: io::Error) -> String {
@@ -1017,8 +1261,11 @@ mod tests {
             b"body{}"
         );
         assert!(packages.asset(&imported.id, "../source.zip").is_err());
-        packages.set_enabled(&imported.id, true).unwrap();
-        assert!(PluginPackages::new(root.clone()).list().unwrap()[0].enabled);
+        packages.set_enabled(&imported.id, true, false).unwrap();
+        assert_eq!(
+            PluginPackages::new(root.clone()).list().unwrap()[0].enabled,
+            true
+        );
         fs::write(
             root.join("installed/plugin-com.example.front/package/dist/frontend/index.css"),
             b"changed",
@@ -1032,8 +1279,80 @@ mod tests {
         assert!(packages
             .asset(&imported.id, "dist/frontend/index.js")
             .is_err());
-        packages.set_enabled(&imported.id, false).unwrap();
+        packages.set_enabled(&imported.id, false, true).unwrap();
         assert!(!packages.list().unwrap()[0].enabled);
+        assert_eq!(packages.list().unwrap()[0].disabled, Some(true));
+    }
+
+    #[test]
+    fn remove_requires_released_assets_and_allows_reimport_with_a_new_revision() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("plugin.zip");
+        archive(&path, &manifest(), &front_files());
+        let root = temp.path().join("store");
+        let packages = PluginPackages::new(root.clone());
+        let imported = packages.import(&path, &compatibility()).unwrap();
+        let old_revision = packages
+            .prepare(&imported.id, &compatibility())
+            .unwrap()
+            .asset_revision;
+        packages.set_enabled(&imported.id, false, false).unwrap();
+        assert!(packages
+            .remove(&imported.id)
+            .unwrap_err()
+            .contains("已准备"));
+        let other_instance = PluginPackages::new(root.clone());
+        assert!(other_instance
+            .remove(&imported.id)
+            .unwrap_err()
+            .contains("其他 Lodestory 窗口"));
+        assert_eq!(packages.list().unwrap().len(), 1);
+        packages.release_assets(&imported.id);
+        other_instance.remove(&imported.id).unwrap();
+        assert!(packages.list().unwrap().is_empty());
+        assert!(path.is_file());
+
+        let changed_files = [
+            ("dist/frontend/index.js", b"changed entry".as_slice()),
+            ("dist/frontend/index.css", b"body{}".as_slice()),
+        ];
+        archive(&path, &manifest(), &changed_files);
+        let reimported = packages.import(&path, &compatibility()).unwrap();
+        assert_eq!(reimported.id, imported.id);
+        let new_revision = packages
+            .prepare(&reimported.id, &compatibility())
+            .unwrap()
+            .asset_revision;
+        assert_ne!(old_revision, new_revision);
+        assert!(packages
+            .asset_revision(&reimported.id, &old_revision, "dist/frontend/index.js")
+            .is_err());
+    }
+
+    #[test]
+    fn removal_tombstone_remains_visible_and_can_be_retried() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("plugin.zip");
+        archive(&path, &manifest(), &front_files());
+        let root = temp.path().join("store");
+        let packages = PluginPackages::new(root.clone());
+        let imported = packages.import(&path, &compatibility()).unwrap();
+        let (installed, record) = packages.record(&imported.id).unwrap();
+        let tombstone = root.join("staging/plugin-remove-test");
+        fs::create_dir_all(&tombstone).unwrap();
+        fs::write(tombstone.join("package"), b"force cleanup failure").unwrap();
+        fs::write(
+            tombstone.join("removal.json"),
+            serde_json::to_vec(&record).unwrap(),
+        )
+        .unwrap();
+        fs::remove_dir_all(installed).unwrap();
+        let listed = packages.list().unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].removal_pending, Some(true));
+        fs::remove_file(tombstone.join("package")).unwrap();
+        packages.remove(&imported.id).unwrap();
+        assert!(packages.list().unwrap().is_empty());
     }
 
     #[test]

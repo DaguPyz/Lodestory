@@ -7,7 +7,7 @@ type PageRegistry = {
     start(initialPage?: string): void;
     previewOpen(id: string, params?: unknown, historyMode?: "push" | "reset"): UiNavigationRequest | null;
     previewBack(): UiNavigationRequest | null;
-    alternative(id: string, accept?: (candidate: string) => boolean): string | undefined;
+    alternative(id: string, accept?: (candidate: string) => boolean): UiLocation | undefined;
     commitNavigation(request: UiNavigationRequest): void;
     getSnapshot(): UiSnapshot;
     subscribe(listener: Listener): () => void;
@@ -131,10 +131,12 @@ export function createPageRegistry(): PageRegistry {
 
         alternative(id, accept = () => true) {
             for (let index = history.length - 1; index >= 0; index -= 1) {
-                const candidate = history[index].id;
-                if (candidate !== id && pages.has(candidate) && accept(candidate)) return candidate;
+                const location = history[index];
+                if (location.id !== id && pages.has(location.id) && accept(location.id)) return location;
             }
-            return [...pages.keys()].find(candidate => candidate !== id && accept(candidate));
+            const recent = [...pageParams.keys()].reverse();
+            const candidate = [...recent, ...pages.keys()].find(key => key !== id && accept(key));
+            if (candidate !== undefined) return makeLocation(candidate, pageParams.get(candidate));
         },
 
         commitNavigation(request) {
@@ -150,6 +152,7 @@ export function createPageRegistry(): PageRegistry {
                 current = previous;
             }
             visited.add(request.to.id);
+            pageParams.delete(request.to.id);
             pageParams.set(request.to.id, request.to.params);
             publish();
         },

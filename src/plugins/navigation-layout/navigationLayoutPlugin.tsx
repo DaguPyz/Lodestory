@@ -109,6 +109,7 @@ export function createNavigationLayoutPlugin(): Plugin {
                         };
                         entries.set(id, entry);
                         return Object.assign(entry.remove, {
+                            leave: removePage.leave,
                             associate: (owner: symbol) => removePage.associate(owner),
                             withdrawOrder: (scope: "plugin" | "application") => {
                                 const order = removePage.withdrawOrder;

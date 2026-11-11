@@ -97,6 +97,9 @@ export type UiSnapshot = {
   readonly canGoBack: boolean;
 };
 
+/** Leave the current page through navigation guards while keeping its registration. Rejects if leaving fails. */
+export type UiPageContribution = PluginContribution & {leave?(): Promise<void>};
+
 /**
  * 合并页面管理与根装配的 UI 能力；使用者须在 requires 中声明 uiKey。
  * 页面可在启动或运行时登记；根包装层仅在启动期间登记。使用者不自行 createRoot。
@@ -107,7 +110,7 @@ export type UiService = {
   /** 当前 UI 实例中是否有可见、可交互的浮层。嵌套浮层独立登记。 */
   hasActiveOverlay(): boolean;
   /** 登记页面并将句柄交给 context.track；当前页面须经停用流程撤回，直接调用句柄会拒绝。 */
-  registerPage(page: UiPage): PluginContribution;
+  registerPage(page: UiPage): UiPageContribution;
   /** 登记根包装并将句柄交给 context.track；运行中的根包装不能直接或单插件撤回。 */
   addWrapper(wrapper: UiWrapper): PluginContribution;
   /** 登记导航守卫并将句柄交给 context.track；直接撤销会使正在等待的导航失效。 */

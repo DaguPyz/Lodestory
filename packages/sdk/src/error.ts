@@ -4,7 +4,7 @@ import { createServiceKey } from "./ServiceKey.js";
 /** Local page-level failure view boundary exposed by the error UI plugin. */
 export type ErrorUiService = {
   /** Stable boundary component; page plugins can wrap their own page subtree. */
-  readonly ErrorBoundary: ComponentType<{ readonly children?: ReactNode }>;
+  readonly ErrorBoundary: ComponentType<{ readonly children?: ReactNode; readonly fallback?: ReactNode }>;
   /** Stable view rendered when ErrorBoundary catches an error. */
   readonly ErrorView: ComponentType;
 };

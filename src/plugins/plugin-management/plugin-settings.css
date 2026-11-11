@@ -30,8 +30,9 @@
 }
 .plugin-settings-identity span, .plugin-settings-status, .plugin-settings-hint { color: var(--ui-text-secondary); }
 .plugin-settings-status { flex-shrink: 0; }
+.plugin-settings-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: var(--ui-space-3); }
 .plugin-settings-hint, .plugin-settings-error { margin: var(--ui-space-3) 0 0; }
-.plugin-settings-error { color: var(--ui-status-danger); overflow-wrap: anywhere; }
+.plugin-settings-error, .plugin-settings-identity .plugin-settings-error { color: var(--ui-status-danger); overflow-wrap: anywhere; }
 @container settings-content (max-width: 23rem) {
   .plugin-settings-row { align-items: flex-start; flex-direction: column; gap: var(--ui-space-2); }
 }

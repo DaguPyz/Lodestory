@@ -34,6 +34,7 @@ import {createDocumentSearchPlugin} from "../plugins/document-search/documentSea
 import {createShortcutsPlugin} from "../plugins/shortcuts";
 import {createPluginPackagesPlugin} from "../plugins/plugin-packages/pluginPackagesPlugin";
 import {createPluginManagementPlugin} from "../plugins/plugin-management/pluginManagementPlugin";
+import {createExternalPluginsPlugin} from "../plugins/external-plugins/externalPluginsPlugin";
 
 /** 应用选择哪些插件；启动和渲染流程不根据具体插件添加分支。 */
 export function createAppPlugins(): readonly Plugin[] {
@@ -72,6 +73,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createWorkbenchToolbarPlugin(),
         createWelcomePlugin(),
         createSettingsPlugin(),
+        createExternalPluginsPlugin(),
         createPluginManagementPlugin(),
     ];
 }

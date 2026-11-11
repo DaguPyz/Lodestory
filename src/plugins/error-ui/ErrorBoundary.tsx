@@ -6,7 +6,7 @@ type ErrorBoundaryState = {
 };
 
 /** A stable page-level boundary that replaces only its own failed subtree. */
-export class ErrorBoundary extends Component<{readonly children?: ReactNode}, ErrorBoundaryState> {
+export class ErrorBoundary extends Component<{readonly children?: ReactNode; readonly fallback?: ReactNode}, ErrorBoundaryState> {
     state: ErrorBoundaryState = {hasError: false};
 
     static getDerivedStateFromError(): ErrorBoundaryState {
@@ -18,6 +18,6 @@ export class ErrorBoundary extends Component<{readonly children?: ReactNode}, Er
     }
 
     render() {
-        return this.state.hasError ? <ErrorView/> : this.props.children;
+        return this.state.hasError ? this.props.fallback ?? <ErrorView/> : this.props.children;
     }
 }

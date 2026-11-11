@@ -34,6 +34,9 @@ pub fn run() {
         .plugin(tauri_plugin_wdio_webdriver::init());
 
     builder
+        .register_uri_scheme_protocol("lodestory-plugin", |context, request| {
+            plugin_package_commands::asset_response(context.app_handle(), request.uri().path())
+        })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
@@ -97,6 +100,9 @@ pub fn run() {
             plugin_package_commands::pick_plugin_package,
             plugin_package_commands::list_plugin_packages,
             plugin_package_commands::import_plugin_package,
+            plugin_package_commands::prepare_plugin_package,
+            plugin_package_commands::set_plugin_enabled,
+            plugin_package_commands::release_plugin_assets,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

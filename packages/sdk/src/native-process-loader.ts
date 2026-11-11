@@ -12,6 +12,14 @@ export type NativeProcessResponse =
   | {requestId: string; status: "success"; result: JsonValue}
   | {requestId: string; status: "error"; error: {code: string; message: string}};
 
+/** Initialization failed and the host could not confirm cleanup of the partial backend. */
+export class NativeBackendInitializationError extends Error {
+  constructor(readonly initializationError: unknown, readonly cleanupError: unknown) {
+    super(`后端启动失败：${initializationError instanceof Error ? initializationError.message : String(initializationError)}；清理未完成：${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
+    this.name = "NativeBackendInitializationError";
+  }
+}
+
 /** 一个已准备好的独立程序后端。close 等待完成清理和进程退出。 */
 export type NativeProcessInstance = {
   call(request: NativeProcessRequest): Promise<NativeProcessResponse>;

@@ -30,14 +30,19 @@ function alternateProvider(sdk, registered, removed = []) {
   const {windowShellKey} = sdk.requireSdk("@lodestory/sdk/window-shell");
   const {uiKey} = sdk.requireSdk("@lodestory/sdk/ui");
   const {themeKey} = sdk.requireSdk("@lodestory/sdk/theme");
+  const {pluginPackagesKey} = sdk.requireSdk("@lodestory/sdk/plugin-packages");
+  const {navigationLayoutExternalCapability} = sdk.requireSdk("@lodestory/sdk/navigation-layout");
+  let removeCapability;
   return {
     id: "navigation-layout",
-    requires: [uiKey, themeKey, windowShellKey],
+    requires: [uiKey, themeKey, windowShellKey, pluginPackagesKey],
     provides: [navigationLayoutKey],
     activate(context) {
       const ui = context.get(uiKey);
       const View = context.get(windowShellKey).View;
-      context.provide(navigationLayoutKey, Object.freeze({
+      removeCapability = context.get(pluginPackagesKey).registerCapability(navigationLayoutExternalCapability);
+      const service = {
+        registerPages(pages) {return pages.map(page => service.registerPage(page));},
         registerPage(page) {
           registered.push({id: page.id, navigation: page.navigation});
           const remove = ui.registerPage({
@@ -57,9 +62,10 @@ function alternateProvider(sdk, registered, removed = []) {
           const remove = () => { removed.push(action.id); };
           return Object.assign(remove, {associate() {}, check() {}, withdraw(scope) {if (scope === "plugin") remove();}});
         },
-      }));
+      };
+      context.provide(navigationLayoutKey, Object.freeze(service));
     },
-    deactivate() {},
+    deactivate() {removeCapability?.();},
   };
 }
 
@@ -200,6 +206,7 @@ test("navigation validates registrations and allows runtime actions", async () =
   const {uiKey} = fixture.requireSdk("@lodestory/sdk/ui");
   const {themeKey} = fixture.requireSdk("@lodestory/sdk/theme");
   const {windowShellKey} = fixture.requireSdk("@lodestory/sdk/window-shell");
+  const {pluginPackagesKey} = fixture.requireSdk("@lodestory/sdk/plugin-packages");
   const registrations = new Map();
   const actionMarkers = new Map();
   const removals = [];
@@ -232,6 +239,7 @@ test("navigation validates registrations and allows runtime actions", async () =
       if (key === uiKey) return ui;
       if (key === themeKey) return {};
       if (key === windowShellKey) return Object.freeze({View: FakeWindowShell});
+      if (key === pluginPackagesKey) return {registerCapability() {return () => {};}};
       throw new Error(`Unexpected dependency '${key.id}'.`);
     },
     provide(key, value) { services.set(key, value); },
@@ -267,6 +275,23 @@ test("navigation validates registrations and allows runtime actions", async () =
   assert.deepEqual(Array.from(navigationLayout.props.items, ({id}) => id), ["welcome", "alpha", "zulu", "settings"]);
   assert.equal(navigationLayout.props.children.type, "page-content");
   assert.equal(await navigationLayout.props.onNavigate("settings"), "settings");
+  let batchChanges = 0;
+  const unsubscribeBatch = navigationLayout.props.subscribeItems(() => {batchChanges++;});
+  assert.throws(() => service.registerPages([validPage("new-batch", 0), validPage("alpha", 0)]), /already registered/);
+  assert.equal(batchChanges, 0);
+  assert.equal(registrations.has("new-batch"), false);
+  registrations.set("blocked-batch", {});
+  assert.throws(() => service.registerPages([validPage("new-batch", 0), validPage("blocked-batch", 0)]), /already registered/);
+  assert.equal(batchChanges, 0);
+  assert.equal(registrations.has("new-batch"), false);
+  assert.equal(removals.pop(), "new-batch");
+  registrations.delete("blocked-batch");
+  const batch = service.registerPages([validPage("batch-a", 0), validPage("batch-b", 0)]);
+  assert.equal(batchChanges, 1);
+  unsubscribeBatch();
+  batch.forEach(remove => remove());
+  removals.splice(removals.indexOf("batch-a"), 1);
+  removals.splice(removals.indexOf("batch-b"), 1);
 
   let actions = 0;
   assert.throws(() => service.registerAction({id: "bad", navigation: {label: "bad"}, run: null}));

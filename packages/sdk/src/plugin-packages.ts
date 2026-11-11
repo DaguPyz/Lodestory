@@ -1,6 +1,6 @@
 import {createServiceKey} from "./ServiceKey.js";
 
-/** The initial package compatibility contract; it does not imply external code can run yet. */
+/** Initial external package compatibility version. */
 export const pluginHostApiVersion = "0.1.0";
 
 export type ExternalCapability = Readonly<{id: string; version: string}>;
@@ -11,6 +11,16 @@ export type ImportedPluginPackage = Readonly<{
   name: string;
   version: string;
   status: "pending-load";
+  /** Desired state restored on the next application startup. */
+  enabled?: boolean;
+}>;
+
+export type PreparedPluginPackage = Readonly<{
+  id: string;
+  frontend: {entry: string; styles: string[]} | null;
+  backend: {type: "process" | "dynamic-library"; entry: string} | null;
+  requires: string[];
+  provides: string[];
 }>;
 
 export type PluginPackagesService = Readonly<{
@@ -23,6 +33,10 @@ export type PluginPackagesService = Readonly<{
   importFromPath(path: string): Promise<ImportedPluginPackage>;
   /** Opens a native chooser; cancellation returns null. */
   importFromFile(): Promise<ImportedPluginPackage | null>;
+  /** Revalidates the installed package and prepares its frontend resources. */
+  prepare(id: string): Promise<PreparedPluginPackage>;
+  setEnabled(id: string, enabled: boolean): Promise<void>;
+  releaseAssets(id: string): Promise<void>;
 }>;
 
 export const pluginPackagesKey = createServiceKey<PluginPackagesService>("app/plugin-packages");

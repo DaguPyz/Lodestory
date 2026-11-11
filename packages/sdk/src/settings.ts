@@ -13,6 +13,8 @@ export type SettingsSection = Readonly<{
 export type SettingsService = Readonly<{
   /** Open settings, optionally selecting a registered section. */
   open(sectionId?: string): boolean;
+  /** Close the settings dialog without changing the selected section. */
+  close(): void;
   /** Register a section; removal stops displaying its view before returning. */
   registerSection(section: SettingsSection): () => void;
 }>;

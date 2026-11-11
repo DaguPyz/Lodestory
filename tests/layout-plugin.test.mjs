@@ -69,6 +69,21 @@ test("layout rejects malformed and duplicate registrations and accepts additions
   assert.throws(() => store.hide("missing"), /not registered/);
 });
 
+test("layout publishes a validated group once and rejects an invalid group without changes", () => {
+  const {store} = registry();
+  store.registerContent(content("existing"));
+  store.start();
+  let changes = 0;
+  store.subscribe(() => changes++);
+  assert.throws(() => store.registerContents([content("new"), content("existing")]), /already registered/);
+  assert.equal(changes, 0);
+  assert.equal(store.getSnapshot().contents.some(entry => entry.id === "new"), false);
+  const handles = store.registerContents([content("first"), content("second")]);
+  assert.equal(changes, 1);
+  assert.equal(handles.length, 2);
+  handles.forEach(remove => remove());
+});
+
 test("show and hide select by ID across all roles without losing descriptors or notifying on no-ops", () => {
   const {store} = registry();
   for (const role of ["main", "navigation", "auxiliary", "actions", "status"]) {

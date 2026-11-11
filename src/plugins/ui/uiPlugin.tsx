@@ -364,7 +364,8 @@ export function createUiPlugin(container?: Element | DocumentFragment, options: 
                     return false;
                 },
                 registerPage(page) {
-                    checkRegistrationAllowed();
+                    checkActive();
+                    if (mountAttempted && !navigationAllowed) throw new Error("UI pages cannot be registered before pluginsReady completes.");
                     const remove = pages.registerPage(page);
                     const pageId = page.id;
                     let registered = true;

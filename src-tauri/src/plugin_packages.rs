@@ -5,6 +5,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
+use std::sync::RwLock;
 use tempfile::{Builder, TempDir};
 use zip::ZipArchive;
 
@@ -22,6 +23,8 @@ pub struct ImportedPackage {
     pub name: String,
     pub version: String,
     pub status: String,
+    #[serde(default)]
+    pub enabled: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -104,11 +107,38 @@ struct Artifact {
 
 pub struct PluginPackages {
     root: PathBuf,
+    assets: RwLock<HashMap<String, HashMap<String, (u64, String)>>>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PreparedPackage {
+    pub id: String,
+    pub frontend: Option<PreparedFrontend>,
+    pub backend: Option<PreparedBackend>,
+    pub requires: Vec<String>,
+    pub provides: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PreparedFrontend {
+    pub entry: String,
+    pub styles: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PreparedBackend {
+    #[serde(rename = "type")]
+    pub kind: String,
+    pub entry: String,
 }
 
 impl PluginPackages {
     pub fn new(root: PathBuf) -> Self {
-        Self { root }
+        Self {
+            root,
+            assets: RwLock::new(HashMap::new()),
+        }
     }
 
     /// The lock also coordinates multiple Lodestory processes. Staging is only
@@ -170,6 +200,207 @@ impl PluginPackages {
         }
         packages.sort_by(|a, b| a.id.to_ascii_lowercase().cmp(&b.id.to_ascii_lowercase()));
         Ok(packages)
+    }
+
+    fn record(&self, id: &str) -> Result<(PathBuf, Record), String> {
+        if !valid_plugin_id(id) {
+            return Err("插件 ID 无效。".into());
+        }
+        let directory = self
+            .root
+            .join("installed")
+            .join(format!("plugin-{}", id.to_ascii_lowercase()));
+        let record: Record =
+            serde_json::from_slice(&read_regular(&directory, RECORD, MAX_MANIFEST)?)
+                .map_err(|error| format!("插件记录无效：{error}"))?;
+        if record.record_version != 1
+            || record.package.id != id
+            || record.package.status != "pending-load"
+        {
+            return Err("插件记录无效。".into());
+        }
+        Ok((directory, record))
+    }
+
+    /// Recheck the original archive, manifest and all installed files before executing code.
+    pub fn prepare(
+        &self,
+        id: &str,
+        compatibility: &Compatibility,
+    ) -> Result<PreparedPackage, String> {
+        let _lock = self.lock()?;
+        let (directory, record) = self.record(id)?;
+        let archive_bytes = read_regular(&directory, "source.zip", MAX_ARCHIVE)?;
+        if format!("{:x}", Sha256::digest(&archive_bytes)) != record.sha256 {
+            return Err("原始插件包校验失败。".into());
+        }
+        let mut archive =
+            ZipArchive::new(io::Cursor::new(archive_bytes)).map_err(|e| e.to_string())?;
+        let mut original_manifest = Vec::new();
+        archive
+            .by_name("manifest.json")
+            .map_err(|e| e.to_string())?
+            .take(MAX_MANIFEST + 1)
+            .read_to_end(&mut original_manifest)
+            .map_err(io_error)?;
+        if original_manifest.len() as u64 > MAX_MANIFEST {
+            return Err("插件清单过大。".into());
+        }
+        let root = directory.join("package");
+        let installed_manifest = read_regular(&root, "manifest.json", MAX_MANIFEST)?;
+        if original_manifest != installed_manifest {
+            return Err("插件清单已被修改。".into());
+        }
+        let manifest: Manifest = serde_json::from_slice(&original_manifest)
+            .map_err(|error| format!("插件清单无效：{error}"))?;
+        if manifest.id != id
+            || manifest.name != record.package.name
+            || manifest.version != record.package.version
+        {
+            return Err("插件清单与导入记录不一致。".into());
+        }
+        let mut files = HashMap::new();
+        files.insert(
+            "manifest.json".to_owned(),
+            (
+                installed_manifest.len() as u64,
+                format!("{:x}", Sha256::digest(&installed_manifest)),
+            ),
+        );
+        let declared = manifest.files.as_ref().ok_or("插件文件清单缺失。")?;
+        if declared.len() > MAX_ENTRIES
+            || declared
+                .iter()
+                .try_fold(installed_manifest.len() as u64, |size, item| {
+                    size.checked_add(item.size)
+                })
+                .filter(|size| *size <= MAX_UNPACKED)
+                .is_none()
+        {
+            return Err("插件文件清单超过大小限制。".into());
+        }
+        for item in declared {
+            let bytes = read_regular(&root, &item.path, item.size)?;
+            files.insert(
+                item.path.clone(),
+                (bytes.len() as u64, format!("{:x}", Sha256::digest(&bytes))),
+            );
+        }
+        validate(&manifest, &root, &files, compatibility)?;
+        let frontend = manifest.frontend.as_ref().map(|item| PreparedFrontend {
+            entry: item.entry.clone(),
+            styles: item.styles.clone(),
+        });
+        let backend = manifest
+            .backend
+            .as_ref()
+            .map(|item| {
+                let os = std::env::consts::OS;
+                let arch = if std::env::consts::ARCH == "aarch64" {
+                    "arm64"
+                } else {
+                    "x64"
+                };
+                let artifact = item
+                    .artifacts
+                    .iter()
+                    .find(|a| {
+                        a.os == os && a.arch == arch && a.target == env!("LODESTORY_BUILD_TARGET")
+                    })
+                    .ok_or("插件后端与当前系统或处理器不兼容。")?;
+                let entry = root
+                    .join(&artifact.entry)
+                    .to_str()
+                    .ok_or("后端路径无法表示。")?
+                    .to_owned();
+                Ok::<_, String>(PreparedBackend {
+                    kind: item.kind.clone(),
+                    entry,
+                })
+            })
+            .transpose()?;
+        let backend_files: HashSet<&str> = manifest
+            .backend
+            .as_ref()
+            .into_iter()
+            .flat_map(|backend| {
+                backend
+                    .artifacts
+                    .iter()
+                    .map(|artifact| artifact.entry.as_str())
+            })
+            .collect();
+        let assets = manifest
+            .files
+            .as_ref()
+            .unwrap()
+            .iter()
+            .filter(|item| !backend_files.contains(item.path.as_str()))
+            .map(|item| (item.path.clone(), (item.size, item.sha256.clone())))
+            .collect();
+        self.assets
+            .write()
+            .map_err(|_| "插件资源状态不可用。")?
+            .insert(id.to_owned(), assets);
+        Ok(PreparedPackage {
+            id: id.to_owned(),
+            frontend,
+            backend,
+            requires: manifest
+                .dependencies
+                .requires
+                .iter()
+                .map(|item| item.id.clone())
+                .collect(),
+            provides: manifest
+                .dependencies
+                .provides
+                .iter()
+                .map(|item| item.id.clone())
+                .collect(),
+        })
+    }
+
+    pub fn set_enabled(&self, id: &str, enabled: bool) -> Result<(), String> {
+        let _lock = self.lock()?;
+        let (directory, mut record) = self.record(id)?;
+        record.package.enabled = enabled;
+        let mut file = Builder::new()
+            .prefix("record-")
+            .tempfile_in(&directory)
+            .map_err(io_error)?;
+        serde_json::to_writer(&mut file, &record).map_err(|e| e.to_string())?;
+        file.write_all(b"\n").map_err(io_error)?;
+        file.as_file().sync_all().map_err(io_error)?;
+        file.persist(directory.join(RECORD))
+            .map_err(|e| format!("保存插件启用状态失败：{}", e.error))?;
+        Ok(())
+    }
+
+    pub fn release_assets(&self, id: &str) {
+        if let Ok(mut assets) = self.assets.write() {
+            assets.remove(id);
+        }
+    }
+
+    /// Only files from a successfully prepared frontend can be served, with integrity checked again.
+    pub fn asset(&self, id: &str, path: &str) -> Result<Vec<u8>, String> {
+        let assets = self.assets.read().map_err(|_| "插件资源状态不可用。")?;
+        let expected = assets
+            .get(id)
+            .and_then(|files| files.get(path))
+            .ok_or("插件资源不存在。")?;
+        let root = self
+            .root
+            .join("installed")
+            .join(format!("plugin-{}", id.to_ascii_lowercase()))
+            .join("package");
+        let bytes = read_regular(&root, path, expected.0)?;
+        if bytes.len() as u64 != expected.0 || format!("{:x}", Sha256::digest(&bytes)) != expected.1
+        {
+            return Err("插件资源校验失败。".into());
+        }
+        Ok(bytes)
     }
 
     pub fn import(
@@ -245,6 +476,7 @@ impl PluginPackages {
             name: manifest.name,
             version: manifest.version,
             status: "pending-load".into(),
+            enabled: false,
         };
         let destination = self
             .root
@@ -281,6 +513,37 @@ impl PluginPackages {
 
 fn io_error(error: io::Error) -> String {
     format!("插件文件操作失败：{error}")
+}
+
+fn read_regular(root: &Path, name: &str, limit: u64) -> Result<Vec<u8>, String> {
+    if !safe_path(name) {
+        return Err("插件文件路径无效。".into());
+    }
+    let root_metadata = fs::symlink_metadata(root).map_err(io_error)?;
+    if root_metadata.file_type().is_symlink() || !root_metadata.is_dir() {
+        return Err("插件目录无效。".into());
+    }
+    let mut path = root.to_path_buf();
+    for part in name.split('/') {
+        path.push(part);
+        let metadata = fs::symlink_metadata(&path).map_err(io_error)?;
+        if metadata.file_type().is_symlink() {
+            return Err("插件文件不能是符号链接。".into());
+        }
+    }
+    let file = File::open(&path).map_err(io_error)?;
+    let metadata = file.metadata().map_err(io_error)?;
+    if !metadata.is_file() || metadata.len() > limit {
+        return Err("插件文件无效或过大。".into());
+    }
+    let mut bytes = Vec::new();
+    file.take(limit + 1)
+        .read_to_end(&mut bytes)
+        .map_err(io_error)?;
+    if bytes.len() as u64 > limit {
+        return Err("插件文件过大。".into());
+    }
+    Ok(bytes)
 }
 
 #[cfg(any(target_os = "macos", target_os = "linux"))]
@@ -536,10 +799,7 @@ fn validate(
     {
         return Err("插件 ID、名称或说明无效。".into());
     }
-    let files = manifest
-        .files
-        .as_ref()
-        .ok_or("插件文件清单缺失。")?;
+    let files = manifest.files.as_ref().ok_or("插件文件清单缺失。")?;
     let mut paths = HashSet::new();
     for file in files {
         if !safe_path(&file.path)
@@ -738,6 +998,61 @@ mod tests {
             ("dist/frontend/index.js", b"throw new Error('not executed')"),
             ("dist/frontend/index.css", b"body{}"),
         ]
+    }
+
+    #[test]
+    fn rechecks_installed_files_and_persists_desired_enabled_state() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("plugin.zip");
+        archive(&path, &manifest(), &front_files());
+        let root = temp.path().join("store");
+        let packages = PluginPackages::new(root.clone());
+        let imported = packages.import(&path, &compatibility()).unwrap();
+        let prepared = packages.prepare(&imported.id, &compatibility()).unwrap();
+        assert_eq!(prepared.frontend.unwrap().entry, "dist/frontend/index.js");
+        assert_eq!(
+            packages
+                .asset(&imported.id, "dist/frontend/index.css")
+                .unwrap(),
+            b"body{}"
+        );
+        assert!(packages.asset(&imported.id, "../source.zip").is_err());
+        packages.set_enabled(&imported.id, true).unwrap();
+        assert!(PluginPackages::new(root.clone()).list().unwrap()[0].enabled);
+        fs::write(
+            root.join("installed/plugin-com.example.front/package/dist/frontend/index.css"),
+            b"changed",
+        )
+        .unwrap();
+        assert!(packages
+            .asset(&imported.id, "dist/frontend/index.css")
+            .is_err());
+        assert!(packages.prepare(&imported.id, &compatibility()).is_err());
+        packages.release_assets(&imported.id);
+        assert!(packages
+            .asset(&imported.id, "dist/frontend/index.js")
+            .is_err());
+        packages.set_enabled(&imported.id, false).unwrap();
+        assert!(!packages.list().unwrap()[0].enabled);
+    }
+
+    #[test]
+    fn rejects_manifest_changes_after_import() {
+        let temp = tempfile::tempdir().unwrap();
+        let path = temp.path().join("plugin.zip");
+        archive(&path, &manifest(), &front_files());
+        let root = temp.path().join("store");
+        let packages = PluginPackages::new(root.clone());
+        let imported = packages.import(&path, &compatibility()).unwrap();
+        fs::write(
+            root.join("installed/plugin-com.example.front/package/manifest.json"),
+            b"{}",
+        )
+        .unwrap();
+        assert!(packages
+            .prepare(&imported.id, &compatibility())
+            .unwrap_err()
+            .contains("已被修改"));
     }
 
     #[test]

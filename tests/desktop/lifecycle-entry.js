@@ -5,7 +5,10 @@ import {layoutKey} from "@lodestory/sdk/layout";
 import {nativeProcessLoaderKey} from "@lodestory/sdk/native-process-loader";
 import {nativeLibraryLoaderKey} from "@lodestory/sdk/native-library-loader";
 import {pluginPackagesKey} from "@lodestory/sdk/plugin-packages";
+import {externalPluginsKey} from "@lodestory/sdk/external-plugins";
 import {settingsKey} from "@lodestory/sdk/settings";
+import {uiKey} from "@lodestory/sdk/ui";
+import {projectStorageKey} from "@lodestory/sdk/project-storage";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 export function installLifecycleTest(runtime) {
   const workbench = runtime.get(workbenchKey);
@@ -14,6 +17,23 @@ export function installLifecycleTest(runtime) {
   window.__lodestoryLifecycleTest = {
    importPluginPackage(path) {return runtime.get(pluginPackagesKey).importFromPath(path);},
    listPluginPackages() {return runtime.get(pluginPackagesKey).list();},
+   enablePlugin(id) {return runtime.get(externalPluginsKey).enable(id);},
+   pluginStatuses() {return runtime.get(externalPluginsKey).getSnapshot();},
+   showLayoutContent(id) {return runtime.get(layoutKey).show(id);},
+   layoutContents() {return runtime.get(layoutKey).getSnapshot().contents.map(item => item.id);},
+   stopRuntime() {return runtime.stop();},
+   openPage(id) {return runtime.get(uiKey).openPage(id);},
+   backPage() {return runtime.get(uiKey).back();},
+   fileState() {
+     const session = workbench.getSnapshot().session;
+     return session ? runtime.get(projectStorageKey).getFiles(session.id)?.getSnapshot().files.find(file => file.fileName === "正文.txt") : null;
+   },
+   delayAutosaveForTest() {
+     const previous = window.setTimeout;
+     window.setTimeout = function (callback, delay, ...args) {return previous(callback, delay === 700 ? 60000 : delay, ...args);};
+     window.__restoreAutosaveTimer = () => {window.setTimeout = previous;};
+   },
+   restoreAutosaveTimer() {window.__restoreAutosaveTimer?.(); delete window.__restoreAutosaveTimer;},
    openPluginSettings() {return runtime.get(settingsKey).open("plugins.packages");},
    async openTemporaryProject(parentPath) {
      const {project} = await invoke("create_project", {parentPath, name: "生命周期测试"});

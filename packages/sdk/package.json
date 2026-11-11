@@ -44,6 +44,14 @@
       "types": "./dist/plugin-packages.d.ts",
       "import": "./dist/plugin-packages.js"
     },
+    "./plugin-runtime": {
+      "types": "./dist/plugin-runtime.d.ts",
+      "import": "./dist/plugin-runtime.js"
+    },
+    "./external-plugins": {
+      "types": "./dist/external-plugins.d.ts",
+      "import": "./dist/external-plugins.js"
+    },
     "./window-shell": {
       "types": "./dist/window-shell.d.ts",
       "import": "./dist/window-shell.js"

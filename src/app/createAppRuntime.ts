@@ -1,5 +1,6 @@
 import type { Plugin, ServiceKey } from "@lodestory/sdk";
 import { EngineCore, PluginBatchDeactivationError } from "../plugin-core";
+import {pluginRuntimeKey} from "@lodestory/sdk/plugin-runtime";
 
 /** 一次插件装配的运行实例；具体插件和能力由调用方选择。 */
 export type AppRuntime = {
@@ -14,8 +15,25 @@ export type AppRuntime = {
 /** 创建内核并完成传入插件的初次启动；激活或启动通知失败时清理由内核负责。 */
 export async function createAppRuntime(plugins: readonly Plugin[]): Promise<AppRuntime> {
   const core = new EngineCore();
-  await core.start(plugins);
   let stopping: Promise<void> | undefined;
+  let started = false;
+  const lifecycle: Plugin = {
+    id: "app-plugin-runtime", requires: [], provides: [pluginRuntimeKey],
+    activate(context) {
+      context.provide(pluginRuntimeKey, Object.freeze({
+        mount(plugin: Plugin) {
+          if (!started || stopping) return Promise.reject(new Error("Plugin runtime is not available."));
+          return core.mount(plugin);
+        },
+        unmount(id: string) {
+          if (!started || stopping) return Promise.reject(new Error("Plugin runtime is not available."));
+          return core.unmount(id);
+        },
+      }));
+    },
+  };
+  await core.start([lifecycle, ...plugins]);
+  started = true;
 
   return {
     get<T>(key: ServiceKey<T>): T {

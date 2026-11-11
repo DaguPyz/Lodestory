@@ -404,7 +404,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
         if (specifier.startsWith("@lodestory/sdk")) return sdk.requireSdk(specifier, relativePath);
         if (specifier === "react") return React;
         if (specifier === "react-dom/client") return ReactDOM;
-        if (specifier === "react/jsx-runtime") {
+        if (specifier === "react/jsx-runtime" || specifier === "react/jsx-dev-runtime") {
           return {
             jsx(type, props, key) { return { type, props: props ?? {}, key }; },
             jsxs(type, props, key) { return { type, props: props ?? {}, key }; },

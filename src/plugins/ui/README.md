@@ -2,7 +2,7 @@
 
 `createUiPlugin` 把页面导航和 React 根节点装配合并为一个插件，并提供 `uiKey`。它依赖 `configKey`，登记 SDK 导出的 `uiInitialPageConfig`；`pluginsReady` 时，在全部包装层准备完成后读取配置并启动首页。默认值 `null` 沿用第一个登记页面。生产应用由配置插件设置 `ui.initialPage`，app 只装配 `createUiPlugin()`；独立宿主或测试可以显式传入容器与 `rootOptions`。
 
-公共生命周期类型位于 [`@lodestory/sdk`](../../../packages/sdk/src/Plugin.ts)，UI 能力与页面类型位于 [`@lodestory/sdk/ui`](../../../packages/sdk/src/ui.ts)。`createUiPlugin` 与 `pluginsReady` 仍是宿主运行时实现；SDK 目前只提供同一 JavaScript realm 内的契约，不提供运行中热登记 API。
+公共生命周期类型位于 [`@lodestory/sdk`](../../../packages/sdk/src/Plugin.ts)，UI 能力与页面类型位于 [`@lodestory/sdk/ui`](../../../packages/sdk/src/ui.ts)。`createUiPlugin` 与 `pluginsReady` 仍是宿主运行时实现；页面可在运行中登记，根包装层和守卫仍只在启动时登记。
 
 启动到 `pluginsReady` 后，所有初始插件已完成登记。UI 插件先按包装层的 `order` 依次调用并等待可选的 `prepare` 回调，全部成功后才通过 `configKey` 读取 `uiInitialPageConfig`，再验证目标页面已登记。配置值为 `null` 时使用第一个登记页面。随后它按包装层的 `order` 组装 Provider 与通用页面容器，再创建一个 React root。数值较小的 `order` 位于外层。`ui.initialPage` 的生效方式为 `restart`：启动后修改配置只保存新值，不会立即导航；重新启动 UI 时才读取。页面调用 `openPage(id, params)` 切换并记录历史，页面收到自己的 `params`；也可以传入第三个参数 `{history: "reset"}`，经守卫批准后清空历史并切换，不把当前页加入历史，适合关闭项目后回到欢迎页。默认 `history: "push"` 保持原有行为。即使目标页和参数与当前相同，带历史的 reset 仍会经过守卫并清空历史；历史已空时则不产生导航。`back()` 返回上一页并恢复它的参数。导航方法都返回 `Promise<boolean>`，守卫拒绝或有导航正在处理时返回 `false`；无历史记录的 `back()` 返回 `true` 且不改变状态。同一页面传入不同参数也会经过导航守卫并记录历史。已访问页面继续留在树中，只隐藏非当前页面，因此切换时会保留其 React 组件实例和 Hook 状态。
 
@@ -10,7 +10,7 @@
 
 `prepare` 用于渲染前准备资源，例如主题插件在所有配色登记后应用选择并等待原生窗口同步。回调失败会中止启动并回滚；等待期间若包装层被撤销或 UI 停用，不会继续创建根视图。该回调不能等待 UI 渲染，也不能依赖较晚执行的 `pluginsReady` 监听者。
 
-页面、根包装层和守卫仍只允许在 `pluginsReady` 前登记。贡献插件须用 `context.track` 关联登记句柄，并保留它用于激活失败或 `deactivate` 清理。单插件停用时，内核先执行全部检查和保存准备，再撤回该插件的页面、守卫及布局贡献，最后释放插件服务；被撤回的当前页先经导航守卫切至其他插件的页面，失败则保留插件及其依赖。未激活页面可直接撤销；当前页面只能通过停用流程撤销。根包装层和 UI 根在运行中拒绝单独卸载，整窗停止在保存检查后卸载根视图。运行中新增贡献及外部插件加载尚未实现。
+页面可在 UI 启动后增量登记；根包装层和守卫仍只允许在 `pluginsReady` 前登记。贡献插件须用 `context.track` 关联登记句柄，并保留它用于激活失败或 `deactivate` 清理。单插件停用时，内核先执行全部检查和保存准备，再撤回该插件的页面、守卫及布局贡献，最后释放插件服务；被撤回的当前页先经导航守卫切至其他插件的页面，失败则保留插件及其依赖。未激活页面可直接撤销；当前页面只能通过停用流程撤销。根包装层和 UI 根在运行中拒绝单独卸载，整窗停止在保存检查后卸载根视图。
 
 `error-ui` 插件通过 `errorUiKey` 提供稳定的 `ErrorBoundary` 错误边界和 `ErrorView`。UI 插件依赖该服务，并用 `ErrorBoundary` 包住根下的 Provider 与页面树；页面插件也可以在自己的页面内容周围使用 `ErrorBoundary`，让局部错误只替换对应页面内容。插件是否被卸载仍由运行时生命周期决定，错误边界只负责渲染错误视图。
 

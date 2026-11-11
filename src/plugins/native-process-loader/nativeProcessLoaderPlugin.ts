@@ -1,6 +1,6 @@
 import {invoke, isTauri} from "@tauri-apps/api/core";
 import type {Plugin} from "@lodestory/sdk";
-import {nativeProcessLoaderKey, type JsonValue, type NativeProcessInstance, type NativeProcessLoader, type NativeProcessRequest, type NativeProcessResponse} from "@lodestory/sdk/native-process-loader";
+import {NativeBackendInitializationError, nativeProcessLoaderKey, type JsonValue, type NativeProcessInstance, type NativeProcessLoader, type NativeProcessRequest, type NativeProcessResponse} from "@lodestory/sdk/native-process-loader";
 
 /** 宿主只提供通用进程输入输出；消息协议由本插件处理。 */
 export type ProcessBridge = {
@@ -66,7 +66,7 @@ async function openInstance(bridge: ProcessBridge, entry: string, onClosed: (ins
     const ready = parse(await timeout(bridge.read(id), "等待后端准备超过 30 秒。"));
     if (ready.type !== "ready" || ready.protocolVersion !== "1.0.0") throw new Error("后端准备消息或协议版本无效。");
   } catch (error) {
-    try { await bridge.abortStart(id); } catch (cleanup) { throw new Error(`后端启动失败，清理未完成：${asError(cleanup).message}`); }
+    try { await bridge.abortStart(id); } catch (cleanup) { throw new NativeBackendInitializationError(error, cleanup); }
     throw asError(error);
   }
 

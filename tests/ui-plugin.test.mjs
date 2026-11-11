@@ -292,6 +292,22 @@ test("ready fails without a page and closes startup registration", async () => {
   await f.core.unmountAll();
 });
 
+test("a page can be added after startup without recreating the UI root", async () => {
+  const f = uiPluginFixture();
+  const {service} = await f.mountUi();
+  service.registerPage(page("home"));
+  await f.notifyReady();
+  const root = f.roots[0];
+  const remove = service.registerPage(page("late"));
+  assert.equal(await service.openPage("late"), true);
+  assert.equal(f.roots[0], root);
+  assert.equal(f.roots.length, 1);
+  assert.throws(() => service.addWrapper({id: "late", order: 1, wrap: children => children}), /before pluginsReady/);
+  assert.equal(await service.openPage("home"), true);
+  remove();
+  await f.core.unmountAll();
+});
+
 test("ready rejects an unknown initial page without creating a React root", async () => {
   const f = uiPluginFixture();
   const { service } = await mountUiAtPage(f, "missing");

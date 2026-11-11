@@ -35,6 +35,7 @@ export function createSettingsStore() {
       publish(true, selectedId);
       return true;
     },
+    close() {if (active) publish(false, snapshot.selectedId);},
     registerSection(section) {
       if (!active) throw new Error("Settings service is no longer active.");
       if (!section || typeof section !== "object") throw new TypeError("Settings section must be an object.");
@@ -67,7 +68,7 @@ export function createSettingsStore() {
     getSnapshot: () => snapshot,
     subscribe(listener: () => void) { if (!active) return () => {}; listeners.add(listener); return () => { listeners.delete(listener); }; },
     select(id: string) { if (active && sections.has(id)) publish(snapshot.open, id); },
-    close() { if (active) publish(false, snapshot.selectedId); },
+    close() { service.close(); },
     dispose() { active = false; sections.clear(); listeners.clear(); },
   };
 }

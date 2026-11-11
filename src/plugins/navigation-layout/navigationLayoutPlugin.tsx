@@ -1,6 +1,7 @@
 import type {Plugin} from "@lodestory/sdk";
 import {flushSync} from "react-dom";
-import {navigationLayoutKey, type NavigationLayoutService} from "@lodestory/sdk/navigation-layout";
+import {navigationLayoutExternalCapability, navigationLayoutKey, type NavigationLayoutService} from "@lodestory/sdk/navigation-layout";
+import {pluginPackagesKey} from "@lodestory/sdk/plugin-packages";
 import {uiKey} from "@lodestory/sdk/ui";
 import {themeKey} from "@lodestory/sdk/theme";
 import {windowShellKey} from "@lodestory/sdk/window-shell";
@@ -12,11 +13,12 @@ export function createNavigationLayoutPlugin(): Plugin {
 
     return {
         id: "navigation-layout",
-        requires: [uiKey, themeKey, windowShellKey],
+        requires: [uiKey, themeKey, windowShellKey, pluginPackagesKey],
         provides: [navigationLayoutKey],
         activate(context) {
             const ui = context.get(uiKey);
             const WindowShell = context.get(windowShellKey).View;
+            const removeCapability = context.get(pluginPackagesKey).registerCapability(navigationLayoutExternalCapability);
             const entries = new Map<string, { item: RegisteredNavigationItem; run?: () => void | Promise<void>; remove: () => void }>();
             const listeners = new Set<() => void>();
             let snapshot: readonly RegisteredNavigationItem[] = Object.freeze([]);
@@ -44,71 +46,88 @@ export function createNavigationLayoutPlugin(): Plugin {
                 }
                 active = false;
                 listeners.clear();
+                removeCapability();
                 if (errors.length) throw Object.assign(new Error("Navigation layout failed to stop."), {errors});
             };
 
             const service: NavigationLayoutService = {
-                registerPage(page) {
+                registerPages(pages) {
                     if (!active) throw new Error("Navigation layout service is no longer active.");
-                    const {id, render} = page;
-                    const item = Object.freeze({
-                        id,
-                        kind: "page" as const,
-                        label: page.navigation.label,
-                        icon: page.navigation.icon,
-                        group: page.navigation.group ?? "primary",
-                        order: page.navigation.order ?? 0,
+                    const ids = new Set<string>();
+                    const prepared = pages.map(page => {
+                        if (!page || !page.navigation) throw new Error("Navigation page requires navigation information.");
+                        const {id, render} = page;
+                        const item = Object.freeze({id, kind: "page" as const, label: page.navigation.label,
+                            icon: page.navigation.icon, group: page.navigation.group ?? "primary", order: page.navigation.order ?? 0});
+                        if (typeof id !== "string" || !id.trim()) throw new Error("Navigation page id cannot be empty.");
+                        if (typeof item.label !== "string" || !item.label.trim()) throw new Error("Navigation label cannot be empty.");
+                        if (item.group !== "primary" && item.group !== "secondary") throw new Error("Unknown navigation group.");
+                        if (!Number.isFinite(item.order)) throw new Error("Navigation order must be finite.");
+                        if (typeof render !== "function") throw new Error("Navigation page must have a render function.");
+                        if (entries.has(id) || ids.has(id)) throw new Error(`Navigation page '${id}' is already registered.`);
+                        ids.add(id);
+                        return {id, render, item};
                     });
-                    if (typeof id !== "string" || !id.trim()) throw new Error("Navigation page id cannot be empty.");
-                    if (typeof item.label !== "string" || !item.label.trim()) throw new Error("Navigation label cannot be empty.");
-                    if (item.group !== "primary" && item.group !== "secondary") throw new Error("Unknown navigation group.");
-                    if (!Number.isFinite(item.order)) throw new Error("Navigation order must be finite.");
-                    if (typeof render !== "function") throw new Error("Navigation page must have a render function.");
-                    if (entries.has(id)) throw new Error(`Navigation page '${id}' is already registered.`);
-
-                    // UI 拒绝迟到或冲突的登记时，导航目录也不发生变化。
-                    const removePage = ui.registerPage({
-                        id,
-                        render: pageContext => <WindowShell><NavigationLayout
-                            pageId={id}
-                            active={pageContext.active}
-                            items={items()}
-                            subscribeItems={subscribe}
-                            getItems={() => snapshot}
-                            onNavigate={async target => {
-                                const entry = entries.get(target);
-                                if (!entry) return false;
-                                if (entry.item.kind === "page") return ui.openPage(target);
-                                await entry.run?.();
-                                return true;
-                            }}
-                        >{render(pageContext)}</NavigationLayout></WindowShell>,
+                    const registered: {id: string; item: RegisteredNavigationItem; removePage: ReturnType<typeof ui.registerPage>}[] = [];
+                    try {
+                        for (const {id, render, item} of prepared) {
+                            const removePage = ui.registerPage({
+                                id,
+                                render: pageContext => <WindowShell><NavigationLayout
+                                    pageId={id}
+                                    active={pageContext.active}
+                                    items={items()}
+                                    subscribeItems={subscribe}
+                                    getItems={() => snapshot}
+                                    ui={ui}
+                                    onNavigate={async target => {
+                                        const entry = entries.get(target);
+                                        if (!entry) return false;
+                                        if (entry.item.kind === "page") return ui.openPage(target);
+                                        await entry.run?.();
+                                        return true;
+                                    }}
+                                >{render(pageContext)}</NavigationLayout></WindowShell>,
+                            });
+                            registered.push({id, item, removePage});
+                        }
+                    } catch (error) {
+                        const failures: unknown[] = [];
+                        for (const {removePage} of registered.reverse()) {try {removePage();} catch (failure) {failures.push(failure);}}
+                        if (failures.length) throw Object.assign(new Error("Navigation page registration and rollback failed."), {cause: error, cleanupError: failures});
+                        throw error;
+                    }
+                    const handles = registered.map(({id, item, removePage}) => {
+                        const entry = {
+                            item,
+                            remove() {
+                                if (entries.get(id) !== entry) return;
+                                removePage();
+                                entries.delete(id);
+                                publish();
+                            },
+                        };
+                        entries.set(id, entry);
+                        return Object.assign(entry.remove, {
+                            associate: (owner: symbol) => removePage.associate(owner),
+                            withdrawOrder: (scope: "plugin" | "application") => {
+                                const order = removePage.withdrawOrder;
+                                return typeof order === "function" ? order(scope) : (order ?? 0);
+                            },
+                            check: (scope: "plugin" | "application") => removePage.check(scope),
+                            async withdraw(scope: "plugin" | "application") {
+                                await removePage.withdraw(scope);
+                                if (scope === "plugin" && entries.get(id) === entry) {
+                                    flushSync(() => { entries.delete(id); publish(); });
+                                }
+                            },
+                        });
                     });
-                    const entry = {
-                        item,
-                        remove() {
-                            if (entries.get(id) !== entry) return;
-                            removePage();
-                            entries.delete(id);
-                            publish();
-                        },
-                    };
-                    entries.set(id, entry);
-                    publish();
-                    return Object.assign(entry.remove, {
-                        associate: (owner: symbol) => removePage.associate(owner),
-                        withdrawOrder: (scope: "plugin" | "application") => {
-                            const order = removePage.withdrawOrder;
-                            return typeof order === "function" ? order(scope) : (order ?? 0);
-                        },
-                        check: (scope: "plugin" | "application") => removePage.check(scope),
-                        async withdraw(scope: "plugin" | "application") {
-                            await removePage.withdraw(scope);
-                            if (scope === "plugin" && entries.get(id) === entry) {
-                                flushSync(() => { entries.delete(id); publish(); });
-                            }
-                        },
-                    });
+                    if (handles.length) publish();
+                    return handles;
+                },
+                registerPage(page) {
+                    return service.registerPages([page])[0];
                 },
                 registerAction(action) {
                     if (!active) throw new Error("Navigation layout service is no longer active.");

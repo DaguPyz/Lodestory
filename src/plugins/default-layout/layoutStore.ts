@@ -66,10 +66,10 @@ export function createLayoutStore(commitRemoval: (remove: () => void) => void) {
     }
   }
 
-  return {
-    registerContent(content: LayoutContent) {
-      checkActive();
-      // 固定描述，避免调用方修改对象绕过校验或影响排序。
+  function registerContents(contents: readonly LayoutContent[]) {
+    checkActive();
+    // 固定描述，避免调用方修改对象绕过校验或影响排序。
+    const prepared = contents.map(content => {
       const entry = Object.freeze({id: content.id, title: content.title, icon: content.icon, role: content.role, order: content.order ?? 0, render: content.render});
       if (typeof entry.id !== "string" || !entry.id.trim()) throw new TypeError("Layout content id cannot be empty.");
       if (typeof entry.title !== "string" || !entry.title.trim()) throw new TypeError("Layout content title cannot be empty.");
@@ -77,8 +77,12 @@ export function createLayoutStore(commitRemoval: (remove: () => void) => void) {
       if (!Number.isFinite(entry.order)) throw new TypeError("Layout content order must be finite.");
       if (typeof entry.render !== "function") throw new TypeError("Layout content must have a render function.");
       if (entries.has(entry.id)) throw new Error(`Layout content '${entry.id}' is already registered.`);
-      entries.set(entry.id, entry);
-      publish();
+      return entry;
+    });
+    if (new Set(prepared.map(entry => entry.id)).size !== prepared.length) throw new Error("Layout content IDs must be unique.");
+    for (const entry of prepared) entries.set(entry.id, entry);
+    if (prepared.length) publish();
+    return prepared.map(entry => {
       const dispose = () => {
         if (!alive || entries.get(entry.id) !== entry) return;
         const remove = () => {
@@ -94,8 +98,13 @@ export function createLayoutStore(commitRemoval: (remove: () => void) => void) {
         associate() {},
         check() {},
         withdraw(scope: "plugin" | "application") { if (scope === "plugin") dispose(); },
+    });
       });
-    },
+  }
+
+  return {
+    registerContent(content: LayoutContent) { return registerContents([content])[0]; },
+    registerContents,
     start() {
       checkActive();
       if (started) return;

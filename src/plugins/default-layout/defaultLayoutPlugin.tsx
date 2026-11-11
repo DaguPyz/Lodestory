@@ -33,6 +33,7 @@ export function createDefaultLayoutPlugin(): Plugin {
       const service: LayoutService = {
         View: ({active}) => <DefaultLayout store={store} widths={widths} active={active} ErrorBoundary={ErrorBoundary}/>,
         registerContent: store.registerContent,
+        registerContents: store.registerContents,
         show: store.show,
         hide: store.hide,
         getSnapshot: store.getSnapshot,

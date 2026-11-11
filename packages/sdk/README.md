@@ -10,7 +10,9 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/ui`：UI 服务类型与共享单例 `uiKey`。
 - `@lodestory/sdk/navigation-layout`：应用导航布局服务、页面与导航元数据类型，以及共享单例 `navigationLayoutKey`。
 - `@lodestory/sdk/settings`：设置分类贡献与打开弹框的契约，以及共享 `settingsKey`。
-- `@lodestory/sdk/plugin-packages`：本地插件包导入、记录和外部能力声明契约，以及共享 `pluginPackagesKey`；导入后的包尚不能加载。
+- `@lodestory/sdk/plugin-packages`：本地插件包导入、记录和外部能力声明契约，以及共享 `pluginPackagesKey`。
+- `@lodestory/sdk/external-plugins`：外部插件加载状态与统一后端调用入口；插件工厂可从 `ExternalPluginOptions.backend` 调用自身后端。
+- `@lodestory/sdk/plugin-runtime`：宿主通用的运行中插件激活和停用能力。
 - `@lodestory/sdk/window-shell`：窗口外壳属性与服务类型，以及共享单例 `windowShellKey`。
 - `@lodestory/sdk/error`：错误边界服务与共享单例 `errorUiKey`。
 - `@lodestory/sdk/layout`：内容用途、登记描述、布局视图、快照和服务类型，以及共享单例 `layoutKey`。
@@ -223,7 +225,7 @@ export const inkThemePlugin: Plugin = {
 
 替代实现须保留页面 ID、`params` 和 `active` 语义，并在切页后保留已访问页面的组件实例，以兼容 UI 服务的页面生命周期。
 
-页面只在启动期间登记。单插件停用时 UI 先经守卫离开目标页面，再移除页面和导航条目，其他页面保留。整体停止时先完成保存检查并卸载根视图，再按逆依赖顺序释放插件。运行中新增页面尚不支持。实现位于 [`src/plugins/navigation-layout/`](../../src/plugins/navigation-layout/README.md)。
+页面可在运行中登记，`registerPages` 支持成组登记。单插件停用时 UI 先经守卫离开目标页面，再移除页面和导航条目，其他页面保留。整体停止时先完成保存检查并卸载根视图，再按逆依赖顺序释放插件。实现位于 [`src/plugins/navigation-layout/`](../../src/plugins/navigation-layout/README.md)。
 
 ## 窗口外壳
 

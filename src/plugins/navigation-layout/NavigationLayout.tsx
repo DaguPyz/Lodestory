@@ -1,5 +1,6 @@
 import {useEffect, useState, useSyncExternalStore, type ReactNode} from "react";
 import type {NavigationGroup} from "@lodestory/sdk/navigation-layout";
+import type {UiService} from "@lodestory/sdk/ui";
 import {BrandLogo} from "@lodestory/ui";
 import "../../styles.css";
 import "./navigation-layout.css";
@@ -20,12 +21,14 @@ type NavigationLayoutProps = {
   readonly subscribeItems: (listener: () => void) => () => void;
   readonly getItems: () => readonly RegisteredNavigationItem[];
   readonly onNavigate: (id: string) => Promise<boolean>;
+  readonly ui: UiService;
   readonly children: ReactNode;
 };
 
 /** 默认导航外观；不认识作品、设置或其他具体页面。 */
-export function NavigationLayout({pageId, active, subscribeItems, getItems, onNavigate, children}: NavigationLayoutProps) {
+export function NavigationLayout({pageId, active, subscribeItems, getItems, onNavigate, ui, children}: NavigationLayoutProps) {
   const items = useSyncExternalStore(subscribeItems, getItems, getItems);
+  const route = useSyncExternalStore(ui.subscribe, ui.getSnapshot, ui.getSnapshot);
   const [navigationFailed, setNavigationFailed] = useState(false);
   useEffect(() => { if (!active) setNavigationFailed(false); }, [active]);
 
@@ -38,6 +41,13 @@ export function NavigationLayout({pageId, active, subscribeItems, getItems, onNa
       console.error("Page navigation failed.", error);
       setNavigationFailed(true);
     }
+  }
+
+  async function back() {
+    if (!active) return;
+    setNavigationFailed(false);
+    try {if (!await ui.back()) setNavigationFailed(true);}
+    catch (error) {console.error("Page navigation failed.", error); setNavigationFailed(true);}
   }
 
   function renderItems(group: NavigationGroup) {
@@ -67,7 +77,11 @@ export function NavigationLayout({pageId, active, subscribeItems, getItems, onNa
         </div>
         <nav className="navigation-items" aria-label="主导航">{renderItems("primary")}</nav>
         {navigationFailed && <p className="navigation-error" role="alert">操作未能完成，请重试。</p>}
-        <nav className="navigation-items navigation-secondary" aria-label="辅助导航">{renderItems("secondary")}</nav>
+        <nav className="navigation-items navigation-secondary" aria-label="辅助导航">
+          {route.canGoBack && <button className="navigation-item navigation-item-text" type="button"
+            aria-label="返回上一页" disabled={!active} onClick={() => {void back();}}><span className="navigation-label">返回上一页</span></button>}
+          {renderItems("secondary")}
+        </nav>
       </aside>
       {children}
     </div>;

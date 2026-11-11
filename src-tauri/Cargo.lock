@@ -2266,6 +2266,7 @@ dependencies = [
  "dunce",
  "font-kit",
  "libloading",
+ "percent-encoding",
  "rustix",
  "same-file",
  "semver",

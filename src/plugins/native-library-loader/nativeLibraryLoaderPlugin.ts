@@ -1,7 +1,7 @@
 import {invoke, isTauri} from "@tauri-apps/api/core";
 import type {Plugin} from "@lodestory/sdk";
 import {nativeLibraryLoaderKey, type NativeLibraryInstance, type NativeLibraryLoader, type NativeLibraryRequest, type NativeLibraryResponse} from "@lodestory/sdk/native-library-loader";
-import type {JsonValue} from "@lodestory/sdk/native-process-loader";
+import {NativeBackendInitializationError, type JsonValue} from "@lodestory/sdk/native-process-loader";
 
 /** 宿主提供通用动态库 ABI 和后台线程；本插件负责请求、实例及停用流程。 */
 export type LibraryBridge = {
@@ -125,7 +125,7 @@ export function createNativeLibraryLoaderPlugin(bridge: LibraryBridge = desktopB
               return instance;
             } catch (error) {
               try {await instance.close();}
-              catch (cleanup) {throw new Error(`动态库加载失败：${asError(error).message} 清理未完成：${asError(cleanup).message}`);}
+              catch (cleanup) {throw new NativeBackendInitializationError(error, cleanup);}
               throw asError(error);
             }
           })();

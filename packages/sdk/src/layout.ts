@@ -41,6 +41,8 @@ export type LayoutService = {
   readonly View: ComponentType<LayoutViewProps>;
   /** 登记内容并将句柄交给 context.track；撤销时先停止其组件，其他内容保留。 */
   registerContent(content: LayoutContent): PluginContribution;
+  /** Validate and publish the whole group together; failure registers nothing. */
+  registerContents(contents: readonly LayoutContent[]): readonly PluginContribution[];
   /** 展示内容，必要时展开容器或切换标签；main 为单选，展示新 main 时隐藏原 main 并保留其实例。
    * 未知 ID 抛错，不负责切换应用页面或聚焦正文。
    */
@@ -56,5 +58,5 @@ export type LayoutService = {
 /** 同一次装配由一个布局插件提供。 */
 export const layoutKey = createServiceKey<LayoutService>("app/layout");
 
-/** Initial external package declaration for this contract; loading is still separate. */
+/** External package declaration for this contract. */
 export const layoutExternalCapability = Object.freeze({id: "lodestory/layout@0", version: "0.1.0"});

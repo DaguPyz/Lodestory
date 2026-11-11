@@ -1,21 +1,22 @@
 import {useSyncExternalStore} from "react";
 import type {Plugin} from "@lodestory/sdk";
-import {layoutKey, type LayoutContent, type LayoutService, type LayoutSnapshot} from "@lodestory/sdk/layout";
+import {layoutExternalCapability, layoutKey, type LayoutContent, type LayoutService, type LayoutSnapshot} from "@lodestory/sdk/layout";
 import {uiKey} from "@lodestory/sdk/ui";
+import {pluginPackagesKey} from "@lodestory/sdk/plugin-packages";
 
 /** 仅用于验证替换：不导入默认布局、编辑页或其状态，导航放在主内容之后。 */
 export function createAlternativeLayoutPlugin(): Plugin {
   let cleanup: (() => void) | undefined;
   return {
-    id: "test-alternative-layout", requires: [uiKey], provides: [layoutKey],
+    id: "test-alternative-layout", requires: [uiKey, pluginPackagesKey], provides: [layoutKey],
     activate(context) {
       const entries = new Map<string, LayoutContent>();
       const hidden = new Set<string>();
       const listeners = new Set<() => void>();
-      let ready = false;
       let alive = true;
       let snapshot: LayoutSnapshot = Object.freeze({contents: [], shownIds: []});
       let removeWrapper: (() => void) | undefined;
+      const removeCapability = context.get(pluginPackagesKey).registerCapability(layoutExternalCapability);
       const check = () => { if (!alive) throw new Error("Alternative layout stopped"); };
       function publish() {
         const roles = ["actions", "main", "navigation", "auxiliary", "status"];
@@ -23,6 +24,22 @@ export function createAlternativeLayoutPlugin(): Plugin {
           || (a.order ?? 0) - (b.order ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
         snapshot = Object.freeze({contents: Object.freeze(contents), shownIds: Object.freeze(contents.filter(entry => !hidden.has(entry.id)).map(entry => entry.id))});
         for (const listener of listeners) listener();
+      }
+      function registerContents(inputs: readonly LayoutContent[]) {
+        check();
+        if (new Set(inputs.map(input => input.id)).size !== inputs.length || inputs.some(input => entries.has(input.id))) {
+          throw new Error("Invalid alternative layout registration");
+        }
+        const registered = inputs.map(input => Object.freeze({...input}));
+        for (const entry of registered) entries.set(entry.id, entry);
+        publish();
+        return registered.map(entry => {
+          const dispose = () => {
+            if (!alive || entries.get(entry.id) !== entry) return;
+            entries.delete(entry.id); hidden.delete(entry.id); publish();
+          };
+          return Object.assign(dispose, {associate() {}, check() {}, withdraw(scope: "plugin" | "application") {if (scope === "plugin") dispose();}});
+        });
       }
       const service: LayoutService = {
         View({active}) {
@@ -41,24 +58,17 @@ export function createAlternativeLayoutPlugin(): Plugin {
           </div>;
         },
         registerContent(input) {
-          check();
-          if (ready || entries.has(input.id)) throw new Error("Invalid alternative layout registration");
-          const entry = Object.freeze({...input});
-          entries.set(entry.id, entry); publish();
-          return () => {
-            if (!alive || entries.get(entry.id) !== entry) return;
-            try { if (ready) removeWrapper?.(); }
-            finally { entries.delete(entry.id); hidden.delete(entry.id); publish(); }
-          };
+          return registerContents([input])[0];
         },
+        registerContents,
         show(id) { check(); if (!entries.has(id)) throw new Error("Unknown content"); if (hidden.delete(id)) publish(); },
         hide(id) { check(); if (!entries.has(id)) throw new Error("Unknown content"); if (!hidden.has(id)) { hidden.add(id); publish(); } },
         getSnapshot() { check(); return snapshot; },
         subscribe(listener) { check(); listeners.add(listener); return () => { listeners.delete(listener); }; },
       };
-      cleanup = () => { try { removeWrapper?.(); } finally { alive = false; entries.clear(); listeners.clear(); } };
+      cleanup = () => { try { removeWrapper?.(); } finally { alive = false; entries.clear(); listeners.clear(); removeCapability(); } };
       context.provide(layoutKey, service);
-      removeWrapper = context.get(uiKey).addWrapper({id: "test-alternative-layout", order: 30, prepare() {ready = true;}, wrap: children => children});
+      removeWrapper = context.get(uiKey).addWrapper({id: "test-alternative-layout", order: 30, wrap: children => children});
     },
     deactivate() { const stop = cleanup; cleanup = undefined; stop?.(); },
   };

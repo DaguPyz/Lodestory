@@ -35,14 +35,17 @@ export type NavigationLayoutAction = {
  */
 export type NavigationLayoutService = {
     /**
-     * 启动期同时登记导航和 UI 页面；重复 ID 或无效描述抛错，失败不留下部分登记。
+     * 同时登记导航和 UI 页面；重复 ID 或无效描述抛错，失败不留下部分登记。
      * 返回生命周期句柄，须交给 context.track。在线停用先经导航守卫离开当前页面，
-     * 再撤回页面和导航登记；根视图与其他页面保留。新增页面仍仅限启动期。
+     * 再撤回页面和导航登记；根视图与其他页面保留。
      */
     registerPage(page: NavigationLayoutPage): PluginContribution;
+    /** Validate and publish a group of new pages as one operation. */
+    registerPages(pages: readonly NavigationLayoutPage[]): readonly PluginContribution[];
     /** 登记独立操作；与页面共享 ID 空间，撤销时同步更新现有导航。 */
     registerAction(action: NavigationLayoutAction): PluginContribution;
 };
 
 /** 默认实现由应用显式装配；页面插件声明依赖并导入同一个 key。 */
 export const navigationLayoutKey = createServiceKey<NavigationLayoutService>("app/navigation-layout");
+export const navigationLayoutExternalCapability = Object.freeze({id: "lodestory/navigation-layout@0", version: "0.1.0"});

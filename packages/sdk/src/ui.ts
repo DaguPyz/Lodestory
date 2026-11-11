@@ -99,7 +99,7 @@ export type UiSnapshot = {
 
 /**
  * 合并页面管理与根装配的 UI 能力；使用者须在 requires 中声明 uiKey。
- * 页面和包装层在 activate 中登记；ready 后可切页，使用者不自行 createRoot。
+ * 页面可在启动或运行时登记；根包装层仅在启动期间登记。使用者不自行 createRoot。
  */
 export type UiService = {
   /** 登记已打开浮层的实际节点（可位于 Portal）。关闭、禁用或卸载时调用返回的撤销函数。 */

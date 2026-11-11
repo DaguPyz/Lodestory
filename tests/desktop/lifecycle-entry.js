@@ -4,12 +4,17 @@ import {documentsKey} from "@lodestory/sdk/documents";
 import {layoutKey} from "@lodestory/sdk/layout";
 import {nativeProcessLoaderKey} from "@lodestory/sdk/native-process-loader";
 import {nativeLibraryLoaderKey} from "@lodestory/sdk/native-library-loader";
+import {pluginPackagesKey} from "@lodestory/sdk/plugin-packages";
+import {settingsKey} from "@lodestory/sdk/settings";
 import {getCurrentWindow} from "@tauri-apps/api/window";
 export function installLifecycleTest(runtime) {
   const workbench = runtime.get(workbenchKey);
   let restoreDestroy;
   let destroyCalls = 0;
   window.__lodestoryLifecycleTest = {
+   importPluginPackage(path) {return runtime.get(pluginPackagesKey).importFromPath(path);},
+   listPluginPackages() {return runtime.get(pluginPackagesKey).list();},
+   openPluginSettings() {return runtime.get(settingsKey).open("plugins.packages");},
    async openTemporaryProject(parentPath) {
      const {project} = await invoke("create_project", {parentPath, name: "生命周期测试"});
      return workbench.openProject(project);

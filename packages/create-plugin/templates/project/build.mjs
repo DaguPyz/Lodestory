@@ -1,4 +1,5 @@
 import {spawnSync} from "node:child_process";
+import {createHash} from "node:crypto";
 import * as fs from "node:fs/promises";
 import path from "node:path";
 import {createRequire} from "node:module";
@@ -22,24 +23,49 @@ function validVersion(value) {
     && semver.valid(value) !== null;
 }
 
+// The initial shared package contract accepts full exact or caret versions.
+// Keeping the syntax small ensures the Rust host and npm use the same meaning.
+function validRange(value) {
+  if (!nonempty(value)) return false;
+  const version = value.startsWith("^") ? value.slice(1) : value;
+  return !version.includes("+") && validVersion(version) && semver.validRange(value) !== null;
+}
+
+function validPluginId(value) {
+  return nonempty(value) && value.length <= 200
+    && /^[A-Za-z0-9_][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_][A-Za-z0-9_-]*)+$/.test(value);
+}
+
+function validCapabilityId(value) {
+  return nonempty(value) && value.length <= 200 && /^[A-Za-z0-9._/@-]+$/.test(value);
+}
+
+function portablePath(value) {
+  if (!value || Buffer.byteLength(value) > 4096 || value.startsWith("/") || /[\\:\u0000-\u001f\u007f-\u009f]/.test(value)) return false;
+  return value.split("/").every(part => part && part !== "." && part !== ".."
+    && Buffer.byteLength(part) <= 255 && !/[. ]$/.test(part)
+    && !/^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\.|$)/i.test(part));
+}
+
 function validate(config) {
   if (!object(config)) throw new Error("plugin.json 必须是对象。");
-  if (!nonempty(config.id) || config.id.length > 200
-      || !/^[A-Za-z0-9_][A-Za-z0-9_-]*(?:\.[A-Za-z0-9_][A-Za-z0-9_-]*)+$/.test(config.id)) {
+  if (!validPluginId(config.id)) {
     throw new Error("插件 ID 需要至少两段，并以点分隔。");
   }
-  if (!nonempty(config.name)) throw new Error("插件名称不能为空。");
+  if (!nonempty(config.name) || Buffer.byteLength(config.name) > 512 || /[\u0000-\u001f\u007f-\u009f]/.test(config.name)) {
+    throw new Error("插件名称无效。");
+  }
   if (!validVersion(config.version)) throw new Error("插件版本必须是有效的语义化版本。");
-  if (config.description !== undefined && typeof config.description !== "string") {
+  if (config.description !== undefined && (typeof config.description !== "string" || Buffer.byteLength(config.description) > 16384)) {
     throw new Error("插件说明必须是字符串。");
   }
   if (!object(config.compatibility) || !nonempty(config.compatibility.hostApi)
-      || !semver.validRange(config.compatibility.hostApi)) {
+      || !validRange(config.compatibility.hostApi)) {
     throw new Error("必须声明有效的宿主接口版本范围。");
   }
   if (config.frontend !== undefined) {
     if (!object(config.frontend) || !nonempty(config.frontend.entry)
-        || !nonempty(config.compatibility.react) || !semver.validRange(config.compatibility.react)) {
+        || !nonempty(config.compatibility.react) || !validRange(config.compatibility.react)) {
       throw new Error("前端须声明源代码入口和有效的 React 版本范围。");
     }
   } else if (config.compatibility.react !== undefined) {
@@ -56,8 +82,8 @@ function validate(config) {
     if (!Array.isArray(entries)) throw new Error("dependencies." + name + " 必须是数组。");
     const seen = new Set();
     for (const item of entries) {
-      if (!object(item) || !nonempty(item.id) || !nonempty(item.version)
-          || !(name === "provides" ? validVersion(item.version) : semver.validRange(item.version))
+      if (!object(item) || !(name === "plugins" ? validPluginId(item.id) : validCapabilityId(item.id)) || !nonempty(item.version)
+          || !(name === "provides" ? validVersion(item.version) : validRange(item.version))
           || seen.has(item.id)) {
         throw new Error("dependencies." + name + " 含无效或重复的声明。");
       }
@@ -133,9 +159,9 @@ async function frontendFiles(config) {
     try { entries = await fs.readdir(directory, {withFileTypes: true}); }
     catch (error) { if (error.code === "ENOENT" && !relative) return; throw error; }
     for (const entry of entries) {
-      if (entry.name.includes("\\")) throw new Error("前端资源名称不能包含反斜杠：" + entry.name);
       const file = path.join(directory, entry.name);
       const name = relative ? relative + "/" + entry.name : entry.name;
+      if (!portablePath(name)) throw new Error("前端资源名称不能用于插件包：" + name);
       if (entry.isDirectory()) await copyAssets(file, name);
       else if (entry.isFile()) files.push({path: "dist/frontend/assets/" + name, bytes: await fs.readFile(file)});
       else throw new Error("前端资源必须是普通文件或目录：" + file);
@@ -148,7 +174,10 @@ async function frontendFiles(config) {
     if (!assetsStat.isDirectory()) throw new Error("frontend/assets 必须是普通目录。");
     await copyAssets(publicDirectory);
   }
-  if (new Set(files.map(file => file.path)).size !== files.length) throw new Error("前端构建产物存在重名资源。");
+  if (files.some(file => !portablePath(file.path))
+      || new Set(files.map(file => file.path.toLowerCase())).size !== files.length) {
+    throw new Error("前端构建产物包含无效或重名资源。");
+  }
   return files;
 }
 
@@ -212,6 +241,11 @@ function manifestFor(config, result) {
     description: config.description ?? "",
     compatibility: config.compatibility,
     dependencies: config.dependencies,
+    files: result.files.map(file => ({
+      path: file.path,
+      size: file.bytes.byteLength,
+      sha256: createHash("sha256").update(file.bytes).digest("hex"),
+    })).sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0),
   };
   if (config.frontend) {
     // The entry stylesheet already includes styles from lazy chunks; listing
@@ -248,11 +282,18 @@ async function saveBuild(files) {
 async function savePackage(config, result) {
   const {default: JSZip} = await import("jszip");
   const zip = new JSZip();
-  zip.file("manifest.json", JSON.stringify(manifestFor(config, result), null, 2) + "\n", {unixPermissions: 0o100644});
+  const manifest = JSON.stringify(manifestFor(config, result), null, 2) + "\n";
+  const manifestBytes = Buffer.byteLength(manifest);
+  if (manifestBytes > 256 * 1024 || manifestBytes + result.files.reduce((total, file) => total + file.bytes.byteLength, 0) > 512 * 1024 * 1024) {
+    throw new Error("插件清单或解压后的文件超过宿主大小限制。");
+  }
+  zip.file("manifest.json", manifest, {unixPermissions: 0o100644});
   for (const file of result.files) {
     zip.file(file.path, file.bytes, {unixPermissions: file.executable ? 0o100755 : 0o100644});
   }
+  if (Object.keys(zip.files).length > 4096) throw new Error("插件包中的文件和目录过多。");
   const bytes = await zip.generateAsync({type: "nodebuffer", compression: "DEFLATE", platform: "UNIX"});
+  if (bytes.byteLength > 256 * 1024 * 1024) throw new Error("插件包超过 256 MiB 的大小限制。");
   const directory = path.join(root, "release");
   await fs.mkdir(directory, {recursive: true});
   const platformName = result.platform?.target ?? "any";

@@ -10,6 +10,7 @@ import * as packageError from "@lodestory/sdk/error";
 import * as packageLayout from "@lodestory/sdk/layout";
 import * as packageNavigationLayout from "@lodestory/sdk/navigation-layout";
 import * as packageSettings from "@lodestory/sdk/settings";
+import * as packagePluginPackages from "@lodestory/sdk/plugin-packages";
 import * as packageWindowShell from "@lodestory/sdk/window-shell";
 import * as packageTheme from "@lodestory/sdk/theme";
 import * as packageWorkbench from "@lodestory/sdk/workbench";
@@ -32,7 +33,7 @@ const packageManifest = JSON.parse(readFileSync(new URL("../packages/sdk/package
 
 test("SDK package exposes ESM root and all public capability entry points", () => {
   assert.equal(packageManifest.type, "module");
-  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./asset-catalog", "./background-tasks", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./layout", "./native-library-loader", "./native-process-loader", "./navigation-layout", "./project-search", "./project-storage", "./settings", "./shortcuts", "./theme", "./timeline", "./ui", "./window-shell", "./workbench"]);
+  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./asset-catalog", "./background-tasks", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./layout", "./native-library-loader", "./native-process-loader", "./navigation-layout", "./plugin-packages", "./project-search", "./project-storage", "./settings", "./shortcuts", "./theme", "./timeline", "./ui", "./window-shell", "./workbench"]);
 
   assert.equal(packageManifest.exports["./body-editor"].import, "./dist/body-editor.js");
   assert.equal(packageManifest.exports["./body-editor"].types, "./dist/body-editor.d.ts");
@@ -45,6 +46,7 @@ test("SDK package exposes ESM root and all public capability entry points", () =
     ["./layout", "layout"],
     ["./navigation-layout", "navigation-layout"],
     ["./settings", "settings"],
+    ["./plugin-packages", "plugin-packages"],
     ["./window-shell", "window-shell"],
     ["./theme", "theme"],
     ["./workbench", "workbench"],
@@ -71,7 +73,9 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.equal(typeof packageUi.UiNavigationCompleteError, "function");
   assert.deepEqual(Object.keys(packageError), ["errorUiKey"]);
   assert.deepEqual(Object.keys(packageTheme).sort(), ["themeKey"]);
-  assert.deepEqual(Object.keys(packageLayout), ["layoutKey"]);
+  assert.deepEqual(Object.keys(packageLayout).sort(), ["layoutExternalCapability", "layoutKey"]);
+  assert.deepEqual(Object.keys(packagePluginPackages).sort(), ["pluginHostApiVersion", "pluginPackagesKey"]);
+  assert.equal(packagePluginPackages.pluginHostApiVersion, "0.1.0");
   assert.deepEqual(Object.keys(packageNavigationLayout), ["navigationLayoutKey"]);
   assert.deepEqual(Object.keys(packageSettings), ["settingsKey"]);
   assert.equal(packageSettings.settingsKey.id, "app/settings");

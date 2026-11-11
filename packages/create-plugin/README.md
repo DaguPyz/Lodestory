@@ -18,7 +18,7 @@ node packages/create-plugin/bin/create-plugin.mjs --name my-c --type process --i
 node packages/create-plugin/bin/create-plugin.mjs --name my-both --frontend --type dynamic-library --id com.example.my-both
 ```
 
-默认在当前目录创建与项目名相同的目录；`--output` 可指定其他目标路径。目标路径必须不存在，其父目录必须已存在。项目名须以小写英文字母开头，最多 64 个字符，只包含小写字母、数字、连字符或下划线，且不能使用 Rust 或 Cargo 的保留名称。插件 ID 当前按至少两段点分隔的英文、数字、下划线或连字符校验；此规则和示例 ID 仍需与正式外部插件规范统一。
+默认在当前目录创建与项目名相同的目录；`--output` 可指定其他目标路径。目标路径必须不存在，其父目录必须已存在。项目名须以小写英文字母开头，最多 64 个字符，只包含小写字母、数字、连字符或下划线，且不能使用 Rust 或 Cargo 的保留名称。插件 ID 至少两段，以点分隔，每段使用英文、数字、下划线或连字符；默认的 `com.example` 命名空间仅作示例，发布前应改为自己的 ID。
 
 ## 生成项目和交付包
 
@@ -29,14 +29,14 @@ npm run build
 npm run package
 ```
 
-`build` 将本次结果写入 `build/run-*`；`package` 会重新构建，并在 `release/` 生成 ZIP。打包工具根据 `plugin.json` 和实际产物生成 ZIP 根目录内的 `manifest.json`；开发者不需要手写交付清单。同名 ZIP 不会被覆盖。
+`build` 将本次结果写入 `build/run-*`；`package` 会重新构建，并在 `release/` 生成 ZIP。打包工具根据 `plugin.json` 和实际产物生成 ZIP 根目录内的 `manifest.json`，其中 `files` 记录每个产物的路径、大小和 SHA-256；开发者不需要手写交付清单。同名 ZIP 不会被覆盖。首版限制 ZIP 最大 256 MiB、解压后最大 512 MiB、清单最大 256 KiB，文件和目录总数最多 4096。
 
 前端使用 React，按公开 SDK 契约登记工作台内容，React 和 `@lodestory/sdk` 保留为外部依赖，由未来宿主提供同一实例。前端源码位于 `frontend/src`；可把静态文件放在 `frontend/assets`，引用的样式和图片等资源也会一起打包。生成的样式文件会记录在交付清单的 `frontend.styles` 中。
 
 后端源码位于 `backend`。打包时按当前 Rust 工具链的宿主目标编译，把真实文件路径、系统、处理器和 Rust 目标三元组写进清单；一个后端包对应一个目标。构建含后端项目需要 Rust 和 Cargo。目标识别覆盖 macOS、Windows 和 Linux 的 x64、arm64；目前桌面联调只在 macOS arm64 完成。
 
-脚手架使用 Node.js 18 或更新版本。默认插件 ID、宿主接口版本和跨包能力 ID 均为示例，正式发布前须按正式契约修改 `plugin.json`。仅后端项目可直接运行 `npm install`。`@lodestory/sdk` 尚未发布到 npm：在发布前，含前端项目需要先本地打包 SDK，并在生成项目中安装该 SDK 包及其他构建依赖。
+脚手架使用 Node.js 18 或更新版本。当前包格式为 `1.0`，宿主接口版本为 `0.1.0`；前端示例依赖的布局能力为 `lodestory/layout@0`，当前版本为 `0.1.0`。宿主接口、React 和依赖的版本范围暂支持完整版本号（如 `0.1.0`）或 `^` 加完整版本号（如 `^0.1.0`），宿主和打包工具按同一规则校验。仅后端项目可直接运行 `npm install`。`@lodestory/sdk` 尚未发布到 npm：在发布前，含前端项目需要先本地打包 SDK，并在生成项目中安装该 SDK 包及其他构建依赖。
 
 例如，在 Lodestory 仓库内执行 `npm pack ./packages/sdk --pack-destination /SDK包目录`，再在生成的插件项目内执行 `npm install --save-dev /SDK包目录/lodestory-sdk-0.1.0.tgz`。本地安装会更新该项目的 SDK 依赖路径；SDK 正式发布后可改回版本号。
 
-当前 Lodestory 尚未实现外部插件安装、前端动态加载、按清单选择 A/B 或前后端的统一连接接口；生成的 ZIP 暂不能直接安装，清单与入口仍是待联调的方案。
+当前可在桌面版“设置 → 插件”导入生成的 ZIP；校验成功后显示“已导入，待加载”，重启后记录仍在。外部前端加载、按清单选择 A/B 和前后端统一连接尚未实现，因此插件暂不能运行。声明了其他插件依赖的包当前无法验证其运行版本，会被拒绝；已导入但未加载的包也不会被当作可用依赖。

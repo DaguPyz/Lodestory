@@ -5,13 +5,15 @@ mod asset_tasks;
 mod background_tasks;
 mod document_commands;
 mod documents;
+mod native_library;
+mod native_process;
+mod plugin_package_commands;
+mod plugin_packages;
 mod project_commands;
 mod project_file_commands;
 mod project_files;
 mod project_index;
 mod system_fonts;
-mod native_process;
-mod native_library;
 
 #[cfg(all(feature = "desktop-e2e", not(debug_assertions)))]
 compile_error!("desktop-e2e is restricted to debug builds");
@@ -46,8 +48,18 @@ pub fn run() {
             app.manage(project_index::ProjectIndex::new(path));
             app.manage(documents::Documents::default());
             app.manage(project_files::ProjectFiles::default());
-            app.manage(std::sync::Arc::new(native_process::NativeProcesses::default()));
-            app.manage(std::sync::Arc::new(native_library::NativeLibraries::default()));
+            app.manage(std::sync::Arc::new(
+                native_process::NativeProcesses::default(),
+            ));
+            app.manage(std::sync::Arc::new(
+                native_library::NativeLibraries::default(),
+            ));
+            let package_root = app.path().app_data_dir()?.join("plugin-packages");
+            #[cfg(feature = "desktop-e2e")]
+            let package_root = std::env::var_os("LODESTORY_DESKTOP_E2E_DATA")
+                .map(std::path::PathBuf::from)
+                .unwrap_or(package_root);
+            app.manage(plugin_packages::PluginPackages::new(package_root));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -82,6 +94,9 @@ pub fn run() {
             native_library::native_library_ready,
             native_library::native_library_call,
             native_library::native_library_close,
+            plugin_package_commands::pick_plugin_package,
+            plugin_package_commands::list_plugin_packages,
+            plugin_package_commands::import_plugin_package,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -40,6 +40,10 @@
       "types": "./dist/settings.d.ts",
       "import": "./dist/settings.js"
     },
+    "./plugin-packages": {
+      "types": "./dist/plugin-packages.d.ts",
+      "import": "./dist/plugin-packages.js"
+    },
     "./window-shell": {
       "types": "./dist/window-shell.d.ts",
       "import": "./dist/window-shell.js"

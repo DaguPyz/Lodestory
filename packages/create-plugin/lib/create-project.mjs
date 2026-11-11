@@ -160,10 +160,10 @@ export async function createProject(options, fs = filesystem) {
     name: options.name,
     version: "0.1.0",
     description: "",
-    compatibility: {hostApi: "^1.0.0", ...(options.frontend ? {react: "^19.1.0"} : {})},
+    compatibility: {hostApi: "^0.1.0", ...(options.frontend ? {react: "^19.1.0"} : {})},
     dependencies: {
       plugins: [],
-      requires: options.frontend ? [{id: "lodestory/layout@1", version: "^1.0.0"}] : [],
+      requires: options.frontend ? [{id: "lodestory/layout@0", version: "^0.1.0"}] : [],
       provides: [],
     },
     ...(options.frontend ? {frontend: {entry: "frontend/src/index.tsx"}} : {}),

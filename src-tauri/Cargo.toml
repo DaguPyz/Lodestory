@@ -21,6 +21,8 @@ same-file = "1"
 rustix = { version = "1.1.5", features = ["fs"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
+semver = "1"
+sha2 = "0.10"
 tauri = { version = "2", features = [] }
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
@@ -28,6 +30,7 @@ tauri-plugin-wdio = { version = "1", optional = true }
 tauri-plugin-wdio-webdriver = { version = "1", optional = true }
 tempfile = "3"
 uuid = { version = "1", features = ["v4", "serde"] }
+zip = { version = "2.4.2", default-features = false, features = ["deflate"] }
 
 [features]
 desktop-e2e = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver", "tauri/custom-protocol"]

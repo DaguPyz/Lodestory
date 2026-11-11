@@ -32,12 +32,15 @@ import {createSettingsPlugin} from "../plugins/settings/settingsPlugin";
 import {createProjectSearchPlugin} from "../plugins/project-search/projectSearchPlugin";
 import {createDocumentSearchPlugin} from "../plugins/document-search/documentSearchPlugin";
 import {createShortcutsPlugin} from "../plugins/shortcuts";
+import {createPluginPackagesPlugin} from "../plugins/plugin-packages/pluginPackagesPlugin";
+import {createPluginManagementPlugin} from "../plugins/plugin-management/pluginManagementPlugin";
 
 /** 应用选择哪些插件；启动和渲染流程不根据具体插件添加分支。 */
 export function createAppPlugins(): readonly Plugin[] {
     return [
         createConfigPlugin(),
         createErrorUiPlugin(),
+        createPluginPackagesPlugin(),
         createUiPlugin(),
         createUiInteractionPlugin(),
         createShortcutsPlugin(),
@@ -69,5 +72,6 @@ export function createAppPlugins(): readonly Plugin[] {
         createWorkbenchToolbarPlugin(),
         createWelcomePlugin(),
         createSettingsPlugin(),
+        createPluginManagementPlugin(),
     ];
 }

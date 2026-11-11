@@ -272,6 +272,11 @@
       const projectTreeGate = new Promise(resolve => { releaseProjectTree = resolve; });
       if (scenario === "project-loading-gate") window.__releaseProjectTree = releaseProjectTree;
       mockIPC(async (command, args) => {
+        if (command === "list_plugin_packages") return scenario === "plugin-preview" ? [
+          {id: "com.example.timeline", name: "时间线扩展", version: "0.1.0", status: "pending-load"},
+          {id: "com.example.reference-notes", name: "资料笔记", version: "0.1.0", status: "pending-load"},
+        ] : [];
+        if (command === "pick_plugin_package") return null;
         if (command === "run_background_task") {
           if (args.name !== VALIDATE_AND_ENCODE_GROUP) throw new Error(`Unknown background task: ${args.name}`);
           const bytes = encodeAssetGroupFallback(args.input);
@@ -487,6 +492,18 @@
           const retryCards = setInterval(openMasonryCards, 50);
           setTimeout(() => clearInterval(retryCards), 15000);
           openMasonryCards();
+        }
+        if (scenario === "plugin-preview") {
+          const openPluginSettings = () => {
+            if (document.querySelector(".plugin-settings")) { clearInterval(retrySettings); return; }
+            const buttons = [...document.querySelectorAll("button")];
+            const section = buttons.find(button => button.textContent.trim() === "插件");
+            if (section) { section.click(); return; }
+            buttons.find(button => button.getAttribute("aria-label") === "设置" || button.textContent.trim() === "设置")?.click();
+          };
+          const retrySettings = setInterval(openPluginSettings, 50);
+          setTimeout(() => clearInterval(retrySettings), 15000);
+          openPluginSettings();
         }
         if (query.get("autoAssets") === "1") {
           let openedProject = false;

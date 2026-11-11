@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import * as fs from "node:fs/promises";
 import {createRequire} from "node:module";
+import {createHash} from "node:crypto";
 import {tmpdir} from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -44,6 +45,8 @@ test("the packed npm command creates each optional frontend and backend combinat
       const project = await create(fixture, name, args);
       const config = JSON.parse(await fs.readFile(path.join(project, "plugin.json"), "utf8"));
       assert.equal(config.id, "com.example." + name);
+      assert.equal(config.compatibility.hostApi, "^0.1.0");
+      assert.deepEqual(config.dependencies.requires, frontend ? [{id: "lodestory/layout@0", version: "^0.1.0"}] : []);
       assert.equal(Boolean(config.frontend), frontend);
       assert.equal(Boolean(config.backend), Boolean(backend));
       if (frontend) await fs.access(path.join(project, "frontend", "src", "index.tsx"));
@@ -185,10 +188,18 @@ test("build and package produce consistent ZIPs for frontend, backend and combin
       const packaged = fixture.runProject(project, "package");
       assert.equal(packaged.status, 0, packaged.stderr + packaged.stdout);
       const {file, bytes, zip, manifest} = await readArchive(project);
+      assert.equal(manifest.manifestVersion, "1.0");
       assert.equal(manifest.id, config.id);
       assert.equal(manifest.name, config.name);
       assert.equal(manifest.version, config.version);
       assert.deepEqual(manifest.dependencies, config.dependencies);
+      const payloadFiles = Object.values(zip.files).filter(entry => !entry.dir && entry.name !== "manifest.json");
+      assert.equal(manifest.files.length, payloadFiles.length);
+      for (const declared of manifest.files) {
+        const payload = await zip.file(declared.path).async("nodebuffer");
+        assert.equal(declared.size, payload.length);
+        assert.equal(declared.sha256, createHash("sha256").update(payload).digest("hex"));
+      }
       assert.equal(Boolean(manifest.frontend), frontend);
       assert.equal(Boolean(manifest.backend), Boolean(backend));
       assert.equal(zip.file("plugin.json"), null, "developer config is not the delivery manifest");

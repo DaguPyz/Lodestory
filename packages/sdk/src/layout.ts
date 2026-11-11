@@ -55,3 +55,6 @@ export type LayoutService = {
 
 /** 同一次装配由一个布局插件提供。 */
 export const layoutKey = createServiceKey<LayoutService>("app/layout");
+
+/** Initial external package declaration for this contract; loading is still separate. */
+export const layoutExternalCapability = Object.freeze({id: "lodestory/layout@0", version: "0.1.0"});

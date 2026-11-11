@@ -1,4 +1,8 @@
 fn main() {
+    println!(
+        "cargo:rustc-env=LODESTORY_BUILD_TARGET={}",
+        std::env::var("TARGET").expect("Cargo target")
+    );
     // Tauri embeds the development icon at compile time, so changes to the
     // source assets must also trigger recompilation of the application.
     println!("cargo:rerun-if-changed=icons/icon.icns");

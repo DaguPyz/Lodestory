@@ -25,6 +25,7 @@ const publicEntries = {
   "@lodestory/sdk/layout": ["layout.ts"],
   "@lodestory/sdk/navigation-layout": ["navigation-layout.ts"],
   "@lodestory/sdk/settings": ["settings.ts"],
+  "@lodestory/sdk/plugin-packages": ["plugin-packages.ts"],
   "@lodestory/sdk/window-shell": ["window-shell.ts"],
   "@lodestory/sdk/ui": ["ui.ts", "ui/index.ts"],
   "@lodestory/sdk/error": ["error.ts"],

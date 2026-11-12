@@ -50,13 +50,8 @@
       function projectFiles(projectPath) {
         let state = projects.get(projectPath);
         if (!state) {
-          const files = new Map([["正文/已有章节.md", encode("这是已有文稿。")], ["故事大纲.txt", encode("故事的大纲。")]]);
-          if (scenario === "document-search") files.set("正文/已有章节.md", encode("# 标题\n\n第一行 **强调词** 和 [链接词](https://example.com)。\n第二行内容。\n\n- 列表甲\n- 列表乙\n\n| 左 | 右 |\n| --- | --- |\n| 表格词 | 其他 |"));
-          if (scenario === "save-as-conflict") files.set("故事大纲.lode", encode(JSON.stringify({format: "quill-delta", version: 1, ops: [{insert: "已存在的富文本文档。\n"}]})));
-          if (scenario === "rich-text-scroll") files.set("长篇文稿.lode", encode(JSON.stringify({
-            format: "quill-delta", version: 1,
-            ops: [{insert: Array.from({length: 150}, (_, index) => `第 ${index + 1} 段：滚动长篇正文时，工具栏应保持固定。\n`).join("")}],
-          })));
+          const files = new Map([["正文/已有章节.txt", encode("这是已有文稿。")], ["故事大纲.txt", encode("故事的大纲。")]]);
+          if (scenario === "document-search") files.set("正文/已有章节.txt", encode("标题\n第一行 强调词 和 链接词。\n第二行内容。\n列表甲 列表乙。左 右 表格词 其他"));
           state = {files, directories: new Set(["", "正文", "资料"]), calls: []};
           if (scenario?.startsWith("asset-template-workspace")) {
             // Sample objects exist only in this development fixture's in-memory files.
@@ -252,7 +247,7 @@
       function documentTree(state, parent = "") {
         return [
           ...[...state.directories].filter(path => path && parentOf(path) === parent && !path.split("/").some(part => part.startsWith("."))).map(path => ({path, name: path.split("/").at(-1), children: documentTree(state, path)})),
-          ...[...state.files.keys()].filter(path => parentOf(path) === parent && /\.(md|markdown|txt|lode)$/i.test(path) && !path.split("/").some(part => part.startsWith("."))).map(path => ({path, name: path.split("/").at(-1)})),
+          ...[...state.files.keys()].filter(path => parentOf(path) === parent && /\.txt$/i.test(path) && !path.split("/").some(part => part.startsWith("."))).map(path => ({path, name: path.split("/").at(-1)})),
         ];
       }
       let records = [
@@ -379,7 +374,6 @@
             if (scenario === "outline-slow-create" && inTimeline) await new Promise(resolve => setTimeout(resolve, 300));
             if (scenario === "outline-create-error" && inTimeline) throw {message: "大纲创建失败：目录不可写。"};
             if (scenario === "create-error" && !inTimeline) throw {message: "创建文档失败：保存目录不可写。"};
-            if (scenario === "save-as-error" && /\.lode$/i.test(path)) throw {message: "转换保存失败：模拟磁盘写入错误。"};
             if (state.files.has(path)) {
               if (!args.acceptIdentical || !equalBytes(state.files.get(path), args.bytes)) throw {message: "已存在同名文件。"};
             } else {
@@ -418,7 +412,6 @@
           else state.files.set(path, [...args.bytes]);
           return;
         }
-        if (command === "list_system_font_families") return ["Arial", "Noto Sans", "宋体"];
         if (scenario === "corrupt") throw { code: "invalid_index", message: "项目索引格式错误，原文件已保留。" };
         if (command === "list_recent_projects") return records;
         if (command === "pick_project_directory") {

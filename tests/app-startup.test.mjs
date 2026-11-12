@@ -94,29 +94,19 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "plugin-packages", "ui", "ui-interaction", "shortcuts", "theme", "builtin-themes", "context-menu", "window-shell", "navigation-layout", "default-layout", "workbench", "project-search", "project-storage", "background-tasks", "native-process-loader", "native-library-loader", "documents", "project-management", "canvas", "timeline", "outline-design", "asset-management", "body-editor", "plain-text-editor", "markdown-editor", "rich-text-editor", "document-search", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings", "external-plugins", "plugin-management"]);
-  assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "./MarkdownEditor"), false,
-  "application startup does not import the Milkdown component");
-  assert.equal(fixture.moduleImports.some(({specifier}) => specifier.startsWith("@milkdown/")), false,
-    "application startup does not load Milkdown packages");
+  assert.deepEqual(fixture.catalogPluginIds, ["config", "error-ui", "plugin-packages", "ui", "ui-interaction", "shortcuts", "theme", "builtin-themes", "context-menu", "window-shell", "navigation-layout", "default-layout", "workbench", "project-search", "project-storage", "background-tasks", "native-process-loader", "native-library-loader", "documents", "project-management", "canvas", "timeline", "outline-design", "asset-management", "body-editor", "plain-text-editor", "document-search", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings", "external-plugins", "plugin-management"]);
+  assert.equal(fixture.catalogPluginIds.includes("markdown-editor"), false);
+  assert.equal(fixture.catalogPluginIds.includes("rich-text-editor"), false);
   assert.deepEqual(fixture.appPluginsCalls, [[]]);
   const {configKey} = fixture.requireSdk("@lodestory/sdk/config");
   const {bodyEditorDefaultEditorsConfig} = fixture.requireSdk("@lodestory/sdk/body-editor");
   assert.deepEqual(Object.fromEntries(Object.entries(
     fixture.getService(configKey).getSnapshot(bodyEditorDefaultEditorsConfig),
   )), {
-    markdown: "milkdown",
     "plain-text": "plain-text",
-    "rich-delta": "quill",
-  }, "application defaults route rich and plain text through the rich-text plugin");
-  assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "./RichTextEditor"), false,
-    "application startup registers the rich-text editor without loading its component");
+  }, "application defaults use the plain-text editor for TXT documents");
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "./PlainTextEditor"), false,
     "application startup registers the dedicated plain-text editor without loading its component");
-  assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "quill" || specifier.startsWith("quill/")), false,
-    "application startup does not import Quill runtime packages");
-  assert.equal(fixture.tauriCalls.some(({command}) => command === "list_system_font_families"), false,
-    "lazy rich-text editor registration does not enumerate system fonts");
   const entryImports = fixture.moduleImports
     .filter(({ from }) => from === "main.tsx")
     .map(({ specifier }) => specifier);

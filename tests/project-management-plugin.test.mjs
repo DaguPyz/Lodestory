@@ -238,6 +238,8 @@ test("new-document and rename commands validate sessions, busy operations, and t
     "a stale new-document request cannot open a dialog in the current session");
   assert.equal(await f.shortcuts.execute(f.shortcutCommandIds.newDocument, {sessionId: f.session.id, parentPath: "missing"}), false,
     "new-document commands validate that the parent is still a directory");
+  assert.equal(await f.shortcuts.execute(f.shortcutCommandIds.newDocument, {sessionId: f.session.id, extension: "txt"}), false,
+    "new-document commands do not accept per-format creation arguments");
   f.setWorkbench({busy: true});
   assert.equal(await f.shortcuts.invokeKeyboard(f.shortcutCommandIds.newDocument, undefined), false,
     "new-document commands stay disabled while the workbench is busy");

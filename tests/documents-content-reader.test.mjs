@@ -122,8 +122,8 @@ test("switch, save, saveAll, saveAs, close and leave flush into the shared buffe
   assert.equal(store.disk.get("one-copy.txt"), "explicit target text");
   assert.equal(text(workspace, "one.txt").content, oneText);
 
-  await workspace.service.saveAs(one, "one-copy.lode", "converted envelope");
-  assert.equal(store.disk.get("one-copy.lode"), "converted envelope", "saveAs persists the caller's converted target content");
+  await assert.rejects(workspace.service.saveAs(one, "one-copy.lode", "converted envelope"), /另存文件名或内容无效/);
+  assert.equal(store.disk.has("one-copy.lode"), false, "saveAs cannot create a non-TXT document");
   assert.equal(text(workspace, "one.txt").content, oneText, "saveAs also flushes the source editor into its existing buffer");
 
   let twoText = "edited two";

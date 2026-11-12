@@ -31,7 +31,7 @@ function fixture({ desktop = true, result = [], failure } = {}) {
 }
 
 test("the project files API lists entries through the desktop command for its project", async () => {
-  const entries = [{ path: "chapters", name: "chapters", children: [{ path: "chapters/one.md", name: "one.md" }] }];
+  const entries = [{ path: "chapters", name: "chapters", children: [{ path: "chapters/one.txt", name: "one.txt" }] }];
   const api = fixture({ result: entries });
 
   assert.deepEqual(await api.listDocuments("/stories/book"), entries);

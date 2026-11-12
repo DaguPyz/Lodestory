@@ -26,13 +26,13 @@ export function createProjectManagementPlugin(): Plugin {
             let removeParticipant: (() => Promise<void>) | undefined;
             let active = true;
             context.provide(projectDocumentCatalogKey, {getCatalog: sessionId => active ? models.get(sessionId) ?? null : null});
-            const validCreateArgs = (args: unknown): args is {sessionId?: string; parentPath?: string; extension?: "txt" | "md" | "lode"} => {
+            const validCreateArgs = (args: unknown): args is {sessionId?: string; parentPath?: string} => {
                 if (args === undefined) return true;
                 if (!args || typeof args !== "object") return false;
                 const value = args as Record<string, unknown>;
-                return (value.sessionId === undefined || typeof value.sessionId === "string")
-                    && (value.parentPath === undefined || typeof value.parentPath === "string")
-                    && (value.extension === undefined || value.extension === "txt" || value.extension === "md" || value.extension === "lode");
+                return Object.keys(value).every(key => key === "sessionId" || key === "parentPath")
+                    && (value.sessionId === undefined || typeof value.sessionId === "string")
+                    && (value.parentPath === undefined || typeof value.parentPath === "string");
             };
             const entryExists = (entries: readonly ProjectTreeEntry[], path: string): boolean => {
                 for (const entry of entries) {
@@ -82,7 +82,7 @@ export function createProjectManagementPlugin(): Plugin {
                         const state = workbench.getSnapshot();
                         const sessionId = args?.sessionId ?? state.session?.id;
                         if (!sessionId) return;
-                        models.get(sessionId)?.requestCreate(args?.parentPath, args?.extension);
+                        models.get(sessionId)?.requestCreate(args?.parentPath);
                     },
                 }));
                 removers.push(shortcuts.registerBinding({id: "project-management.new-document", commandId: shortcutCommandIds.newDocument,

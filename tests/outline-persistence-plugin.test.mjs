@@ -250,16 +250,16 @@ test("outline persists only list fields through shared project bytes and reads t
   const workspace = documents.getWorkspace(session.id);
   const projectFiles = storage.getFiles(session.id);
   assert.ok(projectFiles, "project storage exposes the canonical project byte buffers");
-  disk.set(keyOf(project.path, "第一章.md"), bytesOf("正文原文"));
-  assert.equal(await workspace.open("第一章.md"), true);
+  disk.set(keyOf(project.path, "第一章.txt"), bytesOf("正文原文"));
+  assert.equal(await workspace.open("第一章.txt"), true);
   const documentId = workspace.getSnapshot().documents[0].id;
   assert.equal(workspace.getSnapshot().documents[0].content, "正文原文");
   assert.equal(workspace.update(documentId, "正文与存储共享的内容"), true);
   assert.equal(workspace.getSnapshot().documents[0].content, "正文与存储共享的内容", "documents workspace reads the canonical project-storage buffer");
-  const storedBody = projectFiles.getSnapshot().files.find(file => file.path === "第一章.md");
+  const storedBody = projectFiles.getSnapshot().files.find(file => file.path === "第一章.txt");
   assert.equal(new TextDecoder().decode(new Uint8Array(storedBody.bytes)), "正文与存储共享的内容", "document edits update the same storage-owned byte buffer");
   assert.equal(await workspace.save(documentId), true);
-  assert.equal(new TextDecoder().decode(new Uint8Array(disk.get(keyOf(project.path, "第一章.md")))), "正文与存储共享的内容");
+  assert.equal(new TextDecoder().decode(new Uint8Array(disk.get(keyOf(project.path, "第一章.txt")))), "正文与存储共享的内容");
   const documentSnapshot = workspace.getSnapshot();
   const firstModel = model();
   assert.equal(firstModel.getSnapshot().loaded, true);
@@ -469,7 +469,7 @@ test("timeline summaries reuse unchanged entries and only scan the changed timel
   let notifications = 0;
   const unsubscribe = list.subscribe(() => notifications++);
   try {
-    assert.ok(await storage.getFiles(sessionId).create("无关正文.md", Array.from(new TextEncoder().encode("正文"))));
+    assert.ok(await storage.getFiles(sessionId).create("无关正文.txt", Array.from(new TextEncoder().encode("正文"))));
     assert.strictEqual(list.getSnapshot(), before, "unrelated bytes preserve the public list snapshot");
     assert.equal(notifications, 0);
     assert.equal(timelines.open(sessionId, firstId), true);

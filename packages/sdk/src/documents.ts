@@ -33,17 +33,17 @@ export type DocumentSnapshot = Readonly<{
 export type DocumentWorkspace = {
   getSnapshot(): DocumentSnapshot;
   subscribe(listener: () => void): () => void;
-  /** 已打开时复用；迟到的打开结果不得抢回更新的选择。 */
+  /** 打开 TXT 文档，已打开时复用。迟到的打开结果不得抢回更新的选择。 */
   open(path: string): Promise<boolean>;
   /** Searchable committed text without opening a tab, flushing an editor, or creating a persistent file buffer. */
   readSearchText(path: string, signal?: AbortSignal): Promise<string | null>;
-  /** 创建后加入打开列表；返回实际文件名和路径，失败返回 null。 */
+  /** 创建 TXT 文档并加入打开列表。名称缺少 .txt 时自动追加，失败返回 null。 */
   create(parentPath: string, name: string): Promise<OpenDocument | null>;
   /** 在现有目录下创建单层子目录；不覆盖或递归创建。 */
   createDirectory(parentPath: string, name: string): Promise<string | null>;
-  /** Rename a project-relative file or directory; open descendant documents keep their tabs and selection. */
+  /** Rename a TXT document or project directory. Open descendant documents keep their tabs and selection. */
   renamePath(fromPath: string, toPath: string): Promise<boolean>;
-  /** 将当前文档内容另存为同目录的新文档，并在成功后打开新文档。 */
+  /** 将正文另存为同目录的 TXT 文档，并在成功后打开新文档。 */
   saveAs(documentId: string, fileName: string, content: string): Promise<void>;
   /** 删除项目内的受支持文档；有未保存更改时须显式确认丢弃。 */
   deleteDocument(path: string, options?: { discardChanges?: boolean }): Promise<boolean>;

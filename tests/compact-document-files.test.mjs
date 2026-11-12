@@ -237,7 +237,7 @@ test("TXT reads decode compact bytes without materializing bytes arrays and reta
   adapter.dispose();
 });
 
-test("TXT updates and creates use the compact option; projections reuse views while MD and Lode keep old calls", async () => {
+test("the document adapter only reads, writes and creates TXT paths", async () => {
   resetMetrics();
   const txtPath = "chapters/one.txt";
   const mdPath = "chapters/two.md";
@@ -272,18 +272,13 @@ test("TXT updates and creates use the compact option; projections reuse views wh
   assert.equal(storage.calls.capturedViews[0].equals(bytesOf(nextText)), true,
     "the captured compact view is isolated from the temporary TextEncoder array");
 
-  await adapter.open(mdPath);
-  assert.equal(storage.calls.read.at(-1).length, 1, "Markdown retains the previous read call shape");
-  assert.equal(storage.calls.read.at(-1)[0], mdPath);
-  await adapter.open(lodePath);
-  assert.equal(storage.calls.read.at(-1).length, 1, "rich envelope files retain the previous read call shape");
-  assert.equal(storage.calls.read.at(-1)[0], lodePath);
-  assert.equal(adapter.update(mdPath, "edited markdown"), true);
-  assert.equal(storage.calls.write.at(-1).length, 2, "Markdown does not opt into compact writes");
-  assert.equal(storage.calls.write.at(-1)[0], mdPath);
-  assert.equal(adapter.update(lodePath, "edited envelope"), true);
-  assert.equal(storage.calls.write.at(-1).length, 2, "rich envelope files do not opt into compact writes");
-  assert.equal(storage.calls.write.at(-1)[0], lodePath);
+  const readsBeforeUnsupported = storage.calls.read.length;
+  assert.equal(await adapter.open(mdPath), null);
+  assert.equal(await adapter.open(lodePath), null);
+  assert.equal(storage.calls.read.length, readsBeforeUnsupported, "unsupported paths never reach storage");
+  assert.equal(adapter.update(mdPath, "edited markdown"), false);
+  assert.equal(adapter.update(lodePath, "edited envelope"), false);
+  assert.equal(storage.calls.write.length, 1, "unsupported paths never reach storage writes");
   assert.equal(storage.calls.capture.length, 1, "only TXT updates call the optional compact capture method");
 
   const createdTxt = await adapter.create("chapters", "new.txt", "new TXT");
@@ -291,10 +286,9 @@ test("TXT updates and creates use the compact option; projections reuse views wh
   assert.equal(storage.calls.create.at(-1)[0], "chapters/new.txt");
   assert.equal(storage.calls.create.at(-1).length, 3);
   assert.equal(storage.calls.create.at(-1)[2].preferByteView, true);
-  const createdLode = await adapter.create("chapters", "new.lode", "new envelope");
-  assert.equal(createdLode.content, "new envelope");
-  assert.equal(storage.calls.create.at(-1)[0], "chapters/new.lode");
-  assert.equal(storage.calls.create.at(-1).length, 2, "rich create retains the prior call shape");
+  const createsBeforeUnsupported = storage.calls.create.length;
+  assert.equal(await adapter.create("chapters", "new.lode", "new envelope"), null);
+  assert.equal(storage.calls.create.length, createsBeforeUnsupported, "unsupported paths never reach storage creation");
   adapter.dispose();
 });
 

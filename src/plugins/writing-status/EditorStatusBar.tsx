@@ -4,7 +4,7 @@ import type {OpenDocument} from "@lodestory/sdk/documents";
 import {countDocumentCharacters} from "./countDocumentCharacters";
 import {startChunkedCharacterCount} from "./chunkedCharacterCount";
 
-const LARGE_PLAIN_TEXT_THRESHOLD = 1024 * 1024;
+const LARGE_TEXT_THRESHOLD = 1024 * 1024;
 type AsyncCountResult = Readonly<{request: object; count?: number; failed?: true}>;
 
 export function EditorStatusBar({document, text, showDocumentDetails = true}: {
@@ -13,24 +13,23 @@ export function EditorStatusBar({document, text, showDocumentDetails = true}: {
   showDocumentDetails?: boolean;
 }) {
   const status = document ? {saved: "已保存", pending: "等待保存…", saving: "正在保存…", error: "保存失败"}[document.saveState] : "未打开文稿";
-  const isLargePlainText = document !== undefined && /\.txt$/i.test(document.fileName)
-    && text !== undefined && text.length >= LARGE_PLAIN_TEXT_THRESHOLD;
-  const request = useMemo(() => ({}), [document?.id, text, showDocumentDetails, isLargePlainText]);
+  const isLargeText = document !== undefined && text !== undefined && text.length >= LARGE_TEXT_THRESHOLD;
+  const request = useMemo(() => ({}), [document?.id, text, showDocumentDetails, isLargeText]);
   const [asyncResult, setAsyncResult] = useState<AsyncCountResult | null>(null);
   useEffect(() => {
-    if (!showDocumentDetails || !isLargePlainText || text === undefined) return;
+    if (!showDocumentDetails || !isLargeText || text === undefined) return;
     return startChunkedCharacterCount(text,
       count => setAsyncResult({request, count}),
       () => setAsyncResult({request, failed: true}));
-  }, [request, showDocumentDetails, isLargePlainText, text]);
+  }, [request, showDocumentDetails, isLargeText, text]);
 
   const count = useMemo(() => {
-    if (!showDocumentDetails || text === undefined || isLargePlainText) return undefined;
+    if (!showDocumentDetails || text === undefined || isLargeText) return undefined;
     return countDocumentCharacters(text);
-  }, [showDocumentDetails, text, isLargePlainText]);
-  const currentAsyncResult = isLargePlainText && asyncResult?.request === request ? asyncResult : null;
+  }, [showDocumentDetails, text, isLargeText]);
+  const currentAsyncResult = isLargeText && asyncResult?.request === request ? asyncResult : null;
   const countLabel = count !== undefined ? `${count.toLocaleString("zh-CN")} 字`
-    : isLargePlainText ? currentAsyncResult?.count !== undefined
+    : isLargeText ? currentAsyncResult?.count !== undefined
       ? `${currentAsyncResult.count.toLocaleString("zh-CN")} 字`
       : currentAsyncResult?.failed ? "统计失败" : "统计中…"
     : "—";

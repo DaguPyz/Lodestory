@@ -146,8 +146,8 @@ function textContent(node) {
   return node.props ? textContent(node.props.children) : "";
 }
 
-function document(id, fileName = "story.txt") {
-  return {id, fileName, saveState: "pending"};
+function document(id) {
+  return {id, fileName: "story.txt", saveState: "pending"};
 }
 
 test("small text stays synchronous and large plain text starts with an explicit pending label", async () => {
@@ -188,18 +188,14 @@ test("large TXT completion uses the current document and text version only", asy
   assert.equal(harness.React.stateUpdates, updatesBeforeUnmount, "unmounted task cannot publish");
 });
 
-test("large Markdown remains synchronous and hidden document details skip counting", async () => {
+test("hidden document details skip counting", async () => {
   let syncCalls = 0;
   const scheduler = createScheduler();
   const harness = await loadHarness({scheduler, counter: () => { syncCalls++; return 17; }});
-  const largeMarkdown = {document: document("md", "story.md"), text: "x".repeat(1024 * 1024)};
-  assert.match(textContent(harness.render(largeMarkdown)), /文稿 17 字/);
-  assert.equal(syncCalls, 1);
-
   const hidden = {document: document("hidden"), text: "x".repeat(1024 * 1024), showDocumentDetails: false};
   const hiddenText = textContent(harness.render(hidden));
   assert.doesNotMatch(hiddenText, /文稿|字/);
-  assert.equal(syncCalls, 1);
+  assert.equal(syncCalls, 0);
   assert.equal(scheduler.channels.length, 0, "hidden status does not start a large TXT task");
 });
 

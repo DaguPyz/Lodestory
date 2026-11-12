@@ -9,7 +9,7 @@ const ts = require("typescript");
 
 async function fixture() {
   let entries = [{path: "chapters", name: "chapters", children: [
-    {path: "chapters/old.md", name: "old.md"},
+    {path: "chapters/old.txt", name: "old.txt"},
   ]}];
   let state = {documents: [], activeId: null, blocked: false, creating: false,
     deletingPath: null, openingPath: null, error: null};
@@ -67,18 +67,15 @@ async function fixture() {
     setError(error) { state = {...state, error}; }};
 }
 
-test("default creation remains unchanged and quick creation selects the requested format", async () => {
+test("document creation passes the entered title to the documents workspace unchanged", async () => {
   const {model, calls} = await fixture();
   assert.equal(model.requestCreate("chapters"), true);
   await model.create("chapters", "默认文档");
   assert.deepEqual(calls.documents[0], ["chapters", "默认文档"]);
-  for (const extension of ["txt", "md", "lode"]) {
-    assert.equal(model.requestCreate("chapters", extension), true);
-    assert.equal(model.getSnapshot().createExtension, extension);
-    await model.create("chapters", "新章节.markdown");
-    assert.deepEqual(calls.documents.at(-1), ["chapters", `新章节.${extension}`]);
-    assert.equal(model.getSnapshot().dialogOpen, false);
-  }
+  assert.equal(model.requestCreate("chapters"), true);
+  await model.create("chapters", "卷一.初稿");
+  assert.deepEqual(calls.documents.at(-1), ["chapters", "卷一.初稿"], "project management leaves naming and extension rules to documents");
+  assert.equal(model.getSnapshot().dialogOpen, false);
   model.dispose();
 });
 
@@ -91,7 +88,6 @@ test("folder creation delegates to the directory capability without creating a d
   });
   assert.equal(model.requestCreateDirectory("chapters"), true);
   assert.equal(model.getSnapshot().createKind, "directory");
-  assert.equal(model.getSnapshot().createExtension, null);
   assert.ok(visibleKinds.every(kind => kind === "directory"), "subscribers never see a document dialog for folder creation");
   await model.create("chapters", "人物");
   assert.deepEqual(calls.directories, [["chapters", "人物"]]);
@@ -104,9 +100,9 @@ test("folder creation delegates to the directory capability without creating a d
 test("delete requests only show confirmation and cancellation does not touch the file", async () => {
   const {model, calls} = await fixture();
   assert.equal(model.requestDelete("chapters"), false, "folders cannot be deleted by the document action");
-  assert.equal(model.requestDelete("missing.md"), false);
-  assert.equal(model.requestDelete("chapters/old.md"), true);
-  assert.equal(model.getSnapshot().deletePath, "chapters/old.md");
+  assert.equal(model.requestDelete("missing.txt"), false);
+  assert.equal(model.requestDelete("chapters/old.txt"), true);
+  assert.equal(model.getSnapshot().deletePath, "chapters/old.txt");
   assert.deepEqual(calls.deletes, []);
   assert.equal(model.closeDeleteDialog(), true);
   assert.deepEqual(calls.deletes, []);
@@ -118,13 +114,13 @@ test("confirmed deletion is single-flight, passes discard consent and refreshes 
   const {model, calls, setDelete} = await fixture();
   let finish;
   setDelete(() => new Promise(resolve => { finish = resolve; }));
-  model.requestDelete("chapters/old.md");
+  model.requestDelete("chapters/old.txt");
   const pending = model.confirmDelete();
   assert.equal(model.getSnapshot().deleting, true);
   assert.equal(model.closeDeleteDialog(), false);
   assert.equal(model.requestCreateDirectory(""), false);
   await model.confirmDelete();
-  assert.deepEqual(calls.deletes, [["chapters/old.md", true]]);
+  assert.deepEqual(calls.deletes, [["chapters/old.txt", true]]);
   finish(true);
   await pending;
   assert.equal(model.getSnapshot().deletePath, null);
@@ -136,12 +132,12 @@ test("confirmed deletion is single-flight, passes discard consent and refreshes 
 test("failed deletion keeps the confirmation and tree entry available for retry", async () => {
   const {model, calls, setDelete, setError} = await fixture();
   setDelete(async () => { setError("磁盘文件已变化"); return false; });
-  model.requestDelete("chapters/old.md");
+  model.requestDelete("chapters/old.txt");
   await model.confirmDelete();
   assert.equal(model.getSnapshot().deleteError, "磁盘文件已变化");
-  assert.equal(model.getSnapshot().deletePath, "chapters/old.md");
+  assert.equal(model.getSnapshot().deletePath, "chapters/old.txt");
   assert.equal(model.getSnapshot().deleting, false);
-  assert.equal(model.getSnapshot().entries[0].children[0].path, "chapters/old.md");
+  assert.equal(model.getSnapshot().entries[0].children[0].path, "chapters/old.txt");
   setDelete(async () => true);
   await model.confirmDelete();
   assert.equal(calls.deletes.length, 2);

@@ -4,7 +4,7 @@ import {createServiceKey} from "./ServiceKey.js";
 import type {PluginContribution} from "./Plugin.js";
 
 /** 持久化到文档工作区的正文格式。 */
-export type EditorFormat = "markdown" | "plain-text" | "rich-delta";
+export type EditorFormat = "plain-text";
 
 /** 正文编辑插件登记到布局服务的主内容 ID；消费者可据此关联正文专属 UI。 */
 export const bodyEditorContentIds = Object.freeze({main: "body-editor.main"} as const);
@@ -44,8 +44,6 @@ export type EditorProps = Readonly<{
     onReady(handle: EditorHandle | null): void;
     /** 编辑器初始化或运行错误；宿主负责显示并保留原始内容。 */
     onError(error: Error): void;
-    /** 请求把当前内容另存为指定扩展名的独立文档。 */
-    onSaveAs?(request: Readonly<{ extension: string; content: string }>): Promise<void>;
 }>;
 
 /** 一个编辑器实现声明其支持的格式，并按需异步加载组件。 */
@@ -57,22 +55,7 @@ export type EditorDefinition = Readonly<{
     getText?(content: string, format: EditorFormat): string;
     /** Visible text used for project search; defaults to getText when omitted. */
     getSearchText?(content: string, format: EditorFormat, signal?: AbortSignal): string | Promise<string>;
-    /** 可由宿主展示的内容转换；转换器属于声明目标格式的插件。 */
-    conversions?: readonly EditorConversion[];
-    /** 声明本实现替代的旧注册 ID 与格式；用于透明迁移已保存的编辑器映射。 */
-    replaces?: readonly EditorReplacement[];
     load(): Promise<{ default: ComponentType<EditorProps> }>;
-}>;
-
-export type EditorReplacement = Readonly<{id: string; format: EditorFormat}>;
-
-/** 格式插件贡献的转换操作；宿主负责调用 onSaveAs 持久化转换结果。 */
-export type EditorConversion = Readonly<{
-    id: string;
-    label: string;
-    from: EditorFormat;
-    extension: string;
-    convert(content: string): string;
 }>;
 
 /** 正文宿主使用的编辑器注册表能力。 */
@@ -91,7 +74,7 @@ export const bodyEditorKey = createServiceKey<BodyEditorService>("app/body-edito
 /** 默认编辑器映射在启动时读取，修改后重启生效。 */
 export const bodyEditorDefaultEditorsConfig: ConfigItem<Readonly<Record<string, string>>> = Object.freeze({
     id: "bodyEditor.defaultEditors",
-    defaultValue: Object.freeze({markdown: "textarea", "plain-text": "textarea"}),
+    defaultValue: Object.freeze({"plain-text": "plain-text"}),
     effect: "restart",
     validate: (value: unknown): value is Readonly<Record<string, string>> => {
         if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -99,7 +82,6 @@ export const bodyEditorDefaultEditorsConfig: ConfigItem<Readonly<Record<string, 
         if (prototype !== null && (Object.getPrototypeOf(prototype) !== null
             || prototype.constructor?.name !== "Object")) return false;
         return Object.entries(value).every(([format, id]) =>
-            (format === "markdown" || format === "plain-text" || format === "rich-delta")
-            && typeof id === "string" && id.trim().length > 0);
+            format === "plain-text" && typeof id === "string" && id.trim().length > 0);
     },
 });

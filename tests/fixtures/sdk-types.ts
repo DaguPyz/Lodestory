@@ -181,9 +181,11 @@ const plugin: Plugin = {
     // @ts-expect-error Canvas service exposes generic viewports, not outline business data.
     canvas.createTimeline("timeline-1");
     const removeEditor: () => void = bodyEditor.registerEditor({
-      id: "example.markdown",
-      formats: ["markdown"],
+      id: "example.plain-text",
+      formats: ["plain-text"],
       getText(content: string, format: EditorFormat): string {
+        const plainTextFormat: "plain-text" = format;
+        void plainTextFormat;
         void format;
         return content;
       },
@@ -196,15 +198,15 @@ const plugin: Plugin = {
           const handle: EditorHandle = {focus() {}};
           props.onReady(handle);
           props.onError(new Error("editor example"));
-          const saveAs: Promise<void> | undefined = props.onSaveAs?.({extension: ".lode", content});
           void active;
           void readOnly;
-          void saveAs;
           return null;
         };
         return {default: Editor};
       },
     });
+    // @ts-expect-error Markdown is not a supported editor format.
+    bodyEditor.registerEditor({id: "example.markdown", formats: ["markdown"], async load() { return {default: () => null}; }});
     const workspace: DocumentWorkspace | null = documents.getWorkspace("session-1");
     // @ts-expect-error Generic files do not belong to DocumentsService.
     documents.getFiles("session-1");
@@ -228,7 +230,7 @@ const plugin: Plugin = {
     }
     if (workspace) {
       const snapshot: DocumentSnapshot = workspace.getSnapshot();
-      const opened: Promise<boolean> = workspace.open("chapters/one.md");
+      const opened: Promise<boolean> = workspace.open("chapters/one.txt");
       const created: Promise<OpenDocument | null> = workspace.create("chapters", "新章节");
       const selected: boolean = workspace.select("document-1");
       const updated: boolean = workspace.update("document-1", "正文");

@@ -24,8 +24,6 @@ test("plain text editor registers only TXT and loads its own component on demand
   const definition = definitions.get("plain-text");
   assert.ok(definition);
   assert.deepEqual(Array.from(definition.formats), ["plain-text"]);
-  assert.deepEqual(Array.from(definition.replaces, replacement => ({id: replacement.id, format: replacement.format})),
-    [{id: "quill", format: "plain-text"}]);
   assert.equal(definition.getText("\uFEFFa\r\nb", "plain-text"), "\uFEFFa\r\nb");
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "./PlainTextEditor"), false,
     "registering TXT support does not load the editor component");

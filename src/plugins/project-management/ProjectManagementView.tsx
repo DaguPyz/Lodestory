@@ -39,8 +39,8 @@ function ProjectFilesForSession({workbench, model, active, shortcuts}: {
     lastRename={snapshot.lastRename}
     onOpenDocument={path => model.openDocument(path)}
     onSelectFolder={path => { model.selectFolder(path); }}
-    onNewDocument={(parentPath, extension) => { void shortcuts.execute(shortcutCommandIds.newDocument,
-      {sessionId: snapshot.sessionId, parentPath, extension}).catch(error => console.error("Could not execute new-document command.", error)); }}
+    onNewDocument={parentPath => { void shortcuts.execute(shortcutCommandIds.newDocument,
+      {sessionId: snapshot.sessionId, parentPath}).catch(error => console.error("Could not execute new-document command.", error)); }}
     onNewDirectory={parentPath => { model.requestCreateDirectory(parentPath); }}
     onDeleteDocument={path => { model.requestDelete(path); }}
     onRename={path => { void shortcuts.execute(shortcutCommandIds.renameEntry, {sessionId: snapshot.sessionId, path})
@@ -94,7 +94,6 @@ function ProjectDialogsForSession({workbench, model}: {workbench: WorkbenchServi
       open={snapshot.dialogOpen}
       initialParent={snapshot.selectedFolder}
       kind={snapshot.createKind}
-      extension={snapshot.createExtension}
       busy={workbenchState.busy || snapshot.blocked || snapshot.creating}
       error={snapshot.createError}
       onClose={() => { model.closeCreateDialog(); }}

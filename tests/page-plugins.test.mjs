@@ -419,29 +419,31 @@ test("project file UI and the independent dialog wrapper connect through the SDK
   assert.equal(dialogView.props.open, true);
   assert.equal(dialogView.props.model, projectModel);
 
-  await projectModel.create("", "第二章.md");
+  await projectModel.create("", "第二章.txt");
   await flushStartup();
   const snapshot = workspace.getSnapshot();
   assert.equal(snapshot.documents.length, 1);
-  assert.ok(snapshot.documents.some(document => document.path === "第二章.md"));
-  assert.equal(snapshot.activeId, encodeURIComponent("第二章.md"));
+  assert.ok(snapshot.documents.some(document => document.path === "第二章.txt"));
+  assert.equal(snapshot.activeId, encodeURIComponent("第二章.txt"));
   assert.ok(layout.getSnapshot().shownIds.includes("body-editor.main"), "creating a document should reveal the body editor main content");
-  assert.ok(fixture.tauriCalls.some(({command, args}) => command === "create_project_file" && args.path === "第二章.md"));
-  assert.equal(projectModel.getSnapshot().activeDocumentPath, "第二章.md");
+  assert.ok(fixture.tauriCalls.some(({command, args}) => command === "create_project_file_base64" && args.path === "第二章.txt"));
+  assert.equal(projectModel.getSnapshot().activeDocumentPath, "第二章.txt");
 });
 
 test("a failed document save blocks project close and keeps the draft available for retry", async () => {
   let failWrites = true;
+  const original = Buffer.from("原文");
   const fixture = await startFixture({
     invokeHandler(command, args) {
       if (command === "list_documents") return [];
       if (command === "list_project_directory") return {exists: false, entries: [], issues: []};
-      if (command === "read_project_file") return {path: args.path, fileName: args.path.split("/").at(-1), bytes: Array.from(new TextEncoder().encode("原文"))};
-      if (command === "save_project_file") {
+      if (command === "read_project_file_base64") {
+        return {path: args.path, fileName: args.path.split("/").at(-1), bytesBase64: original.toString("base64"), byteLength: original.length};
+      }
+      if (command === "save_project_file_binary") {
         if (failWrites) throw new Error("磁盘写入失败");
         return undefined;
       }
-      if (command === "create_project_file") return {path: args.path, fileName: args.path.split("/").at(-1), bytes: args.bytes};
       throw new Error(`Unexpected command: ${command}`);
     },
   });
@@ -453,7 +455,7 @@ test("a failed document save blocks project close and keeps the draft available 
   const sessionId = workbench.getSnapshot().session.id;
   const workspace = documents.getWorkspace(sessionId);
   assert.ok(workspace);
-  assert.equal(await workspace.open("第一章.md"), true);
+  assert.equal(await workspace.open("第一章.txt"), true);
   await flushStartup();
   const document = workspace.getSnapshot().documents[0];
   assert.equal(workspace.update(document.id, "未保存的修改"), true);
@@ -479,12 +481,13 @@ test("a delayed document reveal request cannot replace a newer selection or its 
     activate(context) { sender = context; },
   }], invokeHandler(command, args) {
     if (command === "list_documents") return [
-      {path: "old", name: "old", children: [{path: "old/第一章.md", name: "第一章.md"}]},
-      {path: "current", name: "current", children: [{path: "current/第二章.md", name: "第二章.md"}]},
+      {path: "old", name: "old", children: [{path: "old/第一章.txt", name: "第一章.txt"}]},
+      {path: "current", name: "current", children: [{path: "current/第二章.txt", name: "第二章.txt"}]},
     ];
     if (command === "list_project_directory") return {exists: false, entries: [], issues: []};
-      if (command === "read_project_file") return {path: args.path, fileName: args.path.split("/").at(-1), bytes: []};
-    if (command === "save_project_file") return undefined;
+    if (command === "read_project_file_base64") {
+      return {path: args.path, fileName: args.path.split("/").at(-1), bytesBase64: "", byteLength: 0};
+    }
     return undefined;
   }});
   const workbench = getWorkbench(fixture);
@@ -494,9 +497,9 @@ test("a delayed document reveal request cannot replace a newer selection or its 
   await flushStartup();
   const sessionId = workbench.getSnapshot().session.id;
   const workspace = fixture.getService(documentsKey).getWorkspace(sessionId);
-  await workspace.open("old/第一章.md");
+  await workspace.open("old/第一章.txt");
   const oldId = workspace.getSnapshot().activeId;
-  await workspace.open("current/第二章.md");
+  await workspace.open("current/第二章.txt");
   const currentId = workspace.getSnapshot().activeId;
   await flushStartup();
   const model = renderProjectManagementModel(fixture, layout, sessionId);
@@ -508,7 +511,7 @@ test("a delayed document reveal request cannot replace a newer selection or its 
 
   assert.equal(workspace.getSnapshot().activeId, currentId);
   assert.equal(model.getSnapshot().selectedFolder, "current");
-  assert.equal(model.getSnapshot().activeDocumentPath, "current/第二章.md");
+  assert.equal(model.getSnapshot().activeDocumentPath, "current/第二章.txt");
   assert.ok(!layout.getSnapshot().shownIds.includes("body-editor.main"));
 });
 
@@ -520,7 +523,7 @@ test("project switching releases the old document handle and starts an isolated 
   const firstSessionId = workbench.getSnapshot().session.id;
   const firstWorkspace = documents.getWorkspace(firstSessionId);
   assert.ok(firstWorkspace);
-  const created = await firstWorkspace.create("", "第一章.md");
+  const created = await firstWorkspace.create("", "第一章.txt");
   assert.ok(created);
 
   assert.equal(await openWorkbenchProject(workbench, project("novel-second", "第二本", "/stories/second")), true);

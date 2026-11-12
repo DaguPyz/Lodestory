@@ -1,12 +1,11 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import { Dialog, TextField } from "@lodestory/ui";
-import type { CreateEntryKind, DocumentExtension } from "./projectManagementModel";
+import type { CreateEntryKind } from "./projectManagementModel";
 
 type NewDocumentDialogProps = {
   open?: boolean;
   initialParent: string;
   kind?: CreateEntryKind;
-  extension?: DocumentExtension | null;
   busy: boolean;
   error: string | null;
   onClose: () => void;
@@ -14,13 +13,13 @@ type NewDocumentDialogProps = {
   onCreate: (parentPath: string, name: string) => Promise<void>;
 };
 
-export function NewDocumentDialog({ open = true, initialParent, kind = "document", extension, busy, error, onClose, onCloseComplete, onCreate }: NewDocumentDialogProps) {
+export function NewDocumentDialog({ open = true, initialParent, kind = "document", busy, error, onClose, onCloseComplete, onCreate }: NewDocumentDialogProps) {
   const [name, setName] = useState("");
   const [parentPath, setParentPath] = useState(initialParent);
   const previousOpen = useRef(open);
   const input = useRef<HTMLInputElement>(null);
   const directory = kind === "directory";
-  const title = directory ? "新建文件夹" : extension ? `新建 ${extension === "lode" ? "富文本" : extension.toUpperCase()} 文档` : "新建文档";
+  const title = directory ? "新建文件夹" : "新建文档";
 
   useLayoutEffect(() => {
     if (open && !previousOpen.current) {

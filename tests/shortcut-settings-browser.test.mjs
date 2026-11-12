@@ -40,7 +40,7 @@ test("shortcut settings record, persist, reject conflicts, and restore a working
     await page.getByLabel("新建文档的新快捷键").waitFor();
   };
 
-  await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/tests/fixtures/project-index.html?scenario=save-as-conflict`);
+  await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/tests/fixtures/project-index.html`);
   await openSettings();
   await edit();
   await page.getByLabel("新建文档的新快捷键").press(`${modifier}+Shift+N`);

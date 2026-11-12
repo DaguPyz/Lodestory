@@ -239,7 +239,11 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
     }
 
     function completeDocumentName(name: string) {
-        return /\.(?:md|markdown|txt|lode)$/i.test(name) ? name : `${name}.md`;
+        return /\.txt$/i.test(name) ? name : `${name}.txt`;
+    }
+
+    function isTextDocumentPath(path: string) {
+        return /\.txt$/i.test(path);
     }
 
     function install(file: DocumentTextFile, publishChanges = true) {
@@ -419,8 +423,8 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
         },
         open(path: string) {
             if (blocked()) return Promise.resolve(false);
-            if (!validPath(path)) {
-                localError = "文档路径必须位于项目目录内。";
+            if (!validPath(path) || !isTextDocumentPath(path)) {
+                localError = !validPath(path) ? "文档路径必须位于项目目录内。" : "只支持打开 TXT 文档。";
                 publish();
                 return Promise.resolve(false);
             }
@@ -542,15 +546,6 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
                     const rewrite = (path: string) => path === fromPath ? toPath
                         : path.startsWith(`${fromPath}/`) ? `${toPath}${path.slice(fromPath.length)}` : null;
                     const pathsToSave = openPaths.filter(path => rewrite(path) !== null);
-                    for (const path of pathsToSave) {
-                        if (path !== fromPath) continue;
-                        const oldExtension = /\.[^./]+$/.exec(path)?.[0]?.toLocaleLowerCase();
-                        const newExtension = /\.[^./]+$/.exec(toPath)?.[0]?.toLocaleLowerCase();
-                        if (oldExtension !== newExtension) {
-                            localError = "重命名已打开的文档时不能更改文件扩展名。";
-                            return false;
-                        }
-                    }
                     if (!flushOpenContentReadersFor(pathsToSave)) return false;
                     // Re-read after React has observed the lock; any edits that still arrive
                     // while the native rename is pending are journaled by update() below.
@@ -592,7 +587,7 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
             }
             if (typeof content !== "string" || typeof fileName !== "string" || !fileName.trim()
                 || fileName !== fileName.trim() || fileName.startsWith(".") || /[\\/:\u0000-\u001f]/.test(fileName)
-                || !/\.(md|markdown|txt|lode)$/i.test(fileName)) {
+                || !/\.txt$/i.test(fileName)) {
                 return Promise.reject(new Error("另存文件名或内容无效。"));
             }
             if (!flushContentReader(documentId)) {
@@ -687,6 +682,11 @@ export function createDocumentWorkspace(files: DocumentTextFiles, options: Optio
             if (blocked() || deletingPath !== null || creating) return Promise.resolve(false);
             if (!validPath(path)) {
                 localError = "文档路径必须位于项目目录内。";
+                publish();
+                return Promise.resolve(false);
+            }
+            if (!isTextDocumentPath(path)) {
+                localError = "只支持删除 TXT 文档。";
                 publish();
                 return Promise.resolve(false);
             }

@@ -139,10 +139,10 @@ const idFor = path => encodeURIComponent(path);
 test("documents own tab selection while the text store owns the shared content buffer", async () => {
   const store = createFilesStore();
   const workspace = createWorkspace(store.files);
-  assert.equal(await workspace.service.open("第一章.md"), true);
-  assert.equal(await workspace.service.open("第二章.md"), true);
+  assert.equal(await workspace.service.open("第一章.txt"), true);
+  assert.equal(await workspace.service.open("第二章.txt"), true);
   const first = workspace.service.getSnapshot().documents[0];
-  assert.equal(workspace.service.getSnapshot().activeId, idFor("第二章.md"));
+  assert.equal(workspace.service.getSnapshot().activeId, idFor("第二章.txt"));
   assert.equal(workspace.service.select(first.id), true);
 
   assert.equal(workspace.service.update(first.id, "共享草稿"), true);
@@ -155,7 +155,18 @@ test("documents own tab selection while the text store owns the shared content b
 
   assert.equal(await workspace.service.open(first.path), true);
   assert.equal(workspace.service.getSnapshot().documents.find(file => file.id === first.id).content, "共享草稿");
-  assert.deepEqual(store.calls.filter(([operation]) => operation === "open").map(([, path]) => path), ["第一章.md", "第二章.md", "第一章.md"]);
+  assert.deepEqual(store.calls.filter(([operation]) => operation === "open").map(([, path]) => path), ["第一章.txt", "第二章.txt", "第一章.txt"]);
+  await workspace.dispose();
+});
+
+test("legacy non-TXT documents are rejected without reading or deleting their files", async () => {
+  const store = createFilesStore({disk: new Map([["legacy.md", "keep this file"]])});
+  const workspace = createWorkspace(store.files);
+
+  assert.equal(await workspace.service.open("legacy.md"), false);
+  assert.equal(await workspace.service.deleteDocument("legacy.md", {discardChanges: true}), false);
+  assert.equal(store.calls.some(([operation]) => operation === "open" || operation === "delete"), false);
+  assert.equal(store.disk.get("legacy.md"), "keep this file");
   await workspace.dispose();
 });
 
@@ -168,14 +179,14 @@ test("an accepted open calls storage synchronously and drains before leave", asy
     if (workspace.service.getSnapshot().openingPath) canMutate = false;
   });
 
-  const opening = workspace.service.open("延迟打开.md");
-  assert.deepEqual(store.calls[0], ["open", "延迟打开.md"], "the storage request starts before subscribers can make the workbench busy");
+  const opening = workspace.service.open("延迟打开.txt");
+  assert.deepEqual(store.calls[0], ["open", "延迟打开.txt"], "the storage request starts before subscribers can make the workbench busy");
   const leaving = workspace.beforeLeave();
-  assert.equal(await workspace.service.open("不应接受.md"), false);
+  assert.equal(await workspace.service.open("不应接受.txt"), false);
   gate.resolve();
   assert.equal(await opening, true);
   assert.equal(await leaving, true);
-  assert.deepEqual(Array.from(workspace.service.getSnapshot().documents, file => file.path), ["延迟打开.md"]);
+  assert.deepEqual(Array.from(workspace.service.getSnapshot().documents, file => file.path), ["延迟打开.txt"]);
   await workspace.dispose();
 });
 
@@ -185,11 +196,11 @@ test("create keeps document extension rules and starts the shared store operatio
   let canMutate = true;
   const workspace = createWorkspace(store.files, {canMutate: () => canMutate});
   const creating = workspace.service.create("卷一", "第一章");
-  assert.deepEqual(store.calls[0], ["create", "卷一", "第一章.md", ""]);
+  assert.deepEqual(store.calls[0], ["create", "卷一", "第一章.txt", ""]);
   canMutate = false;
   const leaving = workspace.beforeLeave();
   gate.resolve();
-  assert.equal((await creating).path, "卷一/第一章.md");
+  assert.equal((await creating).path, "卷一/第一章.txt");
   assert.equal(await leaving, true);
   assert.equal(workspace.service.getSnapshot().documents[0].content, "");
   await workspace.dispose();
@@ -198,7 +209,7 @@ test("create keeps document extension rules and starts the shared store operatio
 test("deletion delegates dirty draft confirmation and discards only after explicit confirmation", async () => {
   const store = createFilesStore();
   const workspace = createWorkspace(store.files);
-  const document = await workspace.service.create("", "第一章.md");
+  const document = await workspace.service.create("", "第一章.txt");
   workspace.service.update(document.id, "未保存草稿");
 
   assert.equal(await workspace.service.deleteDocument(document.path), false);
@@ -216,8 +227,8 @@ test("a storage save failure keeps and selects the document, and requests reveal
   const store = createFilesStore();
   const revealed = [];
   const workspace = createWorkspace(store.files, {onReveal: id => revealed.push(id)});
-  const first = await workspace.service.create("", "第一章.md");
-  const second = await workspace.service.create("", "第二章.md");
+  const first = await workspace.service.create("", "第一章.txt");
+  const second = await workspace.service.create("", "第二章.txt");
   workspace.service.update(first.id, "不能丢失的草稿");
   store.setFailSave(true);
 
@@ -234,14 +245,16 @@ test("a storage save failure keeps and selects the document, and requests reveal
   await workspace.dispose();
 });
 
-test("saveAs retains supported formats and rejects missing or unsupported formats", async () => {
+test("saveAs accepts TXT files and rejects non-TXT formats", async () => {
   const store = createFilesStore();
   const workspace = createWorkspace(store.files);
   const source = await workspace.service.create("卷一", "第一章");
-  await workspace.service.saveAs(source.id, "第一章.lode", "rich-delta-envelope");
-  assert.deepEqual(store.calls.find(([operation, , name]) => operation === "create" && name === "第一章.lode"),
-    ["create", "卷一", "第一章.lode", "rich-delta-envelope"]);
-  assert.equal(workspace.service.getSnapshot().documents.some(file => file.path === "卷一/第一章.lode"), true);
+  await workspace.service.saveAs(source.id, "第一章副本.txt", "plain text");
+  assert.deepEqual(store.calls.find(([operation, , name]) => operation === "create" && name === "第一章副本.txt"),
+    ["create", "卷一", "第一章副本.txt", "plain text"]);
+  assert.equal(workspace.service.getSnapshot().documents.some(file => file.path === "卷一/第一章副本.txt"), true);
+  await assert.rejects(workspace.service.saveAs(source.id, "第一章.md", "markdown"), /另存文件名或内容无效/);
+  await assert.rejects(workspace.service.saveAs(source.id, "第一章.lode", "rich text"), /另存文件名或内容无效/);
   await assert.rejects(workspace.service.saveAs(source.id, "bad.exe", "x"), /另存文件名或内容无效/);
   await workspace.dispose();
 });
@@ -249,7 +262,7 @@ test("saveAs retains supported formats and rejects missing or unsupported format
 test("dispose delegates pending save to storage and retains a recoverable snapshot on failure", async () => {
   const store = createFilesStore({failSave: true});
   const workspace = createWorkspace(store.files);
-  const document = await workspace.service.create("", "草稿.md");
+  const document = await workspace.service.create("", "草稿.txt");
   workspace.service.update(document.id, "恢复内容");
   let failure;
   try { await workspace.dispose(); } catch (cause) { failure = cause; }
@@ -263,29 +276,29 @@ test("dispose delegates pending save to storage and retains a recoverable snapsh
 test("a later open supersedes an older read without installing stale membership", async () => {
   const firstGate = deferred();
   const secondGate = deferred();
-  const store = createFilesStore({openGate: path => path === "第一章.md" ? firstGate : secondGate});
+  const store = createFilesStore({openGate: path => path === "第一章.txt" ? firstGate : secondGate});
   const workspace = createWorkspace(store.files);
-  const openingFirst = workspace.service.open("第一章.md");
-  const openingSecond = workspace.service.open("第二章.md");
+  const openingFirst = workspace.service.open("第一章.txt");
+  const openingSecond = workspace.service.open("第二章.txt");
   secondGate.resolve();
   assert.equal(await openingSecond, true);
   firstGate.resolve();
   assert.equal(await openingFirst, false);
-  assert.deepEqual(Array.from(workspace.service.getSnapshot().documents, document => document.path), ["第二章.md"]);
-  assert.equal(workspace.service.getSnapshot().activeId, idFor("第二章.md"));
+  assert.deepEqual(Array.from(workspace.service.getSnapshot().documents, document => document.path), ["第二章.txt"]);
+  assert.equal(workspace.service.getSnapshot().activeId, idFor("第二章.txt"));
   await workspace.dispose();
 });
 
 test("selecting an already-open tab supersedes a pending read", async () => {
   const delayed = deferred();
-  const store = createFilesStore({openGate: path => path === "延迟打开.md" ? delayed : null});
+  const store = createFilesStore({openGate: path => path === "延迟打开.txt" ? delayed : null});
   const workspace = createWorkspace(store.files);
-  const existing = await workspace.service.create("", "已打开.md");
-  const opening = workspace.service.open("延迟打开.md");
+  const existing = await workspace.service.create("", "已打开.txt");
+  const opening = workspace.service.open("延迟打开.txt");
   assert.equal(workspace.service.select(existing.id), true);
   delayed.resolve();
   assert.equal(await opening, false);
-  assert.deepEqual(Array.from(workspace.service.getSnapshot().documents, document => document.path), ["已打开.md"]);
+  assert.deepEqual(Array.from(workspace.service.getSnapshot().documents, document => document.path), ["已打开.txt"]);
   assert.equal(workspace.service.getSnapshot().activeId, existing.id);
   await workspace.dispose();
 });
@@ -293,7 +306,7 @@ test("selecting an already-open tab supersedes a pending read", async () => {
 test("close reentry shares the real in-flight promise", async () => {
   const store = createFilesStore();
   const workspace = createWorkspace(store.files);
-  const document = await workspace.service.create("", "第一章.md");
+  const document = await workspace.service.create("", "第一章.txt");
   workspace.service.update(document.id, "需要保存");
   const gate = deferred();
   store.setSaveGate(document.path, gate);
@@ -316,8 +329,8 @@ test("close reentry shares the real in-flight promise", async () => {
 test("closeMany skips a target whose tab was closed and reopened at the same path", async () => {
   const store = createFilesStore();
   const workspace = createWorkspace(store.files);
-  const first = await workspace.service.create("", "第一章.md");
-  const second = await workspace.service.create("", "第二章.md");
+  const first = await workspace.service.create("", "第一章.txt");
+  const second = await workspace.service.create("", "第二章.txt");
   workspace.service.update(first.id, "保存第一章");
   const gate = deferred();
   store.setSaveGate(first.path, gate);
@@ -337,9 +350,9 @@ test("closeMany skips a target whose tab was closed and reopened at the same pat
 test("closeMany stops at the first failed save and leaves later tabs open", async () => {
   const store = createFilesStore();
   const workspace = createWorkspace(store.files);
-  const first = await workspace.service.create("", "第一章.md");
-  const second = await workspace.service.create("", "第二章.md");
-  const third = await workspace.service.create("", "第三章.md");
+  const first = await workspace.service.create("", "第一章.txt");
+  const second = await workspace.service.create("", "第二章.txt");
+  const third = await workspace.service.create("", "第三章.txt");
   workspace.service.update(first.id, "第一章修改");
   workspace.service.update(second.id, "第二章修改");
   workspace.service.update(third.id, "第三章修改");
@@ -357,8 +370,8 @@ test("closeMany stops after leave starts, while leave saves the remaining open t
   let canMutate = true;
   const store = createFilesStore();
   const workspace = createWorkspace(store.files, {canMutate: () => canMutate});
-  const first = await workspace.service.create("", "第一章.md");
-  const second = await workspace.service.create("", "第二章.md");
+  const first = await workspace.service.create("", "第一章.txt");
+  const second = await workspace.service.create("", "第二章.txt");
   workspace.service.update(first.id, "保存第一章");
   workspace.service.update(second.id, "保存第二章");
   const gate = deferred();
@@ -378,24 +391,24 @@ test("closeMany stops after leave starts, while leave saves the remaining open t
 test("document saveAll touches only this workspace's open tabs and hides unrelated storage errors", async () => {
   const store = createFilesStore();
   const workspace = createWorkspace(store.files);
-  const opened = await workspace.service.create("", "已打开.md");
-  store.install("后台插件.md", "other draft", "disk baseline", "pending");
+  const opened = await workspace.service.create("", "已打开.txt");
+  store.install("后台插件.txt", "other draft", "disk baseline", "pending");
   workspace.service.update(opened.id, "打开的草稿");
   store.setError("其他消费者的错误");
   assert.equal(workspace.service.getSnapshot().error, null);
 
   assert.equal(await workspace.service.saveAll(), true);
   assert.equal(store.disk.get(opened.path), "打开的草稿");
-  assert.equal(store.files.getSnapshot().files.find(file => file.path === "后台插件.md").dirty, true);
-  assert.equal(store.calls.filter(([operation]) => operation === "save").some(([, path]) => path === "后台插件.md"), false);
+  assert.equal(store.files.getSnapshot().files.find(file => file.path === "后台插件.txt").dirty, true);
+  assert.equal(store.calls.filter(([operation]) => operation === "save").some(([, path]) => path === "后台插件.txt"), false);
   await workspace.dispose();
 });
 
 test("dispose reentry shares its promise and drains accepted closeMany work", async () => {
   const store = createFilesStore();
   const workspace = createWorkspace(store.files);
-  const first = await workspace.service.create("", "第一章.md");
-  const second = await workspace.service.create("", "第二章.md");
+  const first = await workspace.service.create("", "第一章.txt");
+  const second = await workspace.service.create("", "第二章.txt");
   workspace.service.update(first.id, "第一章修改");
   const gate = deferred();
   store.setSaveGate(first.path, gate);
@@ -419,7 +432,7 @@ test("workspace errors reflect its own failed operation, not another consumer's 
   store.setError("无关消费者错误");
   assert.equal(workspace.service.getSnapshot().error, null);
   store.files.open = async () => { throw new Error("当前文档打开失败"); };
-  assert.equal(await workspace.service.open("失败.md"), false);
+  assert.equal(await workspace.service.open("失败.txt"), false);
   assert.equal(workspace.service.getSnapshot().error, "当前文档打开失败");
   await workspace.dispose();
 });

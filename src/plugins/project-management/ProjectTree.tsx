@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { Button, IconButton, Icon } from "@lodestory/ui";
 import {shortcutCommandIds, shortcutScopeIds, type ShortcutsService} from "@lodestory/sdk/shortcuts";
-import type { DocumentExtension, ProjectTreeEntry } from "./projectManagementModel";
+import type { ProjectTreeEntry } from "./projectManagementModel";
 import { ContextMenuRegion, type MenuEntry } from "../context-menu";
 
 type ProjectTreeProps = {
@@ -18,7 +18,7 @@ type ProjectTreeProps = {
   lastRename: Readonly<{fromPath: string; toPath: string; directory: boolean}> | null;
   onOpenDocument: (path: string) => unknown | Promise<unknown>;
   onSelectFolder: (path: string) => void;
-  onNewDocument: (parentPath?: string, extension?: DocumentExtension) => void;
+  onNewDocument: (parentPath?: string) => void;
   onNewDirectory: (parentPath?: string) => void;
   onDeleteDocument: (path: string) => void;
   onRename: (path: string) => void;
@@ -28,14 +28,9 @@ type ProjectTreeProps = {
 function creationItems(contextPath: string, disabled: boolean,
   onNewDocument: ProjectTreeProps["onNewDocument"], onNewDirectory: ProjectTreeProps["onNewDirectory"],
   parentPath = contextPath, newDocumentShortcut?: string): MenuEntry<string>[] {
-  const formats: readonly [DocumentExtension, string][] = [["txt", "TXT"], ["md", "Markdown"], ["lode", "富文本"]];
   return [
     {id: "new-document", label: "新建文档", shortcut: newDocumentShortcut, icon: <Icon name="plus" />, disabled, restoreFocus: false,
       onSelect: path => { if (!disabled && path === contextPath) onNewDocument(parentPath); }},
-    ...formats.map(([extension, label]) => ({
-      id: `new-document-${extension}`, label: `新建 ${label} 文档`, icon: <Icon name="file" />, disabled, restoreFocus: false,
-      onSelect: (path: string) => { if (!disabled && path === contextPath) onNewDocument(parentPath, extension); },
-    })),
     {id: "new-directory", label: "新建文件夹", icon: <Icon name="folder" />, disabled, restoreFocus: false,
       onSelect: path => { if (!disabled && path === contextPath) onNewDirectory(parentPath); }},
   ];
@@ -238,7 +233,7 @@ export function ProjectTree({ shortcuts, projectName, entries, activeDocumentPat
               activeDocumentPath={activeDocumentPath} selectedPath={selectedPath} openingPath={openingPath}
               onSelectEntry={setSelectedPath}
               onOpenDocument={path => { if (canInteract) return onOpenDocument(path); }}
-              onNewDocument={(path, extension) => { if (canInteract && !newDisabled) onNewDocument(path, extension); }}
+              onNewDocument={path => { if (canInteract && !newDisabled) onNewDocument(path); }}
               onNewDirectory={newDirectory} onDeleteDocument={onDeleteDocument} onRename={onRename}
               newDisabled={newDisabled || !canInteract} loading={!canInteract} deletingPath={deletingPath}
             />

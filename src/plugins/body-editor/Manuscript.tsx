@@ -4,45 +4,29 @@ import type {OpenDocument} from "@lodestory/sdk/documents";
 import type {EditorDefinition, EditorFormat, EditorHandle, EditorProps} from "@lodestory/sdk/body-editor";
 import {ContextMenuRegion, type MenuEntry} from "../context-menu";
 import {createEditorCallbackGuard, type EditorCallbackGuard} from "./editorCallbackGuard";
-import type {ResolvedEditorConversion} from "./bodyEditorRegistry";
-import {createDocumentConversionController, type DocumentConversionStatus} from "./documentConversion";
 
-export function Manuscript({document, visible, active, readOnly = false, format, definition, conversions = [], onChange, onSave, onSaveAs, onEditorReady}: {
+export function Manuscript({document, visible, active, readOnly = false, format, definition, onChange, onSave, onEditorReady}: {
   document: OpenDocument;
   visible: boolean;
   active: boolean;
   readOnly?: boolean;
   format?: EditorFormat;
   definition?: Readonly<EditorDefinition>;
-  conversions?: readonly ResolvedEditorConversion[];
   onChange: (content: string) => void;
-  onSaveAs?: (request: Parameters<NonNullable<EditorProps["onSaveAs"]>>[0]) => Promise<void>;
   onSave: () => unknown | Promise<unknown>;
   onEditorReady: (documentId: string, handle: EditorHandle | null) => void;
 }) {
   const handleRef = useRef<EditorHandle | null>(null);
   const [editorHandle, setEditorHandle] = useState<EditorHandle | null>(null);
-  const [conversionState, setConversionState] = useState<DocumentConversionStatus>({busy: false});
   const handleGeneration = useRef(0);
   const latest = useRef({
     documentId: document.id, visible, active, readOnly, saveState: document.saveState,
-    content: document.content, format, conversions, onSaveAs,
     handle: handleRef.current, generation: handleGeneration.current, onSave,
   });
   latest.current = {
     documentId: document.id, visible, active, readOnly, saveState: document.saveState,
-    content: document.content, format, conversions, onSaveAs,
     handle: handleRef.current, generation: handleGeneration.current, onSave,
   };
-  const conversionController = useRef<ReturnType<typeof createDocumentConversionController> | undefined>(undefined);
-  if (!conversionController.current) {
-    conversionController.current = createDocumentConversionController(() => latest.current, setConversionState);
-  }
-  useEffect(() => {
-    conversionController.current?.invalidate();
-    setConversionState({busy: false});
-    return () => conversionController.current?.invalidate();
-  }, [document.id]);
   const ready = useCallback((handle: EditorHandle | null) => {
     if (handleRef.current !== handle) handleGeneration.current += 1;
     handleRef.current = handle;
@@ -54,11 +38,6 @@ export function Manuscript({document, visible, active, readOnly = false, format,
   }, [document.id, onEditorReady]);
   const editorActive = active && visible;
   const editorActions = editorHandle?.getContextMenuActions?.() ?? [];
-  const availableConversions = onSaveAs ? conversions : [];
-
-  function convertDocument(documentId: string, conversionKey: string) {
-    return conversionController.current?.run(documentId, conversionKey);
-  }
 
   const menuItems = (contextDocumentId: string): readonly MenuEntry<string>[] => {
     const current = latest.current;
@@ -76,7 +55,7 @@ export function Manuscript({document, visible, active, readOnly = false, format,
         return now.onSave();
       },
     }];
-    if (actions.length || availableConversions.length) entries.push({id: "editor-actions-separator", type: "separator"});
+    if (actions.length) entries.push({id: "editor-actions-separator", type: "separator"});
     for (const action of actions) {
       entries.push({
         id: `editor:${generation}:${action.id}`,
@@ -93,27 +72,12 @@ export function Manuscript({document, visible, active, readOnly = false, format,
         },
       });
     }
-    for (const conversion of current.onSaveAs ? current.conversions : []) {
-      entries.push({
-        id: `conversion:${generation}:${conversion.key}`,
-        label: conversionState.busy && conversionState.key === conversion.key ? "正在转换…" : conversion.label,
-        disabled: !current.visible || !current.active || current.readOnly || current.saveState === "saving"
-          || conversionController.current?.isLocked(),
-        onSelect: id => {
-          const now = latest.current;
-          if (id !== contextDocumentId || now.documentId !== contextDocumentId
-            || !now.visible || !now.active || now.readOnly || now.saveState === "saving"
-            || !now.conversions.some(candidate => candidate.key === conversion.key)) return;
-          return convertDocument(contextDocumentId, conversion.key);
-        },
-      });
-    }
     return entries;
   };
 
   return (
     <ContextMenuRegion context={document.id} label={document.fileName + "文稿操作"}
-      mode={editorActions.length || availableConversions.length ? "custom" : undefined} items={menuItems}>
+      mode={editorActions.length ? "custom" : undefined} items={menuItems}>
     <section
       className="editor-document"
       data-editor-scroll={definition?.scrollMode ?? "document"}
@@ -127,11 +91,10 @@ export function Manuscript({document, visible, active, readOnly = false, format,
           <p className="project-error">{document.saveError}</p>
           <Button variant="ghost" disabled={readOnly || document.saveState === "saving"} onClick={onSave}>重试保存</Button>
         </div>}
-        {conversionState.error && <p className="editor-document-feedback" role="alert">转换失败：{conversionState.error}</p>}
         {definition && format
           ? <EditorRuntime key={format + ":" + definition.id} definition={definition} documentId={document.id} format={format}
-              content={document.content} readOnly={readOnly || !visible || conversionState.busy} active={editorActive}
-              onChange={onChange} onReady={ready} onSaveAs={onSaveAs}/>
+              content={document.content} readOnly={readOnly || !visible} active={editorActive}
+              onChange={onChange} onReady={ready}/>
           : <p className="editor-document-feedback" role="status">
               {format ? "当前没有可用的编辑器实现。" : "暂不支持该文档格式。"}
             </p>}
@@ -141,7 +104,7 @@ export function Manuscript({document, visible, active, readOnly = false, format,
   );
 }
 
-function EditorRuntime({definition, documentId, format, content, readOnly, active, onChange, onReady, onSaveAs}: {
+function EditorRuntime({definition, documentId, format, content, readOnly, active, onChange, onReady}: {
   definition: Readonly<EditorDefinition>;
   documentId: string;
   format: EditorFormat;
@@ -150,13 +113,12 @@ function EditorRuntime({definition, documentId, format, content, readOnly, activ
   active: boolean;
   onChange: (content: string) => void;
   onReady: (handle: EditorHandle | null) => void;
-  onSaveAs?: NonNullable<EditorProps["onSaveAs"]>;
 }) {
   const [Editor, setEditor] = useState<ComponentType<EditorProps>>();
   const [error, setError] = useState<Error>();
   const [attempt, setAttempt] = useState(0);
-  const callbacks = useRef({onChange, onReady, onSaveAs, active, readOnly});
-  callbacks.current = {onChange, onReady, onSaveAs, active, readOnly};
+  const callbacks = useRef({onChange, onReady});
+  callbacks.current = {onChange, onReady};
   const activeToken = useRef<symbol | null>(null);
   const activeGuard = useRef<EditorCallbackGuard | null>(null);
   const loadEditor = definition.load;
@@ -183,12 +145,6 @@ function EditorRuntime({definition, documentId, format, content, readOnly, activ
       onChange: content => callbacks.current.onChange(content),
       onReady: handle => callbacks.current.onReady(handle),
       onError: reason => fail(token, reason),
-      onSaveAs: request => {
-        const current = callbacks.current;
-        if (!current.onSaveAs) throw new Error("当前编辑器不支持转换保存。");
-        if (!current.active || current.readOnly) throw new Error("当前文稿不可编辑，无法转换保存。");
-        return current.onSaveAs(request);
-      },
     });
     activeGuard.current = guard;
     setEditor(undefined);
@@ -221,7 +177,6 @@ function EditorRuntime({definition, documentId, format, content, readOnly, activ
     onChange: guard.onChange,
     onReady: guard.onReady,
     onError: guard.onError,
-    ...(onSaveAs ? {onSaveAs: guard.onSaveAs} : {}),
   };
   return <EditorErrorBoundary key={attempt} onError={guard.onError}>
     <Editor {...props}/>

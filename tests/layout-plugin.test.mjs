@@ -316,8 +316,6 @@ test("outline navigation switches independently while preserving editor contents
     "body-editor.main", "document-tabs.tabs", "project-management.files", "workbench-toolbar.main", "workbench.loading", "writing-status.status",
   ]);
   await f.createdCores.at(-1).unmount("writing-status");
-  await assert.rejects(f.createdCores.at(-1).unmount("rich-text-editor"), error => error.phase === "check");
-  await assert.rejects(f.createdCores.at(-1).unmount("markdown-editor"), error => error.phase === "check");
   await assert.rejects(f.createdCores.at(-1).unmount("plain-text-editor"), error => error.phase === "check");
   await assert.rejects(f.createdCores.at(-1).unmount("project-management"), /required by plugins/);
   await f.createdCores.at(-1).unmount("document-tabs");

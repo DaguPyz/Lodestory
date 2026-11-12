@@ -46,11 +46,17 @@ export function installLifecycleTest(runtime) {
      return workbench.openProject(project);
    },
    snapshot() { return workbench.getSnapshot(); },
+   async openDocument(path) {
+     const session = workbench.getSnapshot().session;
+     const workspace = session && runtime.get(documentsKey).getWorkspace(session.id);
+     if (!workspace) throw new Error("Test project workspace is not ready.");
+     return workspace.open(path);
+   },
    async createDocument() {
      const session = workbench.getSnapshot().session;
      const workspace = session && runtime.get(documentsKey).getWorkspace(session.id);
      if (!workspace) throw new Error("Test project workspace is not ready.");
-     const result = await workspace.create("", "正文.txt");
+     const result = await workspace.create("", "正文");
      if (!result) throw new Error("Could not create test document.");
      return result.id;
    },

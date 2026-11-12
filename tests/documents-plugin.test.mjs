@@ -278,7 +278,7 @@ test("documents depends on project storage and owns one tab workspace per workbe
   f.setWorkbench({session: firstSession, busy: false, active: true});
   assert.equal(first.getSnapshot().blocked, false);
   const firstDocument = await first.create("", "第一章");
-  assert.equal(firstDocument.path, "第一章.md");
+  assert.equal(firstDocument.path, "第一章.txt");
   assert.equal(f.stores.get(firstSession.id).calls[0][0], "create");
 
   const secondSession = projectSession("session-b", "/projects/second");
@@ -289,14 +289,14 @@ test("documents depends on project storage and owns one tab workspace per workbe
   assert.notEqual(second, first);
   assert.equal(second.getSnapshot().blocked, true, "new project sessions start staged");
   f.setWorkbench({session: secondSession, busy: false, active: true});
-  await second.open("第一章.md");
+  await second.open("第一章.txt");
   assert.equal(first.getSnapshot().documents[0].content, "");
-  assert.equal(second.getSnapshot().documents[0].content, "content:第一章.md");
+  assert.equal(second.getSnapshot().documents[0].content, "content:第一章.txt");
 
   await firstParticipation.dispose();
   f.participationBySession.delete(firstSession.id);
   assert.equal(documents.getWorkspace(firstSession.id), null);
-  assert.equal(await first.open("旧会话.md"), false);
+  assert.equal(await first.open("旧会话.txt"), false);
   assert.equal(second.getSnapshot().documents.length, 1);
   await secondParticipation.dispose();
   f.participationBySession.delete(secondSession.id);
@@ -384,7 +384,7 @@ test("storage snapshots update open document views, while closing a tab keeps it
   f.setWorkbench({session, busy: false, active: true});
   const workspace = documents.getWorkspace(session.id);
   const created = await workspace.create("", "第一章");
-  assert.equal(workspace.getSnapshot().documents[0].path, "第一章.md");
+  assert.equal(workspace.getSnapshot().documents[0].path, "第一章.txt");
   assert.equal(workspace.update(created.id, "草稿来自同一缓冲"), true);
   const store = f.stores.get(session.id);
   assert.equal(f.decode(store.files.getSnapshot().files[0].bytes), "草稿来自同一缓冲");
@@ -411,20 +411,20 @@ test("the text adapter preserves BOM bytes and ignores unrelated binary buffers"
   const workspace = documents.getWorkspace(session.id);
   const store = f.stores.get(session.id);
   const bomBytes = [0xef, 0xbb, 0xbf, ...f.encode("正文")];
-  store.putDisk("序章.md", bomBytes);
+  store.putDisk("序章.txt", bomBytes);
   store.putDisk("封面.bin", [0xff, 0x00, 0x81]);
 
   await store.files.read("封面.bin");
-  const opened = await workspace.open("序章.md");
+  const opened = await workspace.open("序章.txt");
   assert.equal(opened, true);
   const document = workspace.getSnapshot().documents[0];
   assert.equal(document.content, "\uFEFF正文", "UTF-8 decoding keeps the leading BOM as text");
   assert.equal(workspace.getSnapshot().documents.length, 1, "the unrelated binary buffer is not decoded by documents");
   assert.equal(await workspace.save(document.id), true);
-  assert.deepEqual(store.disk.get("序章.md"), bomBytes, "saving without edits keeps the original BOM bytes");
+  assert.deepEqual(store.disk.get("序章.txt"), bomBytes, "saving without edits keeps the original BOM bytes");
   assert.equal(workspace.update(document.id, document.content), true);
   assert.equal(await workspace.save(document.id), true);
-  assert.deepEqual(store.disk.get("序章.md"), bomBytes, "editing and saving the BOM-preserving text round-trips the same bytes");
+  assert.deepEqual(store.disk.get("序章.txt"), bomBytes, "editing and saving the BOM-preserving text round-trips the same bytes");
 
   await participation.dispose();
   f.participationBySession.delete(session.id);
@@ -440,11 +440,11 @@ test("invalid UTF-8 is rejected without replacing or saving the original bytes",
   const workspace = documents.getWorkspace(session.id);
   const store = f.stores.get(session.id);
   const invalidBytes = [0x66, 0xff, 0x6f];
-  store.putDisk("损坏.md", invalidBytes);
+  store.putDisk("损坏.txt", invalidBytes);
 
-  assert.equal(await workspace.open("损坏.md"), false);
+  assert.equal(await workspace.open("损坏.txt"), false);
   assert.match(workspace.getSnapshot().error, /UTF-8/);
-  assert.deepEqual(store.disk.get("损坏.md"), invalidBytes);
+  assert.deepEqual(store.disk.get("损坏.txt"), invalidBytes);
   assert.equal(workspace.getSnapshot().documents.length, 0);
   assert.equal(store.calls.some(([operation]) => operation === "create" || operation === "save"), false);
 
@@ -464,15 +464,15 @@ test("accepted creates start storage synchronously and are drained before leavin
   f.controls.createGate = new Promise(resolve => { finishCreate = resolve; });
 
   const creating = workspace.create("卷一", "新章");
-  assert.deepEqual(f.stores.get(session.id).calls[0], ["create", "卷一", "新章.md", ""]);
+  assert.deepEqual(f.stores.get(session.id).calls[0], ["create", "卷一", "新章.txt", ""]);
   f.setWorkbench({session, busy: true, active: true});
   const leaving = participation.beforeLeave();
   assert.equal(await workspace.create("", "不应接受"), null);
   f.controls.createGate = null;
   finishCreate();
-  assert.equal((await creating).path, "卷一/新章.md");
+  assert.equal((await creating).path, "卷一/新章.txt");
   assert.equal(await leaving, true);
-  assert.deepEqual(Array.from(workspace.getSnapshot().documents, document => document.path), ["卷一/新章.md"]);
+  assert.deepEqual(Array.from(workspace.getSnapshot().documents, document => document.path), ["卷一/新章.txt"]);
 
   await participation.dispose();
   f.participationBySession.delete(session.id);
@@ -489,7 +489,7 @@ test("reveal events and save failures preserve the shared document buffer", asyn
   const workspace = documents.getWorkspace(session.id);
 
   const created = await workspace.create("", "第一章");
-  assert.equal(created.path, "第一章.md");
+  assert.equal(created.path, "第一章.txt");
   assert.equal(f.emitted.length, 1);
   assert.equal(f.emitted[0][0], f.documentRevealRequested);
   assert.deepEqual({...f.emitted[0][1]}, {sessionId: session.id, documentId: created.id});
@@ -509,18 +509,18 @@ test("reveal events and save failures preserve the shared document buffer", asyn
   const activeId = workspace.getSnapshot().activeId;
   let finishCreate;
   f.controls.createGate = new Promise(resolve => { finishCreate = resolve; });
-  const saveAs = workspace.saveAs(created.id, "第一章.lode", "rich-delta-envelope");
-  assert.deepEqual(f.stores.get(session.id).calls.at(-1), ["create", "", "第一章.lode", "rich-delta-envelope"]);
+  const saveAs = workspace.saveAs(created.id, "第一章副本.txt", "plain text copy");
+  assert.deepEqual(f.stores.get(session.id).calls.at(-1), ["create", "", "第一章副本.txt", "plain text copy"]);
   f.controls.createGate = null;
   assert.equal(workspace.select(second.id), true);
   finishCreate();
   await saveAs;
 
   const snapshot = workspace.getSnapshot();
-  assert.equal(snapshot.documents.find(document => document.fileName === "第一章.lode").content, "rich-delta-envelope");
+  assert.equal(snapshot.documents.find(document => document.fileName === "第一章副本.txt").content, "plain text copy");
   assert.equal(snapshot.activeId, second.id, "a late create does not steal the current selection");
   assert.equal(snapshot.documents.find(document => document.id === created.id).content, "未保存内容");
-  await assert.rejects(workspace.saveAs(created.id, "第一章.lode", "replacement"), /已在工作区打开/);
+  await assert.rejects(workspace.saveAs(created.id, "第一章副本.txt", "replacement"), /已在工作区打开/);
   assert.equal(activeId, created.id);
   await participation.dispose();
   f.participationBySession.delete(session.id);
@@ -546,5 +546,5 @@ test("a failed dispose exposes a recoverable tab snapshot and deactivation inval
   f.participationBySession.delete(session.id);
   await f.plugin.deactivate();
   assert.equal(documents.getWorkspace(session.id), null);
-  assert.equal(await workspace.open("迟到打开.md"), false);
+  assert.equal(await workspace.open("迟到打开.txt"), false);
 });

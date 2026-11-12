@@ -142,7 +142,7 @@ import { Icon, Select } from "@lodestory/ui";
   value={activeContentId} onValueChange={setActiveContentId} options={contents} />
 ```
 
-保存位置和系统主题映射继续使用默认的 `field` 形式。富文本工具栏采用固定两行、左右分组：左侧上排为字体／标题／字号，下排为加粗／斜体／下划线／删除线、文字色／背景色、链接／清除格式；右侧上排为有序／无序列表和引用，下排为左对齐／居中／右对齐／两端对齐四个并列图标按钮。左右区块之间使用竖向分隔和留白。工具栏置于 `compact` 密度中，文字色和背景色使用 32 × 32px `toolbar` 图标触发器；颜色选项的作者色样显示为图标下缘细色条，对齐按钮显示当前选中状态。窄工具区保持两行并允许外层横向滚动，不压缩控件或增加第三行；全部控件仍可通过键盘访问。不能通过覆写 Select 内部 CSS 调整控件。富文本插件自行维护 Quill 选区、格式值和资源清理；动作菜单不属于单选控件。
+保存位置和系统主题映射使用默认的 `field` 形式。工具栏可使用 `compact` 密度和 32 × 32px 的 `toolbar` 图标触发器，控件支持键盘访问。使用公开属性调整 Select 的外观。
 
 ## 职责边界
 
@@ -168,4 +168,4 @@ pnpm dev:ui
 
 `tests/fixtures/ui-dialog.html` 检查独立弹框与迁移后的三个业务弹框，支持主题切换、模拟提交成功／失败、处理中关闭保护、长路径换行和键盘焦点验收；文件操作均由回调模拟。`tests/ui-dialog.test.mjs` 覆盖忙碌时取消关闭请求、关闭按钮的禁用／ref／非提交行为和模态语义。
 
-`tests/fixtures/ui-select.html` 检查 Select 的内置与同类型自定义主题、键盘、动态禁用、只读、空值、长列表、表单提交和弹框嵌套；Alt+T 在面板打开时切换主题，Alt+D 切换普通选择器的禁用状态。`tests/fixtures/rich-text-toolbar-preview.html` 验收真实 Quill 中的格式选择，`tests/quill-select-model.test.mjs` 检查选区、默认值、只读和清理规则。
+`tests/fixtures/ui-select.html` 检查 Select 的内置与同类型自定义主题、键盘、动态禁用、只读、空值、长列表、表单提交和弹框嵌套。Alt+T 在面板打开时切换主题，Alt+D 切换普通选择器的禁用状态。

@@ -42,7 +42,8 @@ const ASYNC_DECODE_THRESHOLD = 1024 * 1024;
 const textEncoder = new TextEncoder();
 const bytesOf = (content: string) => textEncoder.encode(content);
 const pathOf = (parentPath: string, name: string) => parentPath ? `${parentPath}/${name}` : name;
-const isPlainTextPath = (path: string) => /\.txt$/i.test(path);
+const isTextDocumentPath = (path: string) => /\.txt$/i.test(path);
+const unsupportedDocumentMessage = "只支持 TXT 文档。";
 
 type PendingTextProjection = {token: object; bytes: ProjectByteView | Uint8Array; content: string};
 
@@ -346,7 +347,7 @@ export function createDocumentFiles(source: ProjectFiles): DocumentTextFiles {
       return () => { pathChangeListeners.delete(listener); };
     },
     async readSearchText(path: string, signal?: AbortSignal) {
-      if (disposed || signal?.aborted || typeof source.readTransient !== "function") return null;
+      if (disposed || signal?.aborted || !isTextDocumentPath(path) || typeof source.readTransient !== "function") return null;
       try {
         const bytes = await source.readTransient(path);
         if (!bytes || disposed || signal?.aborted) return null;
@@ -354,12 +355,15 @@ export function createDocumentFiles(source: ProjectFiles): DocumentTextFiles {
       } catch { return null; }
     },
     open(path: string) {
+      if (!isTextDocumentPath(path)) {
+        error = unsupportedDocumentMessage;
+        refresh();
+        return Promise.resolve(null);
+      }
       error = null;
       refresh();
       // Start the shared read synchronously so accepted document work is visible to leave checks.
-      return invoke(() => isPlainTextPath(path)
-        ? source.read(path, {preferByteView: true})
-        : source.read(path)).then(async file => {
+      return invoke(() => source.read(path, {preferByteView: true})).then(async file => {
         if (!file) { captureError("无法读取文档。"); return null; }
         const text = await projectFile(file, path);
         if (!text) captureError(issues.get(path) ?? "无法读取文档。");
@@ -371,13 +375,16 @@ export function createDocumentFiles(source: ProjectFiles): DocumentTextFiles {
     },
     create(parentPath: string, name: string, content = "") {
       const path = pathOf(parentPath, name);
+      if (!isTextDocumentPath(path)) {
+        error = unsupportedDocumentMessage;
+        refresh();
+        return Promise.resolve(null);
+      }
       error = null;
       refresh();
       // Encode only the text explicitly supplied by documents; storage never guesses an encoding.
       const bytes = bytesOf(content);
-      return invoke(() => isPlainTextPath(path)
-        ? source.create(path, bytes, {preferByteView: true})
-        : source.create(path, bytes)).then(async file => {
+      return invoke(() => source.create(path, bytes, {preferByteView: true})).then(async file => {
         if (!file) { captureError("无法创建文档。"); return null; }
         const text = await projectFile(file, path);
         if (!text) captureError(issues.get(path) ?? "无法创建文档。");
@@ -403,22 +410,42 @@ export function createDocumentFiles(source: ProjectFiles): DocumentTextFiles {
     },
     renamePath(fromPath: string, toPath: string) {
       if (disposed) return Promise.resolve(false);
-      const rename = Object.freeze({fromPath, toPath});
-      requestedRenames.add(rename);
-      return invoke(() => source.renamePath(fromPath, toPath)).then(renamed => {
-        if (renamed) refresh();
-        return renamed;
+      return invoke(async () => {
+        const parentPath = fromPath.includes("/") ? fromPath.slice(0, fromPath.lastIndexOf("/")) : "";
+        const listing = await source.list(parentPath);
+        if (!listing?.exists) {
+          captureError("无法确认重命名对象，已取消操作。");
+          return false;
+        }
+        const entry = listing.entries.find(candidate => candidate.path === fromPath);
+        if (entry?.kind !== "file" && entry?.kind !== "directory") {
+          captureError("无法确认重命名对象，已取消操作。");
+          return false;
+        }
+        if (entry.kind === "file" && (!isTextDocumentPath(fromPath) || !isTextDocumentPath(toPath))) {
+          captureError("只能重命名 TXT 文档，且不能更改扩展名。");
+          return false;
+        }
+        const rename = Object.freeze({fromPath, toPath});
+        requestedRenames.add(rename);
+        try {
+          const renamed = await source.renamePath(fromPath, toPath);
+          if (renamed) refresh();
+          return renamed;
+        } finally {
+          requestedRenames.delete(rename);
+        }
       }).catch(cause => {
         captureError(cause instanceof Error ? cause.message : "重命名失败。");
         return false;
-      }).finally(() => requestedRenames.delete(rename));
+      });
     },
     update(path: string, content: string) {
-      if (!ownedPaths.has(path) || typeof content !== "string") return false;
+      if (!ownedPaths.has(path) || !isTextDocumentPath(path) || typeof content !== "string") return false;
       error = null;
       const encoded = bytesOf(content);
       let bytes: ProjectByteView | Uint8Array = encoded;
-      if (isPlainTextPath(path) && source.captureBytes) {
+      if (source.captureBytes) {
         try { bytes = source.captureBytes(encoded); }
         catch (cause) {
           error = cause instanceof Error ? cause.message : "无法捕获文档字节。";
@@ -430,9 +457,7 @@ export function createDocumentFiles(source: ProjectFiles): DocumentTextFiles {
       if (isWellFormedUtf16(content)) pendingTextProjections.set(path, {token, bytes, content});
       let accepted: boolean;
       try {
-        accepted = isPlainTextPath(path)
-          ? source.write(path, bytes, {preferByteView: true})
-          : source.write(path, bytes);
+        accepted = source.write(path, bytes, {preferByteView: true});
       } finally {
         if (pendingTextProjections.get(path)?.token === token) pendingTextProjections.delete(path);
       }
@@ -442,6 +467,7 @@ export function createDocumentFiles(source: ProjectFiles): DocumentTextFiles {
     },
     save(path: string) {
       // Explicit flush remains available while the workbench is transitioning.
+      if (!isTextDocumentPath(path)) return Promise.resolve(false);
       return invoke(() => source.save(path)).then(saved => {
         if (!saved) captureError(source.getSnapshot().files.find(file => file.path === path)?.saveError ?? "文档保存失败。");
         else { error = null; refresh(); }
@@ -452,6 +478,11 @@ export function createDocumentFiles(source: ProjectFiles): DocumentTextFiles {
       });
     },
     delete(path: string, options = {}) {
+      if (!isTextDocumentPath(path)) {
+        error = unsupportedDocumentMessage;
+        refresh();
+        return Promise.resolve(false);
+      }
       return invoke(() => source.delete(path, options)).then(deleted => {
         if (!deleted) { captureError("文档删除失败。"); return false; }
         ownedPaths.delete(path);

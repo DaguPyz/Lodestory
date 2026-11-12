@@ -24,7 +24,6 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
   const catalogPluginIds = [];
   const bodyEditorModels = new Map();
   const bodyEditorResolvers = new Map();
-  const bodyEditorConversionResolvers = new Map();
   const projectManagementModels = new Map();
   const workbenchToolbarModels = new Map();
   const appPluginsCalls = [];
@@ -227,12 +226,11 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
       return React.createElement("navigation-layout", { pageId, active, items, onNavigate, children });
     },
     EditorPage: function EditorPage() {},
-    BodyEditorContentProvider: function BodyEditorContentProvider({ workbench, models, resolveEditor, resolveConversions, children }) {
+    BodyEditorContentProvider: function BodyEditorContentProvider({ workbench, models, resolveEditor, children }) {
       const session = workbench.getSnapshot().session;
       if (session) {
         bodyEditorModels.set(session.id, models.get(session.id));
         if (resolveEditor) bodyEditorResolvers.set(session.id, resolveEditor);
-        if (resolveConversions) bodyEditorConversionResolvers.set(session.id, resolveConversions);
       }
       return children;
     },
@@ -587,7 +585,6 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     getService(key) { return createdCores.at(-1)?.get(key); },
     bodyEditorModels,
     bodyEditorResolvers,
-    bodyEditorConversionResolvers,
     projectManagementModels,
     workbenchToolbarModels,
     async requestWindowClose() {

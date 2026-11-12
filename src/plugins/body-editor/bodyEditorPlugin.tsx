@@ -10,7 +10,6 @@ import {BodyEditor} from "./BodyEditorView";
 import {bodyEditorContentIds} from "./bodyEditorContentIds";
 import {createBodyEditorModel, type BodyEditorModel} from "./bodyEditorModel";
 import {createBodyEditorRegistry} from "./bodyEditorRegistry";
-import {TextareaEditor} from "./TextareaEditor";
 
 /** 文稿正文与焦点恢复的独立提供者，不拥有文档工作区。 */
 export function createBodyEditorPlugin(): Plugin {
@@ -19,7 +18,6 @@ export function createBodyEditorPlugin(): Plugin {
   let removeParticipant: (() => Promise<void>) | undefined;
   let registry: ReturnType<typeof createBodyEditorRegistry> | undefined;
   let removeRegistryUiWrapper: (() => void) | undefined;
-  let removeDefaultEditor: (() => void) | undefined;
   let removeConfig: (() => void) | undefined;
   return {
     id: "body-editor",
@@ -40,11 +38,6 @@ export function createBodyEditorPlugin(): Plugin {
       }, (sessionId, target) => models.get(sessionId)?.revealSearchTarget(target) ?? false);
       registry = editorRegistry;
       context.provide(bodyEditorKey, editorRegistry.service);
-      removeDefaultEditor = context.track(editorRegistry.service.registerEditor({
-        id: "textarea",
-        formats: ["markdown", "plain-text"],
-        load: async () => ({default: TextareaEditor}),
-      }));
       removeRegistryUiWrapper = context.track(ui.addWrapper({
         id: "body-editor-registry",
         order: 20,
@@ -52,7 +45,6 @@ export function createBodyEditorPlugin(): Plugin {
         wrap: children => children,
       }));
       const resolveEditor = (format: EditorFormat) => editorRegistry.resolve(format);
-      const resolveConversions = (format: EditorFormat) => editorRegistry.getConversions(format);
       removeContents.push(context.on(documentRevealRequested, request => {
         const session = workbench.getSnapshot().session;
         if (!session || session.id !== request.sessionId) return;
@@ -82,7 +74,7 @@ export function createBodyEditorPlugin(): Plugin {
       ];
       for (const content of contents) {
         removeContents.push(context.track(layout.registerContent({...content, render: props =>
-          <BodyEditorContentProvider workbench={workbench} models={models} resolveEditor={resolveEditor} resolveConversions={resolveConversions}>
+          <BodyEditorContentProvider workbench={workbench} models={models} resolveEditor={resolveEditor}>
             {content.render(props)}
           </BodyEditorContentProvider>})));
       }
@@ -98,9 +90,6 @@ export function createBodyEditorPlugin(): Plugin {
       const stopRegistryUi = removeRegistryUiWrapper;
       removeRegistryUiWrapper = undefined;
       try { stopRegistryUi?.(); } catch (error) { errors.push(error); }
-      const removeTextareaEditor = removeDefaultEditor;
-      removeDefaultEditor = undefined;
-      try { removeTextareaEditor?.(); } catch (error) { errors.push(error); }
       const activeRegistry = registry;
       registry = undefined;
       try { activeRegistry?.dispose(); } catch (error) { errors.push(error); }

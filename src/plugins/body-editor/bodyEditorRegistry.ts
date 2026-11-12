@@ -1,4 +1,4 @@
-import type {BodyEditorService, EditorConversion, EditorDefinition, EditorFormat, EditorReplacement, EditorSearchTarget} from "@lodestory/sdk/body-editor";
+import type {BodyEditorService, EditorDefinition, EditorFormat, EditorSearchTarget} from "@lodestory/sdk/body-editor";
 
 type EditorModule = Awaited<ReturnType<EditorDefinition["load"]>>;
 type Entry = {
@@ -7,16 +7,10 @@ type Entry = {
   pending?: Promise<EditorModule>;
 };
 
-const formats: readonly EditorFormat[] = ["markdown", "plain-text", "rich-delta"];
-
-export type ResolvedEditorConversion = Readonly<EditorConversion & {key: string}>;
+const formats: readonly EditorFormat[] = ["plain-text"];
 
 export function getEditorFormat(fileName: string): EditorFormat | undefined {
-  const extension = fileName.slice(fileName.lastIndexOf(".") + 1).toLowerCase();
-  if (extension === "md" || extension === "markdown") return "markdown";
-  if (extension === "txt") return "plain-text";
-  if (extension === "lode") return "rich-delta";
-  return undefined;
+  return /\.txt$/i.test(fileName) ? "plain-text" : undefined;
 }
 
 /** Startup registry; editor code is shared, while mounted instances belong to documents. */
@@ -75,10 +69,7 @@ export function createBodyEditorRegistry(
   function resolveEntry(format: EditorFormat): Entry | undefined {
     const id = associations[format];
     const configured = id === undefined ? undefined : entries.get(id);
-    if (configured?.source.formats.includes(format)) return configured;
-    if (id === undefined) return undefined;
-    return [...entries.values()].find(candidate => candidate.source.formats.includes(format)
-      && candidate.source.replaces?.some((replacement: EditorReplacement) => replacement.id === id && replacement.format === format));
+    return configured?.source.formats.includes(format) ? configured : undefined;
   }
 
   const service: BodyEditorService = Object.freeze({
@@ -96,28 +87,6 @@ export function createBodyEditorRegistry(
       if (definition.scrollMode !== undefined && definition.scrollMode !== "document" && definition.scrollMode !== "editor") {
         throw new TypeError("Editor scroll mode must be document or editor.");
       }
-      if (definition.conversions !== undefined && (!Array.isArray(definition.conversions)
-        || definition.conversions.some(conversion => !conversion || typeof conversion !== "object"
-          || typeof conversion.id !== "string" || !conversion.id.trim()
-          || typeof conversion.label !== "string" || !conversion.label.trim()
-          || !formats.includes(conversion.from)
-          || typeof conversion.extension !== "string" || !/^[a-z0-9][a-z0-9_-]*$/i.test(conversion.extension)
-          || typeof conversion.convert !== "function")
-        || new Set(definition.conversions.map(conversion => conversion.id)).size !== definition.conversions.length)) {
-        throw new TypeError("Editor conversions must have distinct ids, supported source formats, and valid handlers.");
-      }
-      if (definition.replaces !== undefined && (!Array.isArray(definition.replaces)
-        || definition.replaces.some(replacement => !replacement || typeof replacement !== "object"
-          || typeof replacement.id !== "string" || !replacement.id.trim() || !definition.formats.includes(replacement.format))
-        || new Set(definition.replaces.map(replacement => `${replacement.format}:${replacement.id}`)).size !== definition.replaces.length)) {
-        throw new TypeError("Editor replacements must have distinct ids and supported formats.");
-      }
-      for (const replacement of definition.replaces ?? []) {
-        if ([...entries.values()].some(entry => entry.source.replaces?.some(previous =>
-          previous.id === replacement.id && previous.format === replacement.format))) {
-          throw new Error("An editor replacement is already registered for this id and format.");
-        }
-      }
       if (entries.has(definition.id)) throw new Error("Editor id is already registered.");
       const source: Readonly<EditorDefinition> = Object.freeze({
         id: definition.id,
@@ -125,8 +94,6 @@ export function createBodyEditorRegistry(
         ...(definition.scrollMode !== undefined ? {scrollMode: definition.scrollMode} : {}),
         ...(definition.getText ? {getText: definition.getText} : {}),
         ...(definition.getSearchText ? {getSearchText: definition.getSearchText} : {}),
-        ...(definition.conversions ? {conversions: Object.freeze(definition.conversions.map(conversion => Object.freeze({...conversion})))} : {}),
-        ...(definition.replaces ? {replaces: Object.freeze(definition.replaces.map(replacement => Object.freeze({...replacement})))} : {}),
         load: definition.load,
       });
       const entry: Entry = {source, definition: source};
@@ -154,10 +121,9 @@ export function createBodyEditorRegistry(
       if (!alive || !started) return undefined;
       const format = getEditorFormat(fileName);
       if (!format) return undefined;
-      const entry = resolveEntry(format);
-      const definition = entry?.source.formats.includes(format) ? entry.definition : undefined;
+      const definition = resolveEntry(format)?.definition;
       if (!definition) return undefined;
-      if (!definition.getText) return format === "rich-delta" ? undefined : content;
+      if (!definition.getText) return content;
       try {
         const text = definition.getText(content, format);
         return typeof text === "string" ? text : undefined;
@@ -173,7 +139,7 @@ export function createBodyEditorRegistry(
       if (!entry) return undefined;
       try {
         const getText = entry.definition.getSearchText ?? entry.definition.getText;
-        if (!getText) return format === "rich-delta" ? undefined : content;
+        if (!getText) return content;
         const text = await getText(content, format, signal);
         if (!alive || signal?.aborted || entries.get(entry.source.id) !== entry) return undefined;
         return typeof text === "string" ? text : undefined;
@@ -197,13 +163,6 @@ export function createBodyEditorRegistry(
       checkActive();
       if (!started) throw new Error("Body editor registry is not ready.");
       return resolveEntry(format)?.definition;
-    },
-    getConversions(format: EditorFormat): readonly ResolvedEditorConversion[] {
-      checkActive();
-      if (!started) throw new Error("Body editor registry is not ready.");
-      return Object.freeze([...entries.values()].flatMap(entry => (entry.source.conversions ?? [])
-        .filter(conversion => conversion.from === format)
-        .map(conversion => Object.freeze({...conversion, key: `${entry.source.id}:${conversion.id}`}))));
     },
     dispose() {
       if (!alive) return;

@@ -23,7 +23,7 @@ test('page motion preserves editing state, coordinates menus and supports reduce
     // optimizer generation must not mix with the renderer already on the page.
     optimizeDeps: {
       entries: ['tests/fixtures/project-index.html'],
-      include: ['react', 'react-dom/client', 'quill', '@base-ui/react/scroll-area',
+      include: ['react', 'react-dom/client', '@base-ui/react/scroll-area',
         '@base-ui/react/dialog', '@base-ui/react/menu', '@base-ui/react/select', '@base-ui/react/context-menu'],
     },
     server: {host: '127.0.0.1', port: 0, strictPort: false, hmr: false},
@@ -147,7 +147,7 @@ test('page motion preserves editing state, coordinates menus and supports reduce
   await page.getByRole('button', {name: '打开项目 测试故事', exact: true}).click();
   await page.getByRole('toolbar', {name: '工作台工具栏'}).waitFor();
   await page.getByRole('button', {name: '故事大纲.txt', exact: true}).dblclick();
-  const editor = page.locator('.ql-editor');
+  const editor = page.locator('.plain-text-editor textarea');
   await editor.waitFor();
   await assertSelectedPress(page.locator('.file-tree-entry[data-selected="true"]'), 'current project file');
   await assertSelectedPress(page.locator('.document-tab-select[aria-current="page"]'), 'current document tab');
@@ -196,9 +196,9 @@ test('page motion preserves editing state, coordinates menus and supports reduce
   }
   await page.setViewportSize({width: 1440, height: 900});
   await page.getByRole('dialog', {name: '设置', exact: true}).getByRole('button', {name: '关闭', exact: true}).click();
-  assert.equal(await editorHandle.evaluate(e => e.isConnected && e === document.querySelector('.ql-editor')), true,
+  assert.equal(await editorHandle.evaluate(e => e.isConnected && e === document.querySelector('.plain-text-editor textarea')), true,
     'settings and theme changes preserve the same editor instance');
-  assert.match(await editor.innerText(), /视觉更新验收/);
+  assert.match(await editor.inputValue(), /视觉更新验收/);
   await capture('workbench-light');
 
   await page.getByRole('button', {name: '布局内容', exact: true}).click();

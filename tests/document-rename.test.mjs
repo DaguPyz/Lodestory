@@ -67,10 +67,10 @@ function createWorkspace(files) {
 }
 
 test("folder rename preserves open descendant tabs, selection, and edits queued during the native rename", async () => {
-  const files = createFiles(["notes/one.md", "notes/sub/two.txt", "elsewhere.md"]);
+  const files = createFiles(["notes/one.txt", "notes/sub/two.txt", "elsewhere.txt"]);
   const workspace = createWorkspace(files);
-  await workspace.service.open("elsewhere.md");
-  await workspace.service.open("notes/one.md");
+  await workspace.service.open("elsewhere.txt");
+  await workspace.service.open("notes/one.txt");
   await workspace.service.open("notes/sub/two.txt");
   const activeBefore = workspace.service.getSnapshot().activeId;
   let liveEditorText = "原文:notes/sub/two.txt";
@@ -84,26 +84,26 @@ test("folder rename preserves open descendant tabs, selection, and edits queued 
 
   liveEditorText = "重命名期间的最新输入";
   assert.equal(workspace.service.update(oldActiveId, liveEditorText), true);
-  const unrelatedId = encodeURIComponent("elsewhere.md");
+  const unrelatedId = encodeURIComponent("elsewhere.txt");
   assert.equal(workspace.service.update(unrelatedId, "其他文档仍可编辑"), true);
   files.finishRename(true);
   assert.equal(await rename, true);
 
   const snapshot = workspace.service.getSnapshot();
-  assert.deepEqual(Array.from(snapshot.documents, ({path}) => path), ["elsewhere.md", "archive/one.md", "archive/sub/two.txt"]);
+  assert.deepEqual(Array.from(snapshot.documents, ({path}) => path), ["elsewhere.txt", "archive/one.txt", "archive/sub/two.txt"]);
   assert.equal(snapshot.activeId, encodeURIComponent("archive/sub/two.txt"));
   assert.equal(snapshot.documents[2].content, "重命名期间的最新输入");
   assert.equal(files.files.find(file => file.path === "archive/sub/two.txt").content, "重命名期间的最新输入");
-  assert.equal(files.files.find(file => file.path === "elsewhere.md").content, "其他文档仍可编辑");
+  assert.equal(files.files.find(file => file.path === "elsewhere.txt").content, "其他文档仍可编辑");
   await workspace.dispose();
 });
 
 test("a failed destination rename keeps queued editor input on the original path", async () => {
-  const files = createFiles(["notes/one.md"]);
+  const files = createFiles(["notes/one.txt"]);
   const workspace = createWorkspace(files);
-  await workspace.service.open("notes/one.md");
-  const id = encodeURIComponent("notes/one.md");
-  let liveEditorText = "原文:notes/one.md";
+  await workspace.service.open("notes/one.txt");
+  const id = encodeURIComponent("notes/one.txt");
+  let liveEditorText = "原文:notes/one.txt";
   workspace.service.registerContentReader(id, () => liveEditorText);
 
   const rename = workspace.service.renamePath("notes", "archive");
@@ -114,7 +114,7 @@ test("a failed destination rename keeps queued editor input on the original path
   assert.equal(await rename, false);
 
   const snapshot = workspace.service.getSnapshot();
-  assert.equal(snapshot.documents[0].path, "notes/one.md");
+  assert.equal(snapshot.documents[0].path, "notes/one.txt");
   assert.equal(snapshot.documents[0].content, "保留在原路径的输入");
   assert.equal(files.files[0].content, "保留在原路径的输入");
   assert.equal(snapshot.renamingPath, null);
@@ -124,10 +124,10 @@ test("a failed destination rename keeps queued editor input on the original path
 test("rename waits for a pending open and keeps the opened document at its new path", async () => {
   let release;
   const openGate = {promise: new Promise(resolve => { release = resolve; })};
-  const files = createFiles(["notes/one.md"], {openGate});
+  const files = createFiles(["notes/one.txt"], {openGate});
   const workspace = createWorkspace(files);
-  const opening = workspace.service.open("notes/one.md");
-  const rename = workspace.service.renamePath("notes/one.md", "notes/final.md");
+  const opening = workspace.service.open("notes/one.txt");
+  const rename = workspace.service.renamePath("notes/one.txt", "notes/final.txt");
   await Promise.resolve();
   assert.equal(files.calls.some(([operation]) => operation === "rename"), false, "the file is not moved while its read is pending");
   release();
@@ -136,7 +136,7 @@ test("rename waits for a pending open and keeps the opened document at its new p
   files.finishRename(true);
   assert.equal(await rename, true);
   const snapshot = workspace.service.getSnapshot();
-  assert.equal(snapshot.documents[0].path, "notes/final.md");
-  assert.equal(snapshot.documents[0].content, "原文:notes/one.md");
+  assert.equal(snapshot.documents[0].path, "notes/final.txt");
+  assert.equal(snapshot.documents[0].content, "原文:notes/one.txt");
   await workspace.dispose();
 });

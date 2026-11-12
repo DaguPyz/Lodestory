@@ -110,11 +110,10 @@ export function BodyEditor({active}: {active: boolean}) {
         const documentActive = visible && active;
         const format = getEditorFormat(document.fileName);
         const definition = format ? editor.resolveEditor(format) : undefined;
-        const conversions = format ? editor.resolveConversions(format) : [];
         return <Manuscript key={document.id} document={document}
           visible={visible} active={documentActive}
           readOnly={disabled || workspace.blocked || !visible || workspace.deletingPath === document.path}
-          format={format} definition={definition} conversions={conversions} onEditorReady={onEditorReady}
+          format={format} definition={definition} onEditorReady={onEditorReady}
           onChange={content => {
             const latest = workspace.getSnapshot();
             const focus = focusState.current;
@@ -124,22 +123,7 @@ export function BodyEditor({active}: {active: boolean}) {
               workspace.update(document.id, content);
             }
           }}
-          onSave={() => workspace.save(document.id)}
-          onSaveAs={async ({extension, content}) => {
-            const normalizedExtension = extension.trim().replace(/^\./, "");
-            if (!/^[a-z0-9][a-z0-9_-]*$/i.test(normalizedExtension)) {
-              throw new Error("文件扩展名无效，无法转换保存。");
-            }
-            const latest = workspace.getSnapshot();
-            const focus = focusState.current;
-            if (!documentActive || !focus.active || focus.busy || latest.activeId !== document.id
-              || !latest.documents.some(open => open.id === document.id)) {
-              throw new Error("当前文稿已不可编辑，无法转换保存。");
-            }
-            const extensionIndex = document.fileName.lastIndexOf(".");
-            const basename = extensionIndex > 0 ? document.fileName.slice(0, extensionIndex) : document.fileName;
-            await workspace.saveAs(document.id, `${basename}.${normalizedExtension}`, content);
-          }}/>
+          onSave={() => workspace.save(document.id)}/>
       }) : <EmptyDocument projectPath={editor.projectPath} onCreate={() => editor.requestNewDocument()} disabled={editor.newDisabled || !active}/>}
     </div>
   </div>;

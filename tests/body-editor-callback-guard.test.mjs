@@ -9,7 +9,7 @@ test("content flush handles reject reads from replaced or invalidated editors", 
   let exposed;
   let reads = 0;
   const guard = createEditorCallbackGuard(token, candidate => candidate === current, {
-    onChange() {}, onError() {}, onSaveAs() {}, onReady(handle) { exposed = handle; },
+    onChange() {}, onError() {}, onReady(handle) { exposed = handle; },
   });
   guard.onReady({focus() {}, flushContent() { reads++; return "待提交的正文"; }});
   const first = exposed;
@@ -75,36 +75,6 @@ test("a replaced editor instance cannot publish changes, focus handles, or error
   assert.deepEqual(errors, [oldError, newError]);
 });
 
-test("a failed save-as request rejects locally without invalidating the editor instance", async () => {
-  const fixture = createMainFixture();
-  const {createEditorCallbackGuard} = fixture.loadModule("plugins/body-editor/editorCallbackGuard.ts");
-  const token = Symbol("editor");
-  let currentToken = token;
-  const changes = [];
-  const ready = [];
-  const errors = [];
-  const saveError = new Error("目标文件已存在");
-  const handle = {focus() {}};
-  const guard = createEditorCallbackGuard(token, candidate => candidate === currentToken, {
-    onChange: content => changes.push(content),
-    onReady: value => ready.push(value),
-    onError: error => errors.push(error),
-    onSaveAs: async () => { throw saveError; },
-  });
-
-  guard.onReady(handle);
-  await assert.rejects(guard.onSaveAs({extension: "lode", content: "delta"}), saveError);
-  guard.onChange("still editable");
-  assert.deepEqual(changes, ["still editable"]);
-  assert.deepEqual(ready, [handle], "a recoverable file conflict leaves the editor handle mounted");
-  assert.deepEqual(errors, [], "save-as conflicts are not promoted to fatal editor errors");
-
-  currentToken = Symbol("replacement");
-  await assert.rejects(guard.onSaveAs({extension: "lode", content: "stale"}), /no longer active/);
-  assert.deepEqual(changes, ["still editable"]);
-  assert.deepEqual(errors, []);
-});
-
 test("context menu actions stay dynamic and cached actions cannot run after replacement", async () => {
   const fixture = createMainFixture();
   const {createEditorCallbackGuard} = fixture.loadModule("plugins/body-editor/editorCallbackGuard.ts");
@@ -121,7 +91,6 @@ test("context menu actions stay dynamic and cached actions cannot run after repl
     onChange() {},
     onReady: handle => ready.push(handle),
     onError() {},
-    onSaveAs: async () => {},
   });
 
   guard.onReady(sourceHandle);

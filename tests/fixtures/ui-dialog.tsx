@@ -46,7 +46,7 @@ const themeConfig = {
 type DialogKind = "project" | "document" | "delete";
 type Outcome = "success" | "error";
 
-const longDeletePath = `书稿/archives/${"特别长的历史篇章目录".repeat(22)}/请确认删除的章节.lode`;
+const longDeletePath = `书稿/archives/${"特别长的历史篇章目录".repeat(22)}/请确认删除的章节.txt`;
 
 function ThemePicker({ service, compact = false }: { service: ThemeService; compact?: boolean }) {
   const snapshot = useSyncExternalStore(service.subscribe, service.getSnapshot, service.getSnapshot);
@@ -225,7 +225,6 @@ function BusinessDialogs() {
       open={kind === "document"}
       initialParent="chapters"
       kind="document"
-      extension="lode"
       busy={busy}
       error={error}
       onClose={() => closeDialog("document")}

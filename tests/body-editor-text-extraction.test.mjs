@@ -2,41 +2,30 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {createMainFixture} from "./helpers/mainStartupFixture.mjs";
 
-test("body editor text extraction follows the configured file format and tolerates missing or invalid extractors", () => {
+test("body editor extracts and searches TXT source while rejecting unsupported extensions", async () => {
   const fixture = createMainFixture();
-  const {createBodyEditorRegistry} = fixture.loadModule("plugins/body-editor/bodyEditorRegistry.ts");
-  const registry = createBodyEditorRegistry({markdown: "markdown", "plain-text": "text", "rich-delta": "rich"}, () => {});
+  const {createBodyEditorRegistry, getEditorFormat} = fixture.loadModule("plugins/body-editor/bodyEditorRegistry.ts");
+  const registry = createBodyEditorRegistry({"plain-text": "text"}, () => {});
   const changes = [];
   const unsubscribe = registry.service.subscribe(() => changes.push("changed"));
-  const editor = (id, formats, getText) => ({
-    id,
-    formats,
-    ...(getText ? {getText} : {}),
+  registry.service.registerEditor({
+    id: "text",
+    formats: ["plain-text"],
     async load() { return {default: function Editor() { return null; }}; },
   });
-
-  const removeMarkdown = registry.service.registerEditor(editor("markdown", ["markdown"]));
-  const removeText = registry.service.registerEditor(editor("text", ["plain-text"]));
-  const removeRich = registry.service.registerEditor(editor("rich", ["rich-delta"], (content, format) => {
-    assert.equal(format, "rich-delta");
-    if (content === "corrupt") throw new Error("invalid Delta");
-    return "visible text";
-  }));
   registry.start();
 
-  assert.equal(registry.service.getText("chapter.md", "**raw markdown**"), "**raw markdown**");
-  assert.equal(registry.service.getText("chapter.txt", "plain JSON-looking text: {}"), "plain JSON-looking text: {}");
-  assert.equal(registry.service.getText("chapter.lode", "valid envelope"), "visible text");
-  assert.equal(registry.service.getText("chapter.lode", "corrupt"), undefined);
-  assert.equal(registry.service.getText("chapter.csv", "unmapped"), undefined);
-  assert.equal(changes.length, 3, "each editor registration notifies the status subscriber");
+  assert.equal(getEditorFormat("chapter.txt"), "plain-text");
+  for (const fileName of ["chapter.md", "chapter.markdown", "chapter.lode", "chapter.csv"]) {
+    assert.equal(getEditorFormat(fileName), undefined, `${fileName} is not an app document format`);
+    assert.equal(registry.service.getText(fileName, "unsupported"), undefined);
+    assert.equal(await registry.service.getSearchText(fileName, "unsupported"), undefined);
+  }
+  assert.equal(registry.service.getText("chapter.txt", "\uFEFFA\r\nB"), "\uFEFFA\r\nB");
+  assert.equal(await registry.service.getSearchText("chapter.txt", "plain source: {}"), "plain source: {}");
+  assert.equal(changes.length, 1, "editor registration notifies the status subscriber");
 
-  removeRich();
-  assert.equal(registry.service.getText("chapter.lode", "valid envelope"), undefined);
-  assert.equal(changes.length, 4, "revoking the selected editor refreshes subscribers");
   unsubscribe();
-  removeMarkdown();
-  removeText();
-  assert.equal(changes.length, 4, "an unsubscribed listener is not called during cleanup");
   registry.dispose();
+  assert.equal(changes.length, 1, "an unsubscribed listener is not called during cleanup");
 });

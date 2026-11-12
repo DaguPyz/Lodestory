@@ -15,7 +15,7 @@ function createWorkspace() {
   };
 }
 
-function setup({rejectContentId, editorDefaults = {markdown: "milkdown", "plain-text": "plain-text", "rich-delta": "quill"}} = {}) {
+function setup({rejectContentId, editorDefaults = {"plain-text": "plain-text"}} = {}) {
   const fixture = createMainFixture();
   const {configKey} = fixture.requireSdk("@lodestory/sdk/config");
   const {workbenchKey} = fixture.requireSdk("@lodestory/sdk/workbench");
@@ -112,9 +112,7 @@ function setup({rejectContentId, editorDefaults = {markdown: "milkdown", "plain-
     },
   };
   const plugin = fixture.loadModule("plugins/body-editor/bodyEditorPlugin.tsx").createBodyEditorPlugin();
-  const markdownEditorPlugin = fixture.loadModule("plugins/markdown-editor/markdownEditorPlugin.ts").createMarkdownEditorPlugin();
   const plainTextEditorPlugin = fixture.loadModule("plugins/plain-text-editor/plainTextEditorPlugin.ts").createPlainTextEditorPlugin();
-  const richTextEditorPlugin = fixture.loadModule("plugins/rich-text-editor/richTextEditorPlugin.ts").createRichTextEditorPlugin();
 
   return {
     context,
@@ -133,14 +131,10 @@ function setup({rejectContentId, editorDefaults = {markdown: "milkdown", "plain-
     events,
     fixture,
     layout,
-    markdownEditorPlugin,
     plainTextEditorPlugin,
-    richTextEditorPlugin,
     plugin,
     prepareWrappers: async () => { await Promise.all(wrappers.map(({prepare}) => prepare())); },
     deactivatePlugins: async () => {
-      await richTextEditorPlugin.deactivate();
-      await markdownEditorPlugin.deactivate();
       await plainTextEditorPlugin.deactivate();
       await plugin.deactivate();
     },
@@ -182,11 +176,18 @@ function resolveEditor(f, id, format) {
   return resolve(format);
 }
 
-function resolveConversions(f, id, format) {
-  const resolve = f.fixture.bodyEditorConversionResolvers.get(id);
-  assert.equal(typeof resolve, "function", "the body editor content provider exposes the format conversion resolver");
-  return resolve(format);
-}
+test("body editor resolves the explicitly configured TXT editor", async () => {
+  const f = setup();
+  f.plugin.activate(f.context);
+  f.plainTextEditorPlugin.activate(f.context);
+  await f.prepareWrappers();
+  f.start();
+  renderModel(f, f.session.id);
+
+  assert.equal(resolveEditor(f, f.session.id, "plain-text").id, "plain-text");
+
+  await f.deactivatePlugins();
+});
 
 test("body editor declares the SDK contract and keeps reveal listening before a document is active", async () => {
   const f = setup();
@@ -201,8 +202,6 @@ test("body editor declares the SDK contract and keeps reveal listening before a 
 
   f.plugin.activate(f.context);
   f.plainTextEditorPlugin.activate(f.context);
-  f.markdownEditorPlugin.activate(f.context);
-  f.richTextEditorPlugin.activate(f.context);
   await f.prepareWrappers();
   assert.deepEqual(f.configRegistrations, [f.bodyEditorDefaultEditorsConfig]);
   assert.equal(f.configReads(), 1, "the registry reads its default editor mapping from the configuration service");
@@ -216,31 +215,19 @@ test("body editor declares the SDK contract and keeps reveal listening before a 
   assert.deepEqual(f.shown, [], "a reveal received without a session model is safely ignored");
   f.start();
   const model = renderModel(f, f.session.id);
-  const markdownEditor = resolveEditor(f, f.session.id, "markdown");
-  assert.equal(markdownEditor.id, "milkdown");
   assert.equal(resolveEditor(f, f.session.id, "plain-text").id, "plain-text");
-  assert.equal(resolveEditor(f, f.session.id, "rich-delta").id, "quill");
   const bodyEditor = f.provided.get(f.bodyEditorKey);
-  assert.equal(bodyEditor.getText("chapter.md", "**raw markdown**"), "**raw markdown**");
   assert.equal(bodyEditor.getText("chapter.txt", "plain text"), "plain text");
-  assert.equal(bodyEditor.getText("chapter.lode", "not a Delta envelope"), undefined,
-    "malformed rich text is unavailable to status instead of being counted as JSON");
+  assert.equal(bodyEditor.getText("chapter.md", "Markdown"), undefined);
+  assert.equal(bodyEditor.getText("chapter.lode", "rich text"), undefined);
   assert.equal(bodyEditor.getText("chapter.csv", "unmapped"), undefined);
-  assert.equal(typeof markdownEditor.load, "function");
+  assert.equal(await bodyEditor.getSearchText("chapter.md", "Markdown"), undefined);
+  assert.equal(await bodyEditor.getSearchText("chapter.lode", "rich text"), undefined);
   const txtEditor = resolveEditor(f, f.session.id, "plain-text");
   assert.equal(txtEditor.getText("\uFEFFA\r\nB", "plain-text"), "\uFEFFA\r\nB",
     "the dedicated TXT plugin returns original source without normalization");
   assert.equal(f.fixture.moduleImports.some(({specifier}) => specifier === "./PlainTextEditor"), false,
     "resolving TXT does not load its component until the definition is requested");
-  const conversions = resolveConversions(f, f.session.id, "plain-text");
-  assert.equal(conversions.length, 1);
-  assert.equal(conversions[0].label, "转换为富文本文档");
-  assert.equal(conversions[0].extension, "lode");
-  assert.equal(typeof conversions[0].convert, "function");
-  assert.equal(f.fixture.moduleImports.some(({specifier}) => specifier.startsWith("@milkdown/")), false,
-    "registering and resolving Milkdown does not load its package before the editor definition is loaded");
-  assert.equal(f.fixture.moduleImports.some(({specifier}) => specifier.startsWith("quill")), false,
-    "registering and resolving Quill does not load its package before the editor definition is loaded");
   assert.deepEqual({projectName: model.getSnapshot().projectName, projectPath: model.getSnapshot().projectPath}, {
     projectName: f.session.project.name,
     projectPath: f.session.project.path,
@@ -258,13 +245,12 @@ test("body editor declares the SDK contract and keeps reveal listening before a 
 test("body editor models are session-scoped and valid reveal restores hidden content during busy or blocked state", async () => {
   const f = setup();
   f.plugin.activate(f.context);
-  f.markdownEditorPlugin.activate(f.context);
   await f.prepareWrappers();
   const firstModel = (f.start(), renderModel(f, f.session.id));
   const firstWorkspace = f.workspace;
   assert.strictEqual(firstModel.getSnapshot().workspace, firstWorkspace,
     "the body editor model exposes the documents service workspace for its own session");
-  const activeDocument = {id: "opaque-id-1", path: "第一章.md", content: "正文"};
+  const activeDocument = {id: "opaque-id-1", path: "第一章.txt", content: "正文"};
   firstWorkspace.setSnapshot({documents: [activeDocument], activeId: activeDocument.id, blocked: true});
   let changes = 0;
   const unsubscribe = firstModel.subscribe(() => changes++);
@@ -283,7 +269,7 @@ test("body editor models are session-scoped and valid reveal restores hidden con
   const secondSession = {id: "session-two", project: {id: "project-two", name: "第二本", path: "/stories/two"}};
   const secondWorkspace = createWorkspace();
   f.workspaces.set(secondSession.id, secondWorkspace);
-  const secondDocument = {id: "opaque-id-2", path: "第二章.md", content: "新正文"};
+  const secondDocument = {id: "opaque-id-2", path: "第二章.txt", content: "新正文"};
   secondWorkspace.setSnapshot({documents: [secondDocument], activeId: secondDocument.id});
   f.setWorkbench({session: secondSession, active: true, busy: false});
   f.start(secondSession);
@@ -304,7 +290,6 @@ test("body editor models are session-scoped and valid reveal restores hidden con
 test("new-document requests follow session, visibility, busy, blocked, and SDK event guards", async () => {
   const f = setup();
   f.plugin.activate(f.context);
-  f.markdownEditorPlugin.activate(f.context);
   await f.prepareWrappers();
   f.start();
   const model = renderModel(f, f.session.id);

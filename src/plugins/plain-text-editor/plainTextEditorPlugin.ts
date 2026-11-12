@@ -14,7 +14,6 @@ export function createPlainTextEditorPlugin(): Plugin {
       removeEditor = context.track(bodyEditor.registerEditor({
         id: "plain-text",
         formats: ["plain-text"],
-        replaces: [{id: "quill", format: "plain-text"}],
         getText(content, format) {
           if (format !== "plain-text") throw new Error("TXT 编辑器无法读取此文档格式。");
           return content;

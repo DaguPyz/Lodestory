@@ -331,7 +331,7 @@ const removeParticipant = context.track(workbench.registerParticipant({
 
 `renamePath(fromPath, toPath)` 可以重命名任意项目内普通文件或目录；目标必须不存在。存储会先锁住两条路径及其祖先/后代操作，等待已接受的读取结束，并保存源路径下全部缓冲；保存或磁盘改名失败时保留旧路径和字节。成功后先同步发出 `{fromPath, toPath}` 路径变更通知，再一次性发布全部已打开文件的新路径。路径变更通知只用于同步其他插件持有的路径引用，不可取消或回滚改名；监听器异常会记录，不能中断已落盘操作。需要保留未保存正文的消费者必须在调用改名前先刷新正文编辑器并保存。
 
-默认 `ProjectFile.bytes` 仍是只读冻结字节数组。调用方可在 `read`、`write` 的访问选项或 `create` 选项中显式设置 `preferByteView: true`，启用紧凑的 `ProjectByteView`；紧凑模式下快照提供 `byteView`，而兼容用的 `bytes` 数组只在被读取时才物化。`ProjectByteView` 暴露 `byteLength`、写入调用方 `Uint8Array` 的 `copyTo` 和逐字节比较用的 `equals`，不暴露内部可变缓冲区。该选项不改变字节内容，也不会自动迁移未选择它的调用方；当前 TXT 文档适配器选择此路径，Markdown、富文本和普通数组调用仍沿用原有表示。
+默认 `ProjectFile.bytes` 是只读冻结字节数组。调用方可在 `read`、`write` 的访问选项或 `create` 选项中显式设置 `preferByteView: true`，启用紧凑的 `ProjectByteView`。快照提供 `byteView`，并在调用方读取 `bytes` 时物化字节数组。`ProjectByteView` 暴露 `byteLength`、写入调用方 `Uint8Array` 的 `copyTo` 和逐字节比较用的 `equals`。TXT 文档适配器使用紧凑字节视图。
 
 `ProjectFiles.captureBytes?(data)` 是可选的无副作用辅助方法：它把调用方数据捕获为不可变 `ProjectByteView`，不会登记文件、修改缓冲或安排保存；文件服务停止后调用会抛出错误。当前内置项目存储在变更写入确实安装该 view 时会复用其身份，便于消费者验证刚写入的投影；若字节与现有缓冲相同，存储可能保留旧 view。替代实现无需保留对象身份，消费者在身份不同时仍须按字节精确比较。
 

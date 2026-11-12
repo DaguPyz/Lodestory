@@ -13,7 +13,6 @@ mod project_commands;
 mod project_file_commands;
 mod project_files;
 mod project_index;
-mod system_fonts;
 
 #[cfg(all(feature = "desktop-e2e", not(debug_assertions)))]
 compile_error!("desktop-e2e is restricted to debug builds");
@@ -87,7 +86,6 @@ pub fn run() {
             project_file_commands::list_project_directory,
             project_file_commands::create_project_directory,
             project_file_commands::rename_project_path,
-            system_fonts::list_system_font_families,
             native_process::native_process_start,
             native_process::native_process_read,
             native_process::native_process_write,

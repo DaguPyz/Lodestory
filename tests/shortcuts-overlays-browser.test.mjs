@@ -24,7 +24,7 @@ test("shortcut overlay isolation follows UI surfaces and releases after dismissa
     cacheDir: "node_modules/.vite-shortcuts-overlays-test",
     resolve: {dedupe: ["react", "react-dom"]},
     optimizeDeps: {entries: ["tests/fixtures/project-index.html"], include: [
-      "react", "react-dom/client", "quill", "@base-ui/react/context-menu", "@base-ui/react/dialog", "@base-ui/react/menu", "@base-ui/react/select",
+      "react", "react-dom/client", "@base-ui/react/context-menu", "@base-ui/react/dialog", "@base-ui/react/menu", "@base-ui/react/select",
     ]},
     server: {host: "127.0.0.1", port: 0, strictPort: false, hmr: false}, logLevel: "error",
   });
@@ -37,24 +37,16 @@ test("shortcut overlay isolation follows UI surfaces and releases after dismissa
   const pressShortcut = key => page.keyboard.press(`${modifier}+${key}`);
   const tabs = page.locator(".document-tab-select");
   const file = name => page.locator(".file-tree").getByRole("button", {name, exact: true});
-  const editor = page.getByRole("textbox", {name: "富文本正文", exact: true});
+  const editor = page.getByRole("textbox", {name: "文档正文", exact: true});
 
-  await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/tests/fixtures/project-index.html?scenario=save-as-conflict`);
+  await page.goto(`http://127.0.0.1:${server.httpServer.address().port}/tests/fixtures/project-index.html`);
   await page.getByRole("button", {name: "打开项目 测试故事", exact: true}).click();
   await page.getByRole("heading", {name: "作品已打开", exact: true}).waitFor();
-  if (!await file("故事大纲.lode").isVisible()) await page.getByRole("button", {name: "工程文件", exact: true}).click();
-  await file("故事大纲.lode").dblclick();
+  if (!await file("已有章节.txt").isVisible()) await page.getByRole("button", {name: "工程文件", exact: true}).click();
+  await file("已有章节.txt").dblclick();
   await editor.waitFor();
-  await page.getByRole("combobox", {name: "字号", exact: true}).click();
-  const listbox = page.getByRole("listbox");
-  await listbox.waitFor();
-  await pressShortcut("w");
-  assert.equal(await tabs.count(), 1, "a Select popup keeps the underlying document open");
-  assert.equal(await listbox.isVisible(), true, "the Select remains open while the background shortcut is blocked");
-  await page.keyboard.press("Escape");
-  await listbox.waitFor({state: "detached"});
   await tabs.click({button: "right"});
-  const menu = page.getByRole("menu", {name: "故事大纲.lode标签操作", exact: true});
+  const menu = page.getByRole("menu", {name: "已有章节.txt标签操作", exact: true});
   await menu.waitFor();
   await pressShortcut("w");
   assert.equal(await tabs.count(), 1, "a context menu keeps the underlying document open");
@@ -75,13 +67,13 @@ test("shortcut overlay isolation follows UI surfaces and releases after dismissa
   await pressShortcut("w");
   await tabs.waitFor({state: "detached"});
 
-  await file("故事大纲.lode").click();
+  await file("已有章节.txt").click();
   assert.equal(await tabs.count(), 0, "a single click selects the file without opening a tab");
-  assert.equal(await file("故事大纲.lode").getAttribute("data-selected"), "true");
+  assert.equal(await file("已有章节.txt").getAttribute("data-selected"), "true");
   await page.keyboard.press("F2");
   await page.getByRole("dialog", {name: "重命名文件", exact: true}).waitFor();
   await page.keyboard.press("Escape");
-  assert.equal(await file("故事大纲.lode").evaluate(element => document.activeElement === element), true,
+  assert.equal(await file("已有章节.txt").evaluate(element => document.activeElement === element), true,
     "selection keeps keyboard focus on its tree entry");
   await page.keyboard.press("F2");
   await page.getByRole("dialog", {name: "重命名文件", exact: true}).waitFor();
@@ -94,26 +86,27 @@ test("shortcut overlay isolation follows UI surfaces and releases after dismissa
   await page.getByRole("dialog", {name: "重命名文件夹", exact: true}).waitFor();
   await page.keyboard.press("Escape");
 
-  await file("故事大纲.lode").dblclick();
-  await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "富文本正文");
+  await file("已有章节.txt").dblclick();
+  await editor.waitFor();
+  await editor.focus();
   await page.keyboard.press("F2");
   assert.equal(await page.getByRole("dialog", {name: "重命名文件", exact: true}).count(), 0,
     "tree rename does not take F2 from the focused editor");
 
-  let releaseMarkdown;
-  const markdownGate = new Promise(resolve => { releaseMarkdown = resolve; });
-  t.after(() => releaseMarkdown());
-  await page.route("**/src/plugins/markdown-editor/MarkdownEditor.tsx*", async route => {
-    await markdownGate;
+  let releaseTextEditor;
+  const textEditorGate = new Promise(resolve => { releaseTextEditor = resolve; });
+  t.after(() => releaseTextEditor());
+  await page.route("**/src/plugins/plain-text-editor/PlainTextEditor.tsx*", async route => {
+    await textEditorGate;
     await route.continue();
   });
-  await file("已有章节.md").dblclick();
+  await file("故事大纲.txt").dblclick();
   await page.getByText("正在加载编辑器…", {exact: true}).waitFor();
-  await file("故事大纲.txt").click();
-  releaseMarkdown();
-  await page.getByRole("textbox", {name: "Markdown 正文", exact: true}).waitFor();
+  await file("已有章节.txt").click();
+  releaseTextEditor();
+  await page.getByRole("textbox", {name: "纯文本正文", exact: true}).waitFor();
   await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-  assert.equal(await file("故事大纲.txt").evaluate(element => document.activeElement === element), true,
+  assert.equal(await file("已有章节.txt").evaluate(element => document.activeElement === element), true,
     "a delayed editor does not take focus back after another file is selected");
   await page.keyboard.press("F2");
   await page.getByRole("dialog", {name: "重命名文件", exact: true}).waitFor();

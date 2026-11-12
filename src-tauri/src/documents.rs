@@ -53,12 +53,7 @@ fn relative_path(root: &Path, path: &Path) -> String {
 fn supported_document(path: &Path) -> bool {
     path.extension()
         .and_then(|extension| extension.to_str())
-        .is_some_and(|extension| {
-            matches!(
-                extension.to_ascii_lowercase().as_str(),
-                "md" | "markdown" | "txt" | "lode"
-            )
-        })
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("txt"))
 }
 
 fn directory_entries(root: &Path, directory: &Path) -> Result<Vec<TreeEntry>, ProjectError> {
@@ -114,7 +109,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn listing_filters_hidden_and_unsupported_entries_and_sorts_folders_first() {
+    fn listing_filters_hidden_and_non_txt_files_and_sorts_folders_first() {
         let root = tempfile::tempdir().unwrap();
         let store = Documents::default();
         for name in [
@@ -136,8 +131,14 @@ mod tests {
             tree.iter()
                 .map(|entry| entry.name.as_str())
                 .collect::<Vec<_>>(),
-            ["正文", "a.md", "b.TXT", "c.markdown", "d.lode"]
+            ["正文", "b.TXT"]
         );
+        for name in ["a.md", "c.markdown", "d.lode", "image.png", ".hidden.md"] {
+            assert!(
+                root.path().join(name).exists(),
+                "listing must not remove {name}"
+            );
+        }
     }
 
     #[test]
@@ -163,8 +164,9 @@ mod tests {
                 .iter()
                 .map(|entry| entry.name.as_str())
                 .collect::<Vec<_>>(),
-            ["第一章.txt", "第二章.md"]
+            ["第一章.txt"]
         );
+        assert!(root.path().join("章节甲/第二章.md").exists());
     }
 
     #[cfg(unix)]
@@ -175,14 +177,14 @@ mod tests {
         let root = tempfile::tempdir().unwrap();
         let outside = tempfile::tempdir().unwrap();
         let store = Documents::default();
-        fs::write(outside.path().join("keep.md"), "保留").unwrap();
+        fs::write(outside.path().join("keep.txt"), "保留").unwrap();
         fs::create_dir(root.path().join("safe")).unwrap();
-        fs::write(root.path().join("safe/visible.md"), "").unwrap();
+        fs::write(root.path().join("safe/visible.txt"), "").unwrap();
         symlink(outside.path(), root.path().join("outside")).unwrap();
         symlink(root.path(), root.path().join("cycle")).unwrap();
         symlink(
-            outside.path().join("keep.md"),
-            root.path().join("linked.md"),
+            outside.path().join("keep.txt"),
+            root.path().join("linked.txt"),
         )
         .unwrap();
 
@@ -192,10 +194,10 @@ mod tests {
         assert_eq!(tree[0].name, "safe");
         assert_eq!(
             tree[0].children.as_ref().unwrap()[0].path,
-            "safe/visible.md"
+            "safe/visible.txt"
         );
         assert_eq!(
-            fs::read_to_string(outside.path().join("keep.md")).unwrap(),
+            fs::read_to_string(outside.path().join("keep.txt")).unwrap(),
             "保留"
         );
     }

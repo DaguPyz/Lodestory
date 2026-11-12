@@ -4,7 +4,6 @@ import type {WorkbenchService, WorkbenchSession} from "@lodestory/sdk/workbench"
 import {listDocuments, projectFilesErrorMessage} from "./projectFilesApi";
 
 export type ProjectTreeEntry = Readonly<{ path: string; name: string; children?: readonly ProjectTreeEntry[] }>;
-export type DocumentExtension = "txt" | "md" | "lode";
 export type CreateEntryKind = "document" | "directory";
 export type ProjectManagementSnapshot = Readonly<{
     sessionId: string;
@@ -16,7 +15,6 @@ export type ProjectManagementSnapshot = Readonly<{
     dialogOpen: boolean;
     createError: string | null;
     createKind: CreateEntryKind;
-    createExtension: DocumentExtension | null;
     creating: boolean;
     deletePath: string | null;
     deleteError: string | null;
@@ -40,7 +38,7 @@ export type ProjectManagementModel = {
     refresh(): Promise<void>;
     selectFolder(path: string): boolean;
     openDocument(path: string): Promise<boolean>;
-    requestCreate(parentPath?: string, extension?: DocumentExtension): boolean;
+    requestCreate(parentPath?: string): boolean;
     requestCreateDirectory(parentPath?: string): boolean;
     create(parentPath: string, name: string): Promise<void>;
     closeCreateDialog(): boolean;
@@ -82,10 +80,6 @@ function renamePrefix(path: string, fromPath: string, toPath: string) {
     return path === fromPath || path.startsWith(`${fromPath}/`) ? `${toPath}${path.slice(fromPath.length)}` : path;
 }
 
-function documentName(name: string, extension: DocumentExtension | null) {
-    return extension ? `${name.replace(/\.(?:md|markdown|txt|lode)$/i, "")}.${extension}` : name;
-}
-
 function withoutDocument(entries: readonly ProjectTreeEntry[], path: string): readonly ProjectTreeEntry[] {
     return immutableEntries(entries.filter(entry => entry.path !== path).map(entry => entry.children
         ? {...entry, children: withoutDocument(entry.children, path)} : entry));
@@ -104,7 +98,6 @@ export function createProjectManagementModel(
     let dialogOpen = false;
     let createError: string | null = null;
     let createKind: CreateEntryKind = "document";
-    let createExtension: DocumentExtension | null = null;
     let deletePath: string | null = null;
     let deleteError: string | null = null;
     let deleting = false;
@@ -136,7 +129,7 @@ export function createProjectManagementModel(
     function makeSnapshot(): ProjectManagementSnapshot {
         return Object.freeze({
             sessionId: session.id, projectName: session.project.name, entries, loading, error, selectedFolder,
-            dialogOpen, createError, createKind, createExtension, creating: documentState.creating, blocked: blocked(),
+            dialogOpen, createError, createKind, creating: documentState.creating, blocked: blocked(),
             deletePath, deleteError, deleting, deletingPath: documentState.deletingPath ?? null,
             renamePath, renameName, renameSuffix, renameDirectory, renameError, renaming, lastRename,
             activeDocumentPath: documentState.documents.find(document => document.id === documentState.activeId)?.path ?? null,
@@ -172,11 +165,10 @@ export function createProjectManagementModel(
         else void model.refresh();
     }
 
-    function requestCreation(parentPath: string, kind: CreateEntryKind, extension: DocumentExtension | null) {
+    function requestCreation(parentPath: string, kind: CreateEntryKind) {
         if (blocked() || documentState.creating || documentState.deletingPath || deleting || deletePath || renamePath || dialogOpen || !isDirectory(parentPath)) return false;
         selectedFolder = parentPath;
         createKind = kind;
-        createExtension = extension;
         createError = null;
         workspace.clearError();
         dialogOpen = true;
@@ -253,11 +245,11 @@ export function createProjectManagementModel(
             publish();
             return workspace.open(path);
         },
-        requestCreate(parentPath = selectedFolder, extension) {
-            return requestCreation(parentPath, "document", extension ?? null);
+        requestCreate(parentPath = selectedFolder) {
+            return requestCreation(parentPath, "document");
         },
         requestCreateDirectory(parentPath = selectedFolder) {
-            return requestCreation(parentPath, "directory", null);
+            return requestCreation(parentPath, "directory");
         },
         async create(parentPath, name) {
             if (blocked() || documentState.creating || documentState.deletingPath || deleting || !dialogOpen || !isDirectory(parentPath)) return;
@@ -267,7 +259,7 @@ export function createProjectManagementModel(
             try {
                 const created = createKind === "directory"
                     ? await workspace.createDirectory(parentPath, name)
-                    : await workspace.create(parentPath, documentName(name, createExtension));
+                    : await workspace.create(parentPath, name);
                 if (disposed) return;
                 if (!created) {
                     createError = workspace.getSnapshot().error ?? `未能创建${createKind === "directory" ? "文件夹" : "文档"}，请重试。`;

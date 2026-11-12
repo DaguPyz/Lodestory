@@ -120,12 +120,16 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.deepEqual(packageBodyEditor.bodyEditorContentIds, {main: "body-editor.main"});
   assert.equal(packageCanvas.canvasKey.id, "app/canvas");
   const validateBodyEditorDefaults = packageBodyEditor.bodyEditorDefaultEditorsConfig.validate;
-  assert.equal(validateBodyEditorDefaults({markdown: "milkdown", "plain-text": "textarea"}), true);
+  assert.equal(validateBodyEditorDefaults({"plain-text": "plain-text"}), true);
+  assert.equal(validateBodyEditorDefaults({markdown: "milkdown"}), false,
+    "Markdown is not a supported document format");
+  assert.equal(validateBodyEditorDefaults({"rich-delta": "quill"}), false,
+    "rich text is not a supported document format");
   assert.equal(validateBodyEditorDefaults({}), true, "unconfigured formats may remain unavailable");
   assert.equal(validateBodyEditorDefaults(Object.create(null)), true, "JSON object records may have a null prototype");
-  assert.equal(validateBodyEditorDefaults(runInNewContext("({markdown: 'quill'})")), true,
+  assert.equal(validateBodyEditorDefaults(runInNewContext("({'plain-text': 'plain-text'})")), true,
     "plain records from another realm remain valid configuration values");
-  assert.equal(validateBodyEditorDefaults(runInNewContext("Object.assign(Object.create(null), {markdown: 'quill'})")), true,
+  assert.equal(validateBodyEditorDefaults(runInNewContext("Object.assign(Object.create(null), {'plain-text': 'plain-text'})")), true,
     "null-prototype records from another realm remain valid");
   assert.equal(validateBodyEditorDefaults(runInNewContext("new (class CustomConfig {})()")), false,
     "custom class instances are not plain configuration records");
@@ -133,9 +137,9 @@ test("SDK package exposes ESM root and all public capability entry points", () =
     "built-in instances are not plain configuration records");
   assert.equal(validateBodyEditorDefaults(null), false);
   assert.equal(validateBodyEditorDefaults([]), false);
-  assert.equal(validateBodyEditorDefaults(Object.create({markdown: "milkdown"})), false);
+  assert.equal(validateBodyEditorDefaults(Object.create({"plain-text": "plain-text"})), false);
   assert.equal(validateBodyEditorDefaults({tabs: "editor"}), false);
-  assert.equal(validateBodyEditorDefaults({markdown: "  "}), false);
+  assert.equal(validateBodyEditorDefaults({"plain-text": "  "}), false);
   assert.equal(packageDocuments.documentCreateRequested.id, "app/documents/create-requested");
   assert.equal(packageDocuments.documentRevealRequested.id, "app/documents/reveal-requested");
   assert.equal(packageUi.uiInitialPageConfig.id, "ui.initialPage");

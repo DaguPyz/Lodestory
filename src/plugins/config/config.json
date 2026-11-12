@@ -1,8 +1,6 @@
 {
   "ui.initialPage": "welcome",
   "bodyEditor.defaultEditors": {
-    "markdown": "milkdown",
-    "plain-text": "plain-text",
-    "rich-delta": "quill"
+    "plain-text": "plain-text"
   }
 }

@@ -394,13 +394,7 @@ test("asset type and field definitions persist by stable IDs and stay isolated b
     .map(({id, title, order}) => [id, title, order]), [
     [secondFieldId, "效果", 0], [firstFieldId, "境界", 1],
   ]);
-  const originalBytes = storage.disk.get(storage.key(originalProject.path, schemaPath));
-  assert.ok(originalBytes, "the schema is written through the project's real ProjectFiles byte store");
-  const savedSchema = JSON.parse(new TextDecoder().decode(new Uint8Array(originalBytes)));
-  assert.equal(savedSchema.schemaVersion, 4);
-  assert.deepEqual(savedSchema.groups, [typeId], "the schema file records the available template object group");
-  assert.equal(Object.hasOwn(savedSchema, "assets"), false);
-  assert.equal(Object.hasOwn(savedSchema, "fields"), false);
+  assert.equal(storage.disk.has(storage.key(originalProject.path, schemaPath)), false);
   const objectGroupPath = `.lodestory/assets/objects/${typeId}.json`;
   const savedGroup = JSON.parse(new TextDecoder().decode(new Uint8Array(
     storage.disk.get(storage.key(originalProject.path, objectGroupPath)))));
@@ -537,9 +531,7 @@ test("type deletion survives a failed leave retry and reopens without removing u
   assert.equal(store.getSnapshot().dirty, true);
   const diskBeforeRetry = JSON.parse(new TextDecoder().decode(new Uint8Array(storage.disk.get(storage.key(target.path, removedGroupPath)))));
   assert.ok(diskBeforeRetry.fields.some(field => field.id === removedFieldId), "failed field cleanup leaves the previous template group intact");
-  const savedManifest = JSON.parse(new TextDecoder().decode(new Uint8Array(storage.disk.get(storage.key(target.path, schemaPath)))));
-  assert.equal(savedManifest.schemaVersion, 4);
-  assert.ok(savedManifest.groups.includes(removedTypeId), "the manifest retains the group while the failed cleanup is pending");
+  assert.equal(storage.disk.has(storage.key(target.path, schemaPath)), false);
   assert.deepEqual(JSON.parse(new TextDecoder().decode(new Uint8Array(storage.disk.get(storage.key(target.path, templatesPath))))).map(type => type.id),
     [removedTypeId, retainedTypeId], "failed deletion keeps the standalone template record list intact");
 
@@ -631,10 +623,7 @@ test("template groups isolate object and field files and preserve the unclassifi
   assert.deepEqual(migratedTemplates.map(({id, name, description, order, status}) => [id, name, description, order, status]), [
     [typeOneId, "人物", "角色", 0, "active"], [typeTwoId, "地点", "场景", 1, "active"],
   ]);
-  const manifest = readJson(schemaPath);
-  assert.equal(manifest.schemaVersion, 4);
-  assert.deepEqual(manifest.groups, [typeOneId, typeTwoId, null]);
-  assert.equal(Object.hasOwn(manifest, "assets"), false);
+  assert.equal(storage.disk.has(storage.key(target.path, schemaPath)), false);
   assert.deepEqual(readJson(groupPath(typeOneId)), {
     assets: [{id: objectOneId, name: "林舟", description: "人物记录", typeId: typeOneId, values: {[fieldOneId]: "旅人"}}],
     fields: [initialSchema.fields[0]],

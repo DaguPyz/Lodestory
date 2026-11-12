@@ -42,10 +42,7 @@
           state.files.set(`.lodestory/assets/objects/${fileName}.json`,
             encode(JSON.stringify(content)));
         }
-        const groupIds = [...groups.keys()].map(fileName => fileName === "unclassified" ? null : fileName);
-        state.files.set(".lodestory/assets/schema.json", encode(JSON.stringify({
-          format: "lodestory.asset-schema", schemaVersion: 4, groups: groupIds,
-        })));
+
       }
       function projectFiles(projectPath) {
         let state = projects.get(projectPath);

@@ -168,9 +168,7 @@ test("template reorder saves the standalone template list without rewriting asse
     const beforeTemplates = await evaluate(`window.__projectFixture.readJson(${JSON.stringify(templatesPath)})`);
     const beforeGroups = await evaluate(`[${groupPaths.map(path => `window.__projectFixture.readJson(${JSON.stringify(path)})`).join(",")}]`);
     const beforeCalls = await evaluate("window.__projectFixture.calls()");
-    assert.equal(beforeSchema.schemaVersion, 4);
-    assert.deepEqual(beforeSchema.groups, [peopleId, artsId, null]);
-    assert.equal(Object.hasOwn(beforeSchema, "assets"), false, "the manifest stores no object records");
+    assert.equal(beforeSchema, null, "a current project loads without a schema file");
     assert.ok(Array.isArray(beforeTemplates), "the browser fixture loads the standalone top-level template list");
     assert.ok(beforeGroups.every(group => group && Array.isArray(group.assets) && Array.isArray(group.fields)),
       "objects and their fields are stored by template ID");
@@ -194,16 +192,14 @@ test("template reorder saves the standalone template list without rewriting asse
     const afterSchema = await evaluate(`window.__projectFixture.readJson(${JSON.stringify(schemaPath)})`);
     const afterTemplates = await evaluate(`window.__projectFixture.readJson(${JSON.stringify(templatesPath)})`);
     const afterCalls = await evaluate("window.__projectFixture.calls()");
-    const schemaSaveCount = calls => calls.filter(call => call.command === "save_project_file" && call.path === schemaPath).length;
     const templateSaveCount = calls => calls.filter(call => call.command === "save_project_file" && call.path === templatesPath).length;
-    assert.deepEqual(afterSchema, beforeSchema, "the manifest remains unchanged after reordering");
+    assert.equal(afterSchema, null, "template reordering does not create a schema file");
     const afterGroups = await evaluate(`[${groupPaths.map(path => `window.__projectFixture.readJson(${JSON.stringify(path)})`).join(",")}]`);
     assert.deepEqual(afterGroups, beforeGroups, "template reordering leaves every object group unchanged");
     assert.deepEqual(afterTemplates.map(({id, name, description, order, status}) => [id, name, description, order, status]), [
       ["10000000-0000-4000-8000-000000000002", "功法", "修炼与施展的方法", 0, "active"],
       ["10000000-0000-4000-8000-000000000001", "人物", "故事中的角色", 1, "active"],
     ]);
-    assert.equal(schemaSaveCount(afterCalls), schemaSaveCount(beforeCalls), "reordering does not save schema.json");
     assert.equal(templateSaveCount(afterCalls), templateSaveCount(beforeCalls) + 1, "reordering saves templates.json once");
     assert.deepEqual(pageErrors, []);
   });

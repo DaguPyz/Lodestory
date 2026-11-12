@@ -1,6 +1,6 @@
-import {createAssetObjectFiles, parseGroupManifest, type AssetGroupData, type AssetGroupId, type EncodeAssetGroup} from "./assetObjectFiles";
+import {createAssetObjectFiles, type AssetGroupData, type AssetGroupId, type EncodeAssetGroup} from "./assetObjectFiles";
 import {createAssetTemplateStore, readLegacyTypeOrder, validateAssetTemplates} from "./assetTemplateStore";
-import type {ProjectByteView, ProjectDirectoryListing, ProjectFile, ProjectFileData, ProjectFiles, ProjectSaveState} from "@lodestory/sdk/project-storage";
+import type {ProjectByteView, ProjectDirectoryListing, ProjectFileData, ProjectFiles, ProjectSaveState} from "@lodestory/sdk/project-storage";
 
 export type AssetValueType = "text" | "number" | "singleSelect" | "multiSelect" | "reference";
 
@@ -106,7 +106,7 @@ export type AssetSchemaStore = Readonly<{
   dispose(): Promise<void>;
 }>;
 
-const PATH = ".lodestory/assets/schema.json";
+const LEGACY_PATH = ".lodestory/assets/schema.json";
 const DIRECTORY = ".lodestory/assets";
 const FORMAT = "lodestory.asset-schema";
 const INLINE_DATA_VERSION = 3;
@@ -463,23 +463,17 @@ function groupRecords(body: AssetGroupData): Map<AssetGroupId, AssetGroupData> {
   return groups;
 }
 
-function sameRecords<T>(left: readonly T[], right: readonly T[]): boolean {
-  return left === right || left.length === right.length && left.every((item, index) => item === right[index]);
+function decodeLegacyFile(bytes: ProjectFileData): unknown {
+  let value: unknown;
+  try { value = JSON.parse(decodeUtf8(bytes)); }
+  catch { throw new Error("旧资产数据文件 schema.json 无法读取，已保留原始文件。"); }
+  return value;
 }
 
-function decodeSchemaFile(bytes: ProjectFileData): {value?: unknown; groups?: readonly AssetGroupId[]; error?: string} {
-  let text: string;
-  try { text = decodeUtf8(bytes); }
-  catch { return {error: "schema.json 不是有效的 UTF-8 文件。"}; }
-  let value: unknown;
-  try { value = JSON.parse(text); }
-  catch { return {error: "资产数据文件已损坏，请检查 schema.json。"}; }
-  try {
-    const groups = parseGroupManifest(value);
-    return groups ? {groups} : {value};
-  } catch (cause) {
-    return {error: cause instanceof Error ? cause.message : "资产对象文件清单格式无效。"};
-  }
+function isObsoleteManifest(value: unknown): boolean {
+  return isRecord(value) && value.format === FORMAT && value.schemaVersion === 4
+    && keysMatch(value, ["format", "schemaVersion", "groups"]) && Array.isArray(value.groups)
+    && value.groups.every(id => id === null || isUuid(id));
 }
 
 function sameFieldInput(field: AssetFieldDefinition, input: CreateAssetFieldInput): boolean {
@@ -522,7 +516,6 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
   let catalogReferenceError: string | null = null;
   let pendingRemoval: string | null = null;
   let moving = 0;
-  let knownFile = false;
   let localBlocked = false;
   let localError: string | null = null;
   let alive = true;
@@ -530,15 +523,11 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
   let loadOperation: Promise<boolean> | null = null;
   let mutationOperation: Promise<boolean> | null = null;
   const objectFiles = createAssetObjectFiles(files, encodeGroup);
-  // null denotes an inline legacy body (or a new project without a manifest).
-  let manifestGroups: readonly AssetGroupId[] | null = null;
   let groups = new Map<AssetGroupId, AssetGroupData>();
-  let legacyGroups = groups;
   let pendingGroup: {id: AssetGroupId; data: AssetGroupData} | null = null;
-  let schemaBytes: ProjectFileData | null = null;
-  const acceptedGroups = new Map<AssetGroupId, AssetGroupData>();
-  let parsedBytes: ProjectFileData | null = null;
-  let document: ReturnType<typeof decodeSchemaFile> = {};
+  let legacyBytes: ProjectFileData | null = null;
+  let inlineGroups: ReadonlyMap<AssetGroupId, AssetGroupData> | null = null;
+  let acceptedGroups = new Map<AssetGroupId, AssetGroupData>();
   let snapshot = buildSnapshot();
 
   function currentTypes(): readonly AssetTypeTemplate[] {
@@ -578,25 +567,16 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     return true;
   }
 
-  function readDocument(file: ProjectFile) {
-    const bytes = file.byteView ?? file.bytes;
-    if (bytes !== parsedBytes) {
-      parsedBytes = bytes;
-      document = decodeSchemaFile(bytes);
-    }
-    return document;
-  }
-
   function dataFiles(source = files.getSnapshot()) {
-    return source.files.filter(file => file.path === PATH || file.path.startsWith(DIRECTORY + "/objects/"));
+    return source.files.filter(file => file.path.startsWith(DIRECTORY + "/objects/"));
   }
 
-  function fileFrom(sourceFiles = files.getSnapshot().files): ProjectFile | undefined {
-    return sourceFiles.find(file => file.path === PATH);
+  function legacyFile() {
+    return files.getSnapshot().files.find(file => file.path === LEGACY_PATH);
   }
 
   function buildSnapshot(source = files.getSnapshot()): AssetSchemaSnapshot {
-    const file = dataFiles(source).find(file => file.dirty || file.saveState === "error") ?? fileFrom(source.files);
+    const file = dataFiles(source).find(file => file.dirty || file.saveState === "error");
     const catalog = templateStore.getSnapshot();
     const dirty = pendingGroup !== null || Boolean(file?.dirty) || catalog.dirty || catalog.saving || pendingRemoval !== null;
     const saveState: ProjectSaveState = mutating || catalog.saving ? "saving"
@@ -658,82 +638,53 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     }
   }
 
-  function acceptFile(file: ProjectFile, requestGeneration?: number): boolean {
-    if (!alive || requestGeneration !== undefined && requestGeneration !== generation) return false;
-    const bytes = file.byteView ?? file.bytes;
-    try {
-      const doc = readDocument(file);
-      if (doc.error) throw new Error(doc.error);
-      const templates = templateStore.getSnapshot().templates;
-      const rawGroups = new Map<AssetGroupId, AssetGroupData>();
-      let body = doc.value;
-      if (doc.groups) {
-        for (const id of doc.groups) rawGroups.set(id, objectFiles.read(id));
-        const values = [...rawGroups.values()];
-        body = {format: FORMAT, schemaVersion: INLINE_DATA_VERSION,
-          assets: values.flatMap(group => group.assets), fields: values.flatMap(group => group.fields)};
-      }
-      const parsed = normalizeSchema(body, templates);
-      if (!parsed.schema) throw new Error(parsed.error ?? "资产数据无效。");
-      schema = parsed.schema;
-      if (!templates && legacyOrder) {
-        const rank = new Map(legacyOrder.map((id, i) => [id, i]));
-        const sorted = [...schema.types].sort((a, b) =>
-          (rank.get(a.id) ?? rank.size) - (rank.get(b.id) ?? rank.size) || a.order - b.order);
-        schema = {...schema, types: Object.freeze(sorted.map((type, order) => Object.freeze({...type, order})))};
-      }
-      groups = groupRecords(schema);
-      manifestGroups = doc.groups ?? null;
-      legacyGroups = manifestGroups ? new Map() : groups;
-      acceptedGroups.clear();
-      for (const [id, group] of rawGroups) acceptedGroups.set(id, group);
-      schemaBytes = bytes;
-    } catch (cause) {
-      loaded = false;
-      localBlocked = true;
-      localError = cause instanceof Error ? cause.message : "资产数据读取失败。";
-      return false;
-    }
+  function groupIds(types = currentTypes()): AssetGroupId[] {
+    return [...types.map(type => type.id), null];
+  }
+
+  function acceptBody(body: SchemaData) {
+    schema = body;
+    groups = groupRecords(body);
     checkedTypes = currentTypes();
     catalogReferenceError = null;
     reconcileTypeSelection();
     reconcileAssetSelection();
-    knownFile = true;
-    if (!file.dirty && file.saveState === "saved") clearPendingIds();
     loaded = true;
     localBlocked = false;
     localError = null;
-    return true;
+  }
+
+  function acceptGroups(rawGroups: Map<AssetGroupId, AssetGroupData>, types: readonly AssetTypeTemplate[]) {
+    const values = [...rawGroups.values()];
+    const parsed = normalizeSchema({format: FORMAT, schemaVersion: INLINE_DATA_VERSION,
+      assets: values.flatMap(group => group.assets), fields: values.flatMap(group => group.fields)}, types);
+    if (!parsed.schema) throw new Error(parsed.error ?? "资产数据无效。");
+    acceptBody(parsed.schema);
+    acceptedGroups = rawGroups;
   }
 
   function syncSharedFiles() {
-    if (!alive || loading || !templateStore.getSnapshot().loaded || templateStore.getSnapshot().blocked) return;
-    const file = fileFrom();
-    if (!pendingGroup && file) {
+    if (!alive || loading || !loaded || !templateStore.getSnapshot().loaded || templateStore.getSnapshot().blocked) return;
+    if (!pendingGroup && !inlineGroups) {
       try {
-        if (schemaBytes !== (file.byteView ?? file.bytes)
-          || manifestGroups?.some(id => objectFiles.read(id) !== acceptedGroups.get(id))) acceptFile(file);
+        const current = new Map<AssetGroupId, AssetGroupData>();
+        for (const id of groupIds()) {
+          const group = objectFiles.read(id);
+          if (group) current.set(id, group);
+        }
+        if (current.size !== acceptedGroups.size || [...current].some(([id, group]) => acceptedGroups.get(id) !== group)) {
+          acceptGroups(current, currentTypes());
+        }
       } catch (cause) {
         loaded = false;
         localBlocked = true;
-        localError = cause instanceof Error ? cause.message : "资产对象文件缺失或损坏。";
+        localError = cause instanceof Error ? cause.message : "资产对象文件读取失败。";
       }
       if (!dataFiles().some(item => item.dirty) && !mutating) clearPendingIds();
-    } else if (!pendingGroup && knownFile && !file) {
-      loaded = false;
-      localBlocked = true;
-      localError = "资产数据文件 schema.json 缺失，请恢复后重试。";
     }
     publish();
   }
   const unsubscribe = files.subscribe(syncSharedFiles);
-
-  async function loadBody(file: ProjectFile, requestGeneration: number): Promise<boolean> {
-    const doc = readDocument(file);
-    if (doc.groups) await objectFiles.load(doc.groups);
-    if (!alive || requestGeneration !== generation) return false;
-    return acceptFile(fileFrom() ?? file, requestGeneration);
-  }
 
   function load(): Promise<boolean> {
     if (!alive) return Promise.resolve(false);
@@ -747,115 +698,63 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     let resolveOperation!: (value: boolean) => void;
     const operation = new Promise<boolean>(resolve => { resolveOperation = resolve; });
     loadOperation = operation;
-    const existing = fileFrom();
-    const protectedFile = existing && (existing.dirty || existing.saveState === "pending" || existing.saveState === "saving")
-      ? existing : undefined;
-    let listingOperation: ReturnType<ProjectFiles["list"]> | null = null;
-    if (!protectedFile) {
-      try { listingOperation = files.list(DIRECTORY); }
-      catch (cause) { listingOperation = Promise.reject(cause); }
-    }
     publish();
 
     void (async () => {
       try {
-        if (protectedFile) {
-          if (!alive) return false;
-          if (!await loadTemplates()) { loaded = false; return false; }
-          if (!alive || requestGeneration !== generation) return false;
-          const latest = fileFrom();
-          if (!latest) {
-            loaded = false;
-            localError = "资产文件在读取期间发生变化，请重试。";
-            return false;
-          }
-          const valid = await loadBody(latest, requestGeneration);
-          publish();
-          return valid;
-        }
-        let listing: Awaited<ReturnType<ProjectFiles["list"]>>;
-        try { listing = await listingOperation!; }
-        catch (cause) {
-          if (!alive || requestGeneration !== generation) return false;
-          loaded = false;
-          localError = cause instanceof Error ? cause.message : "读取类型模板目录失败。";
-          publish();
-          return false;
-        }
+        if (!alive) return false;
+        const listing = await files.list(DIRECTORY);
         if (!alive || requestGeneration !== generation) return false;
-        if (!listing) {
-          loaded = false;
-          localError = files.getSnapshot().blocked ? files.getSnapshot().error : "读取类型模板目录失败。";
-          publish();
-          return false;
-        }
+        if (!listing) throw new Error(files.getSnapshot().error ?? "读取资产目录失败。");
         if (!await loadTemplates(listing)) { loaded = false; return false; }
         if (!alive || requestGeneration !== generation) return false;
-        const entry = listing.entries.find(candidate => candidate.name === "schema.json" || candidate.path === PATH);
-        const issue = listing.issues.find(candidate => candidate.path === PATH || candidate.path === "schema.json");
-        if (issue) {
-          loaded = false;
-          localBlocked = true;
-          localError = issue.message;
-          publish();
-          return false;
-        }
-        if (!entry) {
-          if (knownFile) throw new Error("资产数据文件 schema.json 缺失，请恢复后重试。");
-          if (listing.entries.some(item => item.name === "objects") || listing.issues.some(item => item.path.endsWith("/objects"))) {
-            await objectFiles.assertNoOrphanData();
-            if (!alive || requestGeneration !== generation) return false;
+
+        const issue = listing.issues.find(item => item.path === LEGACY_PATH || item.path === "schema.json");
+        if (issue) throw new Error(issue.message);
+        const entry = listing.entries.find(item => item.path === LEGACY_PATH || item.name === "schema.json");
+        let previousBytes: ProjectFileData | null = null;
+        let previousBody: SchemaData | null = null;
+        const templates = templateStore.getSnapshot().templates;
+        if (entry) {
+          if (entry.kind !== "file" || entry.path !== LEGACY_PATH) throw new Error("旧资产数据路径不是普通文件。");
+          const file = await files.read(LEGACY_PATH, {preferByteView: true});
+          if (!alive || requestGeneration !== generation) return false;
+          if (!file) throw new Error(files.getSnapshot().error ?? "读取旧资产数据失败。");
+          previousBytes = file.byteView ?? file.bytes;
+          const value = decodeLegacyFile(previousBytes);
+          if (isObsoleteManifest(value)) {
+            if (!templates) throw new Error("资产数据缺少对应的 templates.json 模板列表。");
+          } else {
+            const parsed = normalizeSchema(value, templates);
+            if (!parsed.schema) throw new Error(parsed.error ?? "旧资产数据无效。");
+            previousBody = parsed.schema;
+            if (!templates && legacyOrder) {
+              const rank = new Map(legacyOrder.map((id, index) => [id, index]));
+              const sorted = [...previousBody.types].sort((a, b) =>
+                (rank.get(a.id) ?? rank.size) - (rank.get(b.id) ?? rank.size) || a.order - b.order);
+              previousBody = {...previousBody, types: Object.freeze(sorted.map((type, order) => Object.freeze({...type, order})))};
+            }
           }
-          schema = freezeSchema([], [], []);
-          reconcileTypeSelection();
-          checkedTypes = currentTypes();
-          catalogReferenceError = null;
-          selectedAssetId = null;
-          assetSelectionInitialized = true;
-          loaded = true;
-          knownFile = false;
-          localBlocked = false;
-          localError = null;
-          publish();
-          return true;
         }
-        if (entry.kind !== "file" || entry.path !== PATH) {
-          loaded = false;
-          localBlocked = true;
-          localError = "类型模板文件路径不是普通文件，已保留原始内容。";
-          publish();
-          return false;
-        }
-        let readOperation: ReturnType<ProjectFiles["read"]>;
-        try { readOperation = files.read(PATH, {preferByteView: true}); }
-        catch (cause) { readOperation = Promise.reject(cause); }
-        let file: ProjectFile | null = null;
-        let readFailure: unknown = null;
-        try { file = await readOperation; }
-        catch (cause) { readFailure = cause; }
+        const types = previousBody?.types ?? templates ?? [];
+        const objectGroups = await objectFiles.load(groupIds(types));
         if (!alive || requestGeneration !== generation) return false;
-        if (file) {
-          const valid = await loadBody(file, requestGeneration);
-          publish();
-          return valid;
+        if (previousBody) {
+          acceptBody(previousBody);
+          inlineGroups = groups;
+          acceptedGroups = objectGroups;
+        } else {
+          acceptGroups(objectGroups, types);
+          inlineGroups = null;
         }
-        const retainedFile = fileFrom();
-        if (retainedFile && (retainedFile.dirty || retainedFile.saveState === "saving" || retainedFile.saveState === "pending")) {
-          const valid = await loadBody(retainedFile, requestGeneration);
-          publish();
-          return valid;
-        }
-        loaded = false;
-        localError = files.getSnapshot().blocked ? files.getSnapshot().error
-          : readFailure instanceof Error ? readFailure.message : "类型模板文件读取失败，原始内容已保留。";
-        publish();
-        return false;
+        legacyBytes = previousBytes;
+        clearPendingIds();
+        return true;
       } catch (cause) {
         if (!alive || requestGeneration !== generation) return false;
         loaded = false;
         localBlocked = true;
-        localError = cause instanceof Error ? cause.message : "读取类型模板失败。";
-        publish();
+        localError = cause instanceof Error ? cause.message : "读取资产数据失败。";
         return false;
       } finally {
         if (alive && requestGeneration === generation) {
@@ -868,57 +767,59 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     return operation;
   }
 
+  async function retireLegacyFile(): Promise<void> {
+    if (!legacyBytes) return;
+    const baseline = legacyBytes;
+    const checkLegacyFile = () => {
+      const file = legacyFile();
+      if (!alive || !file || (file.byteView ?? file.bytes) !== baseline) {
+        throw new Error("旧资产文件在迁移期间被修改，已保留待保存的内容。");
+      }
+    };
+    checkLegacyFile();
+    if (inlineGroups) {
+      if (templateStore.getSnapshot().templates === null && !await templateStore.save(schema.types)) {
+        throw new Error(templateStore.getSnapshot().error ?? "保存资产模板列表失败。");
+      }
+      for (const id of groupIds()) {
+        const data = inlineGroups.get(id);
+        const existing = objectFiles.read(id);
+        if (existing) {
+          if (data ? JSON.stringify(existing) !== JSON.stringify(data) : existing.assets.length > 0 || existing.fields.length > 0) {
+            throw new Error("旧资产与现有分组文件的内容不同，已保留两份数据。");
+          }
+        } else if (data) {
+          await objectFiles.saveGroup(id, data, false, checkLegacyFile);
+        }
+        const current = objectFiles.read(id);
+        if (current) acceptedGroups.set(id, current);
+      }
+    }
+    checkLegacyFile();
+    if (!await files.delete(LEGACY_PATH)) throw new Error(files.getSnapshot().error ?? "移除旧资产文件失败，请重试。");
+    inlineGroups = null;
+    legacyBytes = null;
+  }
+
   async function persistCurrent(): Promise<boolean> {
     if (!alive || files.getSnapshot().blocked || localBlocked || !pendingGroup) return false;
     const {id, data} = pendingGroup;
-    if (templateStore.getSnapshot().templates === null && !await templateStore.save(schema.types)) return false;
-    const ensureCurrentManifest = () => {
+    await retireLegacyFile();
+    const existing = objectFiles.read(id);
+    if (existing !== acceptedGroups.get(id)) throw new Error("当前模板的对象文件在编辑期间被修改，已保留待保存的内容。");
+    const checkGroup = () => {
       if (!alive || files.getSnapshot().blocked || snapshot.blocked) throw new Error("项目已暂停写入。");
-      const current = fileFrom();
-      if (knownFile && (!current || (current.byteView ?? current.bytes) !== schemaBytes)) {
-        throw new Error("资产文件清单在编辑期间被修改，已保留待保存的内容。");
-      }
+      if (id !== null && !currentTypes().some(type => type.id === id)) throw new Error("当前模板已移除，已保留待保存的内容。");
     };
-    ensureCurrentManifest();
-    const nextIds = new Set(manifestGroups ?? legacyGroups.keys());
-    nextIds.add(id);
-    if (!manifestGroups || nextIds.size !== manifestGroups.length) {
-      // Stage deterministic baseline files before switching the manifest. A restart can reuse
-      // any files created before a failure, even if the next edit is different.
-      for (const id of nextIds) {
-        if (!alive || snapshot.blocked) return false;
-        if (!manifestGroups?.includes(id)) await objectFiles.saveGroup(id, legacyGroups.get(id) ?? emptyGroup, false, ensureCurrentManifest);
-      }
-      ensureCurrentManifest();
-      const ids = [...nextIds];
-      try {
-        await objectFiles.saveManifest(ids, knownFile);
-      } catch (error) {
-        // ProjectFiles may already hold our new manifest while its disk write is pending retry.
-        const current = fileFrom();
-        if (current && sameRecords(readDocument(current).groups ?? [], ids)) schemaBytes = current.byteView ?? current.bytes;
-        throw error;
-      }
-      manifestGroups = ids;
-      knownFile = true;
-      const manifest = fileFrom()!;
-      schemaBytes = manifest.byteView ?? manifest.bytes;
-      readDocument(manifest);
-      for (const id of nextIds) {
-        if (!acceptedGroups.has(id)) acceptedGroups.set(id, objectFiles.read(id));
-      }
-      legacyGroups = new Map();
-    }
-    ensureCurrentManifest();
-    if (objectFiles.read(id) !== acceptedGroups.get(id)) throw new Error("当前模板的对象文件在编辑期间被修改，已保留待保存的内容。");
+    checkGroup();
     try {
-      await objectFiles.saveGroup(id, data, true, ensureCurrentManifest);
+      await objectFiles.saveGroup(id, data, existing !== undefined, checkGroup);
     } catch (error) {
       const buffered = objectFiles.read(id);
-      if (JSON.stringify(buffered) === JSON.stringify(data)) acceptedGroups.set(id, buffered);
+      if (buffered && JSON.stringify(buffered) === JSON.stringify(data)) acceptedGroups.set(id, buffered);
       throw error;
     }
-    acceptedGroups.set(id, objectFiles.read(id));
+    acceptedGroups.set(id, objectFiles.read(id)!);
     pendingGroup = null;
     localError = null;
     syncSharedFiles();
@@ -951,7 +852,6 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     for (const field of next.fields) if (!previousFieldIds.has(field.id)) pendingFieldIds.add(field.id);
     for (const asset of next.assets) if (!previousAssetIds.has(asset.id)) pendingAssetIds.add(asset.id);
     pendingGroup = {id, data: next};
-    // Keep the legacy baseline immutable until the v4 manifest has committed.
     groups = new Map(groups).set(id, next);
     const parts = [...groups.values()];
     schema = {types: currentTypes(),
@@ -988,8 +888,7 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
   }
 
   function settleNoop(): Promise<boolean> {
-    const file = fileFrom();
-    if (snapshot.dirty || file?.saveState === "pending" || file?.saveState === "saving" || file?.saveState === "error") {
+    if (snapshot.dirty || snapshot.saveState !== "saved") {
       return retry();
     }
     if (localError) {
@@ -1546,9 +1445,9 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
       objectFiles.dispose();
       unsubscribe();
       listeners.clear();
-      parsedBytes = null;
-      document = {};
-      schemaBytes = null;
+      legacyBytes = null;
+      inlineGroups = null;
+      acceptedGroups.clear();
       loading = false;
       mutating = false;
       snapshot = Object.freeze({...snapshot, loading: false, saving: false, reordering: false, blocked: true});

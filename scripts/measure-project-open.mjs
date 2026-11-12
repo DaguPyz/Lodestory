@@ -64,6 +64,7 @@ if (!args.includes("--child")) {
   const directories = [".lodestory/outline-design/timelines", ".lodestory/timeline/axes", ".lodestory/timeline/events",
     ".lodestory/assets", ".lodestory/assets/objects"];
   for (const directory of directories) {
+    if (!existsSync(resolve(projectPath, directory))) continue;
     for (const entry of readdirSync(resolve(projectPath, directory), {withFileTypes: true}).sort((a, b) => a.name.localeCompare(b.name))) {
       if (entry.isFile() && entry.name.endsWith(".json")) {
         const path = `${directory}/${entry.name}`;
@@ -88,19 +89,23 @@ if (!args.includes("--child")) {
   }
   const schema = disk.has(".lodestory/assets/schema.json")
     ? JSON.parse(disk.get(".lodestory/assets/schema.json").toString("utf8"))
-    : {assets: [], fields: []};
+    : null;
   const templates = disk.has(".lodestory/assets/templates.json")
     ? JSON.parse(disk.get(".lodestory/assets/templates.json").toString("utf8"))
-    : schema.types ?? [];
+    : schema?.types ?? [];
   assert.ok(Array.isArray(templates), "Asset templates must be a top-level list or legacy schema types array");
-  const groupPaths = schema.schemaVersion === 4
+  const groupPaths = schema?.schemaVersion === 4
     ? schema.groups.map(id => `${objectsDirectory}/${id ?? "unclassified"}.json`)
-    : [];
+    : schema === null
+      ? [...templates.map(template => template.id), null]
+        .map(id => `${objectsDirectory}/${id ?? "unclassified"}.json`)
+        .filter(path => disk.has(path))
+      : [];
   const groups = groupPaths.map(path => {
     assert.ok(disk.has(path), `Missing object group: ${path}`);
     return JSON.parse(disk.get(path).toString("utf8"));
   });
-  const assets = schema.schemaVersion === 4
+  const assets = schema?.schemaVersion === 4 || schema === null
     ? groups.flatMap(group => group.assets ?? [])
     : schema.assets ?? [];
   const expectedEvents = [...disk].filter(([path]) => path.startsWith(".lodestory/timeline/events/"))
@@ -119,6 +124,7 @@ if (!args.includes("--child")) {
   const native = {reads: 0, lists: 0, documentLists: 0, writes: 0};
   const fixture = createMainFixture({
     async invokeHandler(command, values) {
+      if (command === "list_plugin_packages") return [];
       if (command === "list_documents") { native.documentLists++; return []; }
       assert.equal(values.projectPath, projectPath);
       if (command === "read_project_file" || command === "read_project_file_base64") {

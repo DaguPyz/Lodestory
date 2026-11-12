@@ -45,7 +45,7 @@ vm.runInNewContext(compiledTemplates, {...vmGlobals, TextDecoder, exports: templ
 const compiledObjectFiles = ts.transpileModule(objectFilesSource, {
   compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS},
 }).outputText;
-vm.runInNewContext(compiledObjectFiles, {...vmGlobals, TextDecoder, exports: objectFilesExports});
+vm.runInNewContext(compiledObjectFiles, {...vmGlobals, exports: objectFilesExports});
 vm.runInNewContext(compiled, {...vmGlobals, exports: storeExports, require(specifier) {
   if (specifier === "./assetTemplateStore") return templateExports;
   if (specifier === "./assetObjectFiles") return objectFilesExports;
@@ -118,28 +118,26 @@ function diskTemplates(f) {
   return JSON.parse(new TextDecoder().decode(new Uint8Array(f.disk.get(f.key("/book", templatesPath)))));
 }
 
-// Compatibility helper for assertions about the store's merged view. The on-disk
-// authority is templates.json; schema.json v4 only lists object group IDs.
 function diskSchema(f) {
-  const schema = rawDiskSchema(f);
-  const templates = f.disk.has(f.key("/book", templatesPath)) ? diskTemplates(f) : schema.types ?? [];
-  if (schema.schemaVersion !== 4) return {...schema, types: templates};
-  const groups = schema.groups.map(group => groupDiskData(f, group));
-  return {...schema, types: templates, assets: groups.flatMap(group => group.assets), fields: groups.flatMap(group => group.fields)};
+  const legacy = f.disk.has(f.key("/book", path)) ? rawDiskSchema(f) : null;
+  const templates = f.disk.has(f.key("/book", templatesPath)) ? diskTemplates(f) : legacy?.types ?? [];
+  if (legacy && legacy.schemaVersion < 4) return {...legacy, types: templates};
+  const groups = [...templates.map(template => template.id), null].map(id => groupDiskData(f, id)).filter(Boolean);
+  return {types: templates, assets: groups.flatMap(group => group.assets), fields: groups.flatMap(group => group.fields)};
 }
 
 function legacyTypeOrder(typeIds) {
   return {format: "lodestory.asset-type-order", schemaVersion: 1, typeIds};
 }
 
-function projectFilesWithOverlay(base, overlay) {
+function projectFilesWithOverlay(base, overlay, targetPath = path) {
   return Object.freeze({
     ...base,
     getSnapshot() {
       const snapshot = base.getSnapshot();
       const patch = overlay();
       if (!patch) return snapshot;
-      return Object.freeze({...snapshot, files: Object.freeze(snapshot.files.map(file => file.path === path
+      return Object.freeze({...snapshot, files: Object.freeze(snapshot.files.map(file => file.path === targetPath
         ? Object.freeze({...file, ...patch}) : file))});
     },
   });
@@ -277,7 +275,7 @@ test("missing schema loads empty without creating a file; type and field edits p
   assert.equal(await store.createType({id: secondTypeId, name: "兵器", description: "法器和武器"}), true);
   assert.equal(await store.moveType(secondTypeId, -1), true);
   assert.deepEqual(diskTemplates(f).map(item => [item.id, item.order]), [[secondTypeId, 0], [typeId, 1]]);
-  assert.deepEqual(Object.keys(rawDiskSchema(f)).sort(), ["format", "groups", "schemaVersion"]);
+  assert.equal(f.disk.has(f.key("/book", path)), false);
   assert.equal(store.selectType(secondTypeId), true);
   assert.equal(store.getSnapshot().selectedTypeId, secondTypeId);
   assert.equal(store.selectType("not-a-type"), false);
@@ -334,7 +332,7 @@ test("existing templates.json overrides legacy schema types and is reused during
   const originalTemplateBytes = [...f.disk.get(f.key("/book", templatesPath))];
 
   assert.equal(await store.createAsset({id: "40000000-0000-4000-8000-000000000091", name: "新资产", description: "", typeId}), true);
-  assert.deepEqual(rawDiskSchema(f), manifestSchema([typeId]), "the body manifest lists the saved object group");
+  assert.equal(f.disk.has(f.key("/book", path)), false, "the old schema is retired");
   assert.deepEqual(groupDiskData(f, typeId).assets, [
     {id: "40000000-0000-4000-8000-000000000091", name: "新资产", description: "", typeId, values: {}},
   ]);
@@ -344,7 +342,7 @@ test("existing templates.json overrides legacy schema types and is reused during
   await controller.dispose();
 });
 
-test("a body edit on a legacy project migrates body data into groups before the v4 manifest", async () => {
+test("a body edit on a legacy project saves the template list and removes the old schema", async () => {
   const f = byteStorageFixture();
   seedFile(f, path, JSON.stringify(storedSchema([type(), type(secondTypeId, {name: "兵器", order: 1})])));
   const controller = f.files();
@@ -353,12 +351,10 @@ test("a body edit on a legacy project migrates body data into groups before the 
 
   assert.equal(await store.createAsset({id: "40000000-0000-4000-8000-000000000092", name: "青霜剑", description: "", typeId}), true);
   assert.deepEqual(diskTemplates(f), [type(), type(secondTypeId, {name: "兵器", order: 1})]);
-  assert.deepEqual(Object.keys(rawDiskSchema(f)).sort(), ["format", "groups", "schemaVersion"]);
-  assert.equal(rawDiskSchema(f).schemaVersion, 4);
-  const writes = f.calls.filter(call => ["create_project_file", "save_project_file"].includes(call.command))
-    .map(call => call.args.path);
-  assert.ok(writes.indexOf(templatesPath) >= 0 && writes.indexOf(path) > writes.indexOf(templatesPath),
-    "the full template table is persisted before the v4 manifest starts referencing group files");
+  assert.equal(f.disk.has(f.key("/book", path)), false);
+  const createdCatalog = f.calls.findIndex(call => call.command === "create_project_file" && call.args.path === templatesPath);
+  const deletedLegacy = f.calls.findIndex(call => call.command === "delete_project_file" && call.args.path === path);
+  assert.ok(createdCatalog >= 0 && deletedLegacy > createdCatalog, "the catalog is persisted before removing the old file");
 
   store.dispose();
   await controller.dispose();
@@ -646,27 +642,22 @@ test("v3 schema data without templates.json stays blocked and preserves its refe
   await controller.dispose();
 });
 
-test("v4 manifest requires every listed group file and validates its assigned IDs", async t => {
+test("existing group files must belong to their template and have the expected fields", async t => {
   const assetId = "40000000-0000-4000-8000-000000000121";
   for (const [label, groupContent] of [
-    ["missing", null],
     ["wrong owner type", {assets: [{id: assetId, name: "错组对象", description: "", typeId: secondTypeId, values: {}}], fields: []}],
     ["unknown group fields", {assets: [], fields: [], legacy: true}],
   ]) {
     await t.test(label, async () => {
       const f = byteStorageFixture();
       seedFile(f, templatesPath, JSON.stringify([type()]));
-      seedFile(f, path, JSON.stringify(manifestSchema([typeId])));
-      if (groupContent) seedGroup(f, typeId, groupContent.assets, groupContent.fields);
-      if (label === "unknown group fields") {
-        seedFile(f, groupPath(typeId), JSON.stringify(groupContent));
-      }
+      seedFile(f, groupPath(typeId), JSON.stringify(groupContent));
       const controller = f.files();
       const store = storeFor(controller.service);
       assert.equal(await store.load(), false);
       assert.equal(store.getSnapshot().blocked, true);
       assert.equal(await store.updateType(typeId, {name: "不应保存"}), false);
-      assert.deepEqual(rawDiskSchema(f), manifestSchema([typeId]));
+      assert.deepEqual(groupDiskData(f, typeId), groupContent);
       store.dispose();
       await controller.dispose();
     });
@@ -751,10 +742,10 @@ test("deleting a template with fields cleans the schema before removing its list
 
   assert.equal(await store.removeType(typeId), true);
   assert.deepEqual(diskTemplates(f), [type(secondTypeId, {name: "兵器", order: 1})]);
-  assert.deepEqual(rawDiskSchema(f), manifestSchema([typeId]));
+  assert.equal(f.disk.has(f.key("/book", path)), false);
   assert.deepEqual(groupDiskData(f, typeId).fields, []);
   const writes = f.calls.filter(call => call.command === "save_project_file").map(call => call.args.path);
-  assert.ok(writes.indexOf(path) >= 0 && writes.indexOf(templatesPath) > writes.indexOf(path),
+  assert.ok(writes.indexOf(groupPath(typeId)) >= 0 && writes.indexOf(templatesPath) > writes.indexOf(groupPath(typeId)),
     "owned template fields are removed before the template record is deleted");
 
   store.dispose();
@@ -1022,7 +1013,7 @@ test("assets receive template defaults only at creation and support asset-owned 
   });
   assert.equal(await store.updateAsset(secondAssetId, {values: {[customFieldId]: "不属于此资产"}}), false);
   assert.match(store.getSnapshot().error, /不匹配/);
-  assert.equal(diskSchema(f).schemaVersion, 4);
+  assert.equal(f.disk.has(f.key("/book", path)), false);
   assert.deepEqual(diskSchema(f).assets.map(asset => asset.id), [assetId, secondAssetId, thirdAssetId]);
 
   const reloaded = storeFor(controller.service);
@@ -1103,7 +1094,7 @@ test("v3 inline data migrates to template group files on the first body edit", a
   assert.equal(await store.load(), true);
 
   assert.equal(await store.updateAsset(assetA.id, {description: "升级时保留其它分组"}), true);
-  assert.deepEqual(rawDiskSchema(f), manifestSchema([typeId, secondTypeId, null]));
+  assert.equal(f.disk.has(f.key("/book", path)), false);
   assert.deepEqual(groupDiskData(f, typeId), {
     assets: [{...assetA, description: "升级时保留其它分组"}],
     fields: [textField(fieldId)],
@@ -1120,26 +1111,40 @@ test("v3 inline data migrates to template group files on the first body edit", a
   await controller.dispose();
 });
 
-test("a missing manifest protects nonempty group data and permits recovery after staging an empty group", async () => {
+test("a template loads its group by ID and creates an absent group on the first edit", async () => {
   const asset = {id: "40000000-0000-4000-8000-000000000109", name: "待保存", description: "", typeId, values: {}};
-  for (const empty of [false, true]) {
+  for (const existing of [false, true]) {
     const fixture = byteStorageFixture();
     seedFile(fixture, templatesPath, JSON.stringify([type()]));
-    seedFile(fixture, groupPath(typeId), JSON.stringify({assets: empty ? [] : [asset], fields: []}));
+    if (existing) seedGroup(fixture, typeId, [asset]);
     const controller = fixture.files();
     const store = storeFor(controller.service);
-    assert.equal(await store.load(), empty);
-    if (empty) {
-      assert.equal(await store.createAsset(asset), true);
-      assert.deepEqual(groupDiskData(fixture, typeId).assets, [asset]);
-    } else {
-      assert.equal(store.getSnapshot().blocked, true);
-      assert.equal(fixture.disk.has(fixture.key("/book", path)), false);
-      assert.deepEqual(groupDiskData(fixture, typeId).assets, [asset]);
-    }
+    assert.equal(await store.load(), true);
+    assert.deepEqual(plain(store.getSnapshot().assets), existing ? [asset] : []);
+    assert.equal(fixture.disk.has(fixture.key("/book", groupPath(typeId))), existing);
+    assert.equal(await store.createAsset(asset), true);
+    assert.deepEqual(groupDiskData(fixture, typeId).assets, [asset]);
+    assert.equal(fixture.disk.has(fixture.key("/book", path)), false);
     await store.dispose();
     await controller.dispose();
   }
+});
+
+test("v4 membership is ignored and the obsolete list is removed on the next group save", async () => {
+  const fixture = byteStorageFixture();
+  seedFile(fixture, templatesPath, JSON.stringify([type(), type(secondTypeId, {name: "地点", order: 1})]));
+  seedFile(fixture, path, JSON.stringify(manifestSchema([secondTypeId])));
+  seedGroup(fixture, typeId, [], [textField()]);
+  const controller = fixture.files();
+  const store = storeFor(controller.service);
+  assert.equal(await store.load(), true);
+  assert.deepEqual(plain(store.getSnapshot().fields), [textField()]);
+  assert.equal(await store.renameField(fieldId, "等级"), true);
+  assert.equal(groupDiskData(fixture, typeId).fields[0].title, "等级");
+  assert.equal(fixture.disk.has(fixture.key("/book", path)), false);
+  assert.equal(groupDiskData(fixture, secondTypeId), null);
+  await store.dispose();
+  await controller.dispose();
 });
 
 test("assets and fields persist per template group, including cross-template references", async () => {
@@ -1274,7 +1279,6 @@ test("a failed color save keeps the canonical color in the dirty draft until ret
   await store.load();
   assert.equal(await store.createAsset({id: assetId, name: "待着色资产", description: "", typeId: null}), true);
   const groupBytes = [...f.disk.get(f.key("/book", groupPath(null)))];
-  const manifestBytes = [...f.disk.get(f.key("/book", path))];
 
   failSave = true;
   assert.equal(await store.updateAsset(assetId, {color: "#AABBCC"}), false);
@@ -1283,7 +1287,7 @@ test("a failed color save keeps the canonical color in the dirty draft until ret
   const buffered = controller.service.getSnapshot().files.find(file => file.path === groupPath(null));
   assert.equal(JSON.parse(new TextDecoder().decode(new Uint8Array(buffered.bytes))).assets[0].color, "#aabbcc");
   assert.deepEqual(f.disk.get(f.key("/book", groupPath(null))), groupBytes, "failed group save preserves previous object bytes");
-  assert.deepEqual(f.disk.get(f.key("/book", path)), manifestBytes, "the group manifest remains unchanged");
+  assert.equal(f.disk.has(f.key("/book", path)), false);
 
   failSave = false;
   assert.equal(await store.retry(), true);
@@ -1689,7 +1693,7 @@ test("invalid UTF-8, malformed JSON, unsupported schema, and invalid references 
   }
 });
 
-test("legacy migration writes group files before the v4 manifest and resumes after reopening", async () => {
+test("legacy migration saves each group before removing the old schema and resumes after reopening", async () => {
   const assetA = {id: "40000000-0000-4000-8000-000000000111", name: "旧对象 A", description: "", typeId, values: {[fieldId]: "地阶"}};
   const assetB = {id: "40000000-0000-4000-8000-000000000112", name: "旧对象 B", description: "", typeId: secondTypeId, values: {[secondFieldId]: "丙"}};
   const unclassifiedId = "40000000-0000-4000-8000-000000000113";
@@ -1729,8 +1733,7 @@ test("legacy migration writes group files before the v4 manifest and resumes aft
   assert.deepEqual(plain(resumed.getSnapshot().assets), plain(legacy.assets),
     "unlisted partial files do not hide legacy data after restart");
   assert.equal(await resumed.updateAsset(assetA.id, {description: "恢复后再编辑"}), true);
-  assert.equal(rawDiskSchema(f).schemaVersion, 4);
-  assert.deepEqual(rawDiskSchema(f), manifestSchema([typeId, secondTypeId, null]));
+  assert.equal(f.disk.has(f.key("/book", path)), false);
   assert.deepEqual(groupDiskData(f, typeId).assets, [{...assetA, description: "恢复后再编辑"}]);
   assert.deepEqual(groupDiskData(f, secondTypeId).assets, [assetB]);
   assert.deepEqual(groupDiskData(f, null).assets, [unclassifiedAsset]);
@@ -1798,10 +1801,8 @@ test("same-value edits retry failed saves instead of reporting success", async (
 
 test("failed new IDs can be corrected and retried once, but saved IDs remain protected", async () => {
   let failCreate = true;
-  let failSave = false;
   const f = byteStorageFixture({onInvoke(command) {
     if (failCreate && command === "create_project_file") throw new Error("创建暂不可用");
-    if (failSave && command === "save_project_file") throw new Error("保存暂不可用");
   }});
   seedFile(f, path, JSON.stringify(storedSchema()));
   const controller = f.files();
@@ -1814,10 +1815,10 @@ test("failed new IDs can be corrected and retried once, but saved IDs remain pro
   assert.deepEqual(diskTemplates(f), [type(typeId, {name: "术法", description: "修订说明"})]);
   assert.equal(await store.createType({id: typeId, name: "已保存后改名", description: "不应覆盖"}), false);
 
-  failSave = true;
+  failCreate = true;
   assert.equal(await store.createField({id: fieldId, owner: {kind: "type", id: typeId}, title: "品阶", valueType: "text", config: {}}), false);
   assert.equal(await store.createField({id: fieldId, owner: {kind: "type", id: typeId}, title: "修为", valueType: "text", config: {}, defaultValue: "筑基"}), false);
-  failSave = false;
+  failCreate = false;
   assert.equal(await store.createField({id: fieldId, owner: {kind: "type", id: typeId}, title: "修为", valueType: "text", config: {}, defaultValue: "筑基"}), true);
   assert.deepEqual(diskSchema(f).fields, [textField(fieldId, {title: "修为", defaultValue: "筑基"})]);
   assert.equal(await store.createField({id: fieldId, owner: {kind: "type", id: typeId}, title: "已保存后改标题", valueType: "text", config: {}}), false);
@@ -1945,10 +1946,11 @@ test("disposing synchronously from the protected-file loading notification skips
 
 test("unrelated file notifications reuse parsed asset bytes and publish only changed state", async () => {
   const f = byteStorageFixture();
-  seedFile(f, path, JSON.stringify(storedSchema([type()])));
+  seedFile(f, templatesPath, JSON.stringify([type()]));
+  seedGroup(f, typeId);
   const controller = f.files();
   let overlay = null;
-  const service = projectFilesWithOverlay(controller.service, () => overlay);
+  const service = projectFilesWithOverlay(controller.service, () => overlay, groupPath(typeId));
   const store = storeFor(service);
   let notifications = 0;
   store.subscribe(() => { notifications++; });
@@ -1982,9 +1984,10 @@ test("unrelated file notifications reuse parsed asset bytes and publish only cha
   await controller.dispose();
 });
 
-test("unchanged invalid bytes are not reparsed and a replacement schema is validated", async () => {
+test("unchanged invalid bytes are not reparsed and a repaired group can be retried", async () => {
   const f = byteStorageFixture();
-  seedFile(f, path, [0xff]);
+  seedFile(f, templatesPath, JSON.stringify([type()]));
+  seedFile(f, groupPath(typeId), [0xff]);
   const controller = f.files();
   const store = storeFor(controller.service);
   const beforeLoad = parseStats.decodes;
@@ -1999,9 +2002,10 @@ test("unchanged invalid bytes are not reparsed and a replacement schema is valid
   assert.strictEqual(store.getSnapshot(), invalid);
   assert.equal(parseStats.decodes - beforeLoad, 1, "the failed parse is cached for the same immutable bytes");
 
-  assert.equal(await controller.service.delete(path, {discardChanges: true}), true);
-  assert.ok(await controller.service.create(path, new TextEncoder().encode(JSON.stringify(storedSchema([type()]))),
+  assert.equal(await controller.service.delete(groupPath(typeId), {discardChanges: true}), true);
+  assert.ok(await controller.service.create(groupPath(typeId), new TextEncoder().encode(JSON.stringify({assets: [], fields: []})),
     {createParents: false}));
+  assert.equal(await store.retry(), true);
   assert.equal(store.getSnapshot().loaded, true);
   assert.deepEqual(plain(store.getSnapshot().types), [type()]);
   assert.equal(parseStats.decodes - beforeLoad, 2, "a replacement byte array is parsed and validated once");

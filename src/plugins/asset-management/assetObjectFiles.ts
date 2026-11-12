@@ -1,4 +1,4 @@
-import type {ProjectByteView, ProjectFile, ProjectFileData, ProjectFiles} from "@lodestory/sdk/project-storage";
+import type {ProjectByteView, ProjectDirectoryListing, ProjectFile, ProjectFileData, ProjectFiles} from "@lodestory/sdk/project-storage";
 import type {AssetFieldDefinition, AssetRecord} from "./assetSchemaStore";
 
 export type AssetGroupId = string | null;
@@ -9,12 +9,8 @@ export type AssetGroupData = Readonly<{
 }>;
 
 const DIRECTORY = ".lodestory/assets/objects";
-const MANIFEST_PATH = ".lodestory/assets/schema.json";
-const FORMAT = "lodestory.asset-schema";
-const SCHEMA_VERSION = 4;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const GROUP_FIELDS = ["assets", "fields"];
-const MANIFEST_FIELDS = ["format", "groups", "schemaVersion"];
 
 type ParsedGroup = Readonly<{
   bytes: ProjectFileData;
@@ -181,30 +177,6 @@ async function saveBytes(
   }
 }
 
-/** Parse the v4 compact manifest; legacy inline schemas return null for migration. */
-export function parseGroupManifest(value: unknown): readonly AssetGroupId[] | null {
-  if (!isRecord(value)) throw new Error("资产对象分组清单格式无效，原文件已保留。");
-
-  const version = value.schemaVersion;
-  if (version === 1 || version === 2 || version === 3) return null;
-  if (version !== SCHEMA_VERSION || value.format !== FORMAT
-    || !keysMatch(value, MANIFEST_FIELDS) || !Array.isArray(value.groups)) {
-    throw new Error("资产对象分组清单格式无效，原文件已保留。");
-  }
-
-  const seen = new Set<AssetGroupId>();
-  const groups: AssetGroupId[] = [];
-  for (const candidate of value.groups) {
-    if (candidate !== null && (typeof candidate !== "string" || !UUID_PATTERN.test(candidate))) {
-      throw new Error("资产对象分组清单包含无效分组 ID，原文件已保留。");
-    }
-    if (seen.has(candidate)) throw new Error("资产对象分组清单含重复 ID，原文件已保留。");
-    seen.add(candidate);
-    groups.push(candidate);
-  }
-  return Object.freeze(groups);
-}
-
 export function assetGroupPath(id: AssetGroupId): string {
   validateGroupId(id);
   return `${DIRECTORY}/${id ?? "unclassified"}.json`;
@@ -213,93 +185,75 @@ export function assetGroupPath(id: AssetGroupId): string {
 export function createAssetObjectFiles(files: ProjectFiles, encodeGroup: EncodeAssetGroup = async (id, data) => encodeAssetGroupFallback({id, data})) {
   const parsed = new Map<AssetGroupId, ParsedGroup>();
   const attempts = new Map<string, PendingWrite>();
-  const safeEmptyOrphans = new Set<AssetGroupId>();
   let disposed = false;
 
-  function read(id: AssetGroupId): AssetGroupData {
-    const path = assetGroupPath(id);
-    const file = pathFile(files, path);
-    if (!file) throw new Error(`资产对象分组文件“${path}”尚未加载。`);
+  function parseFile(id: AssetGroupId, file: ProjectFile): AssetGroupData {
     const bytes = fileData(file);
     const cached = parsed.get(id);
     if (cached?.bytes === bytes) return cached.data;
-    let data: AssetGroupData;
+    let value: unknown;
     try {
-      data = validateGroupData(id, decode(bytes));
-    } catch (cause) {
-      throw cause instanceof Error ? cause : new Error("资产对象分组文件无法解析，原文件已保留。");
+      value = decode(bytes);
+    } catch {
+      throw new Error(`资产对象文件“${file.path}”不是有效的 UTF-8 JSON，已保留原文件。`);
     }
+    const data = validateGroupData(id, value);
     parsed.set(id, {bytes, data});
     return data;
   }
 
+  function read(id: AssetGroupId): AssetGroupData | undefined {
+    const path = assetGroupPath(id);
+    const file = pathFile(files, path);
+    return file ? parseFile(id, file) : undefined;
+  }
+
   return Object.freeze({
-    async assertNoOrphanData(): Promise<void> {
-      let listing;
-      try { listing = await files.list(DIRECTORY); }
-      catch { throw new Error("schema.json 缺失或对象分组目录无法读取，请恢复 schema.json 后重试。"); }
-      if (!listing?.exists || listing.issues.some(issue => issue.path === DIRECTORY
-        || issue.path.startsWith(DIRECTORY + "/"))) {
-        throw new Error("schema.json 缺失或对象分组目录无法读取，请恢复 schema.json 后重试。");
-      }
-
-      const emptyGroups = new Set<AssetGroupId>();
-      for (const entry of listing.entries) {
-        let id: AssetGroupId;
-        if (entry.name === "unclassified.json") {
-          id = null;
-        } else {
-          const match = /^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.json$/.exec(entry.name);
-          if (!match) continue;
-          id = match[1];
-        }
-        const path = assetGroupPath(id);
-        if (entry.path !== path || entry.kind !== "file") {
-          throw new Error("schema.json 缺失，对象分组文件路径无效或无法读取，请恢复 schema.json 后重试。");
-        }
-        try {
-          if (!await files.read(path, {preferByteView: true})) throw new Error();
-          const data = read(id);
-          if (data.assets.length !== 0 || data.fields.length !== 0) throw new Error();
-          emptyGroups.add(id);
-        } catch {
-          throw new Error("schema.json 缺失或对象分组文件损坏/包含数据，请恢复 schema.json 后重试。");
-        }
-      }
-      safeEmptyOrphans.clear();
-      for (const id of emptyGroups) safeEmptyOrphans.add(id);
-    },
-
-    async load(groups: readonly AssetGroupId[]): Promise<void> {
+    async load(ids: readonly AssetGroupId[]): Promise<Map<AssetGroupId, AssetGroupData>> {
       const unique = new Set<AssetGroupId>();
-      for (const id of groups) {
+      for (const id of ids) {
         validateGroupId(id);
-        if (unique.has(id)) throw new Error("资产对象分组清单含重复 ID。");
+        if (unique.has(id)) throw new Error("资产模板 ID 重复。");
         unique.add(id);
       }
 
-      await Promise.all(groups.map(async id => {
+      let listing: ProjectDirectoryListing | null;
+      try { listing = await files.list(DIRECTORY); }
+      catch (cause) {
+        throw cause instanceof Error ? cause : new Error("读取资产对象分组目录失败。");
+      }
+      if (!listing) throw new Error(files.getSnapshot().error ?? "读取资产对象分组目录失败。");
+
+      const loaded = await Promise.all(ids.map(async (id): Promise<[AssetGroupId, AssetGroupData] | null> => {
         const path = assetGroupPath(id);
-        if (!await files.read(path, {preferByteView: true})) {
-          throw new Error(files.getSnapshot().error ?? `资产对象分组文件“${path}”缺失或无法读取。`);
+        const name = path.slice(path.lastIndexOf("/") + 1);
+        const matchingIssue = listing.issues.find(issue => issue.path === path || issue.path === name || issue.path === DIRECTORY);
+        if (matchingIssue) throw new Error(matchingIssue.message || `读取资产对象分组文件“${path}”失败。`);
+
+        const matchingEntries = listing.entries.filter(entry => entry.path === path || entry.name === name);
+        if (matchingEntries.length > 1) throw new Error(`资产对象分组路径“${path}”在目录中重复。`);
+        const entry = matchingEntries[0];
+        if (!entry) return null;
+        if (entry.path !== path || entry.name !== name || entry.kind !== "file") {
+          throw new Error(`资产对象分组路径“${path}”不是普通文件，原文件已保留。`);
         }
-        read(id);
+
+        let file: ProjectFile | null;
+        try { file = await files.read(path, {preferByteView: true}); }
+        catch (cause) {
+          throw cause instanceof Error ? cause : new Error(`读取资产对象分组文件“${path}”失败，原文件已保留。`);
+        }
+        if (!file) throw new Error(files.getSnapshot().error ?? `读取资产对象分组文件“${path}”失败，原文件已保留。`);
+        return [id, parseFile(id, file)];
       }));
+      return new Map(loaded.filter(group => group !== null));
     },
 
     read,
 
     async saveGroup(id: AssetGroupId, data: AssetGroupData, existing: boolean, checkCurrent?: () => void): Promise<void> {
       const path = assetGroupPath(id);
-      let updateExisting = existing;
-      if (updateExisting) read(id);
-      else if (safeEmptyOrphans.has(id)) {
-        const orphan = read(id);
-        if (orphan.assets.length !== 0 || orphan.fields.length !== 0) {
-          throw new Error("孤立对象分组已发生变化，无法覆盖。");
-        }
-        updateExisting = true;
-      }
+      if (existing && !read(id)) throw new Error(`资产对象分组文件“${path}”尚未加载。`);
       const before = pathFile(files, path);
       const beforeBytes = before && fileData(before);
       const bytes = await encodeGroup(id, data);
@@ -309,44 +263,17 @@ export function createAssetObjectFiles(files: ProjectFiles, encodeGroup: EncodeA
       if (beforeBytes !== (current && fileData(current))) {
         throw new Error("当前模板的对象文件在编辑期间被修改，已保留待保存的内容。");
       }
-      await saveBytes(files, attempts, path, bytes, updateExisting, "保存资产对象分组失败，请重试。");
-      safeEmptyOrphans.delete(id);
+      await saveBytes(files, attempts, path, bytes, existing, "保存资产对象分组失败，请重试。");
       const saved = pathFile(files, path);
       if (saved) parsed.set(id, {bytes: fileData(saved), data: Object.freeze({
         assets: Object.freeze(data.assets), fields: Object.freeze(data.fields),
       })});
     },
 
-    async saveManifest(groups: readonly AssetGroupId[], existing: boolean): Promise<void> {
-      const seen = new Set<AssetGroupId>();
-      const ordered: AssetGroupId[] = [];
-      for (const id of groups) {
-        validateGroupId(id);
-        if (seen.has(id)) throw new Error("资产对象分组清单含重复 ID。");
-        seen.add(id);
-        ordered.push(id);
-      }
-      const bytes = encode({format: FORMAT, schemaVersion: SCHEMA_VERSION, groups: ordered});
-      if (existing) {
-        const file = pathFile(files, MANIFEST_PATH);
-        if (!file) throw new Error("资产对象清单尚未加载。");
-        let current: unknown;
-        try { current = decode(fileData(file)); }
-        catch { throw new Error("资产对象清单格式无效，原文件已保留。"); }
-        const currentGroups = parseGroupManifest(current);
-        if (currentGroups && currentGroups.some(id => !seen.has(id))) {
-          throw new Error("资产对象清单在并发修改中新增了分组，当前草稿已保留，请重新加载后再保存。");
-        }
-      }
-      for (const id of ordered) read(id);
-      await saveBytes(files, attempts, MANIFEST_PATH, bytes, existing, "保存资产对象清单失败，请重试。");
-    },
-
     dispose(): void {
       disposed = true;
       parsed.clear();
       attempts.clear();
-      safeEmptyOrphans.clear();
     },
   });
 }

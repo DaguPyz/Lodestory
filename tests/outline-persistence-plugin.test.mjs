@@ -626,11 +626,11 @@ test("timeline receives the current session asset catalog and keeps opaque asset
   const {f, disk, bytesOf, keyOf} = persistenceFixture();
   const assetTypeId = "10000000-0000-4000-8000-000000000001";
   const assetId = "10000000-0000-4000-8000-000000000002";
-  const assetSchemaPath = ".lodestory/assets/schema.json";
-  disk.set(keyOf(project.path, assetSchemaPath), bytesOf(JSON.stringify({
-    format: "lodestory.asset-schema",
-    schemaVersion: 2,
-    types: [{id: assetTypeId, name: "人物", description: "故事人物", order: 0, status: "active"}],
+  const assetGroupPath = `.lodestory/assets/objects/${assetTypeId}.json`;
+  disk.set(keyOf(project.path, ".lodestory/assets/templates.json"), bytesOf(JSON.stringify([
+    {id: assetTypeId, name: "人物", description: "故事人物", order: 0, status: "active"},
+  ])));
+  disk.set(keyOf(project.path, assetGroupPath), bytesOf(JSON.stringify({
     assets: [{id: assetId, name: "林遥", description: "主角", typeId: assetTypeId, values: {}}],
     fields: [],
   })));
@@ -689,11 +689,11 @@ test("timeline receives the current session asset catalog and keeps opaque asset
   assert.deepEqual(Array.from(restoredEvents.getSnapshot().events[0].assetIds), [assetId], "the event association survives close and reopen");
 
   const files = storage.getFiles(restoredSessionId);
-  const schemaFile = files.getSnapshot().files.find(file => file.path === assetSchemaPath);
-  assert.ok(schemaFile);
-  const schema = JSON.parse(new TextDecoder().decode(new Uint8Array(schemaFile.bytes)));
-  assert.equal(files.write(assetSchemaPath, bytesOf(JSON.stringify({...schema, assets: []}))), true);
-  assert.equal(await files.save(assetSchemaPath), true);
+  const groupFile = files.getSnapshot().files.find(file => file.path === assetGroupPath);
+  assert.ok(groupFile);
+  const group = JSON.parse(new TextDecoder().decode(new Uint8Array(groupFile.bytes)));
+  assert.equal(files.write(assetGroupPath, bytesOf(JSON.stringify({...group, assets: []}))), true);
+  assert.equal(await files.save(assetGroupPath), true);
   assert.equal(restoredCatalog.getSnapshot().assets.some(asset => asset.id === assetId), false,
     "the catalog reflects an asset removed through the project's canonical file buffer");
   assert.deepEqual(Array.from(restoredEvents.getSnapshot().events[0].assetIds), [assetId],

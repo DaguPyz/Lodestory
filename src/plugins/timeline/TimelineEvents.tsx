@@ -2,7 +2,7 @@ import {memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState, us
 import {Menu} from "@base-ui/react/menu";
 import {Popover} from "@base-ui/react/popover";
 import type {CanvasViewportSnapshot} from "@lodestory/sdk/canvas";
-import type {ContextMenuService} from "@lodestory/sdk/context-menu";
+import type {ContextMenuService, MenuEntry} from "@lodestory/sdk/context-menu";
 import type {AssetCatalog} from "@lodestory/sdk/asset-catalog";
 import {Button, Dialog, DialogActions, DialogClose, Icon, IconButton, TextField, Textarea, useInteractionRef} from "@lodestory/ui";
 import type {TimelineAxisSettings} from "./timelineAxisStore";
@@ -16,6 +16,8 @@ import "./timeline-events.css";
 type Size = Readonly<{width: number; height: number}>;
 type Draft = {id: string | null; title: string; summary: string; offset: string; placement: "above" | "below"; important: boolean; assetIds: readonly string[]; color: string};
 type Operation = {kind: "upsert"; draft: Draft} | {kind: "remove"; id: string};
+type EventMenuTarget = Readonly<{store: TimelineEventStore; eventId?: string}>;
+type DeleteTarget = Readonly<{id: string; title: string; source: "canvas" | "editor"}>;
 
 const EVENT_COLORS = [
   {name: "红色", value: "#d96666"}, {name: "橙色", value: "#d58a51"},
@@ -117,7 +119,7 @@ function calloutLabel(settings: TimelineAxisSettings, event: TimelineEvent): str
 function eventAccessibleName(settings: TimelineAxisSettings, event: TimelineEvent): string {
   const marker = event.important ? "关键转折" : "普通事件";
   const summary = event.summary ? `，${event.summary}` : "";
-  return `${marker}：${event.title}${summary}，${calloutLabel(settings, event)}，${event.placement === "above" ? "轴线上方" : "轴线下方"}，点击编辑`;
+  return `${marker}：${event.title}${summary}，${calloutLabel(settings, event)}，${event.placement === "above" ? "轴线上方" : "轴线下方"}，编辑事件`;
 }
 
 function formatOffsetHint(settings: TimelineAxisSettings, offsetText: string): string {
@@ -152,8 +154,8 @@ const AxisAnchor = memo(function AxisAnchor({event, x, active, onEdit}: {
   const markerClass = ["timeline-event-axis-marker", origin ? "timeline-event-axis-marker-origin" : "",
     event.important ? "timeline-event-axis-marker-important" : ""].filter(Boolean).join(" ");
   return <g className="timeline-event-markers" data-active={active}>
-    <g className={markerClass} aria-hidden="true" data-canvas-interactive
-      transform={`translate(${x} 0)`} onClick={() => { if (active) onEdit(event); }}>
+    <g className={markerClass} aria-hidden="true" data-canvas-interactive data-timeline-event-id={event.id}
+      transform={`translate(${x} 0)`} onDoubleClick={() => { if (active) onEdit(event); }}>
       <AxisMarkerGlyph important={event.important} origin={origin} />
     </g>
   </g>;
@@ -218,10 +220,10 @@ function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX,
       const event = eventById.get(point.id);
       if (!event) return null;
       const originEvent = event.offset === 0;
-      return <g key={event.id} data-growth-event={event.id}>
+      return <g key={event.id} data-growth-event={event.id} data-timeline-event-id={event.id}>
         {point.turningCaptionVisible && point.turningCaption && <g className="timeline-event-axis-marker"
           aria-hidden="true" data-canvas-interactive transform={`translate(${point.x} ${point.axisY})`}
-          onClick={() => { if (active) onEdit(event); }}>
+          onDoubleClick={() => { if (active) onEdit(event); }}>
           <text className="timeline-event-turning-caption"
             x={point.turningCaption.left + point.turningCaption.width / 2 - point.x} y={point.turningCaption.top - point.axisY}
             fontSize={TIMELINE_TURNING_CAPTION_FONT_SIZE} textAnchor="middle" dominantBaseline="hanging">关键转折</text>
@@ -233,7 +235,8 @@ function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX,
           role="button" tabIndex={active ? 0 : -1}
           aria-label={eventAccessibleName(settings, event)} aria-disabled={!active}
           data-canvas-interactive transform={`translate(${point.x} ${point.endpointY})`}
-          onClick={() => { if (active) onEdit(event); }}
+          onDoubleClick={() => { if (active) onEdit(event); }}
+          onClick={activation => { if (active && activation.detail === 0) onEdit(event); }}
           onKeyDown={nativeEvent => {
             if ((nativeEvent.key === "Enter" || nativeEvent.key === " ") && active) {
               nativeEvent.preventDefault();
@@ -268,13 +271,13 @@ function EventLabels({eventById, settings, geometry, onEdit}: {
       const event = eventById.get(point.id);
       if (!event) return null;
       return <div key={event.id}
-        data-growth-event={event.id}
+        data-growth-event={event.id} data-timeline-event-id={event.id}
         className={`timeline-event-label timeline-event-label-${point.placement}${event.important ? " timeline-event-label-important" : ""}${point.labelAlign === "right" ? " timeline-event-label-align-right" : ""}`}
         style={{transform: `translate(${point.labelLeft}px, ${point.labelTop}px)`, width: point.labelWidth,
           ...(event.color ? {"--timeline-event-color": event.color} : {})} as CSSProperties}
         data-custom-color={event.color ? "true" : undefined}
         aria-hidden="true" data-canvas-interactive
-        onClick={() => onEdit(event)}>
+        onDoubleClick={() => onEdit(event)}>
         <EventLabelText event={event} settings={settings} />
       </div>;
     })}
@@ -311,20 +314,20 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
   const operationEpochRef = useRef(0);
   const operationRef = useRef<Operation | null>(null);
   const [editing, setEditing] = useState(false);
+  const [formSession, setFormSession] = useState(0);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [isNewDraft, setIsNewDraft] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [confirmDelete, setConfirmDelete] = useState(false);
-  const restoreEditorFocus = useRef(false);
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const restoreCanvasFocus = useRef(false);
 
   useLayoutEffect(() => {
-    if (confirmDelete) keepEventButton.current?.focus();
-    else if (active && editing && restoreEditorFocus.current) {
-      restoreEditorFocus.current = false;
-      titleInput.current?.focus();
+    if (!deleteTarget && restoreCanvasFocus.current) {
+      restoreCanvasFocus.current = false;
+      if (active) menuSurface.current?.focus({preventScroll: true});
     }
-  }, [active, confirmDelete, editing]);
+  }, [active, deleteTarget]);
 
   onEditingChangeRef.current = onEditingChange;
 
@@ -333,10 +336,9 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     previousStoreRef.current = store;
     operationEpochRef.current++;
     operationRef.current = null;
-    restoreEditorFocus.current = false;
     setSubmitting(false);
     setOperationError(null);
-    setConfirmDelete(false);
+    setDeleteTarget(null);
     setDraft(null);
     setIsNewDraft(false);
     setIsEditing(false);
@@ -367,6 +369,7 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     if (editingRef.current !== next) {
       editingRef.current = next;
       if (next) {
+        setFormSession(session => session + 1);
         editingOwnerRef.current = onEditingChangeRef.current ?? null;
         editingOwnerRef.current?.(true);
       } else {
@@ -382,32 +385,50 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     setDraft({...draftFromEvent(), id: crypto.randomUUID()});
     setIsNewDraft(true);
     setOperationError(null);
-    setConfirmDelete(false);
+    setDeleteTarget(null);
     operationRef.current = null;
     setIsEditing(true);
   }
 
-  const beginEdit = useCallback((event: TimelineEvent) => {
-    if (!active || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.saving) return;
+  const openEvent = useCallback((event: TimelineEvent) => {
+    if (!active || editingRef.current || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.saving) return;
     setDraft(draftFromEvent(event));
     setIsNewDraft(false);
     setOperationError(null);
-    setConfirmDelete(false);
+    setDeleteTarget(null);
     operationRef.current = null;
     setIsEditing(true);
   }, [active, snapshot.loaded, snapshot.loading, snapshot.blocked, snapshot.saving]);
+
+  function askToDelete(event: TimelineEvent, source: DeleteTarget["source"]) {
+    if (!active || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.saving || submitting) return;
+    if (source === "canvas") {
+      if (editingRef.current) return;
+      setDraft(null);
+      setOperationError(null);
+      operationRef.current = null;
+      setIsEditing(true);
+    }
+    setDeleteTarget({id: event.id, title: event.title, source});
+  }
 
   function cancelDraft(force = false) {
     if (!force && (submitting || snapshot.saving)) return;
     operationEpochRef.current++;
     operationRef.current = null;
-    restoreEditorFocus.current = false;
     setSubmitting(false);
+    setIsEditing(false);
+  }
+
+  function clearDialogContent() {
     setDraft(null);
     setIsNewDraft(false);
     setOperationError(null);
-    setConfirmDelete(false);
-    setIsEditing(false);
+    setDeleteTarget(null);
+  }
+
+  function onDialogTransitionComplete(open: boolean) {
+    if (!open && !editingRef.current) clearDialogContent();
   }
 
   function updateDraft(next: Partial<Draft>) {
@@ -416,8 +437,14 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
   }
 
   function keepEvent() {
-    restoreEditorFocus.current = true;
-    setConfirmDelete(false);
+    if (!deleteTarget || submitting || snapshot.saving) return;
+    if (deleteTarget.source === "canvas") {
+      cancelDraft();
+      restoreCanvasFocus.current = true;
+      clearDialogContent();
+      return;
+    }
+    setDeleteTarget(null);
   }
 
   function validateDraft(value: Draft): {event: TimelineEvent | null; error: string | null} {
@@ -463,14 +490,14 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
   }
 
   async function removeEvent() {
-    if (!active || !draft?.id || !snapshot.loaded || snapshot.blocked || snapshot.saving || submitting) return;
-    operationRef.current = {kind: "remove", id: draft.id};
+    if (!active || !deleteTarget || !snapshot.loaded || snapshot.blocked || snapshot.saving || submitting) return;
+    operationRef.current = {kind: "remove", id: deleteTarget.id};
     setSubmitting(true);
     setOperationError(null);
     const epoch = operationEpochRef.current;
     const operationStore = store;
     try {
-      const removed = await operationStore.remove(draft.id);
+      const removed = await operationStore.remove(deleteTarget.id);
       if (epoch !== operationEpochRef.current || storeRef.current !== operationStore || !activeRef.current) return;
       if (removed) cancelDraft(true);
       else setOperationError(operationStore.getSnapshot().error ?? "事件删除失败，请重试。");
@@ -544,6 +571,7 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
   }
 
   const eventById = useMemo(() => new Map(snapshot.events.map(event => [event.id, event])), [snapshot.events]);
+  const editedEvent = !isNewDraft && draft?.id ? eventById.get(draft.id) : undefined;
   const geometry = useMemo(() => getTimelineEventsGeometry({events: snapshot.events, origin: settings.origin, step: settings.step,
     center: view.center, zoom: view.zoom, width: size.width, height: size.height, axisLabelBounds}),
   [snapshot.events, settings.origin, settings.step, view.center.x, view.center.y, view.zoom, size.width, size.height, axisLabelBounds]);
@@ -572,19 +600,32 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     transform: `translate(${view.center.x - size.width / (2 * Math.max(view.zoom, 0.0001))}px, ${view.center.y - size.height / (2 * Math.max(view.zoom, 0.0001))}px) scale(${scale})`,
   };
   const MenuRegion = contextMenus.Region;
+  const menuItems = (target: EventMenuTarget): MenuEntry<EventMenuTarget>[] => {
+    if (target.store !== store) return [];
+    const addEvent: MenuEntry<EventMenuTarget> = {id: "add-event", label: "添加事件", icon: <Icon name="plus"/>, restoreFocus: false, onSelect: beginCreate};
+    if (!target.eventId) return [addEvent];
+    const event = eventById.get(target.eventId);
+    if (!event) return [];
+    return [
+      {id: "edit-event", label: "编辑事件", icon: <Icon name="pencil"/>, restoreFocus: false, onSelect: () => openEvent(event)},
+      addEvent,
+      {id: "event-menu-separator", type: "separator"},
+      {id: "delete-event", label: "删除事件", icon: <Icon name="trash"/>, restoreFocus: false, onSelect: () => askToDelete(event, "canvas")},
+    ];
+  };
 
   return <>
-    <MenuRegion context={store} label="时间线画布操作" disabled={!active || editing || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.saving}
-      items={target => target === store
-        ? [{id: "add-event", label: "添加事件", icon: <Icon name="plus"/>, restoreFocus: false, onSelect: beginCreate}]
-        : []}>
+    <MenuRegion<EventMenuTarget> label="时间线画布操作"
+      disabled={!active || editing || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.saving}
+      resolveContext={target => ({store, eventId: target?.closest("[data-timeline-event-id]")?.getAttribute("data-timeline-event-id") ?? undefined})}
+      items={menuItems}>
     <div ref={menuSurface} className="timeline-events-overlay" style={overlayStyle} data-active={active}
       tabIndex={active ? 0 : -1} aria-label="时间线事件画布">
       {snapshot.loaded && geometry.width > 0 && geometry.height > 0 && <>
         <EventAxisMarkers eventById={eventById} settings={settings} geometry={geometry} stemSegments={stemSegments} centerX={view.center.x} zoom={view.zoom} active={active}
-          onEdit={beginEdit} />
+          onEdit={openEvent} />
         <EventLabels eventById={eventById} settings={settings} geometry={geometry}
-          onEdit={beginEdit} />
+          onEdit={openEvent} />
       </>}
       {snapshot.loading && <div className="timeline-events-feedback" role="status">正在读取时间线事件…</div>}
       {!snapshot.loading && snapshot.error && <div className="timeline-events-feedback" role="alert">
@@ -594,22 +635,13 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     </div>
     </MenuRegion>
 
-    <Dialog open={editing && active} onOpenChange={open => {
-      if (open) return;
-      if (!active || busy) return;
-      if (confirmDelete) keepEvent();
-      else cancelDraft();
-    }} title={confirmDelete ? "删除事件" : !isNewDraft && draft?.id ? "编辑事件" : "添加时间线事件"}
-      size={confirmDelete ? "narrow" : "large"} bodyLayout={confirmDelete ? "scroll" : "flush"}
-      description={confirmDelete ? "删除后会立即保存到当前项目。" : undefined}
-      headerActions={!confirmDelete ? <>
-        {draft?.id && !isNewDraft && <EventActions disabled={busy} onDelete={() => setConfirmDelete(true)} />}
-        <DialogClose aria-label="关闭事件编辑" title="关闭" variant="ghost"><Icon name="close" /></DialogClose>
-      </> : undefined}
-      busy={busy} initialFocus={confirmDelete ? keepEventButton : titleInput}
-      finalFocus={menuSurface}>
-      {confirmDelete ? <div className="timeline-event-delete-confirm">
-        <p>确定删除「{draft?.title || "未命名事件"}」吗？</p>
+    {deleteTarget && <Dialog key="delete-event" open={editing && active} onOpenChange={open => {
+      if (!open && active) keepEvent();
+    }} onOpenChangeComplete={onDialogTransitionComplete}
+      title="删除事件" size="narrow" description="删除后会立即保存到当前项目。"
+      busy={busy} initialFocus={keepEventButton} finalFocus={menuSurface}>
+      <div className="timeline-event-delete-confirm">
+        <p>确定删除「{deleteTarget.title}」吗？</p>
         {(operationError || snapshot.error) && <p className="timeline-event-form-error" role="alert">{operationError ?? snapshot.error}</p>}
         <DialogActions>
           {operationRef.current?.kind === "remove" && (operationError || snapshot.error)
@@ -619,7 +651,19 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
             {submitting ? "正在删除…" : "确认删除"}
           </Button>
         </DialogActions>
-      </div> : <form className="timeline-event-form" onSubmit={event => void submitEvent(event)}>
+      </div>
+    </Dialog>}
+
+    {draft && !deleteTarget && <Dialog key="event-form" open={editing && active} onOpenChange={open => {
+      if (!open && active && !busy) cancelDraft();
+    }} onOpenChangeComplete={onDialogTransitionComplete}
+      title={isNewDraft ? "添加时间线事件" : "编辑事件"} size="large" bodyLayout="flush"
+      headerActions={<>
+        {editedEvent && <EventActions disabled={busy} onDelete={() => askToDelete(editedEvent, "editor")} />}
+        <DialogClose aria-label="关闭事件编辑" title="关闭" variant="ghost"><Icon name="close" /></DialogClose>
+      </>}
+      busy={busy} initialFocus={titleInput} finalFocus={menuSurface}>
+      <form key={formSession} className="timeline-event-form" onSubmit={event => void submitEvent(event)}>
         <div className="timeline-event-form-scroll">
           <div className="timeline-event-form-columns">
             <div className="timeline-event-content">
@@ -683,8 +727,8 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
             </Button>
           </DialogActions>
         </div>
-      </form>}
-    </Dialog>
+      </form>
+    </Dialog>}
   </>;
 }
 

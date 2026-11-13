@@ -37,6 +37,8 @@ export type ContextMenuRegionProps<T = undefined> = {
     children: ReactElement;
     items?: MenuConfig<T>;
     context?: T;
+    /** Resolve context from the trigger target when the menu opens. Takes precedence over context. */
+    resolveContext?: (target: Element | null) => T;
     mode?: "custom" | "native";
     disabled?: boolean;
     label?: string;

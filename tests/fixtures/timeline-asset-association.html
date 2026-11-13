@@ -96,7 +96,7 @@
 
       window.__timelineAssetFixture = {
         open() {
-          document.querySelector(".timeline-event-endpoint")?.dispatchEvent(new MouseEvent("click", {bubbles: true}));
+          document.querySelector(".timeline-event-endpoint")?.dispatchEvent(new MouseEvent("dblclick", {bubbles: true, detail: 2}));
         },
         events() { return events.map(item => ({...item, assetIds: [...item.assetIds]})); },
         saves() { return saves; },

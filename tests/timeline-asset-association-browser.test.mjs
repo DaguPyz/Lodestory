@@ -119,6 +119,14 @@ test("timeline event associates assets by type, searches, preserves missing link
     };
     const fixture = (method, ...args) => evaluate(`window.__timelineAssetFixture.${method}(...${JSON.stringify(args)})`);
     const click = selector => evaluate(`document.querySelector(${JSON.stringify(selector)})?.click()`);
+    const pointerClick = async selector => {
+      const point = await evaluate(`(() => {
+        const rect = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();
+        return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+      })()`);
+      await cdp("Input.dispatchMouseEvent", {type: "mousePressed", ...point, button: "left", buttons: 1, clickCount: 1});
+      await cdp("Input.dispatchMouseEvent", {type: "mouseReleased", ...point, button: "left", buttons: 0, clickCount: 1});
+    };
     const pressEscape = async () => {
       const key = {key: "Escape", code: "Escape", windowsVirtualKeyCode: 27};
       await cdp("Input.dispatchKeyEvent", {type: "keyDown", ...key});
@@ -302,16 +310,32 @@ test("timeline event associates assets by type, searches, preserves missing link
     await waitFor(async () => (await fixture("events"))[0]?.color === "#123456", "The event did not save the custom color.");
 
     await openEvent();
+    await evaluate(`(() => {
+      const title = document.querySelector('.timeline-event-form input[type="text"]');
+      title.focus();
+      title.select();
+      window.__eventEditorBeforeDelete = title.closest('.ui-dialog');
+    })()`);
+    await cdp("Input.insertText", {text: "未保存的标题"});
     const askToDelete = async () => {
-      await click('button[aria-label="更多操作"]');
-      await waitFor(() => evaluate(`Boolean(document.querySelector('[role="menuitem"]'))`), "The event menu did not open.");
-      await click('[role="menuitem"]');
+      await pointerClick('button[aria-label="更多操作"]');
+      await waitFor(() => evaluate(`(() => {
+        const item = document.querySelector('.timeline-event-menu-item');
+        if (!item) return false;
+        const rect = item.getBoundingClientRect();
+        return item.contains(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
+      })()`), "The event menu item was not ready for pointer input.");
+      await pointerClick('.timeline-event-menu-item');
       await waitFor(() => evaluate(`document.querySelector('.ui-dialog-title')?.textContent === "删除事件"`), "The delete confirmation did not open.");
     };
     await askToDelete();
+    assert.equal(await evaluate("window.__eventEditorBeforeDelete.isConnected"), false,
+      "the delete confirmation uses a separate dialog from the editor");
     assert.equal((await fixture("events")).length, 1, "opening confirmation cannot delete the event");
     await pressEscape();
     await waitFor(() => evaluate(`Boolean(document.querySelector('.timeline-event-form'))`), "Escape should return to the event editor.");
+    assert.equal(await evaluate(`document.querySelector('.timeline-event-form input[type="text"]').value`), "未保存的标题",
+      "canceling deletion preserves the unsaved event title");
     await askToDelete();
     await clickButtonNamed("确认删除");
     await waitFor(async () => (await fixture("events")).length === 0, "The confirmed deletion did not remove the event.");

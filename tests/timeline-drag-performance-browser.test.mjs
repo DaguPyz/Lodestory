@@ -187,6 +187,9 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       const point = await endpointPoint(title);
       assert.ok(point && !point.hidden, `The '${title}' endpoint is visibly available for pointer input.`);
       await clickAt(point.x, point.y);
+      assert.equal((await eventDialogState()).found, false, "a single click does not open the event editor");
+      await press(point.x, point.y, "left", 2);
+      await release(point.x, point.y, "left", 2);
       try { await waitFor(dialogVisible, message, 8000); }
       catch (cause) {
         const diagnostic = await evaluate(`(() => {

@@ -107,6 +107,8 @@ export function useDialogPosition(open: boolean) {
   };
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     const target = event.target as Element;
+    // Portaled header controls bubble through React without being inside the drag handle.
+    if (!event.currentTarget.contains(target)) return;
     if (target.closest("button, input, textarea, select, a, [contenteditable], [data-no-drag]")) return;
     controller.current?.pointerDown(event);
   };

@@ -115,7 +115,8 @@ export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T
     if (boundary && boundary !== region) return false;
     const editable = target?.closest(editableSelector);
     if (editable && latest.current.mode !== "custom") return false;
-    const context = latest.current.context as T;
+    const { resolveContext, context: defaultContext } = latest.current;
+    const context = resolveContext ? resolveContext(target) : defaultContext as T;
     if (!resolveMenu(latest.current.items ?? [], context).length) return false;
     const focus = target?.closest<HTMLElement>(focusableSelector) ?? region.querySelector<HTMLElement>(focusableSelector) ?? region;
     const next = {
@@ -195,7 +196,7 @@ export function ContextMenuRegion<T = undefined>(props: ContextMenuRegionProps<T
     });
   }
 
-  const entries = resolveMenu(items, (snapshot ? snapshot.context : props.context) as T);
+  const entries = snapshot ? resolveMenu(items, snapshot.context) : [];
   useEffect(() => {
     if (open && !entries.length) {
       restore.current = false;

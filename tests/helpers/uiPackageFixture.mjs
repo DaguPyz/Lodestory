@@ -17,7 +17,8 @@ export function resolveUiPackageImport(specifier, load) {
   if (specifier === "@lodestory/ui/styles.css") {
     return {handled: true, value: {}};
   }
-  if (specifier === "@base-ui/react/dialog" || specifier === "@base-ui/react/select" || specifier === "@base-ui/react/context-menu") {
+  if (["@base-ui/react/dialog", "@base-ui/react/select", "@base-ui/react/context-menu",
+    "@base-ui/react/menu", "@base-ui/react/popover"].includes(specifier)) {
     return {handled: true, value: requireFromUiPackage(specifier)};
   }
   return {handled: false};

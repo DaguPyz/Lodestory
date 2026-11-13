@@ -159,8 +159,7 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
     }
     begin({kind: "create", id: crypto.randomUUID(), name: "", description: "", color: null, typeId: selectedType.id, values});
   }
-  function editAsset(assetId: string | null) {
-    const asset = assetFromMenu(assetId);
+  function editAsset(asset: AssetRecord | undefined) {
     if (asset) begin({...asset, color: asset.color ?? null, kind: "edit", values: {...asset.values}});
   }
   function showAsset(id: string) {
@@ -168,7 +167,9 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
     if (store.selectAsset(id)) setError(null);
   }
   function returnToList(assetId: string | null) {
-    if (assetFromMenu(assetId)) store.selectAsset(null);
+    if (assetFromMenu(assetId) && store.selectAsset(null)) {
+      editor.current?.focus({preventScroll: true});
+    }
   }
   function openTypes(create = false) {
     if (disabled || draft || fieldDraft || deleting || !canInteract() || resource.editing.size > 0) return;
@@ -317,12 +318,15 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
   const displayType = snapshot.types.find(type => type.id === (draft?.typeId ?? selected?.typeId));
   const displayTypeName = displayType?.name ?? "未分类";
   const isObjectList = !draft && !selected;
+  const isObjectDetail = !draft && selected !== null;
+  const headerClass = isObjectList ? "asset-records-header" : isObjectDetail ? "asset-record-detail-header" : "";
+  const headingClass = isObjectList ? "asset-records-heading" : isObjectDetail ? "asset-editor-heading-with-back" : undefined;
   const listActionsDisabled = disabled || fieldDraft !== null || deleting || resource.editing.size > 0 || !canInteract();
   const viewSwitchDisabled = !active || !canInteract() || pending || snapshot.saving || resource.editing.size > 0;
   const listMenuItems: readonly MenuEntry<string | null>[] = selectedType ? [
     {id: "create-object", label: "新建对象", icon: <Icon name="plus"/>, disabled: listActionsDisabled,
       restoreFocus: false, onSelect: menuTypeId => createObjectFromMenu(menuTypeId)},
-    {id: "edit-template", label: "模板设置", disabled: listActionsDisabled,
+    {id: "edit-template", label: "模板设置", icon: <Icon name="settings"/>, disabled: listActionsDisabled,
       restoreFocus: false, onSelect: menuTypeId => openSelectedTemplateSettings(menuTypeId)},
   ] : [
     {id: "create-template", label: "新建资产模板", icon: <Icon name="plus"/>, disabled: listActionsDisabled,
@@ -332,28 +336,36 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
     {id: "return-to-list", label: "返回对象列表", disabled: assetId => !assetFromMenu(assetId),
       restoreFocus: false, onSelect: returnToList},
     {id: "edit-object", label: "编辑对象", disabled: assetId => !assetFromMenu(assetId),
-      restoreFocus: false, onSelect: editAsset},
+      restoreFocus: false, onSelect: assetId => editAsset(assetFromMenu(assetId))},
     {id: "delete-object", label: "删除对象", disabled: assetId => !assetFromMenu(assetId),
       restoreFocus: false, onSelect: removeAssetFromMenu},
   ];
   const objectMenuItems: readonly MenuEntry<string | null>[] = selectedType ? [
     {id: "create-object", label: "新建对象", icon: <Icon name="plus"/>, disabled: assetId => !assetFromListMenu(assetId),
       restoreFocus: false, onSelect: createObjectFromAssetMenu},
-    {id: "edit-template", label: "模板设置", disabled: assetId => !assetFromListMenu(assetId),
+    {id: "edit-template", label: "模板设置", icon: <Icon name="settings"/>, disabled: assetId => !assetFromListMenu(assetId),
       restoreFocus: false, onSelect: openTemplateSettingsFromAssetMenu},
-    {id: "delete-object", label: "删除对象", disabled: assetId => !assetFromListMenu(assetId),
+    {id: "edit-object", label: "编辑对象", icon: <Icon name="pencil"/>, disabled: assetId => !assetFromListMenu(assetId),
+      restoreFocus: false, onSelect: assetId => editAsset(assetFromListMenu(assetId))},
+    {id: "delete-object", label: "删除对象", icon: <Icon name="trash"/>, disabled: assetId => !assetFromListMenu(assetId),
       restoreFocus: false, onSelect: removeAssetFromListMenu},
   ] : [
     {id: "create-template", label: "新建资产模板", icon: <Icon name="plus"/>, disabled: assetId => !assetFromListMenu(assetId),
       restoreFocus: false, onSelect: createTemplateFromAssetMenu},
-    {id: "delete-object", label: "删除对象", disabled: assetId => !assetFromListMenu(assetId),
+    {id: "delete-object", label: "删除对象", icon: <Icon name="trash"/>, disabled: assetId => !assetFromListMenu(assetId),
       restoreFocus: false, onSelect: removeAssetFromListMenu},
   ];
 
   const content = <div className="asset-type-editor asset-record-editor" ref={editor} tabIndex={!draft && active ? 0 : -1}>
-    <header className={isObjectList ? "asset-editor-header asset-records-header" : "asset-editor-header"}>
-      <div className={isObjectList ? "asset-records-heading" : undefined}>
+    <header className={`asset-editor-header ${headerClass}`.trimEnd()}>
+      <div className={headingClass}>
         <h1>{draft ? draft.kind === "create" ? "新建对象" : "编辑对象" : selected ? selected.name : selectedType?.name ?? (scopeAssets.length > 0 ? "未分类对象" : "对象管理")}</h1>
+        {isObjectDetail && <div className="asset-editor-back">
+          <Button variant="ghost" disabled={listActionsDisabled} onClick={() => returnToList(selected.id)}>
+            <Icon name="arrowLeft" size="small" />
+            <span>{selectedType ? `返回${selectedType.name}列表` : "返回对象列表"}</span>
+          </Button>
+        </div>}
         {!draft && <p aria-live={isObjectList ? "polite" : undefined}>{selected
           ? `${displayTypeName}${selected.description ? ` · ${selected.description}` : ""}`
           : selectedType ? `${searchActive ? `${visibleAssets.length} / ` : ""}${scopeAssets.length} 个对象${viewMode === "list" ? ` · ${scopeFields.length} 个字段` : ""}`

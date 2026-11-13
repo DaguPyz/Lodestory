@@ -1,8 +1,10 @@
 import {memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type RefObject} from "react";
+import {Menu} from "@base-ui/react/menu";
+import {Popover} from "@base-ui/react/popover";
 import type {CanvasViewportSnapshot} from "@lodestory/sdk/canvas";
 import type {ContextMenuService} from "@lodestory/sdk/context-menu";
 import type {AssetCatalog} from "@lodestory/sdk/asset-catalog";
-import {Button, Dialog, DialogActions, Icon, TextField, Textarea} from "@lodestory/ui";
+import {Button, Dialog, DialogActions, DialogClose, Icon, IconButton, TextField, Textarea, useInteractionRef} from "@lodestory/ui";
 import type {TimelineAxisSettings} from "./timelineAxisStore";
 import {isTimelineEventColor, type TimelineEvent, type TimelineEventStore} from "./timelineEventStore";
 import {getTimelineEventsGeometry, TIMELINE_TURNING_CAPTION_FONT_SIZE, type TimelineEventsGeometry} from "./timelineEventsGeometry";
@@ -21,6 +23,80 @@ const EVENT_COLORS = [
   {name: "青色", value: "#59a8a5"}, {name: "蓝色", value: "#6b9bce"},
   {name: "紫色", value: "#a489c9"}, {name: "粉色", value: "#ce83a2"},
 ] as const;
+
+function EventActions({disabled, onDelete}: {disabled: boolean; onDelete(): void}) {
+  const trigger = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [density, setDensity] = useState<string>();
+  const interactionRef = useInteractionRef<HTMLDivElement>(open && !disabled, "menu");
+
+  return <Menu.Root modal={false} open={open && !disabled} onOpenChange={next => {
+    if (next) setDensity(trigger.current?.closest<HTMLElement>("[data-ui-density]")?.dataset.uiDensity);
+    setOpen(next);
+  }}>
+    <Menu.Trigger ref={trigger} disabled={disabled} render={<IconButton label="更多操作" />}><Icon name="more" /></Menu.Trigger>
+    <Menu.Portal>
+      <Menu.Positioner className="timeline-event-popup-positioner" data-ui-density={density} align="end" sideOffset={4} collisionPadding={8}>
+        <Menu.Popup className="timeline-event-popup timeline-event-menu" ref={interactionRef}>
+          <Menu.Item className="timeline-event-menu-item" onClick={onDelete}>删除事件</Menu.Item>
+        </Menu.Popup>
+      </Menu.Positioner>
+    </Menu.Portal>
+  </Menu.Root>;
+}
+
+function EventColorPicker({value, valid, disabled, onChange}: {
+  value: string; valid: boolean; disabled: boolean; onChange(value: string): void;
+}) {
+  const id = useId();
+  const trigger = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [density, setDensity] = useState<string>();
+  const interactionRef = useInteractionRef<HTMLDivElement>(open && !disabled, "popover");
+  const selected = EVENT_COLORS.find(color => color.value === value.toLowerCase());
+
+  return <div className="timeline-event-color">
+    <div className="timeline-event-color-row">
+      <span id={id}>颜色标记</span>
+      <Popover.Root open={open && !disabled} onOpenChange={next => {
+        if (next) setDensity(trigger.current?.closest<HTMLElement>("[data-ui-density]")?.dataset.uiDensity);
+        setOpen(next);
+      }}>
+        <Popover.Trigger ref={trigger} disabled={disabled} aria-labelledby={`${id} ${id}-value`} aria-invalid={!valid || undefined}
+          aria-describedby={!valid ? `${id}-error` : undefined} render={<Button variant="secondary" />}>
+          <span className="timeline-event-color-swatch" aria-hidden="true" style={valid && value ? {backgroundColor: value} : undefined} />
+          <span id={`${id}-value`}>{value ? selected?.name ?? "自定义" : "默认"}</span>
+          <Icon name="chevronDown" size="small" />
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Positioner className="timeline-event-popup-positioner" data-ui-density={density} align="end" sideOffset={4} collisionPadding={8}>
+            <Popover.Popup className="timeline-event-popup timeline-event-color-popup" ref={interactionRef} aria-label="选择颜色">
+              <fieldset className="timeline-event-color-picker" aria-label="预设颜色" disabled={disabled}>
+                <div className="timeline-event-color-options">
+                  <label className="timeline-event-color-choice timeline-event-color-default">
+                    <input type="radio" name={id} checked={!value} onChange={() => onChange("")} />
+                    <span>默认</span>
+                  </label>
+                  {EVENT_COLORS.map(color => <label className="timeline-event-color-choice" key={color.value} title={color.name}>
+                    <input type="radio" name={id} aria-label={color.name} checked={selected === color} onChange={() => onChange(color.value)} />
+                    <span style={{"--timeline-event-swatch": color.value} as CSSProperties} />
+                  </label>)}
+                </div>
+                <div className="timeline-event-color-custom">
+                  <label>自定义 <input type="color" aria-label="自定义颜色" value={value && valid ? value : "#6b9bce"}
+                    onChange={event => onChange(event.currentTarget.value)} /></label>
+                  <TextField aria-label="颜色值" aria-invalid={!valid || undefined} autoComplete="off" spellCheck={false}
+                    placeholder="#RRGGBB" maxLength={7} value={value} onChange={event => onChange(event.currentTarget.value)} />
+                </div>
+              </fieldset>
+            </Popover.Popup>
+          </Popover.Positioner>
+        </Popover.Portal>
+      </Popover.Root>
+    </div>
+    {!valid && <p id={`${id}-error`} className="timeline-event-form-error" role="alert">颜色值需要使用 #RRGGBB 格式。</p>}
+  </div>;
+}
 
 function draftFromEvent(event?: TimelineEvent): Draft {
   return event
@@ -222,6 +298,7 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
   const formId = useId();
   const menuSurface = useRef<HTMLDivElement>(null);
   const titleInput = useRef<HTMLInputElement>(null);
+  const keepEventButton = useRef<HTMLButtonElement>(null);
   const onEditingChangeRef = useRef(onEditingChange);
   const editingOwnerRef = useRef<((editing: boolean) => void) | null>(null);
   const editingRef = useRef(false);
@@ -239,6 +316,15 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
   const [operationError, setOperationError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const restoreEditorFocus = useRef(false);
+
+  useLayoutEffect(() => {
+    if (confirmDelete) keepEventButton.current?.focus();
+    else if (active && editing && restoreEditorFocus.current) {
+      restoreEditorFocus.current = false;
+      titleInput.current?.focus();
+    }
+  }, [active, confirmDelete, editing]);
 
   onEditingChangeRef.current = onEditingChange;
 
@@ -247,6 +333,7 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     previousStoreRef.current = store;
     operationEpochRef.current++;
     operationRef.current = null;
+    restoreEditorFocus.current = false;
     setSubmitting(false);
     setOperationError(null);
     setConfirmDelete(false);
@@ -314,6 +401,7 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     if (!force && (submitting || snapshot.saving)) return;
     operationEpochRef.current++;
     operationRef.current = null;
+    restoreEditorFocus.current = false;
     setSubmitting(false);
     setDraft(null);
     setIsNewDraft(false);
@@ -325,6 +413,11 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
   function updateDraft(next: Partial<Draft>) {
     setOperationError(null);
     setDraft(current => current ? {...current, ...next} : current);
+  }
+
+  function keepEvent() {
+    restoreEditorFocus.current = true;
+    setConfirmDelete(false);
   }
 
   function validateDraft(value: Draft): {event: TimelineEvent | null; error: string | null} {
@@ -466,10 +559,12 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
   const invalidOffset = Boolean(draft?.offset.trim()) && !Number.isFinite(Number(draft?.offset));
   const offset = Number(draft?.offset ?? "");
   const validTitle = Boolean(draft?.title.trim()) && [...(draft?.title.trim() ?? "")].length <= 60;
+  const invalidTitle = Boolean(draft?.title.trim()) && !validTitle;
   const validSummary = [...(draft?.summary ?? "")].length <= 200;
   const validOffset = Boolean(draft?.offset.trim()) && Number.isFinite(offset) && Math.abs(offset) <= 1_000_000_000;
   const validColor = !draft?.color || isTimelineEventColor(draft.color);
   const formValid = validTitle && validSummary && validOffset && validColor;
+  const busy = submitting || snapshot.saving;
   const scale = view.zoom > 0 ? 1 / view.zoom : 1;
   const overlayStyle = {
     width: size.width,
@@ -501,10 +596,17 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
 
     <Dialog open={editing && active} onOpenChange={open => {
       if (open) return;
-      if (active && !submitting && !snapshot.saving) cancelDraft();
-    }} title={confirmDelete ? "删除事件" : !isNewDraft && draft?.id ? "编辑事件" : "添加时间线事件"} size={confirmDelete ? "narrow" : "regular"}
-      description={confirmDelete ? "删除后会立即保存到当前项目。" : "记录故事中的重要时刻。"}
-      busy={submitting || snapshot.saving} initialFocus={titleInput}
+      if (!active || busy) return;
+      if (confirmDelete) keepEvent();
+      else cancelDraft();
+    }} title={confirmDelete ? "删除事件" : !isNewDraft && draft?.id ? "编辑事件" : "添加时间线事件"}
+      size={confirmDelete ? "narrow" : "large"} bodyLayout={confirmDelete ? "scroll" : "flush"}
+      description={confirmDelete ? "删除后会立即保存到当前项目。" : undefined}
+      headerActions={!confirmDelete ? <>
+        {draft?.id && !isNewDraft && <EventActions disabled={busy} onDelete={() => setConfirmDelete(true)} />}
+        <DialogClose aria-label="关闭事件编辑" title="关闭" variant="ghost"><Icon name="close" /></DialogClose>
+      </> : undefined}
+      busy={busy} initialFocus={confirmDelete ? keepEventButton : titleInput}
       finalFocus={menuSurface}>
       {confirmDelete ? <div className="timeline-event-delete-confirm">
         <p>确定删除「{draft?.title || "未命名事件"}」吗？</p>
@@ -512,86 +614,75 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
         <DialogActions>
           {operationRef.current?.kind === "remove" && (operationError || snapshot.error)
             && <Button variant="ghost" type="button" disabled={submitting || snapshot.saving} onClick={() => void retryLastOperation()}>重试删除</Button>}
-          <Button variant="secondary" type="button" disabled={submitting || snapshot.saving} onClick={() => setConfirmDelete(false)}>保留事件</Button>
+          <Button ref={keepEventButton} variant="secondary" type="button" disabled={busy} onClick={keepEvent}>保留事件</Button>
           <Button type="button" variant="danger" disabled={submitting || snapshot.saving} onClick={() => void removeEvent()}>
             {submitting ? "正在删除…" : "确认删除"}
           </Button>
         </DialogActions>
       </div> : <form className="timeline-event-form" onSubmit={event => void submitEvent(event)}>
-        <div className="timeline-event-field">
-          <div className="timeline-event-field-heading">
-            <label htmlFor={`${formId}-title`}>事件名称</label>
-            <span id={`${formId}-title-count`} className="timeline-event-field-count">{[...(draft?.title.trim() ?? "")].length} / 60</span>
-          </div>
-          <TextField ref={titleInput} id={`${formId}-title`} type="text" required autoComplete="off" placeholder="例如：收到故乡来信" value={draft?.title ?? ""}
-            onChange={event => updateDraft({title: event.target.value})} aria-invalid={Boolean(draft?.title.trim()) && !validTitle || undefined}
-            aria-describedby={`${formId}-title-count`} disabled={submitting || snapshot.saving}/>
-        </div>
-        <div className="timeline-event-position-row">
-          <label className="timeline-event-field"><span>距故事起点</span>
-            <TextField type="number" step="any" min="-1000000000" max="1000000000" required value={draft?.offset ?? ""}
-              onChange={event => updateDraft({offset: event.target.value})} aria-invalid={invalidOffset || (Boolean(draft?.offset.trim()) && !validOffset) || undefined}
-              aria-describedby={`${formId}-offset-help`} disabled={submitting || snapshot.saving}/>
-            <span id={`${formId}-offset-help`} className="timeline-event-field-help">{formatOffsetHint(settings, draft?.offset ?? "")}</span>
-          </label>
-          <fieldset className="timeline-event-placement">
-            <legend>节点位置</legend>
-            <div role="group" aria-label="节点位置">
-              <Button type="button" variant="ghost" aria-pressed={draft?.placement === "above"}
-                disabled={submitting || snapshot.saving} onClick={() => updateDraft({placement: "above"})}>轴线上方</Button>
-              <Button type="button" variant="ghost" aria-pressed={draft?.placement === "below"}
-                disabled={submitting || snapshot.saving} onClick={() => updateDraft({placement: "below"})}>轴线下方</Button>
+        <div className="timeline-event-form-scroll">
+          <div className="timeline-event-form-columns">
+            <div className="timeline-event-content">
+              <div className="timeline-event-field">
+                <label htmlFor={`${formId}-title`}>事件名称</label>
+                <TextField ref={titleInput} id={`${formId}-title`} type="text" required autoComplete="off" placeholder="例如：收到故乡来信" value={draft?.title ?? ""}
+                  onChange={event => updateDraft({title: event.target.value})} aria-invalid={invalidTitle || undefined}
+                  aria-describedby={invalidTitle ? `${formId}-title-help` : undefined} disabled={busy}/>
+                {invalidTitle && <span id={`${formId}-title-help`} className="timeline-event-form-error">事件名称需为 1–60 个字符。</span>}
+              </div>
+              <div className="timeline-event-field">
+                <label htmlFor={`${formId}-summary`}>事件说明 <span className="timeline-event-optional">选填</span></label>
+                <Textarea id={`${formId}-summary`} rows={4} placeholder="发生了什么，对故事有什么影响…" value={draft?.summary ?? ""} onChange={event => updateDraft({summary: event.target.value})}
+                  aria-invalid={!validSummary || undefined} aria-describedby={`${formId}-summary-help`} disabled={busy}/>
+                <span id={`${formId}-summary-help`} className={validSummary ? "timeline-event-summary-help timeline-event-field-help" : "timeline-event-summary-help timeline-event-form-error"}>
+                  {validSummary ? "200 字以内" : "事件说明不能超过 200 个字符。"}
+                </span>
+              </div>
+              {draft && <EventAssetPicker catalog={assetCatalog} selectedIds={draft.assetIds}
+                disabled={busy} onChange={assetIds => updateDraft({assetIds})} />}
             </div>
-          </fieldset>
+            <section className="timeline-event-settings" aria-labelledby={`${formId}-axis`}>
+              <h3 id={`${formId}-axis`}>时间轴</h3>
+              <div className="timeline-event-field">
+                <label htmlFor={`${formId}-offset`}>距故事起点</label>
+                <TextField id={`${formId}-offset`} type="number" step="any" min="-1000000000" max="1000000000" required value={draft?.offset ?? ""}
+                  onChange={event => updateDraft({offset: event.target.value})} aria-invalid={invalidOffset || (Boolean(draft?.offset.trim()) && !validOffset) || undefined}
+                  aria-describedby={`${formId}-offset-help`} disabled={busy}/>
+                <span id={`${formId}-offset-help`} className="timeline-event-field-help">{formatOffsetHint(settings, draft?.offset ?? "")}</span>
+              </div>
+              <fieldset className="timeline-event-placement">
+                <legend>节点位置</legend>
+                <div>
+                  <Button variant="ghost" aria-pressed={draft?.placement === "above"}
+                    disabled={busy} onClick={() => updateDraft({placement: "above"})}>轴线上方</Button>
+                  <Button variant="ghost" aria-pressed={draft?.placement === "below"}
+                    disabled={busy} onClick={() => updateDraft({placement: "below"})}>轴线下方</Button>
+                </div>
+              </fieldset>
+              <div className="timeline-event-markers">
+                <label className="timeline-event-important">
+                  <span className="timeline-event-checkbox">
+                    <input type="checkbox" checked={draft?.important ?? false} onChange={event => updateDraft({important: event.target.checked})}
+                      disabled={busy}/>
+                    <Icon name="check" size="small"/>
+                  </span>
+                  <span>关键转折</span>
+                </label>
+                <EventColorPicker value={draft?.color ?? ""} valid={validColor} disabled={busy}
+                  onChange={color => updateDraft({color})} />
+              </div>
+            </section>
+          </div>
         </div>
-        <div className="timeline-event-field">
-          <div className="timeline-event-field-heading">
-            <label htmlFor={`${formId}-summary`}>事件说明 <span className="timeline-event-optional">选填</span></label>
-            <span id={`${formId}-summary-count`} className="timeline-event-field-count">{[...(draft?.summary ?? "")].length} / 200</span>
-          </div>
-          <Textarea id={`${formId}-summary`} rows={3} placeholder="发生了什么，对故事有什么影响…" value={draft?.summary ?? ""} onChange={event => updateDraft({summary: event.target.value})}
-            aria-invalid={!validSummary || undefined} aria-describedby={`${formId}-summary-count`} disabled={submitting || snapshot.saving}/>
+        <div className="timeline-event-form-footer">
+          {(operationError || snapshot.error) && <p className="timeline-event-form-error" role="alert">{operationError ?? snapshot.error}</p>}
+          <DialogActions>
+            <Button variant="ghost" disabled={busy} onClick={() => cancelDraft()}>取消</Button>
+            <Button type="submit" variant="primary" disabled={!formValid || busy}>
+              {submitting ? "正在保存…" : snapshot.error ? "重试保存" : "保存事件"}
+            </Button>
+          </DialogActions>
         </div>
-        <label className="timeline-event-important">
-          <span className="timeline-event-checkbox">
-            <input type="checkbox" checked={draft?.important ?? false} onChange={event => updateDraft({important: event.target.checked})}
-              disabled={submitting || snapshot.saving}/>
-            <Icon name="check" size="small"/>
-          </span>
-          <span>标记为关键转折</span>
-        </label>
-        <fieldset className="timeline-event-color-picker" disabled={submitting || snapshot.saving}>
-          <legend>颜色标记 <span className="timeline-event-optional">选填</span></legend>
-          <div className="timeline-event-color-options">
-            <label className="timeline-event-color-choice timeline-event-color-default">
-              <input type="radio" name={`${formId}-color`} checked={!draft?.color} onChange={() => updateDraft({color: ""})}/>
-              <span>默认</span>
-            </label>
-            {EVENT_COLORS.map(color => <label className="timeline-event-color-choice" key={color.value} title={`${color.name} ${color.value.toUpperCase()}`}>
-              <input type="radio" name={`${formId}-color`} aria-label={color.name} checked={draft?.color.toLowerCase() === color.value}
-                onChange={() => updateDraft({color: color.value})}/>
-              <span style={{"--timeline-event-swatch": color.value} as CSSProperties}/>
-            </label>)}
-          </div>
-          <div className="timeline-event-color-custom">
-            <label>自定义 <input type="color" aria-label="自定义颜色" value={isTimelineEventColor(draft?.color) ? draft.color : "#6b9bce"}
-              onChange={event => updateDraft({color: event.currentTarget.value})}/></label>
-            <TextField aria-label="颜色值" aria-describedby={`${formId}-color-help`} aria-invalid={!validColor || undefined}
-              autoComplete="off" spellCheck={false} placeholder="#RRGGBB" maxLength={7} value={draft?.color ?? ""}
-              onChange={event => updateDraft({color: event.currentTarget.value})}/>
-          </div>
-          <p id={`${formId}-color-help`} className="timeline-event-field-help">用于标记事件端点和标题短线，输入 #RRGGBB；清空或选择默认可移除。</p>
-        </fieldset>
-        {draft && <EventAssetPicker catalog={assetCatalog} selectedIds={draft.assetIds}
-          disabled={submitting || snapshot.saving} onChange={assetIds => updateDraft({assetIds})} />}
-        {(operationError || snapshot.error) && <p className="timeline-event-form-error" role="alert">{operationError ?? snapshot.error}</p>}
-        <DialogActions>
-          {draft?.id && !isNewDraft && <Button type="button" variant="danger" disabled={submitting || snapshot.saving} onClick={() => setConfirmDelete(true)}>删除事件</Button>}
-          <Button type="button" variant="ghost" disabled={submitting || snapshot.saving} onClick={() => cancelDraft()}>取消</Button>
-          <Button type="submit" variant="primary" disabled={!formValid || submitting || snapshot.saving}>
-            {submitting || snapshot.saving ? "正在保存…" : snapshot.error ? "重试保存" : "保存事件"}
-          </Button>
-        </DialogActions>
       </form>}
     </Dialog>
   </>;

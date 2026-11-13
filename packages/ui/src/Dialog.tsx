@@ -12,9 +12,11 @@ export type DialogProps = {
   title: string;
   /** Semantic width preset; the host viewport still constrains the rendered width. */
   size?: "regular" | "narrow" | "wide" | "large";
-  /** Fill the available body area when children manage their own scrolling. */
-  bodyLayout?: "scroll" | "fill";
+  /** Fill lets children scroll. Flush also removes body padding and separates the header. */
+  bodyLayout?: "scroll" | "fill" | "flush";
   description?: ReactNode;
+  /** Optional controls beside the draggable title. */
+  headerActions?: ReactNode;
   children: ReactNode;
   /** Prevent user dismissal while the owning plugin is processing an operation. */
   busy?: boolean;
@@ -27,7 +29,7 @@ type Density = "comfortable" | "spacious" | "compact";
 const DialogBusyContext = createContext(false);
 
 /** Controlled modal shell. The owning plugin retains all form and operation state. */
-export function Dialog({ open, onOpenChange, onOpenChangeComplete, title, size = "regular", bodyLayout = "scroll", description, children, busy = false, initialFocus, finalFocus }: DialogProps) {
+export function Dialog({ open, onOpenChange, onOpenChangeComplete, title, size = "regular", bodyLayout = "scroll", description, headerActions, children, busy = false, initialFocus, finalFocus }: DialogProps) {
   const [density, setDensity] = useState<Density>("comfortable");
   const movement = useDialogPosition(open);
   const interactionRef = useInteractionRef<HTMLDivElement>(open, "dialog");
@@ -68,12 +70,14 @@ export function Dialog({ open, onOpenChange, onOpenChangeComplete, title, size =
       }}>
         <BaseDialog.Portal>
           <BaseDialog.Backdrop className="ui-dialog-backdrop" />
-          <BaseDialog.Popup ref={setPopupRef} className="ui-dialog" data-ui-dialog-size={size} data-ui-dialog-body-layout={bodyLayout === "fill" ? "fill" : undefined} data-ui-density={density} aria-modal="true" aria-busy={busy || undefined} inert={!open}
+          <BaseDialog.Popup ref={setPopupRef} className="ui-dialog" data-ui-dialog-size={size} data-ui-dialog-body-layout={bodyLayout === "scroll" ? undefined : bodyLayout} data-ui-density={density} aria-modal="true" aria-busy={busy || undefined} inert={!open}
             onKeyDownCapture={movement.onKeyDownCapture}
             initialFocus={initialFocus} finalFocus={finalFocus}>
             <div ref={movement.headerRef} className="ui-dialog-header" role="group" tabIndex={-1}
               aria-label={`移动弹框：${title}`} aria-describedby={movementHint} {...movement.headerProps}>
               <BaseDialog.Title className="ui-dialog-title">{title}</BaseDialog.Title>
+              {headerActions != null && <div className="ui-dialog-header-actions" data-no-drag
+                onDoubleClick={event => event.stopPropagation()}>{headerActions}</div>}
               <span id={movementHint} className="ui-dialog-move-hint">拖动标题移动；方向键移动，Shift 加速，Home 居中，拖动时按 Escape 取消。</span>
             </div>
             <div className="ui-dialog-body">

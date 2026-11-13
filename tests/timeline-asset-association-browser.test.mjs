@@ -119,6 +119,11 @@ test("timeline event associates assets by type, searches, preserves missing link
     };
     const fixture = (method, ...args) => evaluate(`window.__timelineAssetFixture.${method}(...${JSON.stringify(args)})`);
     const click = selector => evaluate(`document.querySelector(${JSON.stringify(selector)})?.click()`);
+    const pressEscape = async () => {
+      const key = {key: "Escape", code: "Escape", windowsVirtualKeyCode: 27};
+      await cdp("Input.dispatchKeyEvent", {type: "keyDown", ...key});
+      await cdp("Input.dispatchKeyEvent", {type: "keyUp", ...key});
+    };
     const openFilter = async () => {
       await click('button[aria-label="资产分类"]');
       await waitFor(() => evaluate(`Boolean(document.querySelector('[role="option"]'))`), "Asset categories did not open.");
@@ -157,8 +162,15 @@ test("timeline event associates assets by type, searches, preserves missing link
     };
     const openEvent = async () => {
       await fixture("open");
-      await waitFor(() => evaluate(`Boolean(document.querySelector('button[aria-label="资产分类"]'))`),
+      await waitFor(() => evaluate(`Boolean(document.querySelector('.timeline-event-form'))`),
         "The timeline event editor did not open.");
+      assert.equal(await evaluate(`Boolean(document.querySelector('input[aria-label="搜索资产"]'))`), false,
+        "the asset search stays collapsed until requested");
+    };
+    const openAssetSearch = async () => {
+      await clickButtonNamed("添加资产");
+      await waitFor(() => evaluate(`Boolean(document.querySelector('button[aria-label="资产分类"]'))`),
+        "The asset search did not open.");
     };
     const selectedIds = async () => fixture("events").then(events => events[0].assetIds);
     const selectionUnavailable = () => evaluate(`(() => {
@@ -172,16 +184,21 @@ test("timeline event associates assets by type, searches, preserves missing link
     await evaluate(`document.documentElement.dataset.uiThemeId = 'lodestory.builtin.light'`);
     await capture("desktop-light");
     await evaluate(`document.documentElement.dataset.uiThemeId = 'lodestory.builtin.dark'`);
-    await cdp("Emulation.setDeviceMetricsOverride", {width: 420, height: 900, deviceScaleFactor: 1, mobile: false});
+    await cdp("Emulation.setDeviceMetricsOverride", {width: 420, height: 680, deviceScaleFactor: 1, mobile: false});
     await capture("narrow-dark");
-    await evaluate(`document.querySelector('.ui-dialog').scrollTop = document.querySelector('.ui-dialog').scrollHeight`);
+    const footerBottom = await evaluate(`document.querySelector('.timeline-event-form-footer').getBoundingClientRect().bottom`);
+    assert.ok(footerBottom <= 680 - 16, "the save area fits within the narrow viewport");
+    await evaluate(`document.querySelector('.timeline-event-form-scroll').scrollTop = document.querySelector('.timeline-event-form-scroll').scrollHeight`);
     await capture("narrow-dark-scroll");
-    await evaluate(`document.querySelector('.ui-dialog').scrollTop = 0`);
+    assert.equal(await evaluate(`document.querySelector('.timeline-event-form-footer').getBoundingClientRect().bottom`), footerBottom,
+      "scrolling the form leaves the save area in place");
+    await evaluate(`document.querySelector('.timeline-event-form-scroll').scrollTop = 0`);
     await cdp("Emulation.setDeviceMetricsOverride", {width: 1440, height: 1000, deviceScaleFactor: 1, mobile: false});
     assert.equal(await evaluate(`document.body.innerText.includes('20000000-0000-4000-8000-000000000099')
       || /不可用|待确认|已删除|找不到资产/.test(document.body.innerText)`), true,
       "a missing linked asset remains represented in the editor");
 
+    await openAssetSearch();
     await fixture("catalogState", {loaded: false, loading: true, blocked: false, error: null});
     await waitFor(selectionUnavailable,
       "Catalog loading disables new asset selection.");
@@ -214,6 +231,15 @@ test("timeline event associates assets by type, searches, preserves missing link
     await openFilter();
     await selectOption("地点");
     await selectAsset("旧街");
+    await openFilter();
+    await selectOption("未分类");
+    await selectAsset("褪色车票");
+    assert.equal(await evaluate(`Boolean(document.querySelector('button[aria-label="移除关联：褪色车票"]'))`), false,
+      "the fourth linked asset starts collapsed");
+    await click('button[aria-label="查看其余 1 项关联资产"]');
+    await waitFor(() => evaluate(`Boolean(document.querySelector('button[aria-label="移除关联：褪色车票"]'))`),
+      "the fourth linked asset can be revealed.");
+    await click('button[aria-label="移除关联：褪色车票"]');
     const removeMissingLink = await evaluate(`(() => {
       const button = [...document.querySelectorAll('button[aria-label^="移除关联："]')]
         .find(item => item.getAttribute('aria-label').includes('资产不可用')
@@ -229,6 +255,7 @@ test("timeline event associates assets by type, searches, preserves missing link
       "cancel keeps the stored event unchanged");
 
     await openEvent();
+    await openAssetSearch();
     await openFilter();
     await selectOption("人物");
     await selectAsset("陈师傅");
@@ -252,9 +279,42 @@ test("timeline event associates assets by type, searches, preserves missing link
 
     await openEvent();
     await fixture("catalogState", {loaded: true, loading: false, blocked: false, error: null});
+    await openAssetSearch();
     assert.equal(await evaluate(`(() => [...document.querySelectorAll('.timeline-event-assets-results input[type="checkbox"]')]
       .filter(item => item.checked).map(item => item.getAttribute('aria-label')).sort().join(',') === '旧街,陈师傅')()`), true,
       "saved links are selected when reopening the event");
+
+    await clickButtonNamed("收起搜索");
+    await click(".timeline-event-color-row button");
+    await waitFor(() => evaluate(`Boolean(document.querySelector('.timeline-event-color-popup'))`), "The color picker did not open.");
+    await click('input[aria-label="蓝色"]');
+    assert.equal(await evaluate(`document.querySelector('.timeline-event-color-row button').textContent`), "蓝色");
+    await evaluate(`(() => {
+      const input = document.querySelector('input[aria-label="颜色值"]');
+      const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+      setter.call(input, "#123456");
+      input.dispatchEvent(new Event('input', {bubbles:true}));
+    })()`);
+    await pressEscape();
+    await waitFor(() => evaluate(`!document.querySelector('.timeline-event-color-popup') && Boolean(document.querySelector('.timeline-event-form'))`),
+      "Escape should dismiss only the color picker.");
+    await clickButtonNamed("保存事件");
+    await waitFor(async () => (await fixture("events"))[0]?.color === "#123456", "The event did not save the custom color.");
+
+    await openEvent();
+    const askToDelete = async () => {
+      await click('button[aria-label="更多操作"]');
+      await waitFor(() => evaluate(`Boolean(document.querySelector('[role="menuitem"]'))`), "The event menu did not open.");
+      await click('[role="menuitem"]');
+      await waitFor(() => evaluate(`document.querySelector('.ui-dialog-title')?.textContent === "删除事件"`), "The delete confirmation did not open.");
+    };
+    await askToDelete();
+    assert.equal((await fixture("events")).length, 1, "opening confirmation cannot delete the event");
+    await pressEscape();
+    await waitFor(() => evaluate(`Boolean(document.querySelector('.timeline-event-form'))`), "Escape should return to the event editor.");
+    await askToDelete();
+    await clickButtonNamed("确认删除");
+    await waitFor(async () => (await fixture("events")).length === 0, "The confirmed deletion did not remove the event.");
     assert.deepEqual(pageErrors, [], "the browser reports no timeline asset editor errors");
   } finally {
     socket?.close();

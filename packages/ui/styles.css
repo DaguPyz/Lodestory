@@ -636,6 +636,19 @@
   touch-action: none;
   user-select: none;
 }
+.ui-dialog-header:has(> .ui-dialog-header-actions) {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-3);
+}
+.ui-dialog-header-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--ui-space-1);
+  margin-inline-start: auto;
+  cursor: default;
+}
 .ui-dialog[data-dragging="true"] .ui-dialog-header { cursor: grabbing; }
 .ui-dialog-header:focus-visible {
   outline: var(--ui-focus-width) solid var(--ui-focus-ring);
@@ -650,13 +663,18 @@
   overflow: auto;
   overscroll-behavior: contain;
 }
-.ui-dialog[data-ui-dialog-body-layout="fill"] .ui-dialog-body {
+.ui-dialog:is([data-ui-dialog-body-layout="fill"], [data-ui-dialog-body-layout="flush"]) > .ui-dialog-body {
   display: flex;
   flex-direction: column;
   overflow: hidden;
 }
+.ui-dialog[data-ui-dialog-body-layout="flush"] > .ui-dialog-header {
+  padding-block: var(--ui-space-4);
+  border-bottom: 1px solid var(--ui-border-divider);
+}
+.ui-dialog[data-ui-dialog-body-layout="flush"] > .ui-dialog-body { padding: 0; }
 @media (max-height: 34rem) {
-  .ui-dialog[data-ui-dialog-body-layout="fill"] {
+  .ui-dialog:is([data-ui-dialog-body-layout="fill"], [data-ui-dialog-body-layout="flush"]) {
     --ui-dialog-padding: var(--ui-space-5);
     --ui-dialog-actions-gap: var(--ui-space-3);
   }

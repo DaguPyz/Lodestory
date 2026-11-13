@@ -143,6 +143,53 @@ async function rightClickTemplate(evaluate, name) {
   })()`);
 }
 
+test("template rows and cards open the clicked object for editing", async t => {
+  await withProjectPage(t, "asset-template-workspace", async ({send, evaluate, pageErrors}) => {
+    await clickButton(evaluate, "打开项目 测试故事");
+    await waitFor(() => evaluate(`Boolean(document.querySelector('.layout-activitybar button[aria-label="资产管理"]'))`),
+      "Asset management navigation did not appear.");
+    await clickButton(evaluate, "资产管理");
+    const people = `document.querySelector('.asset-type-list button[aria-label^="人物"]')`;
+    await waitFor(() => evaluate(`Boolean(${people})`), "The people template did not load.");
+    await evaluate(`${people}.click()`);
+
+    const openEditor = async (selector, name) => {
+      const point = await waitFor(() => evaluate(`(() => {
+        const button = document.querySelector(${JSON.stringify(selector)});
+        if (!button || button.disabled) return null;
+        const rect = button.getBoundingClientRect();
+        return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+      })()`), `The object '${name}' did not appear.`);
+      await send("Input.dispatchMouseEvent", {...point, type: "mousePressed", button: "right", clickCount: 1});
+      await send("Input.dispatchMouseEvent", {...point, type: "mouseReleased", button: "right", clickCount: 1});
+      const edit = `[...document.querySelectorAll('[role="menuitem"]')].find(item => item.textContent.trim() === "编辑对象")`;
+      await waitFor(() => evaluate(`Boolean(${edit})`), "The object menu did not offer Edit.");
+      assert.deepEqual(await evaluate(`[...(${edit}).closest('[role="menu"]').querySelectorAll('[role="menuitem"]')]
+        .filter(item => item.querySelector('.context-menu-icon svg[aria-hidden="true"]'))
+        .map(item => item.textContent.trim())`), ["新建对象", "模板设置", "编辑对象", "删除对象"]);
+      await evaluate(`${edit}.click()`);
+      await waitFor(() => evaluate(`document.querySelector('.asset-record-form input[aria-label="对象名称"]')?.value === ${JSON.stringify(name)}`),
+        "The form did not load the right-clicked object.");
+    };
+
+    await openEditor('.asset-object-table button[aria-label="查看对象“林舟”"]', "林舟");
+    await evaluate(`[...document.querySelectorAll('.asset-record-form button')].find(button => button.textContent === "取消").click()`);
+    await waitFor(() => evaluate(`Boolean(document.querySelector(".asset-object-table"))`), "Cancel did not return to the table.");
+
+    await clickButton(evaluate, "卡片视图");
+    await openEditor('.asset-object-card button[aria-label="查看对象“沈青萝”"]', "沈青萝");
+    await evaluate(`(() => {
+      const input = document.querySelector('.asset-record-form input[aria-label="对象名称"]');
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, "沈青萝（已编辑）");
+      input.dispatchEvent(new Event("input", {bubbles: true}));
+    })()`);
+    await evaluate(`document.querySelector('.asset-record-form button[type="submit"]').click()`);
+    await waitFor(() => evaluate(`Boolean(document.querySelector('.asset-object-card button[aria-label="查看对象“沈青萝（已编辑）”"]'))`),
+      "Saving did not return to the cards with the edited object.");
+    assert.deepEqual(pageErrors, []);
+  });
+});
+
 test("template reorder saves the standalone template list without rewriting asset data", async t => {
   await withProjectPage(t, "asset-template-workspace", async ({send, evaluate, pageErrors}) => {
     await clickButton(evaluate, "打开项目 测试故事");
@@ -179,6 +226,43 @@ test("template reorder saves the standalone template list without rewriting asse
       && file.fields.every(field => field.owner.kind === "type")),
     "each template has a separate file for its shared fields");
 
+    const backButton = `document.querySelector(".asset-record-editor .asset-editor-back button")`;
+    await evaluate(`document.querySelector('.asset-type-list button[aria-label^="人物"]').click()`);
+    await waitFor(() => evaluate(`Boolean(document.querySelector('.asset-record-editor button[aria-label="卡片视图"]'))`),
+      "The current template's object list did not appear.");
+    await clickButton(evaluate, "卡片视图");
+    await waitFor(() => evaluate(`Boolean(document.querySelector('.asset-object-card button[aria-label="查看对象“林舟”"]'))`),
+      "The current template's cards did not appear.");
+    await clickButton(evaluate, "查看对象“林舟”");
+    await waitFor(() => evaluate(`${backButton}?.textContent.trim() === "返回人物列表"`),
+      "The object detail did not show its return button.");
+    const detailLayout = () => evaluate(`(() => {
+      const button = ${backButton}.getBoundingClientRect();
+      const title = document.querySelector(".asset-record-editor .asset-editor-heading-with-back h1").getBoundingClientRect();
+      const fields = document.querySelector(".asset-record-editor .asset-property-values").getBoundingClientRect();
+      return {sameRow: button.top < title.bottom && title.top < button.bottom && button.left > title.left,
+        aligned: Math.abs(button.right - fields.right) < 1};
+    })()`);
+    assert.deepEqual(await detailLayout(), {sameRow: true, aligned: true}, "the return button shares the title row and aligns with the fields");
+    await send("Emulation.setDeviceMetricsOverride", {width: 390, height: 800, deviceScaleFactor: 1, mobile: false});
+    await waitFor(async () => {
+      const {sameRow, aligned} = await detailLayout();
+      return !sameRow && aligned;
+    }, "The button should wrap and stay aligned in a narrow pane.");
+    await send("Emulation.setDeviceMetricsOverride", {width: 1440, height: 900, deviceScaleFactor: 1, mobile: false});
+    assert.equal(await evaluate(`(() => {
+      const button = ${backButton};
+      button.focus();
+      return document.activeElement === button && !button.disabled;
+    })()`), true, "the return button is available to the keyboard");
+    const space = {key: " ", code: "Space", windowsVirtualKeyCode: 32};
+    await send("Input.dispatchKeyEvent", {type: "keyDown", ...space});
+    await send("Input.dispatchKeyEvent", {type: "keyUp", ...space});
+    await waitFor(() => evaluate(`document.querySelector(".asset-records-heading h1")?.textContent === "人物"
+      && Boolean(document.querySelector(".asset-object-card"))`), "Return should preserve the selected template and card view.");
+    assert.equal(await evaluate(`document.activeElement === document.querySelector(".asset-record-editor")`), true,
+      "keyboard focus returns to the object list");
+
     const point = await rightClickTemplate(evaluate, "功法");
     assert.ok(point, "the target template row exists");
     await send("Input.dispatchMouseEvent", {...point, type: "mousePressed", button: "right", clickCount: 1});
@@ -209,6 +293,22 @@ test("template reorder saves the standalone template list without rewriting asse
       ["10000000-0000-4000-8000-000000000001", "人物", "故事中的角色", 1, "active"],
     ]);
     assert.equal(templateSaveCount(afterCalls), templateSaveCount(beforeCalls) + 1, "reordering saves templates.json once");
+
+    const settingsBack = `document.querySelector(".asset-template-settings .asset-editor-back button")`;
+    await waitFor(() => evaluate(`${settingsBack}?.textContent.trim() === "返回功法列表" && !${settingsBack}.disabled`),
+      "The template settings should show its return button once saving finishes.");
+    assert.equal(await evaluate(`(() => {
+      const button = ${settingsBack}.getBoundingClientRect();
+      const title = document.querySelector(".asset-template-settings h1").getBoundingClientRect();
+      const fields = document.querySelector(".asset-template-settings .asset-fields-scroll").getBoundingClientRect();
+      return button.left > title.right && button.top < title.bottom && title.top < button.bottom
+        && Math.abs(button.right - fields.right) < 1;
+    })()`), true, "the template return button shares the title row and aligns with the field area");
+    await evaluate(`${settingsBack}.click()`);
+    await waitFor(() => evaluate(`(() => {
+      const list = document.querySelector(".asset-records-heading h1");
+      return list?.textContent === "功法" && !list.closest("[hidden], [inert]");
+    })()`), "Return should open the same template's object list.");
     assert.deepEqual(pageErrors, []);
   });
 });

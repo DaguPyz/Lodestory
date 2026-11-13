@@ -273,21 +273,21 @@ function TypeEditor({resource, contextMenus, active, canInteract, onOpenAssets}:
     if (!current.loaded || current.loading || current.blocked || current.saving || current.dirty) return;
     begin({kind: "newType", id: crypto.randomUUID(), name: "", description: "", color: null});
   }
-  function canNavigateFromMenu(typeId: string | null) {
+  function canNavigate(typeId: string | null) {
     const current = store.getSnapshot();
     return activeRef.current && canInteract() && !pending && !current.saving && !editing &&
       resource.editing.size === 0 && current.selectedTypeId === typeId;
   }
   function canManageFromMenu(typeId: string | null) {
     const current = store.getSnapshot();
-    return canNavigateFromMenu(typeId) && current.loaded && !current.loading && !current.blocked && !current.dirty;
+    return canNavigate(typeId) && current.loaded && !current.loading && !current.blocked && !current.dirty;
   }
   function templateFromMenu(typeId: string | null) {
     if (!canManageFromMenu(typeId)) return undefined;
     return store.getSnapshot().types.find(type => type.id === typeId && type.status === "active");
   }
   function returnToAssets(typeId: string | null) {
-    if (canNavigateFromMenu(typeId) && store.selectAsset(null)) onOpenAssets();
+    if (canNavigate(typeId) && store.selectAsset(null)) onOpenAssets();
   }
   function editTemplate(typeId: string | null) {
     const target = templateFromMenu(typeId);
@@ -323,7 +323,7 @@ function TypeEditor({resource, contextMenus, active, canInteract, onOpenAssets}:
     {id: "new-field", label: "添加字段", icon: <Icon name="plus"/>, disabled: typeId => !templateFromMenu(typeId), restoreFocus: false, onSelect: newField},
   ] : [];
   const menuItems: readonly MenuEntry<string | null>[] = [
-    {id: "return-to-assets", label: "返回对象列表", disabled: typeId => !canNavigateFromMenu(typeId), restoreFocus: false, onSelect: returnToAssets},
+    {id: "return-to-assets", label: "返回对象列表", disabled: typeId => !canNavigate(typeId), restoreFocus: false, onSelect: returnToAssets},
     ...templateActions,
     {id: "new-template-separator", type: "separator"},
     {id: "new-template", label: "新建资产模板", icon: <Icon name="plus"/>, disabled: typeId => !canManageFromMenu(typeId),
@@ -333,8 +333,16 @@ function TypeEditor({resource, contextMenus, active, canInteract, onOpenAssets}:
     disabled={!active || editing || pending || snapshot.saving} fallbackFocus={() => editor.current} items={menuItems}>
   <div className="asset-type-editor asset-template-settings" ref={editor} tabIndex={active ? 0 : -1}>
     <header className="asset-editor-header">
-      <div><h1>{selected ? `${selected.name} · 模板设置` : "资产模板"}</h1>
-        <p>{selected ? "配置这个模板下所有对象共用的字段、字段类型和默认值。" : "先定义资产模板，再基于模板创建具体对象。"}</p></div>
+      <div className="asset-editor-heading-with-back">
+        <h1>{selected ? `${selected.name} · 模板设置` : "资产模板"}</h1>
+        <div className="asset-editor-back">
+          <Button variant="ghost" disabled={!canNavigate(snapshot.selectedTypeId)} onClick={() => returnToAssets(snapshot.selectedTypeId)}>
+            <Icon name="arrowLeft" size="small" />
+            <span>{selected ? `返回${selected.name}列表` : "返回对象列表"}</span>
+          </Button>
+        </div>
+        <p>{selected ? "配置这个模板下所有对象共用的字段、字段类型和默认值。" : "先定义资产模板，再基于模板创建具体对象。"}</p>
+      </div>
     </header>
     {(error || snapshot.error) && !editing && <div className="asset-feedback" role="alert"><span>{error ?? snapshot.error}</span>
       {(snapshot.dirty || snapshot.blocked || snapshot.orderBlocked || !snapshot.loaded) && <Button variant="ghost" disabled={!active || pending || snapshot.saving}

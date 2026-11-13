@@ -1,4 +1,4 @@
-import type {ProjectByteView, ProjectDirectoryListing, ProjectFile, ProjectFileData, ProjectFiles} from "@lodestory/sdk/project-storage";
+import type {ProjectByteView, ProjectFile, ProjectFileData, ProjectFiles} from "@lodestory/sdk/project-storage";
 import type {AssetTypeTemplate} from "./assetSchemaStore";
 
 const PATH = ".lodestory/assets/templates.json";
@@ -23,7 +23,7 @@ export type AssetTemplateStoreSnapshot = Readonly<{
 export type AssetTemplateStore = Readonly<{
   getSnapshot(): AssetTemplateStoreSnapshot;
   subscribe(listener: () => void): () => void;
-  load(listing?: ProjectDirectoryListing): Promise<boolean>;
+  load(): Promise<boolean>;
   save(templates: readonly AssetTypeTemplate[]): Promise<boolean>;
   retry(): Promise<boolean>;
   dispose(): Promise<void>;
@@ -134,31 +134,6 @@ export function parseAssetTemplateList(data: ProjectFileData): {templates: reado
   }
 }
 
-/** Read the pre-migration order sidecar without changing or removing it. */
-export async function readLegacyTypeOrder(files: ProjectFiles, listing?: ProjectDirectoryListing): Promise<readonly string[] | null> {
-  const path = ".lodestory/assets/type-order.json";
-  const directory = listing ?? await files.list(".lodestory/assets");
-  if (!directory) throw new Error(files.getSnapshot().error ?? "读取资产模板顺序目录失败。");
-  const issue = directory.issues.find(item => item.path === path || item.path === "type-order.json");
-  if (issue) throw new Error(issue.message);
-  if (!directory.exists) return null;
-  const entry = directory.entries.find(item => item.name === "type-order.json" || item.path === path);
-  if (!entry) return null;
-  if (entry.path !== path || entry.kind !== "file") throw new Error("资产模板顺序路径不是普通文件。");
-  const file = await files.read(path, {preferByteView: true});
-  if (!file) throw new Error(files.getSnapshot().error ?? "读取资产模板顺序失败。");
-  try {
-    const value: unknown = JSON.parse(new TextDecoder("utf-8", {fatal: true}).decode(copyBytes(fileData(file))));
-    if (!isRecord(value) || Object.keys(value).length !== 3 || value.format !== "lodestory.asset-type-order"
-      || value.schemaVersion !== 1 || !Array.isArray(value.typeIds)
-      || !value.typeIds.every((id: unknown) => typeof id === "string" && UUID_PATTERN.test(id))
-      || new Set(value.typeIds).size !== value.typeIds.length) throw new Error();
-    return Object.freeze([...value.typeIds as string[]]);
-  } catch {
-    throw new Error("资产模板顺序文件格式无效，原文件已保留。");
-  }
-}
-
 export function createAssetTemplateStore(files: ProjectFiles): AssetTemplateStore {
   const listeners = new Set<() => void>();
   let alive = true;
@@ -216,12 +191,12 @@ export function createAssetTemplateStore(files: ProjectFiles): AssetTemplateStor
     publish();
   });
 
-  function load(listing?: ProjectDirectoryListing): Promise<boolean> {
+  function load(): Promise<boolean> {
     if (!alive) return Promise.resolve(false);
     if (loading) return loading;
     loading = Promise.resolve().then(async () => {
       if (!alive) return false;
-      const directory = listing ?? await files.list(".lodestory/assets");
+      const directory = await files.list(".lodestory/assets");
       if (!alive) return false;
       if (!directory) throw new Error(files.getSnapshot().error ?? "读取资产模板列表目录失败。");
       const issue = directory.issues.find(item => item.path === PATH || item.path === "templates.json");

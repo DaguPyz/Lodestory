@@ -1,6 +1,7 @@
-import {createAssetObjectFiles, type AssetGroupData, type AssetGroupId, type EncodeAssetGroup} from "./assetObjectFiles";
-import {createAssetTemplateStore, readLegacyTypeOrder, validateAssetTemplates} from "./assetTemplateStore";
-import type {ProjectByteView, ProjectDirectoryListing, ProjectFileData, ProjectFiles, ProjectSaveState} from "@lodestory/sdk/project-storage";
+import {ASSET_OBJECTS_DIRECTORY, ASSET_TEMPLATE_FIELDS_DIRECTORY,
+  createAssetObjectFiles, type AssetGroupData, type AssetGroupId, type EncodeAssetGroup} from "./assetObjectFiles";
+import {createAssetTemplateStore, validateAssetTemplates} from "./assetTemplateStore";
+import type {ProjectFiles, ProjectSaveState} from "@lodestory/sdk/project-storage";
 
 export type AssetValueType = "text" | "number" | "singleSelect" | "multiSelect" | "reference";
 
@@ -106,10 +107,6 @@ export type AssetSchemaStore = Readonly<{
   dispose(): Promise<void>;
 }>;
 
-const LEGACY_PATH = ".lodestory/assets/schema.json";
-const DIRECTORY = ".lodestory/assets";
-const FORMAT = "lodestory.asset-schema";
-const INLINE_DATA_VERSION = 3;
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const MAX_FIELD_TITLE = 60;
 const MAX_ASSET_NAME = 60;
@@ -121,14 +118,7 @@ const ASSET_FIELDS = ["description", "id", "name", "typeId", "values"];
 const FIELD_FIELDS = ["config", "id", "order", "owner", "status", "title", "valueType"];
 const CONFIG_FIELDS = ["options", "targetTypeId"];
 const OPTION_FIELDS = ["id", "title"];
-const LEGACY_DOCUMENT_FIELDS = ["fields", "format", "schemaVersion", "types"];
-const DOCUMENT_FIELDS = ["assets", "fields", "format", "schemaVersion", "types"];
-
-type SchemaData = Readonly<{
-  types: readonly AssetTypeTemplate[];
-  assets: readonly AssetRecord[];
-  fields: readonly AssetFieldDefinition[];
-}>;
+const emptyTypes: readonly AssetTypeTemplate[] = Object.freeze([]);
 
 function isUuid(value: unknown): value is string {
   return typeof value === "string" && UUID_PATTERN.test(value);
@@ -147,22 +137,6 @@ function keysMatch(value: Record<string, unknown>, required: readonly string[], 
   const allowed = [...required, ...optional].sort();
   return required.every(key => hasOwn(value, key))
     && actual.every(key => allowed.includes(key));
-}
-
-function isByteView(bytes: ProjectFileData): bytes is ProjectByteView {
-  return !Array.isArray(bytes) && !(bytes instanceof Uint8Array)
-    && typeof bytes === "object" && bytes !== null
-    && typeof (bytes as ProjectByteView).copyTo === "function"
-    && typeof (bytes as ProjectByteView).equals === "function";
-}
-
-function decodeUtf8(bytes: ProjectFileData): string {
-  if (isByteView(bytes)) {
-    const buffer = new Uint8Array(bytes.byteLength);
-    bytes.copyTo(buffer);
-    return new TextDecoder("utf-8", {fatal: true}).decode(buffer);
-  }
-  return new TextDecoder("utf-8", {fatal: true}).decode(bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes));
 }
 
 function cloneConfig(config: AssetFieldConfig): AssetFieldConfig {
@@ -192,38 +166,12 @@ function freezeAsset(asset: AssetRecord): AssetRecord {
     ...(asset.color !== undefined ? {color: asset.color} : {}), values});
 }
 
-function freezeSchema(types: readonly AssetTypeTemplate[], fields: readonly AssetFieldDefinition[], assets: readonly AssetRecord[] = []): SchemaData {
-  return Object.freeze({types: Object.freeze([...types]), assets: Object.freeze([...assets]), fields: Object.freeze([...fields])});
-}
-
 function orderIsValid(order: unknown): order is number {
   return typeof order === "number" && Number.isSafeInteger(order) && order >= 0;
 }
 
-function normalizeSchema(value: unknown, templates: readonly AssetTypeTemplate[] | null,
-  otherGroups?: ReadonlyMap<AssetGroupId, AssetGroupData>, editingGroup?: AssetGroupId): {schema: SchemaData | null; error: string | null} {
-  if (!isRecord(value)) {
-    return {schema: null, error: "类型模板文件字段不完整或包含未知字段，已保留原始文件。"};
-  }
-  const version = value.schemaVersion;
-  if (value.format !== FORMAT || version !== 1 && version !== 2 && version !== INLINE_DATA_VERSION) {
-    return {schema: null, error: "类型模板文件格式或版本不受支持，已保留原始文件。"};
-  }
-  const expectedDocumentFields = version === 1 ? LEGACY_DOCUMENT_FIELDS
-    : version === 2 ? DOCUMENT_FIELDS : ["assets", "fields", "format", "schemaVersion"];
-  if (!keysMatch(value, expectedDocumentFields)) {
-    return {schema: null, error: "类型模板文件字段不完整或包含未知字段，已保留原始文件。"};
-  }
-  if (!Array.isArray(value.fields) || version !== 1 && !Array.isArray(value.assets)) {
-    return {schema: null, error: "资产类型和字段定义必须是数组，已保留原始文件。"};
-  }
-
-  if (version === INLINE_DATA_VERSION && templates === null) {
-    return {schema: null, error: "资产数据缺少对应的 templates.json 模板列表，已保留原始文件。"};
-  }
-  const catalog = templates === null ? validateAssetTemplates(value.types) : {templates, error: null};
-  if (!catalog.templates) return {schema: null, error: catalog.error};
-  const types = catalog.templates;
+function normalizeAssetData(data: AssetGroupData, types: readonly AssetTypeTemplate[],
+  otherGroups?: ReadonlyMap<AssetGroupId, AssetGroupData>, editingGroup?: AssetGroupId): {schema: AssetGroupData | null; error: string | null} {
   const typeIds = new Set(types.map(type => type.id));
   const globalIds = new Set(typeIds);
   const assetById = new Map<string, {typeId: AssetGroupId}>();
@@ -242,7 +190,7 @@ function normalizeSchema(value: unknown, templates: readonly AssetTypeTemplate[]
 
   const rawAssets: {id: string; name: string; description: string; typeId: string | null; color?: string; values: Record<string, unknown>}[] = [];
   const assetIds = new Set<string>();
-  for (const candidate of version === 1 ? [] : value.assets as unknown[]) {
+  for (const candidate of data.assets) {
     if (!isRecord(candidate) || !keysMatch(candidate, ASSET_FIELDS, ["color"])) {
       return {schema: null, error: "资产记录字段不完整或包含未知字段，已保留原始文件。"};
     }
@@ -276,7 +224,7 @@ function normalizeSchema(value: unknown, templates: readonly AssetTypeTemplate[]
   const fieldIds = new Set<string>();
   const ownerOrders = new Map<string, Set<number>>();
   const activeTitles = new Map<string, Set<string>>();
-  for (const candidate of value.fields) {
+  for (const candidate of data.fields) {
     if (!isRecord(candidate) || !keysMatch(candidate, FIELD_FIELDS, ["defaultValue"])) {
       return {schema: null, error: "资产字段定义不完整或包含未知字段，已保留原始文件。"};
     }
@@ -292,7 +240,7 @@ function normalizeSchema(value: unknown, templates: readonly AssetTypeTemplate[]
     if (!isRecord(candidate.owner) || !keysMatch(candidate.owner, ["id", "kind"])
       || !["type", "asset"].includes(candidate.owner.kind as string) || !isUuid(candidate.owner.id)
       || candidate.owner.kind === "type" && !typeIds.has(candidate.owner.id)
-      || candidate.owner.kind === "asset" && (version === 1 || !assetIds.has(candidate.owner.id))) {
+      || candidate.owner.kind === "asset" && !assetIds.has(candidate.owner.id)) {
       return {schema: null, error: "资产字段所属类型不存在或格式无效，已保留原始文件。"};
     }
     if (typeof candidate.title !== "string" || [...candidate.title.trim()].length < 1 || [...candidate.title.trim()].length > MAX_FIELD_TITLE) {
@@ -435,7 +383,7 @@ function normalizeSchema(value: unknown, templates: readonly AssetTypeTemplate[]
       ...(asset.color !== undefined ? {color: asset.color} : {}), values: Object.freeze(values)}));
   }
 
-  return {schema: freezeSchema(types, fields, normalizedAssets), error: null};
+  return {schema: Object.freeze({fields: Object.freeze(fields), assets: Object.freeze(normalizedAssets)}), error: null};
 }
 
 const emptyGroup: AssetGroupData = Object.freeze({assets: Object.freeze([]), fields: Object.freeze([])});
@@ -463,17 +411,16 @@ function groupRecords(body: AssetGroupData): Map<AssetGroupId, AssetGroupData> {
   return groups;
 }
 
-function decodeLegacyFile(bytes: ProjectFileData): unknown {
-  let value: unknown;
-  try { value = JSON.parse(decodeUtf8(bytes)); }
-  catch { throw new Error("旧资产数据文件 schema.json 无法读取，已保留原始文件。"); }
-  return value;
+function templateFields(group: AssetGroupData): readonly AssetFieldDefinition[] {
+  return group.fields.filter(field => field.owner.kind === "type");
 }
 
-function isObsoleteManifest(value: unknown): boolean {
-  return isRecord(value) && value.format === FORMAT && value.schemaVersion === 4
-    && keysMatch(value, ["format", "schemaVersion", "groups"]) && Array.isArray(value.groups)
-    && value.groups.every(id => id === null || isUuid(id));
+function objectData(group: AssetGroupData): AssetGroupData {
+  return {assets: group.assets, fields: group.fields.filter(field => field.owner.kind === "asset")};
+}
+
+function changedFiles<K, V>(before: ReadonlyMap<K, V>, after: ReadonlyMap<K, V>): boolean {
+  return before.size !== after.size || [...after].some(([id, value]) => before.get(id) !== value);
 }
 
 function sameFieldInput(field: AssetFieldDefinition, input: CreateAssetFieldInput): boolean {
@@ -498,7 +445,7 @@ function sameFieldInput(field: AssetFieldDefinition, input: CreateAssetFieldInpu
 
 export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: EncodeAssetGroup): AssetSchemaStore {
   const listeners = new Set<() => void>();
-  let schema = freezeSchema([], [], []);
+  let schema = emptyGroup;
   let selectedTypeId: string | null = null;
   let selectedAssetId: string | null = null;
   let typeSelectionInitialized = false;
@@ -511,8 +458,6 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
   let loading = false;
   let mutating = false;
   const templateStore = createAssetTemplateStore(files);
-  let legacyOrder: readonly string[] | null = null;
-  let legacyOrderError: string | null = null;
   let catalogReferenceError: string | null = null;
   let pendingRemoval: string | null = null;
   let moving = 0;
@@ -524,14 +469,13 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
   let mutationOperation: Promise<boolean> | null = null;
   const objectFiles = createAssetObjectFiles(files, encodeGroup);
   let groups = new Map<AssetGroupId, AssetGroupData>();
-  let pendingGroup: {id: AssetGroupId; data: AssetGroupData} | null = null;
-  let legacyBytes: ProjectFileData | null = null;
-  let inlineGroups: ReadonlyMap<AssetGroupId, AssetGroupData> | null = null;
+  let pendingGroup: {id: AssetGroupId; data: AssetGroupData; template: boolean; objects: boolean} | null = null;
   let acceptedGroups = new Map<AssetGroupId, AssetGroupData>();
+  let acceptedTemplates = new Map<string, readonly AssetFieldDefinition[]>();
   let snapshot = buildSnapshot();
 
   function currentTypes(): readonly AssetTypeTemplate[] {
-    return templateStore.getSnapshot().templates ?? schema.types;
+    return templateStore.getSnapshot().templates ?? emptyTypes;
   }
 
   // An external catalog edit can remove an ID still used in the data file.
@@ -556,23 +500,9 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     publish();
   });
 
-  async function loadTemplates(listing?: ProjectDirectoryListing): Promise<boolean> {
-    if (!await templateStore.load(listing)) return false;
-    legacyOrder = null;
-    legacyOrderError = null;
-    if (templateStore.getSnapshot().templates === null) {
-      try { legacyOrder = await readLegacyTypeOrder(files, listing); }
-      catch (cause) { legacyOrderError = cause instanceof Error ? cause.message : "读取旧模板顺序失败。"; }
-    }
-    return true;
-  }
-
   function dataFiles(source = files.getSnapshot()) {
-    return source.files.filter(file => file.path.startsWith(DIRECTORY + "/objects/"));
-  }
-
-  function legacyFile() {
-    return files.getSnapshot().files.find(file => file.path === LEGACY_PATH);
+    return source.files.filter(file => file.path.startsWith(ASSET_OBJECTS_DIRECTORY + "/")
+      || file.path.startsWith(ASSET_TEMPLATE_FIELDS_DIRECTORY + "/"));
   }
 
   function buildSnapshot(source = files.getSnapshot()): AssetSchemaSnapshot {
@@ -594,10 +524,10 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
       saving: loading || mutating || saveState === "pending" || saveState === "saving",
       reordering: moving > 0 && catalog.saving && !mutating && !file?.dirty,
       pendingTypeRemoval: pendingRemoval,
-      orderBlocked: catalog.blocked || !catalog.loaded || legacyOrderError !== null,
+      orderBlocked: catalog.blocked || !catalog.loaded,
       dirty,
       blocked: source.blocked || localBlocked || catalog.blocked || catalogReferenceError !== null,
-      error: localError ?? catalogReferenceError ?? catalog.error ?? legacyOrderError ?? file?.saveError ?? (saveState === "error" ? "类型模板保存失败，请重试。" : null),
+      error: localError ?? catalogReferenceError ?? catalog.error ?? file?.saveError ?? (saveState === "error" ? "类型模板保存失败，请重试。" : null),
       saveState,
     });
   }
@@ -642,9 +572,17 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     return [...types.map(type => type.id), null];
   }
 
-  function acceptBody(body: SchemaData) {
-    schema = body;
-    groups = groupRecords(body);
+  function acceptGroups(rawGroups: Map<AssetGroupId, AssetGroupData>,
+    rawTemplates: Map<string, readonly AssetFieldDefinition[]>, types: readonly AssetTypeTemplate[]) {
+    const objects = [...rawGroups.values()];
+    const assets = objects.flatMap(group => group.assets);
+    const fields = [...objects.flatMap(group => group.fields), ...[...rawTemplates.values()].flat()];
+    const parsed = normalizeAssetData({assets, fields}, types);
+    if (!parsed.schema) throw new Error(parsed.error ?? "资产数据无效。");
+    schema = parsed.schema;
+    groups = groupRecords(schema);
+    acceptedGroups = rawGroups;
+    acceptedTemplates = rawTemplates;
     checkedTypes = currentTypes();
     catalogReferenceError = null;
     reconcileTypeSelection();
@@ -654,31 +592,27 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     localError = null;
   }
 
-  function acceptGroups(rawGroups: Map<AssetGroupId, AssetGroupData>, types: readonly AssetTypeTemplate[]) {
-    const values = [...rawGroups.values()];
-    const parsed = normalizeSchema({format: FORMAT, schemaVersion: INLINE_DATA_VERSION,
-      assets: values.flatMap(group => group.assets), fields: values.flatMap(group => group.fields)}, types);
-    if (!parsed.schema) throw new Error(parsed.error ?? "资产数据无效。");
-    acceptBody(parsed.schema);
-    acceptedGroups = rawGroups;
-  }
-
   function syncSharedFiles() {
-    if (!alive || loading || !loaded || !templateStore.getSnapshot().loaded || templateStore.getSnapshot().blocked) return;
-    if (!pendingGroup && !inlineGroups) {
+    if (!alive || loading || !loaded || catalogReferenceError !== null
+      || !templateStore.getSnapshot().loaded || templateStore.getSnapshot().blocked) return;
+    if (!pendingGroup) {
       try {
-        const current = new Map<AssetGroupId, AssetGroupData>();
+        const objects = new Map<AssetGroupId, AssetGroupData>();
+        const templates = new Map<string, readonly AssetFieldDefinition[]>();
         for (const id of groupIds()) {
           const group = objectFiles.read(id);
-          if (group) current.set(id, group);
+          if (group) objects.set(id, group);
+          if (id === null) continue;
+          const fields = objectFiles.readTemplateFields(id);
+          if (fields) templates.set(id, fields);
         }
-        if (current.size !== acceptedGroups.size || [...current].some(([id, group]) => acceptedGroups.get(id) !== group)) {
-          acceptGroups(current, currentTypes());
+        if (changedFiles(acceptedGroups, objects) || changedFiles(acceptedTemplates, templates)) {
+          acceptGroups(objects, templates, currentTypes());
         }
       } catch (cause) {
         loaded = false;
         localBlocked = true;
-        localError = cause instanceof Error ? cause.message : "资产对象文件读取失败。";
+        localError = cause instanceof Error ? cause.message : "读取资产数据失败。";
       }
       if (!dataFiles().some(item => item.dirty) && !mutating) clearPendingIds();
     }
@@ -688,7 +622,7 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
 
   function load(): Promise<boolean> {
     if (!alive) return Promise.resolve(false);
-    if (loaded && !snapshot.blocked && !legacyOrderError && templateStore.getSnapshot().loaded) return Promise.resolve(true);
+    if (loaded && !snapshot.blocked && templateStore.getSnapshot().loaded) return Promise.resolve(true);
     if (loadOperation) return loadOperation;
     if (pendingGroup) return Promise.resolve(false);
     const requestGeneration = ++generation;
@@ -703,51 +637,15 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     void (async () => {
       try {
         if (!alive) return false;
-        const listing = await files.list(DIRECTORY);
+        if (!await templateStore.load()) { loaded = false; return false; }
         if (!alive || requestGeneration !== generation) return false;
-        if (!listing) throw new Error(files.getSnapshot().error ?? "读取资产目录失败。");
-        if (!await loadTemplates(listing)) { loaded = false; return false; }
+        const types = currentTypes();
+        const [objectGroups, templateGroups] = await Promise.all([
+          objectFiles.load(groupIds(types)),
+          objectFiles.loadTemplateFields(types.map(type => type.id)),
+        ]);
         if (!alive || requestGeneration !== generation) return false;
-
-        const issue = listing.issues.find(item => item.path === LEGACY_PATH || item.path === "schema.json");
-        if (issue) throw new Error(issue.message);
-        const entry = listing.entries.find(item => item.path === LEGACY_PATH || item.name === "schema.json");
-        let previousBytes: ProjectFileData | null = null;
-        let previousBody: SchemaData | null = null;
-        const templates = templateStore.getSnapshot().templates;
-        if (entry) {
-          if (entry.kind !== "file" || entry.path !== LEGACY_PATH) throw new Error("旧资产数据路径不是普通文件。");
-          const file = await files.read(LEGACY_PATH, {preferByteView: true});
-          if (!alive || requestGeneration !== generation) return false;
-          if (!file) throw new Error(files.getSnapshot().error ?? "读取旧资产数据失败。");
-          previousBytes = file.byteView ?? file.bytes;
-          const value = decodeLegacyFile(previousBytes);
-          if (isObsoleteManifest(value)) {
-            if (!templates) throw new Error("资产数据缺少对应的 templates.json 模板列表。");
-          } else {
-            const parsed = normalizeSchema(value, templates);
-            if (!parsed.schema) throw new Error(parsed.error ?? "旧资产数据无效。");
-            previousBody = parsed.schema;
-            if (!templates && legacyOrder) {
-              const rank = new Map(legacyOrder.map((id, index) => [id, index]));
-              const sorted = [...previousBody.types].sort((a, b) =>
-                (rank.get(a.id) ?? rank.size) - (rank.get(b.id) ?? rank.size) || a.order - b.order);
-              previousBody = {...previousBody, types: Object.freeze(sorted.map((type, order) => Object.freeze({...type, order})))};
-            }
-          }
-        }
-        const types = previousBody?.types ?? templates ?? [];
-        const objectGroups = await objectFiles.load(groupIds(types));
-        if (!alive || requestGeneration !== generation) return false;
-        if (previousBody) {
-          acceptBody(previousBody);
-          inlineGroups = groups;
-          acceptedGroups = objectGroups;
-        } else {
-          acceptGroups(objectGroups, types);
-          inlineGroups = null;
-        }
-        legacyBytes = previousBytes;
+        acceptGroups(objectGroups, templateGroups, types);
         clearPendingIds();
         return true;
       } catch (cause) {
@@ -767,59 +665,49 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     return operation;
   }
 
-  async function retireLegacyFile(): Promise<void> {
-    if (!legacyBytes) return;
-    const baseline = legacyBytes;
-    const checkLegacyFile = () => {
-      const file = legacyFile();
-      if (!alive || !file || (file.byteView ?? file.bytes) !== baseline) {
-        throw new Error("旧资产文件在迁移期间被修改，已保留待保存的内容。");
-      }
-    };
-    checkLegacyFile();
-    if (inlineGroups) {
-      if (templateStore.getSnapshot().templates === null && !await templateStore.save(schema.types)) {
-        throw new Error(templateStore.getSnapshot().error ?? "保存资产模板列表失败。");
-      }
-      for (const id of groupIds()) {
-        const data = inlineGroups.get(id);
-        const existing = objectFiles.read(id);
-        if (existing) {
-          if (data ? JSON.stringify(existing) !== JSON.stringify(data) : existing.assets.length > 0 || existing.fields.length > 0) {
-            throw new Error("旧资产与现有分组文件的内容不同，已保留两份数据。");
-          }
-        } else if (data) {
-          await objectFiles.saveGroup(id, data, false, checkLegacyFile);
-        }
-        const current = objectFiles.read(id);
-        if (current) acceptedGroups.set(id, current);
-      }
-    }
-    checkLegacyFile();
-    if (!await files.delete(LEGACY_PATH)) throw new Error(files.getSnapshot().error ?? "移除旧资产文件失败，请重试。");
-    inlineGroups = null;
-    legacyBytes = null;
-  }
-
   async function persistCurrent(): Promise<boolean> {
     if (!alive || files.getSnapshot().blocked || localBlocked || !pendingGroup) return false;
-    const {id, data} = pendingGroup;
-    await retireLegacyFile();
+    const change = pendingGroup;
+    const {id, data} = change;
     const existing = objectFiles.read(id);
-    if (existing !== acceptedGroups.get(id)) throw new Error("当前模板的对象文件在编辑期间被修改，已保留待保存的内容。");
+    const existingTemplate = id === null ? undefined : objectFiles.readTemplateFields(id);
+    if (existing !== acceptedGroups.get(id) || id !== null && existingTemplate !== acceptedTemplates.get(id)) {
+      throw new Error("当前模板的数据文件在编辑期间被修改，已保留待保存的内容。");
+    }
     const checkGroup = () => {
       if (!alive || files.getSnapshot().blocked || snapshot.blocked) throw new Error("项目已暂停写入。");
       if (id !== null && !currentTypes().some(type => type.id === id)) throw new Error("当前模板已移除，已保留待保存的内容。");
+      if (objectFiles.read(id) !== acceptedGroups.get(id)
+        || id !== null && objectFiles.readTemplateFields(id) !== acceptedTemplates.get(id)) {
+        throw new Error("当前模板的数据文件在编辑期间被修改，已保留待保存的内容。");
+      }
     };
     checkGroup();
-    try {
-      await objectFiles.saveGroup(id, data, existing !== undefined, checkGroup);
-    } catch (error) {
-      const buffered = objectFiles.read(id);
-      if (buffered && JSON.stringify(buffered) === JSON.stringify(data)) acceptedGroups.set(id, buffered);
-      throw error;
+    if (id !== null && change.template) {
+      const shared = templateFields(data);
+      try {
+        await objectFiles.saveTemplateFields(id, shared, existingTemplate !== undefined, checkGroup);
+      } catch (error) {
+        const buffered = objectFiles.readTemplateFields(id);
+        if (buffered && JSON.stringify(buffered) === JSON.stringify(shared)) acceptedTemplates.set(id, buffered);
+        throw error;
+      }
+      const saved = objectFiles.readTemplateFields(id);
+      if (saved) acceptedTemplates.set(id, saved);
+      change.template = false;
     }
-    acceptedGroups.set(id, objectFiles.read(id)!);
+    if (change.objects) {
+      const objects = objectData(data);
+      try {
+        await objectFiles.saveGroup(id, objects, existing !== undefined, checkGroup);
+      } catch (error) {
+        const buffered = objectFiles.read(id);
+        if (buffered && JSON.stringify(buffered) === JSON.stringify(objects)) acceptedGroups.set(id, buffered);
+        throw error;
+      }
+      const saved = objectFiles.read(id);
+      if (saved) acceptedGroups.set(id, saved);
+    }
     pendingGroup = null;
     localError = null;
     syncSharedFiles();
@@ -831,7 +719,8 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
   }
 
   function mutateGroup(id: AssetGroupId, changes: Partial<AssetGroupData>,
-    nextSelectedTypeId = selectedTypeId, nextSelectedAssetId = selectedAssetId): Promise<boolean> {
+    nextSelectedTypeId = selectedTypeId, nextSelectedAssetId = selectedAssetId,
+    part: "template" | "objects" = "objects"): Promise<boolean> {
     if (!alive || !loaded || snapshot.blocked || snapshot.orderBlocked || mutating || templateStore.getSnapshot().saving || templateStore.getSnapshot().dirty) return Promise.resolve(false);
     if (!pendingGroup && dataFiles().some(file => file.dirty || file.saveState === "saving")) return Promise.resolve(false);
     if (pendingGroup && pendingGroup.id !== id) {
@@ -840,7 +729,7 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
       return Promise.resolve(false);
     }
     const before = groups.get(id) ?? emptyGroup;
-    const checked = normalizeSchema({format: FORMAT, schemaVersion: INLINE_DATA_VERSION, ...before, ...changes}, currentTypes(), groups, id);
+    const checked = normalizeAssetData({...before, ...changes}, currentTypes(), groups, id);
     if (!checked.schema) {
       localError = checked.error;
       publish();
@@ -851,17 +740,21 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     const previousFieldIds = new Set(before.fields.map(field => field.id));
     for (const field of next.fields) if (!previousFieldIds.has(field.id)) pendingFieldIds.add(field.id);
     for (const asset of next.assets) if (!previousAssetIds.has(asset.id)) pendingAssetIds.add(asset.id);
-    pendingGroup = {id, data: next};
+    pendingGroup = {id, data: next, template: part === "template" || Boolean(pendingGroup?.template),
+      objects: part === "objects" || Boolean(pendingGroup?.objects)};
     groups = new Map(groups).set(id, next);
     const parts = [...groups.values()];
-    schema = {types: currentTypes(),
-      assets: Object.freeze(parts.flatMap(group => group.assets)), fields: Object.freeze(parts.flatMap(group => group.fields))};
+    schema = {assets: Object.freeze(parts.flatMap(group => group.assets)), fields: Object.freeze(parts.flatMap(group => group.fields))};
     selectedTypeId = nextSelectedTypeId;
     typeSelectionInitialized = true;
     selectedAssetId = nextSelectedAssetId && schema.assets.some(asset => asset.id === nextSelectedAssetId) ? nextSelectedAssetId : null;
     assetSelectionInitialized = true;
     localError = null;
     return persistMutation();
+  }
+
+  function mutateTemplateFields(id: string, fields: readonly AssetFieldDefinition[], selection = selectedTypeId): Promise<boolean> {
+    return mutateGroup(id, {fields}, selection, selectedAssetId, "template");
   }
 
   function persistMutation(): Promise<boolean> {
@@ -1052,7 +945,7 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     if (snapshot.dirty || snapshot.saving) return Promise.resolve(false);
     // Remove dependent fields durably before dropping their owner from the catalog.
     pendingRemoval = id;
-    return mutateGroup(id, {fields: []}, nextSelectedTypeId);
+    return mutateTemplateFields(id, [], nextSelectedTypeId);
   }
 
   function createAsset(input: CreateAssetInput): Promise<boolean> {
@@ -1265,8 +1158,9 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
         };
         const fields = [...group.fields];
         fields[fields.findIndex(field => field.id === input.id)] = replacement as AssetFieldDefinition;
+        if (existing.owner.kind === "type") return mutateTemplateFields(existing.owner.id, fields);
         const assets = group.assets.map(asset => {
-          if (existing.owner.kind !== "asset" || existing.owner.id !== asset.id) return asset;
+          if (existing.owner.id !== asset.id) return asset;
           const values: Record<string, AssetPropertyValue> = {...asset.values};
           if (hasOwn(existing, "defaultValue")
             && hasOwn(values, existing.id) && JSON.stringify(values[existing.id]) === JSON.stringify(existing.defaultValue)) {
@@ -1310,7 +1204,8 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
       status: "active",
     });
     const fields = [...group.fields, candidate];
-    if (candidate.owner.kind === "asset" && hasOwn(candidate, "defaultValue")) {
+    if (candidate.owner.kind === "type") return mutateTemplateFields(candidate.owner.id, fields);
+    if (hasOwn(candidate, "defaultValue")) {
       const assets = group.assets.map(asset => asset.id === candidate.owner.id
         ? freezeAsset({...asset, values: {...asset.values, [candidate.id]: clonePropertyValue(candidate.defaultValue!)}})
         : asset);
@@ -1339,7 +1234,7 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     if (current.title === normalizedTitle) return settleNoop();
     const groupId = groupForOwner(current.owner);
     const fields = groups.get(groupId)!.fields.map(field => field.id === id ? Object.freeze({...field, title: normalizedTitle}) : field);
-    return mutateGroup(groupId, {fields});
+    return current.owner.kind === "type" ? mutateTemplateFields(current.owner.id, fields) : mutateGroup(groupId, {fields});
   }
 
   function removeAssetField(assetId: string, fieldId: string): Promise<boolean> {
@@ -1381,7 +1276,7 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     const normalized = ownerFields.map((field, order) => Object.freeze({...field, order}));
     const byId = new Map(normalized.map(field => [field.id, field]));
     const fields = group.fields.map(field => byId.get(field.id) ?? field);
-    return mutateGroup(groupId, {fields});
+    return current.owner.kind === "type" ? mutateTemplateFields(current.owner.id, fields) : mutateGroup(groupId, {fields});
   }
 
   async function retry(): Promise<boolean> {
@@ -1389,10 +1284,10 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
     if (loading) return loadOperation ?? false;
     if (mutating) return mutationOperation ?? false;
     if (files.getSnapshot().blocked) return false;
-    if (!loaded || snapshot.blocked || legacyOrderError) {
+    if (!loaded || snapshot.blocked) {
       // Reload repaired files without discarding a body edit that storage has not accepted.
       if (pendingGroup) {
-        if (!await loadTemplates() || snapshot.blocked || legacyOrderError) return false;
+        if (!await templateStore.load() || snapshot.blocked) return false;
       } else if (!await load() || snapshot.orderBlocked || snapshot.blocked) {
         return false;
       }
@@ -1445,9 +1340,8 @@ export function createAssetSchemaStore(files: ProjectFiles, encodeGroup?: Encode
       objectFiles.dispose();
       unsubscribe();
       listeners.clear();
-      legacyBytes = null;
-      inlineGroups = null;
       acceptedGroups.clear();
+      acceptedTemplates.clear();
       loading = false;
       mutating = false;
       snapshot = Object.freeze({...snapshot, loading: false, saving: false, reordering: false, blocked: true});

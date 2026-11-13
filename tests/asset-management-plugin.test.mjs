@@ -292,10 +292,11 @@ test("asset creation and value edits retain the session draft when saving fails"
 });
 
 function persistentFixture() {
-  const controls = {failSchemaSave: false, failTemplatesSave: false};
+  const controls = {failAssetDataSave: false, failTemplatesSave: false};
   const storageFixture = byteStorageFixture({onInvoke(command, args) {
-    if (controls.failSchemaSave && command === "save_project_file"
-      && (args.path === ".lodestory/assets/schema.json" || args.path.startsWith(".lodestory/assets/objects/"))) {
+    if (controls.failAssetDataSave && command === "save_project_file"
+      && (args.path.startsWith(".lodestory/assets/objects/")
+        || args.path.startsWith(".lodestory/assets/templates/"))) {
       throw new Error("模拟资产资料保存失败");
     }
     if (controls.failTemplatesSave && command === "save_project_file" && args.path === ".lodestory/assets/templates.json") {
@@ -357,7 +358,6 @@ test("asset type and field definitions persist by stable IDs and stay isolated b
   const typeId = "40000000-0000-4000-8000-000000000001";
   const firstFieldId = "40000000-0000-4000-8000-000000000002";
   const secondFieldId = "40000000-0000-4000-8000-000000000003";
-  const schemaPath = ".lodestory/assets/schema.json";
   const templatesPath = ".lodestory/assets/templates.json";
 
   await openReadyProject(workbench, originalProject);
@@ -370,7 +370,7 @@ test("asset type and field definitions persist by stable IDs and stay isolated b
   assert.deepEqual(JSON.parse(new TextDecoder().decode(new Uint8Array(initialTemplateBytes))), [
     {id: typeId, name: "功法", description: "修炼与施展的方法", order: 0, status: "active"},
   ], "the template file is a top-level array of complete records");
-  assert.equal(storage.disk.has(storage.key(originalProject.path, schemaPath)), false,
+  assert.equal(storage.disk.has(storage.key(originalProject.path, ".lodestory/assets/schema.json")), false,
     "a project containing only templates does not need an asset schema file");
 
   assert.equal(await workbench.closeProject(), true);
@@ -394,11 +394,14 @@ test("asset type and field definitions persist by stable IDs and stay isolated b
     .map(({id, title, order}) => [id, title, order]), [
     [secondFieldId, "效果", 0], [firstFieldId, "境界", 1],
   ]);
-  assert.equal(storage.disk.has(storage.key(originalProject.path, schemaPath)), false);
-  const objectGroupPath = `.lodestory/assets/objects/${typeId}.json`;
-  const savedGroup = JSON.parse(new TextDecoder().decode(new Uint8Array(
-    storage.disk.get(storage.key(originalProject.path, objectGroupPath)))));
-  assert.equal(savedGroup.fields[0].owner.id, typeId, "template fields are stored with their template objects");
+  assert.equal(storage.disk.has(storage.key(originalProject.path, ".lodestory/assets/schema.json")), false);
+  const templateFieldsPath = `.lodestory/assets/templates/${typeId}.json`;
+  const savedTemplateFields = JSON.parse(new TextDecoder().decode(new Uint8Array(
+    storage.disk.get(storage.key(originalProject.path, templateFieldsPath)))));
+  assert.deepEqual(savedTemplateFields.fields.map(field => field.owner.id), [typeId, typeId],
+    "shared template fields are stored in the template's field file");
+  assert.equal(storage.disk.has(storage.key(originalProject.path, `.lodestory/assets/objects/${typeId}.json`)), false,
+    "adding template fields alone does not create an object file");
 
   assert.equal(await workbench.closeProject(), true);
   assert.equal(sessions.has(originalSessionId), false);
@@ -408,7 +411,7 @@ test("asset type and field definitions persist by stable IDs and stay isolated b
   assert.notStrictEqual(otherStore, originalStore);
   assert.deepEqual(Array.from(otherStore.getSnapshot().types), [], "a different project starts with an empty schema");
   assert.deepEqual(Array.from(otherStore.getSnapshot().fields), []);
-  assert.equal(storage.disk.has(storage.key(otherProject.path, schemaPath)), false);
+  assert.equal(storage.disk.has(storage.key(otherProject.path, ".lodestory/assets/schema.json")), false);
   assert.equal(storage.disk.has(storage.key(otherProject.path, templatesPath)), false);
 
   assert.equal(await workbench.closeProject(), true);
@@ -463,7 +466,7 @@ test("asset deletion survives a failed leave retry and persists after reopening 
   assert.ok(store.getSnapshot().fields.some(field => field.id === customFieldId));
   assert.ok(storage.disk.has(storage.key(target.path, templatesPath)), "the template persists independently from the asset schema");
 
-  controls.failSchemaSave = true;
+  controls.failAssetDataSave = true;
   assert.equal(await store.removeAsset(assetId), false, "a failed write retains the deletion as a dirty candidate");
   assert.deepEqual(Array.from(store.getSnapshot().assets, asset => asset.id), [otherAssetId]);
   assert.deepEqual(Array.from(store.getSnapshot().fields, field => field.id), [templateFieldId], "deleting the asset removes its own fields only");
@@ -473,7 +476,7 @@ test("asset deletion survives a failed leave retry and persists after reopening 
   assert.deepEqual(Array.from(store.getSnapshot().assets, asset => asset.id), [otherAssetId], "retry failure preserves the pending deletion");
   assert.equal(store.getSnapshot().dirty, true);
 
-  controls.failSchemaSave = false;
+  controls.failAssetDataSave = false;
   assert.equal(await workbench.closeProject(), true, "leave retries and persists the deletion");
   assert.equal(sessions.has(sessionId), false);
   await openReadyProject(workbench, target);
@@ -487,7 +490,7 @@ test("asset deletion survives a failed leave retry and persists after reopening 
   await f.createdCores.at(-1).unmountAll();
 });
 
-test("type deletion survives a failed leave retry and reopens without removing unrelated schema or assets", async () => {
+test("template deletion survives a failed save retry and preserves unrelated fields and objects", async () => {
   const {f, storage, controls} = persistentFixture();
   f.start(); await flushStartup();
 
@@ -502,9 +505,9 @@ test("type deletion survives a failed leave retry and reopens without removing u
   const retainedFieldId = "70000000-0000-4000-8000-000000000004";
   const assetId = "70000000-0000-4000-8000-000000000005";
   const assetFieldId = "70000000-0000-4000-8000-000000000006";
-  const schemaPath = ".lodestory/assets/schema.json";
   const templatesPath = ".lodestory/assets/templates.json";
-  const removedGroupPath = `.lodestory/assets/objects/${removedTypeId}.json`;
+  const removedFieldsPath = `.lodestory/assets/templates/${removedTypeId}.json`;
+  const retainedFieldsPath = `.lodestory/assets/templates/${retainedTypeId}.json`;
   const retainedGroupPath = `.lodestory/assets/objects/${retainedTypeId}.json`;
   const unclassifiedGroupPath = ".lodestory/assets/objects/unclassified.json";
 
@@ -521,7 +524,7 @@ test("type deletion survives a failed leave retry and reopens without removing u
   assert.equal(await store.createField({id: assetFieldId, owner: {kind: "asset", id: assetId},
     title: "来源", valueType: "text", config: {}, defaultValue: "古书"}), true);
 
-  controls.failSchemaSave = true;
+  controls.failAssetDataSave = true;
   assert.equal(await store.removeType(removedTypeId), false, "a failed field cleanup keeps the type deletion pending");
   assert.deepEqual(Array.from(store.getSnapshot().types, type => type.id), [removedTypeId, retainedTypeId],
     "the template remains visible until its field cleanup is saved");
@@ -529,9 +532,8 @@ test("type deletion survives a failed leave retry and reopens without removing u
     "deleting a type removes its fields while preserving asset-owned fields");
   assert.deepEqual(Array.from(store.getSnapshot().assets, asset => asset.id), [assetId]);
   assert.equal(store.getSnapshot().dirty, true);
-  const diskBeforeRetry = JSON.parse(new TextDecoder().decode(new Uint8Array(storage.disk.get(storage.key(target.path, removedGroupPath)))));
-  assert.ok(diskBeforeRetry.fields.some(field => field.id === removedFieldId), "failed field cleanup leaves the previous template group intact");
-  assert.equal(storage.disk.has(storage.key(target.path, schemaPath)), false);
+  const diskBeforeRetry = JSON.parse(new TextDecoder().decode(new Uint8Array(storage.disk.get(storage.key(target.path, removedFieldsPath)))));
+  assert.ok(diskBeforeRetry.fields.some(field => field.id === removedFieldId), "failed field cleanup leaves the previous template fields intact");
   assert.deepEqual(JSON.parse(new TextDecoder().decode(new Uint8Array(storage.disk.get(storage.key(target.path, templatesPath))))).map(type => type.id),
     [removedTypeId, retainedTypeId], "failed deletion keeps the standalone template record list intact");
 
@@ -540,7 +542,7 @@ test("type deletion survives a failed leave retry and reopens without removing u
   assert.deepEqual(Array.from(store.getSnapshot().types, type => type.id), [removedTypeId, retainedTypeId],
     "the template still remains visible while the retry cannot persist field cleanup");
   assert.equal(store.getSnapshot().dirty, true);
-  controls.failSchemaSave = false;
+  controls.failAssetDataSave = false;
   assert.equal(await workbench.closeProject(), true, "leave retries and persists the type deletion");
 
   await openReadyProject(workbench, target);
@@ -549,15 +551,19 @@ test("type deletion survives a failed leave retry and reopens without removing u
   assert.deepEqual(Array.from(reopenedStore.getSnapshot().fields, field => field.id).sort(), [retainedFieldId, assetFieldId].sort());
   assert.deepEqual(Array.from(reopenedStore.getSnapshot().assets, asset => asset.id), [assetId]);
   assert.equal(reopenedStore.getSnapshot().assets[0].values[assetFieldId], "古书");
+  assert.equal(storage.disk.has(storage.key(target.path, `.lodestory/assets/objects/${removedTypeId}.json`)), false,
+    "deleting a template does not create an empty object group");
   assert.deepEqual(JSON.parse(new TextDecoder().decode(new Uint8Array(
-    storage.disk.get(storage.key(target.path, removedGroupPath))))), {assets: [], fields: []},
-  "deleting a template preserves an empty group file for safe recovery");
+    storage.disk.get(storage.key(target.path, removedFieldsPath))))), {fields: []},
+  "deleting a template clears its shared fields in the template field file");
   const unclassifiedGroup = JSON.parse(new TextDecoder().decode(new Uint8Array(
     storage.disk.get(storage.key(target.path, unclassifiedGroupPath)))));
-  const retainedGroup = JSON.parse(new TextDecoder().decode(new Uint8Array(
-    storage.disk.get(storage.key(target.path, retainedGroupPath)))));
-  assert.deepEqual(unclassifiedGroup.fields.map(field => field.id), [assetFieldId]);
-  assert.deepEqual(retainedGroup.fields.map(field => field.id), [retainedFieldId]);
+  assert.deepEqual(unclassifiedGroup.fields.map(field => field.id), [assetFieldId],
+    "unclassified custom fields remain with unclassified objects");
+  assert.equal(storage.disk.has(storage.key(target.path, retainedGroupPath)), false,
+    "template fields alone do not create an object group");
+  assert.deepEqual(JSON.parse(new TextDecoder().decode(new Uint8Array(
+    storage.disk.get(storage.key(target.path, retainedFieldsPath))))).fields.map(field => field.id), [retainedFieldId]);
   assert.deepEqual(JSON.parse(new TextDecoder().decode(new Uint8Array(storage.disk.get(storage.key(target.path, templatesPath))))).map(type => type.id),
     [retainedTypeId], "the confirmed template deletion updates only the template list after field cleanup succeeds");
 
@@ -565,7 +571,7 @@ test("type deletion survives a failed leave retry and reopens without removing u
   await f.createdCores.at(-1).unmountAll();
 });
 
-test("template groups isolate object and field files and preserve the unclassified group on migration", async () => {
+test("template and object files stay isolated, including unclassified objects", async () => {
   const {f, storage} = persistentFixture();
   const target = {id: "template-scope-book", name: "模板范围项目", path: "/stories/template-scope"};
   const typeOneId = "80000000-0000-4000-8000-000000000001";
@@ -574,32 +580,38 @@ test("template groups isolate object and field files and preserve the unclassifi
   const fieldTwoId = "80000000-0000-4000-8000-000000000004";
   const objectOneId = "80000000-0000-4000-8000-000000000005";
   const objectTwoId = "80000000-0000-4000-8000-000000000006";
-  const legacyObjectId = "80000000-0000-4000-8000-000000000007";
-  const legacyFieldId = "80000000-0000-4000-8000-000000000008";
-  const schemaPath = ".lodestory/assets/schema.json";
+  const unclassifiedObjectId = "80000000-0000-4000-8000-000000000007";
+  const unclassifiedFieldId = "80000000-0000-4000-8000-000000000008";
   const templatesPath = ".lodestory/assets/templates.json";
   const groupPath = typeId => `.lodestory/assets/objects/${typeId ?? "unclassified"}.json`;
+  const templateFieldsPath = typeId => `.lodestory/assets/templates/${typeId}.json`;
   const readJson = path => JSON.parse(new TextDecoder().decode(new Uint8Array(storage.disk.get(storage.key(target.path, path)))));
-  const initialSchema = {
-    format: "lodestory.asset-schema", schemaVersion: 2,
-    types: [
+  const fieldOne = {id: fieldOneId, owner: {kind: "type", id: typeOneId}, title: "身份", valueType: "text", config: {}, order: 0, status: "active"};
+  const fieldTwo = {id: fieldTwoId, owner: {kind: "type", id: typeTwoId}, title: "方位", valueType: "text", config: {}, order: 0, status: "active"};
+  const unclassifiedField = {id: unclassifiedFieldId, owner: {kind: "asset", id: unclassifiedObjectId},
+    title: "旧记载", valueType: "text", config: {}, order: 0, status: "active"};
+  const objectOne = {id: objectOneId, name: "林舟", description: "人物记录", typeId: typeOneId, values: {[fieldOneId]: "旅人"}};
+  const objectTwo = {id: objectTwoId, name: "霜城", description: "地点记录", typeId: typeTwoId, values: {[fieldTwoId]: "北境"}};
+  const unclassifiedObject = {id: unclassifiedObjectId, name: "未分类记录", description: "尚未归入模板", typeId: null,
+    values: {[unclassifiedFieldId]: "沿用旧稿"}};
+  const files = new Map([
+    [templatesPath, [
       {id: typeOneId, name: "人物", description: "角色", order: 0, status: "active"},
       {id: typeTwoId, name: "地点", description: "场景", order: 1, status: "active"},
-    ],
-    assets: [
-      {id: objectOneId, name: "林舟", description: "人物记录", typeId: typeOneId, values: {[fieldOneId]: "旅人"}},
-      {id: objectTwoId, name: "霜城", description: "地点记录", typeId: typeTwoId, values: {[fieldTwoId]: "北境"}},
-      {id: legacyObjectId, name: "旧稿中的名字", description: "未分类的旧记录", typeId: null, values: {[legacyFieldId]: "沿用旧稿"}},
-    ],
-    fields: [
-      {id: fieldOneId, owner: {kind: "type", id: typeOneId}, title: "身份", valueType: "text", config: {}, order: 0, status: "active"},
-      {id: fieldTwoId, owner: {kind: "type", id: typeTwoId}, title: "方位", valueType: "text", config: {}, order: 0, status: "active"},
-      {id: legacyFieldId, owner: {kind: "asset", id: legacyObjectId}, title: "旧记载", valueType: "text", config: {}, order: 0, status: "active"},
-    ],
-  };
-  storage.disk.set(storage.key(target.path, schemaPath), Array.from(new TextEncoder().encode(JSON.stringify(initialSchema))));
+    ]],
+    [templateFieldsPath(typeOneId), {fields: [fieldOne]}],
+    [templateFieldsPath(typeTwoId), {fields: [fieldTwo]}],
+    [groupPath(typeOneId), {assets: [objectOne], fields: []}],
+    [groupPath(typeTwoId), {assets: [objectTwo], fields: []}],
+    [groupPath(null), {assets: [unclassifiedObject], fields: [unclassifiedField]}],
+  ]);
+  for (const [path, content] of files) {
+    storage.disk.set(storage.key(target.path, path), Array.from(new TextEncoder().encode(JSON.stringify(content))));
+  }
   storage.directories.add(storage.key(target.path, ".lodestory"));
   storage.directories.add(storage.key(target.path, ".lodestory/assets"));
+  storage.directories.add(storage.key(target.path, ".lodestory/assets/objects"));
+  storage.directories.add(storage.key(target.path, ".lodestory/assets/templates"));
 
   f.start(); await flushStartup();
   const layout = f.getService(f.requireSdk("@lodestory/sdk/layout").layoutKey);
@@ -608,37 +620,40 @@ test("template groups isolate object and field files and preserve the unclassifi
   const sessions = navigation.render({active: true}).props.sessions;
   await openReadyProject(workbench, target);
   const store = sessions.get(workbench.getSnapshot().session.id).store;
-  assert.equal(storage.disk.has(storage.key(target.path, templatesPath)), false,
-    "legacy template metadata remains in schema.json until the first write");
   assert.deepEqual(Array.from(store.getSnapshot().assets, asset => [asset.id, asset.typeId]), [
-    [objectOneId, typeOneId], [objectTwoId, typeTwoId], [legacyObjectId, null],
+    [objectOneId, typeOneId], [objectTwoId, typeTwoId], [unclassifiedObjectId, null],
   ]);
+  assert.deepEqual(Array.from(store.getSnapshot().types, type => type.id), [typeOneId, typeTwoId]);
+  assert.deepEqual(Array.from(store.getSnapshot().fields, field => field.id).sort(),
+    [fieldOneId, fieldTwoId, unclassifiedFieldId].sort());
 
+  const callsBeforeTemplateObjectEdit = storage.calls.length;
   assert.equal(store.selectType(typeTwoId), true);
   assert.equal(store.selectAsset(null), true);
   assert.equal(await store.updateAsset(objectTwoId, {values: {[fieldTwoId]: "北境·旧城区"}}), true);
   assert.equal(store.getSnapshot().selectedTypeId, typeTwoId);
   assert.equal(store.getSnapshot().selectedAssetId, null);
-  const migratedTemplates = readJson(templatesPath);
-  assert.deepEqual(migratedTemplates.map(({id, name, description, order, status}) => [id, name, description, order, status]), [
-    [typeOneId, "人物", "角色", 0, "active"], [typeTwoId, "地点", "场景", 1, "active"],
-  ]);
-  assert.equal(storage.disk.has(storage.key(target.path, schemaPath)), false);
+  assert.deepEqual(storage.calls.slice(callsBeforeTemplateObjectEdit)
+    .filter(call => call.command === "save_project_file").map(call => call.args.path), [groupPath(typeTwoId)],
+  "editing an object writes only its object's file");
+  assert.deepEqual(readJson(templatesPath).map(({id}) => id), [typeOneId, typeTwoId]);
   assert.deepEqual(readJson(groupPath(typeOneId)), {
-    assets: [{id: objectOneId, name: "林舟", description: "人物记录", typeId: typeOneId, values: {[fieldOneId]: "旅人"}}],
-    fields: [initialSchema.fields[0]],
+    assets: [objectOne],
+    fields: [],
   });
+  assert.deepEqual(readJson(templateFieldsPath(typeOneId)), {fields: [fieldOne]});
+  assert.deepEqual(readJson(templateFieldsPath(typeTwoId)), {fields: [fieldTwo]});
   assert.deepEqual(readJson(groupPath(typeTwoId)).assets[0].values, {[fieldTwoId]: "北境·旧城区"});
-  assert.deepEqual(readJson(groupPath(null)).assets.map(asset => asset.id), [legacyObjectId]);
-  assert.equal(readJson(groupPath(null)).fields[0].id, legacyFieldId);
+  assert.deepEqual(readJson(groupPath(null)).assets, [unclassifiedObject]);
+  assert.equal(readJson(groupPath(null)).fields[0].id, unclassifiedFieldId);
 
   const callsBeforeUnclassifiedEdit = storage.calls.length;
   assert.equal(store.selectType(null), true);
   assert.equal(store.selectAsset(null), true);
-  assert.equal(await store.updateAsset(legacyObjectId, {values: {[legacyFieldId]: "沿用旧稿·已校订"}}), true);
+  assert.equal(await store.updateAsset(unclassifiedObjectId, {values: {[unclassifiedFieldId]: "沿用旧稿·已校订"}}), true);
   assert.equal(store.getSnapshot().selectedTypeId, null);
   assert.equal(store.getSnapshot().selectedAssetId, null);
-  assert.equal(store.getSnapshot().assets.find(asset => asset.id === legacyObjectId).typeId, null);
+  assert.equal(store.getSnapshot().assets.find(asset => asset.id === unclassifiedObjectId).typeId, null);
   const editWrites = storage.calls.slice(callsBeforeUnclassifiedEdit)
     .filter(call => call.command === "save_project_file").map(call => call.args.path);
   assert.deepEqual(editWrites, [groupPath(null)], "editing an unclassified object writes only its own group file");
@@ -648,7 +663,7 @@ test("template groups isolate object and field files and preserve the unclassifi
   const reopened = sessions.get(workbench.getSnapshot().session.id).store;
   assert.equal(reopened.getSnapshot().assets.find(asset => asset.id === objectOneId).values[fieldOneId], "旅人");
   assert.equal(reopened.getSnapshot().assets.find(asset => asset.id === objectTwoId).values[fieldTwoId], "北境·旧城区");
-  assert.equal(reopened.getSnapshot().assets.find(asset => asset.id === legacyObjectId).values[legacyFieldId], "沿用旧稿·已校订");
+  assert.equal(reopened.getSnapshot().assets.find(asset => asset.id === unclassifiedObjectId).values[unclassifiedFieldId], "沿用旧稿·已校订");
   assert.equal(readJson(groupPath(typeOneId)).assets.length, 1, "saving the unclassified group leaves the other groups intact");
 
   assert.equal(await workbench.closeProject(), true);

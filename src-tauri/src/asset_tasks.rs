@@ -47,8 +47,7 @@ pub fn validate_and_encode(input: Value) -> Result<Vec<u8>, String> {
             .and_then(Value::as_object)
             .ok_or("资产字段所属信息无效，原文件已保留。")?;
         match owner.get("kind").and_then(Value::as_str) {
-            Some("type") if !id.is_null() && owner.get("id") == Some(id) => (),
-            Some("type") => return Err("模板字段不属于当前对象分组，原文件已保留。".into()),
+            Some("type") => return Err("对象文件中不能包含模板字段，原文件已保留。".into()),
             Some("asset")
                 if owner
                     .get("id")
@@ -88,6 +87,9 @@ mod tests {
         let mut invalid = input.clone();
         invalid["data"]["fields"][0]["owner"]["id"] = json!(id);
         assert!(validate_and_encode(invalid).is_err());
+        let mut template_field = input.clone();
+        template_field["data"]["fields"][0]["owner"] = json!({"kind": "type", "id": id});
+        assert!(validate_and_encode(template_field).is_err());
         let mut duplicate = input.clone();
         duplicate["data"]["assets"]
             .as_array_mut()

@@ -27,20 +27,30 @@
       function writeAssetGroups(state, assets, fields) {
         const byAssetId = new Map(assets.map(asset => [asset.id, asset]));
         const groups = new Map();
+        const templateFields = new Map();
         const groupFor = typeId => {
           const fileName = typeId ?? "unclassified";
           if (!groups.has(fileName)) groups.set(fileName, {assets: [], fields: []});
           return groups.get(fileName);
         };
+        const templateFor = typeId => {
+          if (!templateFields.has(typeId)) templateFields.set(typeId, {fields: []});
+          return templateFields.get(typeId);
+        };
         for (const asset of assets) groupFor(asset.typeId).assets.push(asset);
         for (const field of fields) {
           const typeId = field.owner.kind === "type" ? field.owner.id : byAssetId.get(field.owner.id)?.typeId ?? null;
-          groupFor(typeId).fields.push(field);
+          if (field.owner.kind === "type") templateFor(typeId).fields.push(field);
+          else groupFor(typeId).fields.push(field);
         }
         state.directories.add(".lodestory/assets/objects");
+        state.directories.add(".lodestory/assets/templates");
         for (const [fileName, content] of groups) {
           state.files.set(`.lodestory/assets/objects/${fileName}.json`,
             encode(JSON.stringify(content)));
+        }
+        for (const [typeId, content] of templateFields) {
+          state.files.set(`.lodestory/assets/templates/${typeId}.json`, encode(JSON.stringify(content)));
         }
 
       }
@@ -171,33 +181,31 @@
               owner: {kind: "type", id: typeId}, title, valueType, config, order: suffix - 1, status: "active", ...extra,
             });
             for (const directory of [".lodestory", ".lodestory/assets"]) state.directories.add(directory);
-            files.set(".lodestory/assets/schema.json", encode(JSON.stringify({
-              format: "lodestory.asset-schema", schemaVersion: 1,
-              types: [{id: typeId, name: "功法", description: "修炼与施展的方法", order: 0, status: "active"}],
-              fields: [field(1, "修炼条件", "text", {}, {defaultValue: "掌握基础吐纳"}),
-                field(2, "修炼年限", "number", {}, {defaultValue: 0}),
-                field(3, "品阶", "singleSelect", {options: [{id: optionId, title: "黄阶"}]}, {defaultValue: optionId}),
-                field(4, "流派", "multiSelect", {options: [{id: "30000000-0000-4000-8000-000000000002", title: "剑修"}, {id: "30000000-0000-4000-8000-000000000003", title: "符修"}]}),
-                field(5, "前置功法", "reference", {targetTypeId: typeId})],
-            })));
+            const templateFields = [field(1, "修炼条件", "text", {}, {defaultValue: "掌握基础吐纳"}),
+              field(2, "修炼年限", "number", {}, {defaultValue: 0}),
+              field(3, "品阶", "singleSelect", {options: [{id: optionId, title: "黄阶"}]}, {defaultValue: optionId}),
+              field(4, "流派", "multiSelect", {options: [{id: "30000000-0000-4000-8000-000000000002", title: "剑修"}, {id: "30000000-0000-4000-8000-000000000003", title: "符修"}]}),
+              field(5, "前置功法", "reference", {targetTypeId: typeId})];
+            files.set(".lodestory/assets/templates.json", encode(JSON.stringify([
+              {id: typeId, name: "功法", description: "修炼与施展的方法", order: 0, status: "active"},
+            ])));
+            writeAssetGroups(state, [], templateFields);
             if (scenario.startsWith("asset-records-delete")) {
-              const schema = JSON.parse(new TextDecoder().decode(new Uint8Array(files.get(".lodestory/assets/schema.json"))));
               const firstAssetId = "40000000-0000-4000-8000-000000000001";
               const secondAssetId = "40000000-0000-4000-8000-000000000002";
               const customFieldId = "20000000-0000-4000-8000-000000000006";
               const secondCustomFieldId = "20000000-0000-4000-8000-000000000007";
-              schema.schemaVersion = 2;
-              schema.fields.push(
+              const customFields = [
                 {...field(6, "创立经过", "text"), owner: {kind: "asset", id: firstAssetId}, order: 0},
                 {...field(7, "创立经过", "text"), owner: {kind: "asset", id: secondAssetId}, order: 0},
-              );
-              schema.assets = [
-                {id: firstAssetId, name: "御风诀", description: "借山风而行", typeId,
-                  values: {[schema.fields[0].id]: "掌握吐纳", [customFieldId]: "观山风而悟"}},
-                {id: secondAssetId, name: "基础吐纳法", description: "入门修行", typeId,
-                  values: {[schema.fields[4].id]: firstAssetId, [secondCustomFieldId]: "记载于青云古卷"}},
               ];
-              files.set(".lodestory/assets/schema.json", encode(JSON.stringify(schema)));
+              const assets = [
+                {id: firstAssetId, name: "御风诀", description: "借山风而行", typeId,
+                  values: {[templateFields[0].id]: "掌握吐纳", [customFieldId]: "观山风而悟"}},
+                {id: secondAssetId, name: "基础吐纳法", description: "入门修行", typeId,
+                  values: {[templateFields[4].id]: firstAssetId, [secondCustomFieldId]: "记载于青云古卷"}},
+              ];
+              writeAssetGroups(state, assets, [...templateFields, ...customFields]);
             }
           }
           // Timeline-only visual/interaction scenarios; all examples live in this in-memory fixture.

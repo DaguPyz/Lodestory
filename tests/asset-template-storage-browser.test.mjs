@@ -164,14 +164,20 @@ test("template reorder saves the standalone template list without rewriting asse
     const peopleId = "10000000-0000-4000-8000-000000000001";
     const artsId = "10000000-0000-4000-8000-000000000002";
     const groupPaths = [peopleId, artsId, "unclassified"].map(id => `.lodestory/assets/objects/${id}.json`);
+    const templateFieldPaths = [peopleId, artsId].map(id => `.lodestory/assets/templates/${id}.json`);
     const beforeSchema = await evaluate(`window.__projectFixture.readJson(${JSON.stringify(schemaPath)})`);
     const beforeTemplates = await evaluate(`window.__projectFixture.readJson(${JSON.stringify(templatesPath)})`);
     const beforeGroups = await evaluate(`[${groupPaths.map(path => `window.__projectFixture.readJson(${JSON.stringify(path)})`).join(",")}]`);
+    const beforeTemplateFields = await evaluate(`[${templateFieldPaths.map(path => `window.__projectFixture.readJson(${JSON.stringify(path)})`).join(",")}]`);
     const beforeCalls = await evaluate("window.__projectFixture.calls()");
     assert.equal(beforeSchema, null, "a current project loads without a schema file");
     assert.ok(Array.isArray(beforeTemplates), "the browser fixture loads the standalone top-level template list");
-    assert.ok(beforeGroups.every(group => group && Array.isArray(group.assets) && Array.isArray(group.fields)),
-      "objects and their fields are stored by template ID");
+    assert.ok(beforeGroups.every(group => group && Array.isArray(group.assets) && Array.isArray(group.fields)
+      && group.fields.every(field => field.owner.kind === "asset")),
+    "object files contain objects and only object-owned fields");
+    assert.ok(beforeTemplateFields.every(file => file && Array.isArray(file.fields)
+      && file.fields.every(field => field.owner.kind === "type")),
+    "each template has a separate file for its shared fields");
 
     const point = await rightClickTemplate(evaluate, "功法");
     assert.ok(point, "the target template row exists");
@@ -195,7 +201,9 @@ test("template reorder saves the standalone template list without rewriting asse
     const templateSaveCount = calls => calls.filter(call => call.command === "save_project_file" && call.path === templatesPath).length;
     assert.equal(afterSchema, null, "template reordering does not create a schema file");
     const afterGroups = await evaluate(`[${groupPaths.map(path => `window.__projectFixture.readJson(${JSON.stringify(path)})`).join(",")}]`);
-    assert.deepEqual(afterGroups, beforeGroups, "template reordering leaves every object group unchanged");
+    const afterTemplateFields = await evaluate(`[${templateFieldPaths.map(path => `window.__projectFixture.readJson(${JSON.stringify(path)})`).join(",")}]`);
+    assert.deepEqual(afterGroups, beforeGroups, "template reordering leaves every object file unchanged");
+    assert.deepEqual(afterTemplateFields, beforeTemplateFields, "template reordering leaves shared template fields unchanged");
     assert.deepEqual(afterTemplates.map(({id, name, description, order, status}) => [id, name, description, order, status]), [
       ["10000000-0000-4000-8000-000000000002", "功法", "修炼与施展的方法", 0, "active"],
       ["10000000-0000-4000-8000-000000000001", "人物", "故事中的角色", 1, "active"],
@@ -226,10 +234,11 @@ test("template deletion waits for field cleanup and retries the template-list wr
     const templatesPath = ".lodestory/assets/templates.json";
     const targetId = "10000000-0000-4000-8000-000000000001";
     const targetFieldId = "20000000-0000-4000-8000-000000000001";
-    const targetGroupPath = `.lodestory/assets/objects/${targetId}.json`;
-    const originalGroup = await evaluate(`window.__projectFixture.readJson(${JSON.stringify(targetGroupPath)})`);
-    assert.ok(originalGroup.fields.some(field => field.id === targetFieldId), "the template initially owns the field to be removed");
-    assert.equal(originalGroup.assets.length, 0, "no objects prevent this template from being deleted");
+    const targetFieldPath = `.lodestory/assets/templates/${targetId}.json`;
+    const originalTemplateFields = await evaluate(`window.__projectFixture.readJson(${JSON.stringify(targetFieldPath)})`);
+    assert.ok(originalTemplateFields.fields.some(field => field.id === targetFieldId), "the template initially owns the field to be removed");
+    assert.equal(await evaluate(`window.__projectFixture.readJson(${JSON.stringify(`.lodestory/assets/objects/${targetId}.json`)})`), null,
+      "template fields alone do not create an object file");
     const callsBeforeDelete = await evaluate("window.__projectFixture.calls()");
     await evaluate(`${confirm}.click()`);
     const alert = await waitFor(() => evaluate(`document.querySelector('[role="dialog"] [role="alert"]')?.textContent?.trim()`),
@@ -237,12 +246,12 @@ test("template deletion waits for field cleanup and retries the template-list wr
     assert.match(alert, /类型删除保存失败：模拟首次写入失败，请重试。/);
 
     const pendingTemplates = await evaluate(`window.__projectFixture.readJson(${JSON.stringify(templatesPath)})`);
-    const cleanedGroup = await evaluate(`window.__projectFixture.readJson(${JSON.stringify(targetGroupPath)})`);
+    const cleanedTemplateFields = await evaluate(`window.__projectFixture.readJson(${JSON.stringify(targetFieldPath)})`);
     const failedCalls = (await evaluate("window.__projectFixture.calls()")).slice(callsBeforeDelete.length);
     assert.ok(pendingTemplates.some(template => template.id === targetId), "the template remains when the template-list save fails");
-    assert.ok(!cleanedGroup.fields.some(field => field.id === targetFieldId), "the owned field is saved before the template record is removed");
+    assert.ok(!cleanedTemplateFields.fields.some(field => field.id === targetFieldId), "the shared field is saved before the template record is removed");
     assert.deepEqual(failedCalls.filter(call => call.command === "save_project_file").map(call => call.path),
-      [targetGroupPath, templatesPath], "the owned fields are saved before the template-list save fails");
+      [targetFieldPath, templatesPath], "the shared fields are saved before the template-list save fails");
 
     const retry = `([...document.querySelectorAll('[role="dialog"] button')].find(button => /确认删除|重试保存/.test(button.textContent.trim())))`;
     await evaluate(`${retry}.click()`);

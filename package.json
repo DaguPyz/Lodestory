@@ -16,6 +16,8 @@
     "build:ui": "pnpm --filter @lodestory/ui build",
     "build:packages": "pnpm run build:sdk && pnpm run build:ui",
     "build": "pnpm run build:packages && tsc && vite build",
+    "build:desktop": "tauri build",
+    "build:installers": "node scripts/build-installers.mjs",
     "test": "pnpm run build:packages && node --test tests/*.test.mjs",
     "test:desktop": "node scripts/test-desktop.mjs",
     "preview": "vite preview",

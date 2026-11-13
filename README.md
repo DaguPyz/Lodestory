@@ -13,11 +13,39 @@ pnpm dev:desktop
 
 `pnpm dev:desktop` starts Tauri and delegates the frontend to `pnpm dev`, which builds the SDK and UI library once and then watches both packages while running Vite. Use `pnpm dev` for frontend-only development, or `pnpm dev:sdk` / `pnpm dev:ui` to run an individual package watcher.
 
-To build an application bundle:
+### Desktop installers
+
+To build installers for your current platform, install the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/) and use Node.js 24 and pnpm 8.10.2.
 
 ```sh
-pnpm tauri build
+pnpm install --frozen-lockfile
+pnpm build:desktop
 ```
+
+Local installers are written under `src-tauri/target/release/bundle/` by default.
+
+To build macOS and Windows installers locally from a Mac, install the Windows cross-compiler tools.
+
+```sh
+brew install llvm lld nsis
+cargo install --locked cargo-xwin
+pnpm build:installers
+```
+
+Installers are saved in a new `output/installers.*` directory on each run. Use `pnpm build:installers macos` or `pnpm build:installers windows` to build a single platform.
+
+| Platform | Architecture | Files |
+| --- | --- | --- |
+| macOS | Apple Silicon and Intel (universal) | `.dmg` |
+| Windows | x64 | `-setup.exe` |
+
+The installer script signs the macOS app and DMG by default. Import your **Developer ID Application** certificate and its private key into your macOS keychain. The script selects the identity automatically when exactly one is available. Set `APPLE_SIGNING_IDENTITY` to the full identity name to select a specific certificate. Use `APPLE_SIGNING_IDENTITY=- pnpm build:installers macos` for an ad-hoc test build.
+
+To submit the app to Apple for notarization during packaging, set `APPLE_API_KEY`, `APPLE_API_ISSUER`, and `APPLE_API_KEY_PATH` in your local environment, then run `LODESTORY_MACOS_NOTARIZE=1 pnpm build:installers macos`. The path points to your App Store Connect `.p8` file. Keep the key outside the repository. [Tauri macOS signing and notarization](https://v2.tauri.app/distribute/sign/macos/#notarization)
+
+The first Windows build downloads the Windows SDK. Windows installers are unsigned by default. To sign one, configure [Tauri's `signCommand`](https://v2.tauri.app/distribute/sign/windows/#custom-sign-command) and run `LODESTORY_WINDOWS_SIGN=1 pnpm build:installers windows`. Package versions come from the Tauri configuration.
+
+### Project development
 
 The bundle identifier is `com.lodestory.app` in `src-tauri/tauri.conf.json`.
 

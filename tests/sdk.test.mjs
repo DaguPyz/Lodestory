@@ -27,6 +27,8 @@ import * as packageBodyEditor from "@lodestory/sdk/body-editor";
 import * as packageCanvas from "@lodestory/sdk/canvas";
 import * as packageTimeline from "@lodestory/sdk/timeline";
 import * as packageAssetCatalog from "@lodestory/sdk/asset-catalog";
+import * as packageAssetEditor from "@lodestory/sdk/asset-editor";
+import * as packageAssetRelations from "@lodestory/sdk/asset-relations";
 import * as packageContextMenu from "@lodestory/sdk/context-menu";
 import * as packageShortcuts from "@lodestory/sdk/shortcuts";
 import { createSdkLoader } from "./helpers/sdkFixture.mjs";
@@ -35,7 +37,7 @@ const packageManifest = JSON.parse(readFileSync(new URL("../packages/sdk/package
 
 test("SDK package exposes ESM root and all public capability entry points", () => {
   assert.equal(packageManifest.type, "module");
-  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./asset-catalog", "./background-tasks", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./external-plugins", "./layout", "./native-library-loader", "./native-process-loader", "./navigation-layout", "./plugin-packages", "./plugin-runtime", "./project-search", "./project-storage", "./settings", "./shortcuts", "./theme", "./timeline", "./ui", "./window-shell", "./workbench"]);
+  assert.deepEqual(Object.keys(packageManifest.exports).sort(), [".", "./asset-catalog", "./asset-editor", "./asset-relations", "./background-tasks", "./body-editor", "./canvas", "./config", "./context-menu", "./documents", "./error", "./external-plugins", "./layout", "./native-library-loader", "./native-process-loader", "./navigation-layout", "./plugin-packages", "./plugin-runtime", "./project-search", "./project-storage", "./settings", "./shortcuts", "./theme", "./timeline", "./ui", "./window-shell", "./workbench"]);
 
   assert.equal(packageManifest.exports["./body-editor"].import, "./dist/body-editor.js");
   assert.equal(packageManifest.exports["./body-editor"].types, "./dist/body-editor.d.ts");
@@ -66,6 +68,8 @@ test("SDK package exposes ESM root and all public capability entry points", () =
     ["./canvas", "canvas"],
     ["./timeline", "timeline"],
     ["./asset-catalog", "asset-catalog"],
+    ["./asset-editor", "asset-editor"],
+    ["./asset-relations", "asset-relations"],
   ]) {
     assert.equal(packageManifest.exports[specifier].import, `./dist/${target}.js`);
     assert.equal(packageManifest.exports[specifier].types, `./dist/${target}.d.ts`);
@@ -103,8 +107,12 @@ test("SDK package exposes ESM root and all public capability entry points", () =
   assert.deepEqual(Object.keys(packageCanvas), ["canvasKey"], "canvas behavior types do not add runtime exports");
   assert.deepEqual(Object.keys(packageTimeline), ["timelineKey"], "timeline behavior types do not add runtime exports");
   assert.deepEqual(Object.keys(packageAssetCatalog), ["assetCatalogKey"], "catalog behavior types do not add runtime exports");
+  assert.deepEqual(Object.keys(packageAssetEditor), ["assetEditorKey"]);
+  assert.deepEqual(Object.keys(packageAssetRelations), ["assetRelationsKey"]);
   assert.equal(packageTimeline.timelineKey.id, "app/timeline");
   assert.equal(packageAssetCatalog.assetCatalogKey.id, "app/asset-catalog");
+  assert.equal(packageAssetEditor.assetEditorKey.id, "app/asset-editor");
+  assert.equal(packageAssetRelations.assetRelationsKey.id, "app/asset-relations");
   assert.equal(packageLayout.layoutKey.id, "app/layout");
   assert.equal(packageNavigationLayout.navigationLayoutKey.id, "app/navigation-layout");
   assert.equal(packageWindowShell.windowShellKey.id, "app/window-shell");

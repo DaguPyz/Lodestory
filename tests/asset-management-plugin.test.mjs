@@ -123,8 +123,7 @@ test("asset schema sessions own their stores, guard project leave, and release r
   assert.ok(plugin.requires.includes(f.requireSdk("@lodestory/sdk/workbench").workbenchKey));
   assert.ok(plugin.requires.includes(f.requireSdk("@lodestory/sdk/project-storage").projectStorageKey));
   assert.ok(plugin.requires.includes(contextMenuKey), "asset management declares its context-menu service dependency");
-  assert.deepEqual(Array.from(plugin.provides, key => key.id), ["app/asset-catalog"],
-    "the plugin exposes only the public read-only catalog capability");
+  assert.deepEqual(Array.from(plugin.provides, key => key.id), ["app/asset-catalog", "app/asset-editor"]);
   assert.equal(navigation.order, 20);
   assert.equal(navigation.title, "资产管理");
   assert.equal(main.role, "main");
@@ -743,6 +742,7 @@ test("object view and search stay local while filtering both list modes", () => 
   // This fixture drives hook state directly; effects only manage focus and cleanup.
   f.React.useLayoutEffect = () => {};
   const {AssetRecordsEditor} = f.loadSource("plugins/asset-management/AssetRecordsView.tsx");
+  const {createAssetEditorPanels} = f.loadSource("plugins/asset-management/assetEditorPanels.ts");
   const typeOne = {id: "view-type-one", name: "人物", description: "", order: 0, status: "active"};
   const typeTwo = {id: "view-type-two", name: "物品", description: "", order: 1, status: "active"};
   const nameField = {id: "view-name", owner: {kind: "type", id: typeOne.id}, title: "名称",
@@ -790,6 +790,7 @@ test("object view and search stay local while filtering both list modes", () => 
   const props = {
     workbench, sessions: resources, active: true, onOpenTypes() {},
     contextMenus: {Region: function Region() {}},
+    assetEditor: createAssetEditorPanels(remove => remove()).service,
   };
   const editorHooks = {};
   const recordHooks = new Map();
@@ -964,6 +965,7 @@ test("object list right-click deletion targets objects in both list and card vie
     const f = uiPluginFixture();
     f.React.useLayoutEffect = () => {};
     const {AssetRecordsEditor} = f.loadSource("plugins/asset-management/AssetRecordsView.tsx");
+    const {createAssetEditorPanels} = f.loadSource("plugins/asset-management/assetEditorPanels.ts");
     const session = {id: `delete-object-${mode}`};
     const type = {id: "object-menu-type", name: "人物", description: "", order: 0, status: "active"};
     const asset = {id: `object-menu-${mode}`, name: "林舟", description: "旅人", typeId: type.id, values: {}};
@@ -985,7 +987,7 @@ test("object list right-click deletion targets objects in both list and card vie
     const workbenchSnapshot = {session, active: true, busy: false};
     const props = {workbench: {getSnapshot: () => workbenchSnapshot, subscribe: () => () => {}},
       sessions: new Map([[session.id, resource]]), active: true, onOpenTypes() {},
-      contextMenus: {Region: function Region() {}}};
+      contextMenus: {Region: function Region() {}}, assetEditor: createAssetEditorPanels(remove => remove()).service};
     const editorHooks = {};
     const recordHooks = {};
     function render() {

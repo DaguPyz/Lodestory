@@ -18,6 +18,7 @@ import {createNativeLibraryLoaderPlugin} from "../plugins/native-library-loader/
 import {createProjectManagementPlugin} from "../plugins/project-management/projectManagementPlugin";
 import {createOutlineDesignPlugin} from "../plugins/outline-design/outlineDesignPlugin";
 import {createAssetManagementPlugin} from "../plugins/asset-management/assetManagementPlugin";
+import {createAssetRelationsPlugin} from "../plugins/asset-relations/assetRelationsPlugin";
 import {createCanvasPlugin} from "../plugins/canvas/canvasPlugin";
 import {createTimelinePlugin} from "../plugins/timeline/timelinePlugin";
 import {createBodyEditorPlugin} from "../plugins/body-editor/bodyEditorPlugin";
@@ -61,6 +62,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createTimelinePlugin(),
         createOutlineDesignPlugin(),
         createAssetManagementPlugin(),
+        createAssetRelationsPlugin(),
         createBodyEditorPlugin(),
         createPlainTextEditorPlugin(),
         createDocumentSearchPlugin(),

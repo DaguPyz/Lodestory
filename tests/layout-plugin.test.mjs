@@ -304,6 +304,8 @@ test("outline navigation switches independently while preserving editor contents
   assert.ok(layout.getSnapshot().contents.some(({id}) => id === "project-management.files"), "revoking the outline leaves the project-files contribution registered");
   await core.unmount("timeline");
   assert.ok(!layout.getSnapshot().contents.some(({id}) => id === canvas.id), "unmounting timeline revokes its main contribution");
+  await assert.rejects(core.unmount("asset-management"), /required by plugins: 'asset-relations'/);
+  await core.unmount("asset-relations");
   await core.unmount("asset-management");
   assert.ok(!layout.getSnapshot().contents.some(({id}) => id === assetManagement.id), "unmounting asset-management revokes its contribution");
   assert.ok(!layout.getSnapshot().contents.some(({id}) => id === assetTypes.id), "unmounting asset-management revokes its main contribution");

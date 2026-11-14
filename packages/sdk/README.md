@@ -19,6 +19,8 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/canvas`：通用视口与画布表面服务类型，以及共享单例 `canvasKey`。
 - `@lodestory/sdk/timeline`：时间线列表快照、命令与打开服务，以及共享单例 `timelineKey`。
 - `@lodestory/sdk/asset-catalog`：按工作台会话读取只读资产目录快照，以及共享单例 `assetCatalogKey`。
+- `@lodestory/sdk/asset-editor` 提供 `assetEditorKey` 与对象编辑面板登记接口。
+- `@lodestory/sdk/asset-relations` 提供 `assetRelationsKey` 与按会话、资产 ID 查询关系的只读接口。
 - `@lodestory/sdk/workbench`：项目与工作台会话、参与者生命周期、快照和服务类型，以及共享单例 `workbenchKey`。
 - `@lodestory/sdk/project-storage`：项目字节文件缓冲与存储服务类型，以及共享单例 `projectStorageKey`。
 - `@lodestory/sdk/native-library-loader`：可信动态库的加载、调用和关闭契约，以及共享 `nativeLibraryLoaderKey`；原生函数约定见 [ABI 头文件](native/lodestory_native_library.h)。

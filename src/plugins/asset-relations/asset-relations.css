@@ -1,0 +1,84 @@
+.asset-relations-panel { container: asset-relations / inline-size; color: var(--ui-text-primary); }
+.asset-relations-panel h2 { margin: 0 0 var(--ui-space-5); font-size: var(--ui-font-size-title); line-height: var(--ui-line-height-title); font-weight: 600; }
+.asset-relations-form { display: grid; gap: var(--ui-space-3); }
+.asset-relations-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--ui-space-3); }
+.asset-relations-fields > :first-child { grid-column: 1 / -1; }
+.asset-relations-label {
+  display: grid;
+  align-content: end;
+  gap: var(--ui-space-2);
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--ui-font-size-label);
+  line-height: var(--ui-line-height-label);
+}
+.asset-relations-label .ui-text-field, .asset-relations-label .ui-select { width: 100%; min-width: 0; }
+.asset-relations-row-actions { display: flex; justify-content: flex-end; gap: var(--ui-space-2); }
+.asset-relations-actions { justify-self: end; }
+.asset-relations-options { display: flex; align-items: center; justify-content: space-between; gap: var(--ui-space-3); }
+.asset-relations-tags-positioner { z-index: 45; }
+.asset-relations-tags-popup {
+  box-sizing: border-box;
+  display: grid;
+  gap: var(--ui-space-4);
+  width: min(18rem, var(--available-width));
+  max-height: var(--available-height);
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: var(--ui-space-5);
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-overlay);
+  border: 1px solid var(--ui-border-divider);
+  border-radius: var(--ui-radius-overlay);
+  box-shadow: var(--ui-shadow-popover);
+  outline: none;
+}
+.asset-relations-tags-heading { display: flex; align-items: baseline; gap: var(--ui-space-3); }
+.asset-relations-tags-heading h2 {
+  margin: 0;
+  font-size: var(--ui-font-size-strong);
+  line-height: var(--ui-line-height-strong);
+  font-weight: 600;
+}
+.asset-relations-tags-heading > span { color: var(--ui-text-muted); font-size: var(--ui-font-size-caption); }
+.asset-relations-tags-popup > .button { justify-self: end; }
+.asset-relations-list, .asset-relations-empty { margin: var(--ui-space-5) 0 0; padding: 0; border-block-start: 1px solid var(--ui-border-divider); }
+.asset-relations-list { list-style: none; }
+.asset-relations-list > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--ui-space-4);
+  padding-block: var(--ui-space-3);
+}
+.asset-relations-list > li + li { border-block-start: 1px solid var(--ui-border-divider); }
+.asset-relations-row { overflow-wrap: anywhere; font-size: var(--ui-font-size-label); line-height: var(--ui-line-height-label); }
+.asset-relations-endpoint strong { font-weight: 600; }
+.asset-relations-tag, .asset-relations-message, .asset-relations-empty { color: var(--ui-text-muted); font-size: var(--ui-font-size-caption); line-height: var(--ui-line-height-caption); }
+.asset-relations-description { color: var(--ui-text-secondary); }
+.asset-relations-description::before, .asset-relations-description::after {
+  content: "";
+  display: inline-block;
+  width: var(--ui-space-3);
+  height: 1px;
+  margin-inline: var(--ui-space-2);
+  background: var(--ui-border-decoration);
+  vertical-align: middle;
+}
+.asset-relations-message, .asset-relations-error { margin: 0; overflow-wrap: anywhere; }
+.asset-relations-error { color: var(--ui-status-danger-foreground); font-size: var(--ui-font-size-label); line-height: var(--ui-line-height-label); }
+.asset-relations-empty { padding-block-start: var(--ui-space-4); }
+@container asset-relations (min-width: 25rem) {
+  .asset-relations-fields { grid-template-columns: minmax(7.5rem, 1.65fr) minmax(6.75rem, 1fr) minmax(6.75rem, 1.15fr); }
+  .asset-relations-fields > :first-child { grid-column: auto; }
+}
+@container asset-relations (min-width: 33rem) {
+  .asset-relations-form {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    column-gap: var(--ui-space-3);
+  }
+  .asset-relations-fields { grid-column: 1; grid-row: 1; }
+  .asset-relations-actions { grid-column: 2; grid-row: 1; }
+  .asset-relations-options, .asset-relations-form > p { grid-column: 1 / -1; }
+}

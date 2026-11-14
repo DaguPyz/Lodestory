@@ -526,6 +526,15 @@
   scrollbar-color: var(--ui-border-decoration) transparent;
   outline: none;
 }
+.ui-select-popup--searchable {
+  display: flex;
+  flex-direction: column;
+  width: min(max(12rem, var(--anchor-width)), var(--available-width));
+  max-height: var(--available-height);
+}
+.ui-select-search { flex: none; padding: var(--ui-space-2) var(--ui-space-2) 0; }
+.ui-select-popup--searchable .ui-select-list { min-height: 0; }
+.ui-select-popup--searchable .ui-select-list:empty, .ui-select-search-empty:empty { padding: 0; }
 .ui-select-option {
   display: flex;
   align-items: center;

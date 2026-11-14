@@ -100,6 +100,14 @@
       "types": "./dist/asset-catalog.d.ts",
       "import": "./dist/asset-catalog.js"
     },
+    "./asset-editor": {
+      "types": "./dist/asset-editor.d.ts",
+      "import": "./dist/asset-editor.js"
+    },
+    "./asset-relations": {
+      "types": "./dist/asset-relations.d.ts",
+      "import": "./dist/asset-relations.js"
+    },
     "./context-menu": {
       "types": "./dist/context-menu.d.ts",
       "import": "./dist/context-menu.js"

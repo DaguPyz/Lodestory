@@ -1,6 +1,8 @@
 import type {Plugin} from "@lodestory/sdk";
+import {flushSync} from "react-dom";
 import {contextMenuKey} from "@lodestory/sdk/context-menu";
 import {assetCatalogKey, type AssetCatalog} from "@lodestory/sdk/asset-catalog";
+import {assetEditorKey} from "@lodestory/sdk/asset-editor";
 import {layoutKey} from "@lodestory/sdk/layout";
 import {projectStorageKey, type ProjectFiles} from "@lodestory/sdk/project-storage";
 import {workbenchKey} from "@lodestory/sdk/workbench";
@@ -12,6 +14,7 @@ import {AssetTypeEditor, AssetTypeNavigation} from "./AssetManagementView";
 import {AssetRecordsEditor} from "./AssetRecordsView";
 import {displayedValue} from "./assetDisplayValue";
 import {createAssetCatalog} from "./assetCatalog";
+import {createAssetEditorPanels} from "./assetEditorPanels";
 import {encodeAssetGroupFallback, VALIDATE_AND_ENCODE_GROUP} from "./assetObjectFiles";
 import "./asset-management.css";
 
@@ -34,12 +37,13 @@ export function createAssetManagementPlugin(): Plugin {
   let removeAssets: (() => void) | undefined;
   let removeParticipant: (() => Promise<void>) | undefined;
   let removeTaskFallback: (() => void) | undefined;
+  let disposePanels: (() => void) | undefined;
   const sessions = new Map<string, AssetSessionResources>();
 
   return {
     id: "asset-management",
     requires: [layoutKey, workbenchKey, projectStorageKey, contextMenuKey, projectSearchKey, backgroundTasksKey],
-    provides: [assetCatalogKey],
+    provides: [assetCatalogKey, assetEditorKey],
     async activate(context) {
       alive = true;
       const layout = context.get(layoutKey);
@@ -48,6 +52,9 @@ export function createAssetManagementPlugin(): Plugin {
       const contextMenus = context.get(contextMenuKey);
       const search = context.get(projectSearchKey);
       const tasks = context.get(backgroundTasksKey);
+      const panels = createAssetEditorPanels(remove => flushSync(remove));
+      disposePanels = panels.dispose;
+      context.provide(assetEditorKey, panels.service);
       removeTaskFallback = tasks.registerFallback(VALIDATE_AND_ENCODE_GROUP, encodeAssetGroupFallback);
       context.provide(assetCatalogKey, Object.freeze({
         getCatalog(sessionId: string) { return sessions.get(sessionId)?.catalog ?? null; },
@@ -79,7 +86,7 @@ export function createAssetManagementPlugin(): Plugin {
           role: "main",
           order: 21,
           render: ({active}) => <AssetRecordsEditor workbench={workbench} sessions={sessions} contextMenus={contextMenus}
-            active={active} onOpenTypes={onOpenTypes}/>,
+            active={active} onOpenTypes={onOpenTypes} assetEditor={panels.service}/>,
         }));
         removeParticipant = context.track(workbench.registerParticipant({
           id: "asset-management",
@@ -209,6 +216,8 @@ export function createAssetManagementPlugin(): Plugin {
       removeMain = undefined;
       removeAssets = undefined;
       removeNavigation = undefined;
+      disposePanels?.();
+      disposePanels = undefined;
       const unregister = removeParticipant;
       removeParticipant = undefined;
       try { await unregister?.(); } catch (error) { errors.push(error); }

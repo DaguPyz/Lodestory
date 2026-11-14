@@ -13,6 +13,7 @@ Lodestory 自有 React 基础组件库。组件、公开属性类型和组件样
 | `TextField` | 单行文本或数字输入 | 原生输入属性与 `ref`；`type` 限定为文本类和数字类，默认 `text` |
 | `Textarea` | 多行文本输入 | 原生多行输入属性与 `ref`；默认 `rows=3`，支持显式覆盖 |
 | `Select` | 受控单选下拉框 | `value`、`options`、`onValueChange`；`variant`: `field`（默认）/ `title` / `toolbar`；支持占位、禁用、只读、表单属性、颜色样本及 `triggerIcon` / `iconOnly` 图标触发器 |
+| `SearchableSelect` | 下拉浮层内可搜索的受控单选框 | `value`、`options`、`onValueChange`、`searchLabel`；按选项名称与可选的 `searchText` 过滤，关闭时清空查询 |
 | `Dialog` | 受控模态弹框 | `open`、`onOpenChange`、`title`，可选 `onOpenChangeComplete`、`size`（`regular` 默认、`narrow`、`wide`、`large`）、`description`、`busy`、`initialFocus`、`finalFocus` |
 | `DialogActions` | 弹框操作区 | 统一右对齐、间距与换行 |
 | `DialogClose` | 关闭弹框的按钮 | 支持 `Button` 属性和 `ref`，固定为非提交按钮 |

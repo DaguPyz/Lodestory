@@ -143,6 +143,20 @@ async function rightClickTemplate(evaluate, name) {
   })()`);
 }
 
+async function openObjectContextMenu(send, evaluate, selector) {
+  const point = await waitFor(() => evaluate(`(() => {
+    const button = document.querySelector(${JSON.stringify(selector)});
+    if (!button || button.disabled) return null;
+    const rect = button.getBoundingClientRect();
+    return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+  })()`), `The object '${selector}' did not appear.`);
+  await send("Input.dispatchMouseEvent", {...point, type: "mousePressed", button: "right", clickCount: 1});
+  await send("Input.dispatchMouseEvent", {...point, type: "mouseReleased", button: "right", clickCount: 1});
+  const edit = `[...document.querySelectorAll('[role="menuitem"]')].find(item => item.textContent.trim() === "编辑对象")`;
+  await waitFor(() => evaluate(`Boolean(${edit})`), "The object menu did not offer Edit.");
+  return edit;
+}
+
 test("template rows and cards open the clicked object for editing", async t => {
   await withProjectPage(t, "asset-template-workspace", async ({send, evaluate, pageErrors}) => {
     await clickButton(evaluate, "打开项目 测试故事");
@@ -154,16 +168,7 @@ test("template rows and cards open the clicked object for editing", async t => {
     await evaluate(`${people}.click()`);
 
     const openEditor = async (selector, name) => {
-      const point = await waitFor(() => evaluate(`(() => {
-        const button = document.querySelector(${JSON.stringify(selector)});
-        if (!button || button.disabled) return null;
-        const rect = button.getBoundingClientRect();
-        return {x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
-      })()`), `The object '${name}' did not appear.`);
-      await send("Input.dispatchMouseEvent", {...point, type: "mousePressed", button: "right", clickCount: 1});
-      await send("Input.dispatchMouseEvent", {...point, type: "mouseReleased", button: "right", clickCount: 1});
-      const edit = `[...document.querySelectorAll('[role="menuitem"]')].find(item => item.textContent.trim() === "编辑对象")`;
-      await waitFor(() => evaluate(`Boolean(${edit})`), "The object menu did not offer Edit.");
+      const edit = await openObjectContextMenu(send, evaluate, selector);
       assert.deepEqual(await evaluate(`[...(${edit}).closest('[role="menu"]').querySelectorAll('[role="menuitem"]')]
         .filter(item => item.querySelector('.context-menu-icon svg[aria-hidden="true"]'))
         .map(item => item.textContent.trim())`), ["新建对象", "模板设置", "编辑对象", "删除对象"]);
@@ -173,7 +178,7 @@ test("template rows and cards open the clicked object for editing", async t => {
     };
 
     await openEditor('.asset-object-table button[aria-label="查看对象“林舟”"]', "林舟");
-    await evaluate(`[...document.querySelectorAll('.asset-record-form button')].find(button => button.textContent === "取消").click()`);
+    await evaluate(`[...document.querySelectorAll('.asset-record-form-actions button')].find(button => button.textContent === "取消").click()`);
     await waitFor(() => evaluate(`Boolean(document.querySelector(".asset-object-table"))`), "Cancel did not return to the table.");
 
     await clickButton(evaluate, "卡片视图");
@@ -183,9 +188,207 @@ test("template rows and cards open the clicked object for editing", async t => {
       Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, "沈青萝（已编辑）");
       input.dispatchEvent(new Event("input", {bubbles: true}));
     })()`);
-    await evaluate(`document.querySelector('.asset-record-form button[type="submit"]').click()`);
+    await evaluate(`document.querySelector('.asset-record-form-actions button[type="submit"]').click()`);
     await waitFor(() => evaluate(`Boolean(document.querySelector('.asset-object-card button[aria-label="查看对象“沈青萝（已编辑）”"]'))`),
       "Saving did not return to the cards with the edited object.");
+    assert.deepEqual(pageErrors, []);
+  });
+});
+
+test("asset relation panel searches both dropdowns, preserves drafts, and edits relations from either object", async t => {
+  await withProjectPage(t, "asset-template-workspace-relation-once", async ({send, evaluate, pageErrors}) => {
+    const panel = ".asset-relations-panel";
+    const path = ".lodestory/asset-relations/relations.json";
+    const savedRelations = `window.__projectFixture.readJson(${JSON.stringify(path)})?.relations ?? []`;
+    const label = `${panel} .asset-relations-fields input`;
+    const searchPopup = ".ui-select-popup--searchable[data-open]";
+    const tagsPopup = ".asset-relations-tags-popup";
+    const tags = `${tagsPopup} input`;
+    const objectSave = ".asset-record-form-actions button[type=submit]";
+
+    const clickText = async (selector, title) => {
+      const item = `[...document.querySelectorAll(${JSON.stringify(selector)})].find(node => node.textContent.trim() === ${JSON.stringify(title)} && !node.disabled)`;
+      await waitFor(() => evaluate(`Boolean(${item})`), `Missing action: ${title}`);
+      await evaluate(`${item}.click()`);
+    };
+    const typeIn = (selector, value) => evaluate(`(() => {
+      const input = document.querySelector(${JSON.stringify(selector)});
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, ${JSON.stringify(value)});
+      input.dispatchEvent(new Event("input", {bubbles: true}));
+    })()`);
+    const dropdown = position => `${panel} .asset-relations-fields > :nth-child(${position}) button[role=combobox]`;
+    const pressKey = async (key, windowsVirtualKeyCode) => {
+      const event = {key, code: key, windowsVirtualKeyCode};
+      await send("Input.dispatchKeyEvent", {type: "keyDown", ...event, ...(key === "Enter" ? {text: "\r"} : {})});
+      await send("Input.dispatchKeyEvent", {type: "keyUp", ...event});
+    };
+    const openDropdown = async (position, searchLabel) => {
+      const selector = dropdown(position);
+      const point = await evaluate(`(() => {
+        const button = document.querySelector(${JSON.stringify(selector)});
+        const rect = button.getBoundingClientRect();
+        return {x: rect.x + rect.width / 2, y: rect.y + rect.height / 2};
+      })()`);
+      await send("Input.dispatchMouseEvent", {...point, type: "mousePressed", button: "left", clickCount: 1});
+      await send("Input.dispatchMouseEvent", {...point, type: "mouseReleased", button: "left", clickCount: 1});
+      await waitFor(() => evaluate(`document.activeElement.matches('${searchPopup} input[aria-label="${searchLabel}"]')`),
+        `Search input '${searchLabel}' did not receive focus.`, 2500);
+    };
+    const results = () => evaluate(`Array.from(document.querySelectorAll('${searchPopup} [role=option]'), option => option.textContent.trim())`);
+    const search = text => send("Input.insertText", {text});
+    const openEditor = async (category, name) => {
+      const categorySelector = `.asset-type-list button[aria-label^="${category}"]`;
+      await waitFor(() => evaluate(`Boolean(document.querySelector('${categorySelector}'))`), `Missing category: ${category}`);
+      await evaluate(`document.querySelector('${categorySelector}').click()`);
+      const edit = await openObjectContextMenu(send, evaluate, `.asset-object-table button[aria-label="查看对象“${name}”"]`);
+      await evaluate(`${edit}.click()`);
+      await waitFor(() => evaluate(`Boolean(document.querySelector('${label}'))`), "The relation panel did not mount.");
+    };
+    const row = () => evaluate(`[...document.querySelectorAll('${panel} .asset-relations-row > *')].map(node => node.textContent)`);
+    const relationFormBounds = () => evaluate(`Array.from(document.querySelectorAll(
+      '.asset-relations-fields input, .asset-relations-fields [role=combobox], .asset-relations-actions button'), control => {
+      const {x, y, width, height} = control.getBoundingClientRect();
+      return [x, y, width, height];
+    })`);
+    const openTags = async name => {
+      await clickText(`${panel} .asset-relations-options button`, name);
+      await waitFor(() => evaluate(`Boolean(document.querySelector('${tags}'))`), "The optional tag editor did not open.");
+    };
+    const closeTags = async () => {
+      await clickText(`${tagsPopup} button`, "完成");
+      await waitFor(() => evaluate(`!document.querySelector('${tagsPopup}')`), "The optional tag editor did not close.");
+    };
+
+    await clickButton(evaluate, "打开项目 测试故事");
+    await waitFor(() => evaluate(`Boolean(document.querySelector('.layout-activitybar button[aria-label="资产管理"]'))`), "Asset navigation not available.");
+    await clickButton(evaluate, "资产管理");
+    await openEditor("人物", "林舟");
+    await send("Emulation.setDeviceMetricsOverride", {width: 1920, height: 900, deviceScaleFactor: 1, mobile: false});
+    const layout = () => evaluate(`(() => {
+      const bounds = selector => document.querySelector(selector).getBoundingClientRect();
+      const form = document.querySelector('.asset-record-form');
+      const {left, right, top, width, bottom} = form.getBoundingClientRect();
+      const sidebar = bounds('.asset-record-edit-panels');
+      const footer = bounds('.asset-record-form-actions');
+      return {even: Math.abs(right - sidebar.left) < 1 && Math.abs(top - sidebar.top) < 1
+        && Math.abs(width - sidebar.width) < 1 && Math.abs(bounds('.asset-record-basics').width - bounds('${panel}').width) < 1,
+        scrollTop: form.scrollTop, fieldTop: bounds('.asset-record-basics').top,
+        panelTop: bounds('${panel}').top, titleTop: bounds('.asset-record-editor h1').top,
+        footerTop: footer.top, footerVisible: footer.top >= bottom && footer.bottom <= window.innerHeight,
+        scrollPoint: {x: left + width / 2, y: top + (bottom - top) / 2}};
+    })()`);
+    const beforeScroll = await layout();
+    assert.equal(beforeScroll.even, true, "the object form and relation panel split the editor evenly at desktop width");
+    assert.equal(beforeScroll.footerVisible, true, "the save bar is visible before scrolling the form");
+    await send("Input.dispatchMouseEvent", {type: "mouseWheel", ...beforeScroll.scrollPoint, deltaX: 0, deltaY: 640});
+    const afterScroll = await waitFor(async () => {
+      const current = await layout();
+      return current.scrollTop > beforeScroll.scrollTop && current;
+    }, "The form content did not scroll.");
+    assert.ok(afterScroll.fieldTop < beforeScroll.fieldTop);
+    assert.equal(afterScroll.titleTop, beforeScroll.titleTop);
+    assert.equal(afterScroll.footerTop, beforeScroll.footerTop);
+    assert.equal(afterScroll.panelTop, beforeScroll.panelTop);
+
+    const emptyForm = await relationFormBounds();
+    assert.equal(await evaluate(`document.querySelector('${dropdown(3)}').disabled`), true);
+    await openDropdown(2, "搜索分类");
+    assert.deepEqual(await relationFormBounds(), emptyForm, "opening search does not reflow the form");
+    await search("不存在的分类");
+    await waitFor(() => evaluate(`document.querySelector('${searchPopup} [role=status]')?.textContent === '没有匹配的选项'`),
+      "Empty filter results should be announced.");
+    assert.deepEqual(await results(), []);
+    await pressKey("Escape", 27);
+    await waitFor(() => evaluate(`document.activeElement.matches('${dropdown(2)}')`), "Escape should return focus to the category dropdown.");
+
+    await pressKey("Enter", 13);
+    await waitFor(() => evaluate(`document.activeElement.matches('${searchPopup} input')`), "Keyboard should reopen the category search.", 2500);
+    assert.equal(await evaluate("document.activeElement.value"), "", "search terms reset between openings");
+    await search("人");
+    assert.deepEqual(await results(), ["人物"], "categories filter by partial name");
+    await pressKey("Enter", 13);
+    await openDropdown(3, "搜索对象");
+    assert.deepEqual(await results(), ["沈青萝", "顾长风"], "only other objects in the selected category are shown");
+    await search("书铺");
+    assert.deepEqual(await results(), ["沈青萝"], "objects can also be found by description");
+    await clickText(`${searchPopup} [role=option]`, "沈青萝");
+
+    await typeIn(label, "林舟修习御风诀");
+    await openDropdown(2, "搜索分类");
+    await search("功");
+    await clickText(`${searchPopup} [role=option]`, "功法");
+    assert.equal(await evaluate(`document.querySelector('${dropdown(3)}').textContent.trim()`), "选对象");
+    await openDropdown(3, "搜索对象");
+    await search("风诀");
+    await pressKey("Enter", 13);
+    assert.deepEqual(await relationFormBounds(), emptyForm, "choosing an asset keeps the required fields and add button in place");
+    assert.equal(await evaluate(`document.querySelector('${tagsPopup}')`), null);
+    await openTags("添加标签");
+    assert.deepEqual(await relationFormBounds(), emptyForm, "opening the optional tags does not reflow the form");
+    await typeIn(tags, "修习者");
+    await typeIn(`${tagsPopup} label:nth-of-type(2) input`, "功法");
+    await pressKey("Escape", 27);
+    await waitFor(() => evaluate(`!document.querySelector('${tagsPopup}')`), "Escape did not close the optional tag editor.");
+    assert.deepEqual(await relationFormBounds(), emptyForm, "closing the optional tags keeps the main controls in place");
+    await openTags("标签（2）");
+    assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('${tags}'), input => input.value)`), ["修习者", "功法"]);
+    await closeTags();
+    assert.equal(await evaluate(`document.querySelector('${objectSave}').disabled`), true);
+    await evaluate(`document.querySelector('[data-toolbar-project-trigger]').click()`);
+    await clickText('[data-toolbar-menu-item]', "返回欢迎页");
+    await waitFor(() => evaluate(`document.querySelector('${label}')?.value === '林舟修习御风诀' && !document.querySelector('${label}').disabled`),
+      "A rejected project change must preserve the relation draft.");
+
+    await clickText(`${panel} button`, "添加关系");
+    await waitFor(() => evaluate(`document.querySelector('${panel} [role=alert]')?.textContent.includes('模拟首次创建失败')`), "The save error was not reported.");
+    assert.equal(await evaluate(`document.querySelector('${label}').value`), "林舟修习御风诀");
+    assert.deepEqual(await evaluate(savedRelations), []);
+    await clickText(`${panel} button`, "重试保存关系");
+    await waitFor(() => evaluate(`(${savedRelations}).length === 1`), "Retry did not save the relation.");
+    assert.deepEqual(await row(), ["林舟（修习者）", "林舟修习御风诀", "御风诀（功法）"]);
+    assert.deepEqual(await evaluate(savedRelations), [{label: "林舟修习御风诀", assets: [
+      {assetsId: "40000000-0000-4000-8000-000000000001", tag: "修习者"},
+      {assetsId: "40000000-0000-4000-8000-000000000004", tag: "功法"},
+    ]}]);
+
+    await clickText(".asset-record-form-actions button", "取消");
+    await openEditor("功法", "御风诀");
+    assert.deepEqual(await row(), ["御风诀（功法）", "林舟修习御风诀", "林舟（修习者）"]);
+    await clickButton(evaluate, "编辑与林舟的关系「林舟修习御风诀」");
+    await openTags("标签（2）");
+    await typeIn(tags, "入门功法");
+    await closeTags();
+    await clickText(`${panel} button`, "保存关系");
+    await waitFor(async () => (await row()).join("").includes("入门功法"), "Editing from the other endpoint did not update its tag.");
+    assert.equal((await evaluate(savedRelations)).length, 1);
+
+    await send("Emulation.setDeviceMetricsOverride", {width: 768, height: 900, deviceScaleFactor: 1, mobile: false});
+    await waitFor(() => evaluate(`(() => {
+      const form = document.querySelector('.asset-record-form').getBoundingClientRect();
+      const panel = document.querySelector('${panel}').getBoundingClientRect();
+      return panel.top >= form.bottom && panel.right <= window.innerWidth;
+    })()`), "The panel should stack without horizontal overflow at narrow widths.");
+    await clickButton(evaluate, "收起资产管理");
+    await clickText(".asset-editor-panels-jump button", "查看资产关系");
+    await waitFor(() => evaluate(`!document.querySelector('.layout-navigation[data-open="true"]')`), "Asset navigation did not close.");
+    await send("Emulation.setDeviceMetricsOverride", {width: 390, height: 844, deviceScaleFactor: 1, mobile: false});
+    const narrowChrome = () => evaluate(`['.asset-record-editor h1', '.asset-record-form-actions'].map(selector =>
+      document.querySelector(selector).getBoundingClientRect().top)`);
+    const beforeJump = await narrowChrome();
+    await clickText(".asset-editor-panels-jump button", "查看资产关系");
+    assert.equal(await evaluate(`document.activeElement === document.querySelector('.asset-record-edit-panels')`), true);
+    assert.deepEqual(await narrowChrome(), beforeJump, "jumping to the relation panel keeps the title and save bar in place");
+    await evaluate(`document.querySelector('${dropdown(2)}').scrollIntoView({block: 'center', behavior: 'instant'})`);
+    await openDropdown(2, "搜索分类");
+    await waitFor(() => evaluate(`(() => {
+      const {left, right, top, bottom} = document.querySelector('${searchPopup}').getBoundingClientRect();
+      return left >= 0 && right <= innerWidth && top >= 0 && bottom <= innerHeight;
+    })()`), "Search popup should stay within the narrow viewport.");
+    await pressKey("Escape", 27);
+    await clickButton(evaluate, "删除与林舟的关系「林舟修习御风诀」");
+    await clickText('[role=dialog] button', "删除关系");
+    await waitFor(() => evaluate(`Boolean(document.querySelector('${panel} .asset-relations-empty'))`), "The relation was not removed.");
+    assert.deepEqual(await evaluate(savedRelations), []);
     assert.deepEqual(pageErrors, []);
   });
 });

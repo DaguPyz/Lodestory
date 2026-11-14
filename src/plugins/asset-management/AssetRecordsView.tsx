@@ -1,5 +1,6 @@
-import {useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
+import {useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
 import {Button, Dialog, DialogActions, Icon, IconButton, SearchField, Textarea, TextField} from "@lodestory/ui";
+import type {AssetEditorPanel, AssetEditorService} from "@lodestory/sdk/asset-editor";
 import type {ContextMenuService, MenuEntry} from "@lodestory/sdk/context-menu";
 import type {AssetSessionResources} from "./assetManagementPlugin";
 import {useAssetProject, type AssetViewProps} from "./AssetManagementView";
@@ -34,12 +35,26 @@ function clonePropertyValue(value: AssetPropertyValue): AssetPropertyValue {
   return Array.isArray(value) ? [...value] : value;
 }
 
-function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus}: {
+function EditingPanel({panel, sessionId, assetId, active, onEditingChange}: {
+  panel: AssetEditorPanel;
+  sessionId: string;
+  assetId: string;
+  active: boolean;
+  onEditingChange(id: string, editing: boolean): void;
+}) {
+  const updateEditing = useCallback((editing: boolean) => onEditingChange(panel.id, editing), [onEditingChange, panel.id]);
+  useLayoutEffect(() => () => updateEditing(false), [updateEditing]);
+  return <panel.View sessionId={sessionId} assetId={assetId} active={active} onEditingChange={updateEditing}/>;
+}
+
+function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus, sessionId, assetEditor}: {
   resource: AssetSessionResources;
   active: boolean;
   canInteract(): boolean;
   onOpenTypes(): void;
   contextMenus: ContextMenuService;
+  sessionId: string;
+  assetEditor: AssetEditorService;
 }) {
   const {store} = resource;
   const MenuRegion = contextMenus.Region;
@@ -55,6 +70,9 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
   const [fieldDraft, setFieldDraft] = useState<AssetSchemaDraft | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
   const [pending, setPending] = useState(false);
+  const [editingPanels, setEditingPanels] = useState<ReadonlySet<string>>(() => new Set());
+  const panels = useSyncExternalStore(assetEditor.subscribe, assetEditor.getPanels, assetEditor.getPanels);
+  const panelContainer = useRef<HTMLElement>(null);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"list" | "cards">("list");
   const [searchQuery, setSearchQuery] = useState("");
@@ -68,6 +86,15 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
   const activeRef = useRef(active);
   activeRef.current = active;
   const busy = pending || snapshot.saving;
+  const panelEditing = editingPanels.size > 0;
+  const updatePanelEditing = useCallback((id: string, editing: boolean) => {
+    setEditingPanels(previous => {
+      if (previous.has(id) === editing) return previous;
+      const next = new Set(previous);
+      if (editing) next.add(id); else next.delete(id);
+      return next;
+    });
+  }, []);
   const disabled = !active || busy || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.dirty;
   const owner = draft ?? selected;
   const detailTemplateFields = orderedFields(snapshot.fields, "type", owner?.typeId ?? null);
@@ -122,7 +149,7 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
     setError(null);
   }
   function cancel() {
-    if (busy) return;
+    if (busy || panelEditing) return;
     resource.editing.delete(token.current);
     setDraft(null);
     setFieldDraft(null);
@@ -248,7 +275,7 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
   }
   function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!draft || busy || !active || !canInteract()) return;
+    if (!draft || busy || panelEditing || !active || !canInteract()) return;
     if (!event.currentTarget.reportValidity()) return;
     const name = draft.name.trim();
     if ([...name].length < 1 || [...name].length > 60) { setError("对象名称需要填写 1–60 个字符。"); nameInput.current?.focus(); return; }
@@ -319,6 +346,11 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
   const displayTypeName = displayType?.name ?? "未分类";
   const isObjectList = !draft && !selected;
   const isObjectDetail = !draft && selected !== null;
+  const formId = draft ? `asset-record-form-${sessionId}-${draft.id}` : undefined;
+  const editorPanels = draft?.kind === "edit" && panels.length > 0 ? <aside className="asset-record-edit-panels" ref={panelContainer} tabIndex={-1}>
+    {panels.map(panel => <EditingPanel key={panel.id} panel={panel} assetId={draft.id} sessionId={sessionId}
+      active={active && !busy} onEditingChange={updatePanelEditing}/>)}
+  </aside> : null;
   const headerClass = isObjectList ? "asset-records-header" : isObjectDetail ? "asset-record-detail-header" : "";
   const headingClass = isObjectList ? "asset-records-heading" : isObjectDetail ? "asset-editor-heading-with-back" : undefined;
   const listActionsDisabled = disabled || fieldDraft !== null || deleting || resource.editing.size > 0 || !canInteract();
@@ -356,10 +388,16 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
       restoreFocus: false, onSelect: removeAssetFromListMenu},
   ];
 
-  const content = <div className="asset-type-editor asset-record-editor" ref={editor} tabIndex={!draft && active ? 0 : -1}>
+  const content = <div className="asset-type-editor asset-record-editor" data-editing={Boolean(draft) || undefined}
+    ref={editor} tabIndex={!draft && active ? 0 : -1}>
     <header className={`asset-editor-header ${headerClass}`.trimEnd()}>
       <div className={headingClass}>
         <h1>{draft ? draft.kind === "create" ? "新建对象" : "编辑对象" : selected ? selected.name : selectedType?.name ?? (scopeAssets.length > 0 ? "未分类对象" : "对象管理")}</h1>
+        {editorPanels && <div className="asset-editor-panels-jump">
+          <Button variant="ghost" disabled={!active} onClick={() => panelContainer.current?.focus()}>
+            {panels.length === 1 ? `查看${panels[0].title}` : "查看编辑面板"}
+          </Button>
+        </div>}
         {isObjectDetail && <div className="asset-editor-back">
           <Button variant="ghost" disabled={listActionsDisabled} onClick={() => returnToList(selected.id)}>
             <Icon name="arrowLeft" size="small" />
@@ -387,29 +425,34 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
       <span>{error ?? snapshot.error}</span>{!draft && <Button variant="ghost" disabled={!active || busy} onClick={() => void run(store.retry)}>重试</Button>}
     </div>}
     {snapshot.loading && <p className="asset-editor-message" role="status">正在读取对象资料…</p>}
-    {snapshot.loaded && !snapshot.blocked && (draft ? <form className="asset-record-form" onSubmit={submit} noValidate aria-busy={busy || undefined}>
-      <div className="asset-record-basics">
-        <label className="asset-form-field"><span>对象名称</span><TextField ref={nameInput} value={draft.name} disabled={disabled} required
-          autoComplete="off" aria-label="对象名称" placeholder="例如：林舟、御风诀、青铜古剑"
-          onChange={event => {setDraft({...draft, name: event.currentTarget.value}); setError(null);}}/>
-          <span className="asset-form-help">{[...draft.name.trim()].length}/60</span></label>
-        <p className="asset-editor-message">资产模板：{displayTypeName}</p>
-        <label className="asset-form-field"><span>对象简介 <span className="asset-optional">选填</span></span>
-          <Textarea value={draft.description} disabled={disabled} aria-label="对象简介"
-            onChange={event => {setDraft({...draft, description: event.currentTarget.value}); setError(null);}}/>
-          <span className="asset-form-help">{[...draft.description].length}/200</span></label>
-        <AssetColorPicker value={draft.color} disabled={disabled}
-          onChange={color => {setDraft({...draft, color}); setError(null);}}/>
+    {draft ? <div className="asset-record-edit" data-panels={editorPanels ? "true" : undefined}>
+      <div className="asset-record-edit-content">
+        <form id={formId} className="asset-record-form" onSubmit={submit} noValidate aria-busy={busy || undefined}>
+          <div className="asset-record-basics">
+            <label className="asset-form-field"><span>对象名称</span><TextField ref={nameInput} value={draft.name} disabled={disabled} required
+              autoComplete="off" aria-label="对象名称" placeholder="例如：林舟、御风诀、青铜古剑"
+              onChange={event => {setDraft({...draft, name: event.currentTarget.value}); setError(null);}}/>
+              <span className="asset-form-help">{[...draft.name.trim()].length}/60</span></label>
+            <p className="asset-editor-message">资产模板：{displayTypeName}</p>
+            <label className="asset-form-field"><span>对象简介 <span className="asset-optional">选填</span></span>
+              <Textarea value={draft.description} disabled={disabled} aria-label="对象简介"
+                onChange={event => {setDraft({...draft, description: event.currentTarget.value}); setError(null);}}/>
+              <span className="asset-form-help">{[...draft.description].length}/200</span></label>
+            <AssetColorPicker value={draft.color} disabled={disabled}
+              onChange={color => {setDraft({...draft, color}); setError(null);}}/>
+          </div>
+          {fieldSection("模板字段", detailTemplateFields)}
+          {customFields.length > 0 && fieldSection("专属属性", customFields, true)}
+          {draft.kind === "create" && <p className="asset-form-help">创建对象后，可以继续添加只属于这个对象的专属属性。</p>}
+        </form>
+        {editorPanels}
       </div>
-      {fieldSection("模板字段", detailTemplateFields)}
-      {customFields.length > 0 && fieldSection("专属属性", customFields, true)}
-      {draft.kind === "create" && <p className="asset-form-help">创建对象后，可以继续添加只属于这个对象的专属属性。</p>}
       <div className="asset-record-form-actions">
-        <span className="asset-form-help" role="status">{busy ? "正在保存…" : snapshot.dirty ? "保存失败，输入已保留，请重试。" : "填写完成后保存。"}</span>
-        <Button variant="secondary" type="button" disabled={busy} onClick={cancel}>{snapshot.dirty ? "关闭编辑" : "取消"}</Button>
-        <Button variant="primary" type="submit" disabled={!active || busy}>{snapshot.dirty ? "重试保存" : draft.kind === "create" ? "创建对象" : "保存对象"}</Button>
+        <span className="asset-form-help" role="status">{panelEditing ? "请先保存或取消面板中的编辑。" : busy ? "正在保存…" : snapshot.dirty ? "保存失败，输入已保留，请重试。" : "填写完成后保存。"}</span>
+        <Button variant="secondary" type="button" disabled={busy || panelEditing} onClick={cancel}>{snapshot.dirty ? "关闭编辑" : "取消"}</Button>
+        <Button variant="primary" type="submit" form={formId} disabled={!active || busy || panelEditing || snapshot.blocked}>{snapshot.dirty ? "重试保存" : draft.kind === "create" ? "创建对象" : "保存对象"}</Button>
       </div>
-    </form> : selected ? <>
+    </div> : snapshot.loaded && !snapshot.blocked && (selected ? <>
       {fieldSection("模板字段", detailTemplateFields)}
       {fieldSection("专属属性", customFields, true)}
       <p className="asset-form-help" role="status">{snapshot.saving ? "正在保存…" : snapshot.dirty ? "尚未保存" : "已保存"}</p>
@@ -514,9 +557,10 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
     fallbackFocus={() => editor.current}>{content}</MenuRegion>;
 }
 
-export function AssetRecordsEditor(props: AssetViewProps) {
+export function AssetRecordsEditor(props: AssetViewProps & {assetEditor: AssetEditorService}) {
   const project = useAssetProject(props);
   return project.resource && project.session
-    ? <RecordsEditor key={project.session.id} resource={project.resource} active={project.active} canInteract={project.canInteract} onOpenTypes={props.onOpenTypes} contextMenus={props.contextMenus}/>
+    ? <RecordsEditor key={project.session.id} sessionId={project.session.id} assetEditor={props.assetEditor}
+      resource={project.resource} active={project.active} canInteract={project.canInteract} onOpenTypes={props.onOpenTypes} contextMenus={props.contextMenus}/>
     : <div className="asset-type-editor"><p className="asset-editor-message">请先打开一个项目。</p></div>;
 }

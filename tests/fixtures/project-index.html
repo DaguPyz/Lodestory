@@ -368,6 +368,10 @@
             return;
           }
           if (command === "create_project_file") {
+            if (scenario === "asset-template-workspace-relation-once" && path === ".lodestory/asset-relations/relations.json" && !state.relationCreateFailed) {
+              state.relationCreateFailed = true;
+              throw {message: "资产关系保存失败：模拟首次创建失败。"};
+            }
             if (scenario === "asset-schema-create-once" && path === ".lodestory/assets/templates.json" && !state.assetSchemaCreateFailed) {
               state.assetSchemaCreateFailed = true;
               throw {message: "类型模板保存失败：模拟首次创建失败，请重试。"};

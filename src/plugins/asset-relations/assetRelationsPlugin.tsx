@@ -19,6 +19,7 @@ export function createAssetRelationsPlugin(): Plugin {
   const sessions = new Map<string, AssetRelationSession>();
   let removeParticipant: PluginAsyncContribution | undefined;
   let removePanel: PluginContribution | undefined;
+  let removeRelationSource: PluginContribution | undefined;
 
   return {
     id: "asset-relations",
@@ -29,9 +30,10 @@ export function createAssetRelationsPlugin(): Plugin {
       const catalogs = context.get(assetCatalogKey);
       const workbench = context.get(workbenchKey);
       const storage = context.get(projectStorageKey);
-      context.provide(assetRelationsKey, Object.freeze({
+      const service = Object.freeze({
         getNetwork: (sessionId: string) => sessions.get(sessionId)?.network ?? null,
-      }));
+      });
+      context.provide(assetRelationsKey, service);
       removeParticipant = context.track(workbench.registerParticipant({
         id: "asset-relations",
         label: "资产关系",
@@ -64,14 +66,19 @@ export function createAssetRelationsPlugin(): Plugin {
         title: "资产关系",
         View: props => <AssetRelationPanel {...props} resource={sessions.get(props.sessionId)}/>,
       }));
+      if (catalogs.relationSource) removeRelationSource = context.track(catalogs.relationSource.register(service));
     },
     async deactivate() {
-      try { removePanel?.(); }
+      try { removeRelationSource?.(); }
       finally {
-        removePanel = undefined;
-        const unregister = removeParticipant;
-        removeParticipant = undefined;
-        await unregister?.();
+        removeRelationSource = undefined;
+        try { removePanel?.(); }
+        finally {
+          removePanel = undefined;
+          const unregister = removeParticipant;
+          removeParticipant = undefined;
+          await unregister?.();
+        }
       }
     },
   };

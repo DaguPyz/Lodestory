@@ -15,6 +15,7 @@ import {AssetRecordsEditor} from "./AssetRecordsView";
 import {displayedValue} from "./assetDisplayValue";
 import {createAssetCatalog} from "./assetCatalog";
 import {createAssetEditorPanels} from "./assetEditorPanels";
+import {createAssetRelationSource} from "./assetRelationSource";
 import {encodeAssetGroupFallback, VALIDATE_AND_ENCODE_GROUP} from "./assetObjectFiles";
 import "./asset-management.css";
 
@@ -58,6 +59,7 @@ export function createAssetManagementPlugin(): Plugin {
       removeTaskFallback = tasks.registerFallback(VALIDATE_AND_ENCODE_GROUP, encodeAssetGroupFallback);
       context.provide(assetCatalogKey, Object.freeze({
         getCatalog(sessionId: string) { return sessions.get(sessionId)?.catalog ?? null; },
+        relationSource: createAssetRelationSource(remove => flushSync(remove)),
       }));
       const onOpenTypes = () => layout.show(MAIN_CONTENT_ID);
       const onOpenAssets = () => layout.show(ASSETS_CONTENT_ID);

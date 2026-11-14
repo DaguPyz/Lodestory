@@ -2,6 +2,7 @@ import {useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type For
 import type {CanvasService, CanvasViewport} from "@lodestory/sdk/canvas";
 import type {ContextMenuService} from "@lodestory/sdk/context-menu";
 import type {AssetCatalog} from "@lodestory/sdk/asset-catalog";
+import type {AssetRelationNetwork} from "@lodestory/sdk/asset-relations";
 import {Button, Dialog, DialogActions, TextField} from "@lodestory/ui";
 import type {TimelineAxisStore, TimelineAxisSettings} from "./timelineAxisStore";
 import type {TimelineEventStore} from "./timelineEventStore";
@@ -50,10 +51,11 @@ function AxisTicks({ticks, axisY, worldHalfWidth, zoom}: {ticks: readonly Timeli
   </g></>;
 }
 
-export function TimelineCanvas({canvas, contextMenus, assetCatalog, viewport, active, title, axis, events, openToken = null, onEditingChange}: {
+export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelations = null, viewport, active, title, axis, events, openToken = null, onEditingChange}: {
   canvas: CanvasService;
   contextMenus: ContextMenuService;
   assetCatalog: AssetCatalog | null;
+  assetRelations?: AssetRelationNetwork | null;
   viewport: CanvasViewport;
   active: boolean;
   title: string;
@@ -484,7 +486,8 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, viewport, ac
           </g>}
         </svg>
       </div>}
-      {snapshot.loaded && <TimelineEvents contextMenus={contextMenus} assetCatalog={assetCatalog} store={events} settings={snapshot.settings} view={view} size={size}
+      {snapshot.loaded && <TimelineEvents contextMenus={contextMenus} assetCatalog={assetCatalog} assetRelations={assetRelations}
+        store={events} settings={snapshot.settings} view={view} size={size}
         openToken={openToken}
         growthGeometryRef={growthGeometry}
         growthStemsRef={growthStems}

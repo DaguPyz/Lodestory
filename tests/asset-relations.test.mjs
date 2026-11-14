@@ -93,6 +93,9 @@ test("the project keeps a damaged relation file, and the optional panel can be w
   const core = f.createdCores.at(-1);
 
   assert.deepEqual(Array.from(editor.getPanels(), panel => panel.id), ["asset-relations.panel"]);
+  assert.equal(catalog.relationSource.getSnapshot(), relations, "timeline readers see the shared relationship service through the catalog");
+  const withdrawn = [];
+  const unsubscribe = catalog.relationSource.subscribe(() => withdrawn.push(catalog.relationSource.getSnapshot()));
   assert.equal(await workbench.openProject(project), true);
   for (let attempt = 0; attempt < 100 && workbench.getSnapshot().busy; attempt++) {
     await new Promise(resolve => setImmediate(resolve));
@@ -103,6 +106,8 @@ test("the project keeps a damaged relation file, and the optional panel can be w
   assert.equal(network.getSnapshot().loaded, false);
   assert.match(network.getSnapshot().error, /原文件已保留/);
   await core.unmount("asset-relations");
+  assert.deepEqual(withdrawn, [null], "withdrawing relationships removes the optional source for subscribers");
+  unsubscribe();
   assert.equal(editor.getPanels().length, 0);
   assert.equal(relations.getNetwork(session.id), null);
   assert.equal(catalog.getCatalog(session.id).getSnapshot().loaded, true);

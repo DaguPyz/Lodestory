@@ -156,6 +156,17 @@
                 {id: oldAssetId, name: "旧设定", description: "整理前留下的对象", typeId: null, values: {[customId]: "旧资料保留"}},
             ];
             writeAssetGroups(state, workspaceAssets, workspaceFields);
+            if (scenario === "asset-template-workspace-timeline-relations") {
+              const [student, enemy, teacher] = workspaceAssets;
+              state.directories.add(".lodestory/asset-relations");
+              files.set(".lodestory/asset-relations/relations.json", encode(JSON.stringify({
+                format: "lodestory.asset-relations", schemaVersion: 1,
+                relations: [
+                  {assets: [{assetsId: student.id, tag: "徒弟"}, {assetsId: teacher.id, tag: "师父"}], label: "师徒"},
+                  {assets: [{assetsId: student.id}, {assetsId: enemy.id}], label: "旧友"},
+                ],
+              })));
+            }
           }
           if (scenario?.startsWith("asset-types-delete")) {
             const targetTypeId = "10000000-0000-4000-8000-000000000001";
@@ -208,8 +219,9 @@
               writeAssetGroups(state, assets, [...templateFields, ...customFields]);
             }
           }
-          // Timeline-only visual/interaction scenarios; all examples live in this in-memory fixture.
-          if (scenario?.startsWith("timeline-events")) {
+          // Timeline interaction scenarios use only this fixture's in-memory files.
+          if (scenario?.startsWith("timeline-events") || scenario === "asset-template-workspace-timeline-relations") {
+            const relationFixture = scenario === "asset-template-workspace-timeline-relations";
             const timelineId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
             for (const directory of [".lodestory", ".lodestory/outline-design", timelineDirectory,
               ".lodestory/timeline", ".lodestory/timeline/axes", ".lodestory/timeline/events"]) state.directories.add(directory);
@@ -237,10 +249,11 @@
                 ["抵达故乡", "", 23, "below", false],
               ];
               files.set(`.lodestory/timeline/events/${timelineId}.json`, encode(JSON.stringify({
-                format: "lodestory.timeline-events", schemaVersion: 1, timelineId,
+                format: "lodestory.timeline-events", schemaVersion: relationFixture ? 2 : 1, timelineId,
                 events: examples.map(([title, summary, offset, placement, important], index) => ({
                   id: `bbbbbbbb-bbbb-4bbb-8bbb-${String(index + 1).padStart(12, "0")}`,
                   title, summary, offset, placement, important,
+                  ...(relationFixture && {assetIds: index === 2 ? ["40000000-0000-4000-8000-000000000001"] : []}),
                 })),
               })));
             }

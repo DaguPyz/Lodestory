@@ -402,6 +402,8 @@ function TimelineMain({workbench, canvas, contextMenus, assetCatalog, sessions, 
   onEditingChange(sessionId: string, timelineId: string, editing: boolean): void;
 }) {
   const workbenchSnapshot = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
+  const relationSource = useSyncExternalStore(assetCatalog.relationSource?.subscribe ?? emptySubscribe,
+    assetCatalog.relationSource?.getSnapshot ?? noRelations, noRelations);
   const session = workbenchSnapshot.session;
   const resource = session ? sessions.get(session.id) : undefined;
   const subscribe = resource?.publicModel.subscribe ?? emptySubscribe;
@@ -421,12 +423,14 @@ function TimelineMain({workbench, canvas, contextMenus, assetCatalog, sessions, 
   if (!entry || !viewport || !axis || !events || !session || !resource) {
     return <div className="timeline-canvas-empty" role="status">选择或新建一条时间线以打开画布。</div>;
   }
-  return <TimelineCanvas canvas={canvas} contextMenus={contextMenus} assetCatalog={assetCatalog.getCatalog(session.id)} viewport={viewport} active={current} title={entry.title} axis={axis} events={events}
+  return <TimelineCanvas canvas={canvas} contextMenus={contextMenus} assetCatalog={assetCatalog.getCatalog(session.id)}
+    assetRelations={relationSource?.getNetwork(session.id) ?? null} viewport={viewport} active={current} title={entry.title} axis={axis} events={events}
     openToken={openGeneration ? `${session.id}:${openGeneration}` : null}
     onEditingChange={editing => onEditingChange(session.id, entry.id, editing)}/>;
 }
 
 function emptySubscribe() { return () => {}; }
+function noRelations() { return null; }
 const EMPTY_SNAPSHOT = Object.freeze({entries: Object.freeze([]), selectedId: null, createDraft: null, issues: Object.freeze([]),
   loaded: false, loading: false, creating: false, busy: true, retryDisabled: true, error: null, retryLabel: "重试读取"});
 function emptySnapshot() { return EMPTY_SNAPSHOT; }

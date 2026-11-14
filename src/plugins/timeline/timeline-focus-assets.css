@@ -7,14 +7,18 @@
   --timeline-focus-reveal-duration: 440ms;
   --timeline-focus-dismiss-step: 22ms;
   --timeline-focus-dismiss-duration: 220ms;
+  --timeline-focus-center-duration: 225ms;
+  --timeline-focus-neighbor-delay: 0ms;
   --timeline-focus-gold: var(--ui-category-4-foreground);
 }
+
+.timeline-focus-assets[data-centering] { --timeline-focus-neighbor-delay: var(--timeline-focus-center-duration); }
 
 .timeline-focus-toolbar {
   position: absolute;
   inset: calc(var(--ui-space-3) - var(--timeline-focus-inset-top))
     calc(var(--ui-space-4) - var(--timeline-focus-inset-inline)) auto;
-  z-index: 1;
+  z-index: 3;
   display: flex;
   flex-wrap: wrap;
   justify-content: space-between;
@@ -179,6 +183,8 @@
 }
 
 .timeline-focus-asset-node {
+  --timeline-focus-node-delay: calc(var(--timeline-focus-neighbor-delay) + var(--timeline-focus-asset-order) * var(--timeline-focus-reveal-step));
+  z-index: 1;
   position: relative;
   width: 100%;
   height: 100%;
@@ -189,6 +195,26 @@
     timeline-focus-asset-drift var(--timeline-focus-drift-duration) ease-in-out
       calc(var(--timeline-focus-reveal-duration) + var(--timeline-focus-asset-order) * var(--timeline-focus-reveal-step))
       infinite var(--timeline-focus-drift-direction);
+}
+
+.timeline-focus-asset-node:is(button) {
+  display: block;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.timeline-focus-asset-node:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: var(--ui-focus-offset);
+}
+
+.timeline-focus-assets:where([data-relations]:not([data-compact])) .timeline-focus-asset-node {
+  animation: timeline-focus-asset-reveal var(--timeline-focus-reveal-duration)
+    var(--ui-ease-enter) var(--timeline-focus-node-delay) backwards;
 }
 
 /* Scale the visible circle independently of the moving hit area. */
@@ -267,6 +293,97 @@
   line-height: var(--ui-line-height-caption);
 }
 
+.timeline-focus-relation-center {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  z-index: 2;
+  display: grid;
+  justify-items: center;
+  width: max-content;
+  max-width: 100%;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+}
+
+.timeline-focus-relation-center-node {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ui-space-1);
+  inline-size: 6rem;
+  block-size: 6rem;
+  padding: var(--ui-space-3);
+  background: var(--ui-surface-control);
+  border: 1px solid var(--timeline-focus-category-color);
+  border-radius: 50%;
+  text-align: center;
+}
+
+.timeline-focus-relation-name {
+  display: -webkit-box;
+  overflow: hidden;
+  max-width: 100%;
+  margin: 0;
+  color: var(--ui-text-primary);
+  font-size: var(--ui-font-size-strong);
+  line-height: var(--ui-line-height-strong);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.timeline-focus-relation-name:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: var(--ui-focus-offset);
+}
+
+.timeline-focus-relation-center > .timeline-focus-message {
+  position: absolute;
+  inset: 100% auto auto 50%;
+  width: max-content;
+  max-width: 16rem;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.timeline-focus-relation-edges, .timeline-focus-relation-edge { position: absolute; inset: 0; pointer-events: none; }
+.timeline-focus-relation-edge {
+  animation: timeline-focus-relation-fade var(--ui-duration-fast) var(--ui-ease-enter)
+    calc(var(--timeline-focus-neighbor-delay) + var(--timeline-focus-reveal-duration) + var(--timeline-focus-asset-order) * var(--timeline-focus-reveal-step)) backwards;
+}
+
+.timeline-focus-relation-line {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  border-block-start: 1px solid var(--ui-border-decoration);
+  transform-origin: left top;
+}
+
+.timeline-focus-relation-label, .timeline-focus-relation-list-label {
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+  overflow-wrap: anywhere;
+}
+
+.timeline-focus-relation-label {
+  position: absolute;
+  display: -webkit-box;
+  overflow: hidden;
+  inline-size: max-content;
+  max-inline-size: 8rem;
+  max-block-size: calc(2 * var(--ui-line-height-caption) + 2 * var(--ui-space-1));
+  padding: var(--ui-space-1) var(--ui-space-2);
+  background: var(--ui-surface-workspace);
+  text-align: center;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .timeline-focus-assets[data-compact] {
   inset-inline: var(--ui-space-4);
 }
@@ -316,6 +433,34 @@
   pointer-events: auto;
 }
 
+.timeline-focus-assets[data-compact] .timeline-focus-relation-center {
+  position: static;
+  justify-items: start;
+  gap: var(--ui-space-2);
+  padding-inline: var(--ui-space-3);
+  transform: none;
+}
+
+.timeline-focus-assets[data-compact] .timeline-focus-relation-center-node {
+  flex-direction: row;
+  justify-content: start;
+  gap: var(--ui-space-3);
+  inline-size: auto;
+  block-size: auto;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  text-align: start;
+}
+
+.timeline-focus-assets[data-compact] .timeline-focus-relation-center > .timeline-focus-message {
+  position: static;
+  margin: 0;
+  text-align: start;
+  transform: none;
+}
+
 .timeline-focus-assets[data-compact] .timeline-focus-groups:focus-visible {
   outline: var(--ui-focus-width) solid var(--ui-focus-ring);
   outline-offset: calc(-1 * var(--ui-focus-width));
@@ -337,7 +482,7 @@
   transform: none;
 }
 
-:where(.timeline-focus-assets[data-compact]) .timeline-focus-asset-node {
+.timeline-focus-assets[data-compact] .timeline-focus-asset-node {
   border-radius: var(--ui-radius-control);
   animation: timeline-focus-asset-fade var(--timeline-focus-reveal-duration)
     var(--ui-ease-enter) calc(var(--timeline-focus-asset-order) * var(--timeline-focus-reveal-step)) backwards;
@@ -354,6 +499,15 @@
 .timeline-focus-assets[data-compact] .timeline-focus-asset-dot { position: static; flex: none; }
 .timeline-focus-assets[data-compact] .timeline-focus-asset-text { align-items: flex-start; text-align: start; }
 .timeline-focus-assets[data-compact] .timeline-focus-asset-name { -webkit-line-clamp: 1; }
+
+.timeline-focus-assets[data-compact][data-relations] .timeline-focus-asset {
+  display: grid;
+  gap: var(--ui-space-2);
+  block-size: auto;
+}
+
+.timeline-focus-assets[data-compact][data-relations] .timeline-focus-asset-node { min-height: var(--timeline-focus-card-height); }
+.timeline-focus-relation-list-label { padding: 0 var(--ui-space-3) var(--ui-space-2); }
 
 @keyframes timeline-focus-asset-reveal {
   from {
@@ -392,14 +546,30 @@
   to { opacity: 1; }
 }
 
-:root[data-ui-motion="reduce"] :is(.timeline-focus-asset-node, .timeline-focus-orbit) { animation: none; }
+@keyframes timeline-focus-relation-fade {
+  from { opacity: 0; visibility: hidden; }
+  to { opacity: 1; visibility: visible; }
+}
+
+.timeline-focus-asset-node:is(button):focus-visible { animation: none; }
+
+:root[data-ui-motion="reduce"] .timeline-focus-assets {
+  --timeline-focus-center-duration: 0ms;
+}
+
+:root[data-ui-motion="reduce"] .timeline-focus-assets :is(.timeline-focus-asset-node, .timeline-focus-orbit, .timeline-focus-relation-edge) {
+  animation: none;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  .timeline-focus-asset-node, .timeline-focus-orbit { animation: none; }
+  :root .timeline-focus-assets { --timeline-focus-center-duration: 0ms; }
+  :root .timeline-focus-assets :is(.timeline-focus-asset-node, .timeline-focus-orbit, .timeline-focus-relation-edge) { animation: none; }
 }
 
 @media (forced-colors: active) {
-  .timeline-focus-asset-face { background: Canvas; color: CanvasText; border-color: CanvasText; }
+  .timeline-focus-asset-face, .timeline-focus-relation-center-node { background: Canvas; color: CanvasText; border-color: CanvasText; }
+  .timeline-focus-relation-line { border-color: GrayText; }
+  .timeline-focus-relation-label { background: Canvas; color: CanvasText; }
   .timeline-focus-orbit { border-color: GrayText; }
   .timeline-focus-asset-dot,
   .timeline-focus-event-title::before,

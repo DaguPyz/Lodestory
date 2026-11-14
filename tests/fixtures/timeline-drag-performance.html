@@ -100,6 +100,20 @@
         loaded: true, loading: false, blocked: false, error: null,
       };
       const assetCatalog = {getSnapshot: () => catalogSnapshot, subscribe: () => () => {}, async retry() { return true; }};
+      const student = relatedAssets[0];
+      const teacher = relatedAssets[2];
+      const enemy = relatedAssets[4];
+      const assetRelationsSnapshot = {loaded: true, loading: false, saving: false, pending: false, error: null};
+      const savedRelations = [
+        {assets: [{assetsId: student.id, tag: "徒弟"}, {assetsId: teacher.id, tag: "师父"}], label: "师徒"},
+        {assets: [{assetsId: enemy.id}, {assetsId: student.id}], label: "死敌"},
+        {assets: [{assetsId: teacher.id}, {assetsId: student.id}], label: "传授功法"},
+      ];
+      const assetRelations = {
+        getSnapshot: () => assetRelationsSnapshot,
+        subscribe: () => () => {},
+        getRelations: id => savedRelations.filter(relation => relation.assets.some(asset => asset.assetsId === id)),
+      };
       const canvas = {Surface: CanvasSurface};
       const contextMenus = {Region: ContextMenuRegion};
       const root = createRoot(document.querySelector("#root"));
@@ -107,10 +121,12 @@
       let active = true;
       let openToken = null;
       let mounted = true;
+      let showRelations = false;
       const oldViewports = [];
       function render() {
         root.render(mounted ? React.createElement(ContextMenuProvider, null, React.createElement("div", {className: "fixture-host"},
           React.createElement(TimelineCanvas, {canvas, contextMenus, assetCatalog, viewport,
+            assetRelations: showRelations ? assetRelations : null,
             active, title: "性能回归", axis: axisStore, events: eventStore, openToken}))) : null);
       }
       render();
@@ -129,6 +145,7 @@
           viewport.panBy(-center.x * zoom, -center.y * zoom);
         },
         setActive(next) { active = next; render(); },
+        showRelations(next) { showRelations = next; render(); },
         open(next) { openToken = next; render(); },
         setAnimationEvents(enabled) {
           events = enabled ? denseEvents.filter((_, index) => index % 25 === 0) : allEvents;

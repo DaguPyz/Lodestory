@@ -393,6 +393,33 @@ test("asset relation panel searches both dropdowns, preserves drafts, and edits 
   });
 });
 
+test("the assembled timeline displays stored asset relations without editing the project", async t => {
+  await withProjectPage(t, "asset-template-workspace-timeline-relations", async ({send, evaluate, pageErrors}) => {
+    const path = ".lodestory/asset-relations/relations.json";
+    const savedRelations = `window.__projectFixture.readJson(${JSON.stringify(path)})`;
+    await clickButton(evaluate, "打开项目 测试故事");
+    await waitFor(() => evaluate(`Boolean(document.querySelector('button[aria-label="大纲设计"]'))`), "The outline did not become available.");
+    await clickButton(evaluate, "大纲设计");
+    await waitFor(() => evaluate(`document.querySelector('.outline-design-entry strong')?.textContent === '归乡之路'`), "The project timeline was not loaded.");
+    await send("Emulation.setEmulatedMedia", {features: [{name: "prefers-reduced-motion", value: "reduce"}]});
+    await evaluate(`document.querySelector('.outline-design-entry').click()`);
+    const endpoint = '[data-timeline-event-id="bbbbbbbb-bbbb-4bbb-8bbb-000000000003"] .timeline-event-endpoint';
+    await waitFor(() => evaluate(`Boolean(document.querySelector(${JSON.stringify(endpoint)}))`), "The event did not appear.");
+    await evaluate(`document.querySelector(${JSON.stringify(endpoint)}).focus()`);
+    await send("Input.dispatchKeyEvent", {type: "keyDown", key: " ", code: "Space", windowsVirtualKeyCode: 32});
+    await send("Input.dispatchKeyEvent", {type: "keyUp", key: " ", code: "Space", windowsVirtualKeyCode: 32});
+    const asset = '.timeline-focus-asset-node[aria-label="查看「林舟」的资产关系"]';
+    await waitFor(() => evaluate(`Boolean(document.querySelector(${JSON.stringify(asset)}))`), "The event asset has no relationship entry point.");
+    const before = await evaluate(savedRelations);
+    await evaluate(`document.querySelector(${JSON.stringify(asset)}).click()`);
+    assert.equal(await evaluate(`document.querySelector('.timeline-focus-relation-name').textContent`), "林舟");
+    assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('.timeline-focus-relation-label'), node => node.textContent)`), ["师徒", "旧友"]);
+    assert.deepEqual(await evaluate(`Array.from(document.querySelectorAll('.timeline-focus-asset-name'), node => node.textContent)`), ["顾长风", "沈青萝"]);
+    assert.deepEqual(await evaluate(savedRelations), before);
+    assert.deepEqual(pageErrors, []);
+  });
+});
+
 test("template reorder saves the standalone template list without rewriting asset data", async t => {
   await withProjectPage(t, "asset-template-workspace", async ({send, evaluate, pageErrors}) => {
     await clickButton(evaluate, "打开项目 测试故事");

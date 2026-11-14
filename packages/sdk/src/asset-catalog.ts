@@ -1,4 +1,6 @@
 import {createServiceKey} from "./ServiceKey.js";
+import type {AssetRelationsService} from "./asset-relations.js";
+import type {PluginContribution} from "./Plugin.js";
 
 export type AssetCatalogType = Readonly<{
   /** Stable canonical lowercase UUID, matching the type ID used by assets. */
@@ -33,10 +35,19 @@ export type AssetCatalog = {
   retry(): Promise<boolean>;
 };
 
+export type AssetRelationSourceRegistration = Readonly<{
+  /** Publish the optional source of relationship networks. Give the handle to context.track. */
+  register(source: AssetRelationsService): PluginContribution;
+  getSnapshot(): AssetRelationsService | null;
+  subscribe(listener: () => void): () => void;
+}>;
+
 /** Session-scoped asset metadata owned and populated by asset-management. */
 export type AssetCatalogService = {
   /** Return the read-only catalog for a live workbench session, or null when unavailable. */
   getCatalog(sessionId: string): AssetCatalog | null;
+  /** Optional discovery point for consumers that can also work without relationships. */
+  relationSource?: AssetRelationSourceRegistration;
 };
 
 export const assetCatalogKey = createServiceKey<AssetCatalogService>("app/asset-catalog");

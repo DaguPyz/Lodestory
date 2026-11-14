@@ -259,6 +259,8 @@ export const inkThemePlugin: Plugin = {
 
 `@lodestory/sdk/asset-catalog` 提供共享 `assetCatalogKey`。资产管理插件拥有资产类型、资产记录及其属性，并按工作台会话发布只读目录；类型与资产条目仅包含类型 ID、名称和状态，以及资产 ID、名称、说明和类型 ID，不暴露属性值或私有 store；快照另含 `loaded`、`loading`、`error`、`blocked` 状态。类型和资产 ID 都是稳定的规范小写 UUID，消费者可以将资产 ID 作为不透明引用保存；类型 ID 与资产的 `typeId` 对应，未分类资产使用 `typeId: null`。目录提供稳定快照、订阅和重试能力，会话结束后失效且不能再重试；没有对应活动会话时 `getCatalog` 返回 `null`。类型保留 `active` 和 `archived` 状态。消费者可自行按类型筛选或搜索目录内容，资产目录不提供查询或修改命令。
 
+关系提供者可把既有的 `AssetRelationsService` 通过目录服务的可选 `relationSource.register` 接口登记。消费者订阅 `relationSource` 的快照，再按会话取得只读网络。没有登记或撤回后，快照为 `null`。提供者通过 `context.track` 追踪撤回，关系数据和写入仍归提供者所有。
+
 原点世界坐标表示故事起点，其显示数值、刻度间隔和单位由作者设置。事件保存相对故事起点的 `offset`；其标签数值按 `origin + offset` 计算，所以修改起点会同步更新显示值。数值轴实现、事件 JSON 与配置 JSON 属于提供者内部，不加入通用画布接口。现有列表文件路径和格式保持兼容；轴和事件数据分别使用独立文件。契约消费方不拥有服务的清理权，插件在撤回 UI 后释放模型和视口。详见[时间线插件](../../src/plugins/timeline/README.md)。
 
 ## 工作台服务

@@ -26,6 +26,16 @@
 
 .timeline-events-svg { color: var(--ui-text-secondary); }
 
+.timeline-events-overlay [data-focus-hidden],
+.timeline-events-overlay[data-event-focused] .timeline-event-stems {
+  display: none;
+}
+
+.timeline-events-overlay[data-event-focused] :is(.timeline-events-svg, .timeline-event-labels) {
+  opacity: 0;
+  visibility: hidden;
+}
+
 .timeline-event-stem {
   fill: none;
   stroke: var(--ui-text-secondary);
@@ -164,15 +174,15 @@
 }
 
 @media (hover: hover) and (prefers-reduced-motion: no-preference) {
-  :root:not([data-ui-motion="reduce"]) .timeline-events-overlay[data-active="true"] .timeline-event-label:hover .timeline-event-title {
+  :root:not([data-ui-motion="reduce"]) .timeline-events-overlay[data-active="true"]:not([data-event-focused]) .timeline-event-label:hover .timeline-event-title {
     transform: scale(1.2);
   }
 
-  :root:not([data-ui-motion="reduce"]) .timeline-events-overlay[data-active="true"] .timeline-event-label:hover .timeline-event-title-rule {
+  :root:not([data-ui-motion="reduce"]) .timeline-events-overlay[data-active="true"]:not([data-event-focused]) .timeline-event-label:hover .timeline-event-title-rule {
     transform: scaleX(1.2);
   }
 
-  :root:not([data-ui-motion="reduce"]) .timeline-events-overlay[data-active="true"] .timeline-event-label:hover :is(.timeline-event-offset, .timeline-event-summary) {
+  :root:not([data-ui-motion="reduce"]) .timeline-events-overlay[data-active="true"]:not([data-event-focused]) .timeline-event-label:hover :is(.timeline-event-offset, .timeline-event-summary) {
     transform: scale(1.05);
   }
 }

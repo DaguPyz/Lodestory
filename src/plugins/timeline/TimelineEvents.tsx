@@ -1,4 +1,4 @@
-import {memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type RefObject} from "react";
+import {memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type MouseEvent, type RefObject} from "react";
 import {Menu} from "@base-ui/react/menu";
 import {Popover} from "@base-ui/react/popover";
 import type {CanvasViewportSnapshot} from "@lodestory/sdk/canvas";
@@ -7,17 +7,26 @@ import type {AssetCatalog} from "@lodestory/sdk/asset-catalog";
 import {Button, Dialog, DialogActions, DialogClose, Icon, IconButton, TextField, Textarea, useInteractionRef} from "@lodestory/ui";
 import type {TimelineAxisSettings} from "./timelineAxisStore";
 import {isTimelineEventColor, type TimelineEvent, type TimelineEventStore} from "./timelineEventStore";
-import {getTimelineEventsGeometry, TIMELINE_TURNING_CAPTION_FONT_SIZE, type TimelineEventsGeometry} from "./timelineEventsGeometry";
+import {getTimelineEventsGeometry, TIMELINE_TURNING_CAPTION_FONT_SIZE, type TimelineEventGeometry, type TimelineEventsGeometry} from "./timelineEventsGeometry";
 import {getTimelineStemSegments, type TimelineStemSegment} from "./timelineStemSegments";
 import {formatTimelineAxisValue, timelineValueAtOffset, TIMELINE_AXIS_BASE_PIXEL_INTERVAL, type TimelineLabelBounds} from "./timelineAxisGeometry";
 import {EventAssetPicker} from "./EventAssetPicker";
+import {TimelineFocusAssets} from "./TimelineFocusAssets";
 import "./timeline-events.css";
 
 type Size = Readonly<{width: number; height: number}>;
+type View = Pick<CanvasViewportSnapshot, "center" | "zoom">;
 type Draft = {id: string | null; title: string; summary: string; offset: string; placement: "above" | "below"; important: boolean; assetIds: readonly string[]; color: string};
 type Operation = {kind: "upsert"; draft: Draft} | {kind: "remove"; id: string};
 type EventMenuTarget = Readonly<{store: TimelineEventStore; eventId?: string}>;
 type DeleteTarget = Readonly<{id: string; title: string; source: "canvas" | "editor"}>;
+type EventFocus = Readonly<{
+  id: string;
+  store: TimelineEventStore;
+  view: View;
+  openToken?: string | null;
+  closing?: boolean;
+}>;
 
 const EVENT_COLORS = [
   {name: "红色", value: "#d96666"}, {name: "橙色", value: "#d58a51"},
@@ -119,7 +128,7 @@ function calloutLabel(settings: TimelineAxisSettings, event: TimelineEvent): str
 function eventAccessibleName(settings: TimelineAxisSettings, event: TimelineEvent): string {
   const marker = event.important ? "关键转折" : "普通事件";
   const summary = event.summary ? `，${event.summary}` : "";
-  return `${marker}：${event.title}${summary}，${calloutLabel(settings, event)}，${event.placement === "above" ? "轴线上方" : "轴线下方"}，编辑事件`;
+  return `${marker}：${event.title}${summary}，${calloutLabel(settings, event)}，${event.placement === "above" ? "轴线上方" : "轴线下方"}`;
 }
 
 function formatOffsetHint(settings: TimelineAxisSettings, offsetText: string): string {
@@ -144,17 +153,18 @@ const EndpointGlyph = memo(function EndpointGlyph() {
   </>;
 });
 
-const AxisAnchor = memo(function AxisAnchor({event, x, active, onEdit}: {
+const AxisAnchor = memo(function AxisAnchor({event, x, active, hidden, onEdit}: {
   event: TimelineEvent;
   x: number;
   active: boolean;
+  hidden: boolean;
   onEdit(event: TimelineEvent): void;
 }) {
   const origin = event.offset === 0;
   const markerClass = ["timeline-event-axis-marker", origin ? "timeline-event-axis-marker-origin" : "",
     event.important ? "timeline-event-axis-marker-important" : ""].filter(Boolean).join(" ");
   return <g className="timeline-event-markers" data-active={active}>
-    <g className={markerClass} aria-hidden="true" data-canvas-interactive data-timeline-event-id={event.id}
+    <g className={markerClass} aria-hidden="true" data-focus-hidden={hidden || undefined} data-canvas-interactive data-timeline-event-id={event.id}
       transform={`translate(${x} 0)`} onDoubleClick={() => { if (active) onEdit(event); }}>
       <AxisMarkerGlyph important={event.important} origin={origin} />
     </g>
@@ -162,12 +172,13 @@ const AxisAnchor = memo(function AxisAnchor({event, x, active, onEdit}: {
 });
 
 /** A stable set of native hit targets; panning only translates the enclosing group. */
-const AxisAnchors = memo(function AxisAnchors({events, step, zoom, originWorldX, active, onEdit}: {
+const AxisAnchors = memo(function AxisAnchors({events, step, zoom, originWorldX, active, focusedAxisId, onEdit}: {
   events: readonly TimelineEvent[];
   step: number;
   zoom: number;
   originWorldX: number;
   active: boolean;
+  focusedAxisId: string | null;
   onEdit(event: TimelineEvent): void;
 }) {
   const count = Math.min(24, events.length);
@@ -175,12 +186,13 @@ const AxisAnchors = memo(function AxisAnchors({events, step, zoom, originWorldX,
     const group = events.slice(Math.floor(index * events.length / count), Math.floor((index + 1) * events.length / count));
     return <g key={group[0].id} data-growth-anchor={group[0].id}>{group.map(event => {
       const x = ((event.offset / step) * TIMELINE_AXIS_BASE_PIXEL_INTERVAL - originWorldX) * zoom;
-      return <AxisAnchor key={event.id} event={event} x={x} active={active} onEdit={onEdit} />;
+      return <AxisAnchor key={event.id} event={event} x={x} active={active}
+        hidden={focusedAxisId !== null && focusedAxisId !== event.id} onEdit={onEdit} />;
     })}</g>;
   })}</>;
 });
 
-function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX, zoom, active, onEdit}: {
+function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX, zoom, active, focusedId, onFocusEvent, onEdit}: {
   eventById: ReadonlyMap<string, TimelineEvent>;
   settings: TimelineAxisSettings;
   geometry: ReturnType<typeof getTimelineEventsGeometry>;
@@ -188,6 +200,8 @@ function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX,
   centerX: number;
   zoom: number;
   active: boolean;
+  focusedId: string | null;
+  onFocusEvent(id: string): void;
   onEdit(event: TimelineEvent): void;
 }) {
   // Only membership/data/zoom changes rebuild the anchors; view movement does not.
@@ -203,25 +217,26 @@ function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX,
   for (const segment of stemSegments) {
     stems[Number(segment.important)].push(`M${segment.x} ${segment.y1}V${segment.y2}`);
   }
-  return <svg className="timeline-events-svg" aria-hidden="false" width={geometry.width} height={geometry.height}
+  return <svg className="timeline-events-svg" aria-hidden={Boolean(focusedId)} width={geometry.width} height={geometry.height}
     viewBox={`0 0 ${geometry.width} ${geometry.height}`}>
     <g className="timeline-event-stems" aria-hidden="true">
       {stems[0].length > 0 && <path className="timeline-event-stem" d={stems[0].join("")} />}
       {stems[1].length > 0 && <path className="timeline-event-stem timeline-event-stem-important" d={stems[1].join("")} />}
     </g>
-    <g className="timeline-event-axis-anchors">
+    <g className="timeline-event-axis-anchors" data-focus-hidden={Boolean(focusedId) || undefined}>
       <g transform={`translate(${geometry.width / 2 + (originWorldX - centerX) * zoom} ${geometry.axisY})`}>
         <AxisAnchors events={markerEvents} step={settings.step} zoom={zoom} originWorldX={originWorldX}
-          active={active} onEdit={onEdit} />
+          active={active} focusedAxisId={focusedId} onEdit={onEdit} />
       </g>
     </g>
     <g className="timeline-event-details">{geometry.events.map(point => {
+      if (focusedId && point.id !== focusedId) return null;
       if (!point.endpointVisible && !point.turningCaptionVisible) return null;
       const event = eventById.get(point.id);
       if (!event) return null;
       const originEvent = event.offset === 0;
       return <g key={event.id} data-growth-event={event.id} data-timeline-event-id={event.id}>
-        {point.turningCaptionVisible && point.turningCaption && <g className="timeline-event-axis-marker"
+        {point.turningCaptionVisible && point.turningCaption && <g className="timeline-event-axis-marker" data-focus-hidden={Boolean(focusedId) || undefined}
           aria-hidden="true" data-canvas-interactive transform={`translate(${point.x} ${point.axisY})`}
           onDoubleClick={() => { if (active) onEdit(event); }}>
           <text className="timeline-event-turning-caption"
@@ -232,15 +247,17 @@ function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX,
           event.important ? "timeline-event-endpoint-important" : ""].filter(Boolean).join(" ")}
           style={event.color ? {"--timeline-event-color": event.color} as CSSProperties : undefined}
           data-custom-color={event.color ? "true" : undefined}
-          role="button" tabIndex={active ? 0 : -1}
+          role="button" tabIndex={active && !focusedId ? 0 : -1}
           aria-label={eventAccessibleName(settings, event)} aria-disabled={!active}
+          aria-expanded={focusedId === event.id} aria-description="右键菜单或空格查看关联资产，Enter 编辑事件。"
           data-canvas-interactive transform={`translate(${point.x} ${point.endpointY})`}
           onDoubleClick={() => { if (active) onEdit(event); }}
-          onClick={activation => { if (active && activation.detail === 0) onEdit(event); }}
           onKeyDown={nativeEvent => {
-            if ((nativeEvent.key === "Enter" || nativeEvent.key === " ") && active) {
+            if (!active || nativeEvent.nativeEvent.isComposing || nativeEvent.repeat) return;
+            if (nativeEvent.key === "Enter" || nativeEvent.key === " ") {
               nativeEvent.preventDefault();
-              onEdit(event);
+              if (nativeEvent.key === "Enter") onEdit(event);
+              else onFocusEvent(event.id);
             }
           }}>
           <EndpointGlyph />
@@ -259,14 +276,14 @@ const EventLabelText = memo(function EventLabelText({event, settings}: {event: T
   </>;
 });
 
-function EventLabels({eventById, settings, geometry, onEdit}: {
+function EventLabels({eventById, settings, points, onEdit}: {
   eventById: ReadonlyMap<string, TimelineEvent>;
   settings: TimelineAxisSettings;
-  geometry: ReturnType<typeof getTimelineEventsGeometry>;
+  points: readonly TimelineEventGeometry[];
   onEdit(event: TimelineEvent): void;
 }) {
   return <div className="timeline-event-labels">
-    {geometry.events.map(point => {
+    {points.map(point => {
       if (!point.labelVisible) return null;
       const event = eventById.get(point.id);
       if (!event) return null;
@@ -284,15 +301,41 @@ function EventLabels({eventById, settings, geometry, onEdit}: {
   </div>;
 }
 
-export function TimelineEvents({contextMenus, assetCatalog, store, settings, view, size, axisLabelBounds, active, growthGeometryRef, growthStemsRef, onEditingChange}: {
+function FocusedEvent({event, settings, onEdit}: {
+  event: TimelineEvent;
+  settings: TimelineAxisSettings;
+  onEdit(event: TimelineEvent): void;
+}) {
+  const title = useRef<HTMLButtonElement>(null);
+  useLayoutEffect(() => {
+    title.current?.focus({preventScroll: true});
+  }, []);
+  const offset = calloutLabel(settings, event);
+
+  return <div className="timeline-focus-event" data-timeline-event-id={event.id} data-canvas-interactive
+    style={event.color ? {"--timeline-focus-event-color": event.color} as CSSProperties : undefined}
+    onDoubleClick={click => { if (click.button === 0) onEdit(event); }}>
+    <span className="timeline-focus-event-offset" title={offset}>{offset}</span>
+    <button ref={title} className="timeline-focus-event-title" type="button"
+      aria-label={eventAccessibleName(settings, event)} aria-description="按 Enter 编辑事件。"
+      title={event.title} onClick={click => { if (click.detail === 0) onEdit(event); }}>
+      <span>{event.title}</span>
+    </button>
+    <span className="timeline-focus-event-rule" aria-hidden="true" />
+    {event.summary && <p className="timeline-focus-event-excerpt" title={event.summary}>{event.summary}</p>}
+  </div>;
+}
+
+export function TimelineEvents({contextMenus, assetCatalog, store, settings, view, size, axisLabelBounds, active, openToken, growthGeometryRef, growthStemsRef, onEditingChange}: {
   contextMenus: ContextMenuService;
   assetCatalog: AssetCatalog | null;
   store: TimelineEventStore;
   settings: TimelineAxisSettings;
-  view: Pick<CanvasViewportSnapshot, "center" | "zoom">;
+  view: View;
   size: Size;
   axisLabelBounds: readonly TimelineLabelBounds[];
   active: boolean;
+  openToken?: string | null;
   growthGeometryRef?: RefObject<TimelineEventsGeometry | null>;
   growthStemsRef?: RefObject<readonly TimelineStemSegment[] | null>;
   onEditingChange?: (editing: boolean) => void;
@@ -320,6 +363,7 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
   const [operationError, setOperationError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null);
+  const [eventFocus, setEventFocus] = useState<EventFocus | null>(null);
   const restoreCanvasFocus = useRef(false);
 
   useLayoutEffect(() => {
@@ -576,6 +620,35 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     center: view.center, zoom: view.zoom, width: size.width, height: size.height, axisLabelBounds}),
   [snapshot.events, settings.origin, settings.step, view.center.x, view.center.y, view.zoom, size.width, size.height, axisLabelBounds]);
   const stemSegments = useMemo(() => getTimelineStemSegments(geometry), [geometry]);
+  const focusInView = active && eventFocus?.store === store && eventFocus.view === view && eventFocus.openToken === openToken
+    ? eventFocus : null;
+  const focusedEvent = focusInView && eventById.get(focusInView.id);
+  const focusedPoint = focusedEvent ? geometry.events.find(point => point.id === focusedEvent.id) : undefined;
+  useLayoutEffect(() => {
+    if (eventFocus && !focusedPoint) setEventFocus(null);
+  }, [eventFocus, focusedPoint]);
+
+  function focusEvent(id: string) {
+    if (!active || editingRef.current || !eventById.has(id) || focusInView?.id === id) return;
+    setEventFocus({id, store, view, openToken});
+    menuSurface.current?.focus({preventScroll: true});
+  }
+
+  function exitEventFocus() {
+    setEventFocus(current => current && !current.closing ? {...current, closing: true} : current);
+    menuSurface.current?.focus({preventScroll: true});
+  }
+
+  const completeEventFocusExit = useCallback(() => {
+    setEventFocus(current => current?.closing ? null : current);
+  }, []);
+
+  function handleCanvasClick(event: MouseEvent<HTMLDivElement>) {
+    if (!active || !focusedPoint || editingRef.current || event.button !== 0 || event.ctrlKey || event.detail > 1) return;
+    if (!(event.target instanceof Element) || !event.currentTarget.contains(event.target)) return;
+    if (!event.target.closest(".timeline-focus-assets [data-canvas-interactive], .timeline-focus-asset")) exitEventFocus();
+  }
+
   useLayoutEffect(() => {
     if (growthGeometryRef) growthGeometryRef.current = geometry;
     if (growthStemsRef) growthStemsRef.current = stemSegments;
@@ -598,7 +671,7 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     width: size.width,
     height: size.height,
     transform: `translate(${view.center.x - size.width / (2 * Math.max(view.zoom, 0.0001))}px, ${view.center.y - size.height / (2 * Math.max(view.zoom, 0.0001))}px) scale(${scale})`,
-  };
+  } as CSSProperties;
   const MenuRegion = contextMenus.Region;
   const menuItems = (target: EventMenuTarget): MenuEntry<EventMenuTarget>[] => {
     if (target.store !== store) return [];
@@ -607,6 +680,7 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
     const event = eventById.get(target.eventId);
     if (!event) return [];
     return [
+      {id: "view-event-assets", label: "查看关联资产", icon: <Icon name="assets"/>, restoreFocus: false, onSelect: () => focusEvent(event.id)},
       {id: "edit-event", label: "编辑事件", icon: <Icon name="pencil"/>, restoreFocus: false, onSelect: () => openEvent(event)},
       addEvent,
       {id: "event-menu-separator", type: "separator"},
@@ -620,12 +694,25 @@ export function TimelineEvents({contextMenus, assetCatalog, store, settings, vie
       resolveContext={target => ({store, eventId: target?.closest("[data-timeline-event-id]")?.getAttribute("data-timeline-event-id") ?? undefined})}
       items={menuItems}>
     <div ref={menuSurface} className="timeline-events-overlay" style={overlayStyle} data-active={active}
-      tabIndex={active ? 0 : -1} aria-label="时间线事件画布">
+      data-event-focused={Boolean(focusedPoint) || undefined}
+      tabIndex={active ? 0 : -1} aria-label="时间线事件画布" onClick={handleCanvasClick}
+      onKeyDown={event => {
+        if (focusedPoint && !editingRef.current && event.key === "Escape" && !event.nativeEvent.isComposing) {
+          event.preventDefault();
+          event.stopPropagation();
+          exitEventFocus();
+        }
+      }}>
       {snapshot.loaded && geometry.width > 0 && geometry.height > 0 && <>
         <EventAxisMarkers eventById={eventById} settings={settings} geometry={geometry} stemSegments={stemSegments} centerX={view.center.x} zoom={view.zoom} active={active}
+          focusedId={focusedPoint?.id ?? null} onFocusEvent={focusEvent} onEdit={openEvent} />
+        <EventLabels eventById={eventById} settings={settings} points={focusedPoint ? [focusedPoint] : geometry.events}
           onEdit={openEvent} />
-        <EventLabels eventById={eventById} settings={settings} geometry={geometry}
-          onEdit={openEvent} />
+        {focusedEvent && focusedPoint && <TimelineFocusAssets key={focusedEvent.id}
+          event={focusedEvent} catalog={assetCatalog} size={size} closing={Boolean(focusInView?.closing)}
+          onExit={exitEventFocus} onExited={completeEventFocusExit}>
+          <FocusedEvent event={focusedEvent} settings={settings} onEdit={openEvent} />
+        </TimelineFocusAssets>}
       </>}
       {snapshot.loading && <div className="timeline-events-feedback" role="status">正在读取时间线事件…</div>}
       {!snapshot.loading && snapshot.error && <div className="timeline-events-feedback" role="alert">

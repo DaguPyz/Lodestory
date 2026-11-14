@@ -188,6 +188,8 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       assert.ok(point && !point.hidden, `The '${title}' endpoint is visibly available for pointer input.`);
       await clickAt(point.x, point.y);
       assert.equal((await eventDialogState()).found, false, "a single click does not open the event editor");
+      assert.equal(await evaluate("Boolean(document.querySelector('.timeline-focus-assets'))"), false,
+        "the first click of a double click does not enter asset focus");
       await press(point.x, point.y, "left", 2);
       await release(point.x, point.y, "left", 2);
       try { await waitFor(dialogVisible, message, 8000); }
@@ -583,6 +585,277 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       assert.equal(saved.saves, 1, "canceling the second edit does not save");
       assert.equal(saved.target.title, "Edited sparse beyond 2048", "cancel keeps the stored event unchanged");
       assert.deepEqual(saved.target.assetIds, ["20000000-0000-4000-8000-000000000099"]);
+    });
+
+    await t.test("the event context menu opens assets while single clicks leave the timeline in place", async () => {
+      await fixture("setView", {x: 4320, y: 0}, 1);
+      await fixture("setFocusAssets", true);
+      await waitForFrame();
+      const before = await fixture("state");
+      const point = await endpointPoint(before.target.title);
+      assert.ok(point);
+      const openAssetsAt = async target => {
+        await press(target.x, target.y, "right", 1);
+        await release(target.x, target.y, "right", 1);
+        const menuPoint = await waitFor(() => evaluate(`(() => {
+          const item = [...document.querySelectorAll('.context-menu-item')]
+            .find(node => node.textContent.trim() === '查看关联资产');
+          if (!item) return null;
+          const rect = item.getBoundingClientRect();
+          return rect.width && rect.height ? {x: rect.x + rect.width / 2, y: rect.y + rect.height / 2} : null;
+        })()`), "the event menu did not offer related assets");
+        assert.equal(await evaluate("Boolean(document.querySelector('.timeline-focus-assets'))"), false,
+          "opening the context menu alone does not enter asset focus");
+        await clickAt(menuPoint.x, menuPoint.y);
+        await waitForFrame();
+      };
+      const focus = () => evaluate(`(() => {
+        const item = document.querySelector('.timeline-focus-event');
+        const scene = document.querySelector('.timeline-focus-scene');
+        const groups = [...document.querySelectorAll('.timeline-focus-group')];
+        const assets = [...document.querySelectorAll('.timeline-focus-asset')];
+        const nodes = assets.map(asset => asset.querySelector('.timeline-focus-asset-node'));
+        const delays = nodes.map(node => parseFloat(getComputedStyle(node).animationDelay));
+        const sceneBox = scene?.getBoundingClientRect();
+        const x = sceneBox?.left + sceneBox?.width * 0.5;
+        const y = sceneBox?.top + sceneBox?.height * 0.5;
+        const points = assets.map(asset => {
+          const rect = asset.getBoundingClientRect();
+          return [rect.left + rect.width / 2 - x, rect.top + rect.height / 2 - y];
+        });
+        const firstAngle = Math.atan2(points[0]?.[0], -points[0]?.[1]);
+        const center = item?.getBoundingClientRect();
+        return {assets: assets.map(asset => asset.querySelector('.timeline-focus-asset-name').textContent),
+          groups: groups.map(group => group.getAttribute('aria-label')),
+          pagination: Boolean(document.querySelector('.timeline-focus-pagination')),
+          legends: document.querySelectorAll('.timeline-focus-group-heading').length,
+          rings: document.querySelectorAll('.timeline-focus-orbit').length,
+          centered: center && Math.abs(center.left + center.width / 2 - x) < 2 && Math.abs(center.top + center.height / 2 - y) < 2,
+          orbit: Boolean(document.querySelector('.timeline-focus-orbit')),
+          points, angles: points.map(([dx, dy]) => (Math.atan2(dx, -dy) - firstAngle + 2 * Math.PI) % (2 * Math.PI)),
+          delays, animations: nodes.map(node => getComputedStyle(node).animationName),
+          circles: nodes.every(node => {
+            const {width, height, borderRadius} = getComputedStyle(node);
+            return width === height && parseFloat(width) <= 80 && borderRadius === '50%';
+          }),
+          dots: new Set(groups.map(group => getComputedStyle(group.querySelector('.timeline-focus-asset-dot')).backgroundColor)).size,
+          labels: getComputedStyle(document.querySelector('.timeline-event-labels')).opacity,
+          axis: getComputedStyle(document.querySelector('.timeline-axis-overlay')).display,
+          stems: getComputedStyle(document.querySelector('.timeline-event-stems')).display};
+      })()`);
+      await clickAt(point.x, point.y);
+      assert.deepEqual((await focus()).assets, [], "a single click on the endpoint leaves asset focus closed");
+      const otherTargets = await evaluate(`(() => {
+        const id = window.__timelineDragFixture.targetId();
+        return ['.timeline-event-label[data-timeline-event-id="' + id + '"] .timeline-event-title',
+          '.timeline-event-axis-marker[data-timeline-event-id="' + id + '"]'].map(selector => {
+            const node = document.querySelector(selector); if (!node) return null;
+            const rect = node.getBoundingClientRect();
+            return {x: rect.x + rect.width / 2, y: rect.y + rect.height / 2};
+          }).filter(Boolean);
+      })()`);
+      assert.equal(otherTargets.length, 2);
+      for (const target of otherTargets) {
+        await clickAt(target.x, target.y);
+        assert.deepEqual((await focus()).assets, [], "single clicking the title or axis marker does not enter asset focus");
+      }
+      assert.equal((await eventDialogState()).found, false);
+      assert.notEqual((await focus()).axis, "none");
+      await press(24, 160, "right", 1);
+      await release(24, 160, "right", 1);
+      await waitFor(() => evaluate("Boolean(document.querySelector('.context-menu-popup'))"), "the canvas menu did not open");
+      assert.deepEqual(await evaluate("[...document.querySelectorAll('.context-menu-item')].map(item => item.textContent.trim())"),
+        ["添加事件"], "the asset action is available only for an event");
+      await cdp("Input.dispatchKeyEvent", {type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
+      await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
+      await waitFor(() => evaluate("!document.querySelector('.context-menu-popup')"), "the canvas menu did not close");
+      await openAssetsAt(point);
+      const shown = await focus();
+      assert.deepEqual(shown.assets, ["林舟", "陈师傅", "方晴", "闻溪", "守溪会", "造钟行", "旧街", "渡口"]);
+      assert.deepEqual(shown.groups, ["人物", "势力", "地点"]);
+      assert.equal(shown.legends, 0, "the category legend is removed");
+      assert.ok(shown.centered && shown.orbit && shown.circles);
+      assert.equal(shown.dots, 3);
+      assert.equal(shown.labels, "0");
+      assert.equal(shown.axis, "none");
+      assert.equal(shown.stems, "none");
+      const radii = shown.points.map(([x, y]) => Math.hypot(x, y));
+      assert.ok(radii.every(radius => Math.abs(radius - radii[0]) < 1), "assets share a circular orbit around the event");
+      assert.ok(radii[0] > 200 && radii[0] < 280, "the orbit stays compact");
+      assert.ok(shown.angles.slice(1).every((angle, index) => angle > shown.angles[index]), "the cards occupy clockwise positions");
+      assert.deepEqual(shown.delays, [0, 0.065, 0.13, 0.195, 0.26, 0.325, 0.39, 0.455]);
+      const movement = await evaluate("(() => {"
+        + "const node = document.querySelectorAll('.timeline-focus-asset-node')[2];"
+        + "const animation = node.getAnimations()[0];"
+        + "const delay = animation.effect.getTiming().delay;"
+        + "animation.pause(); animation.currentTime = delay;"
+        + "const box = node.getBoundingClientRect(); const start = box.x + box.width / 2;"
+        + "animation.finish();"
+        + "const end = node.getBoundingClientRect(); return end.x + end.width / 2 - start;"
+        + "})()");
+      assert.ok(movement > 200, "assets travel all the way from the event center");
+      assert.equal((await eventDialogState()).found, false);
+
+      const floating = await evaluate(`(() => {
+        const nodes = [...document.querySelectorAll('.timeline-focus-asset-node')];
+        const event = document.querySelector('.timeline-focus-event');
+        const before = event.getBoundingClientRect().toJSON();
+        const samples = nodes.map(node => {
+          const entry = node.getAnimations().find(animation => animation.animationName === 'timeline-focus-asset-reveal');
+          entry?.finish();
+          const drift = node.getAnimations().find(animation => animation.animationName === 'timeline-focus-asset-drift');
+          if (!drift) return null;
+          const timing = drift.effect.getTiming();
+          drift.pause();
+          const read = progress => {
+            drift.currentTime = timing.delay + timing.duration * progress;
+            const anchor = node.parentElement.getBoundingClientRect();
+            const bounds = node.getBoundingClientRect();
+            const dot = node.querySelector('.timeline-focus-asset-dot').getBoundingClientRect();
+            const viewport = document.querySelector('.timeline-focus-viewport').getBoundingClientRect();
+            return {x: bounds.left - anchor.left, y: bounds.top - anchor.top,
+              inside: Math.min(bounds.left, dot.left) >= viewport.left && Math.min(bounds.top, dot.top) >= viewport.top
+                && Math.max(bounds.right, dot.right) <= viewport.right && Math.max(bounds.bottom, dot.bottom) <= viewport.bottom};
+          };
+          const first = read(0.25), second = read(0.75);
+          return {first, second, duration: timing.duration, iterations: timing.iterations === Infinity,
+            translate: getComputedStyle(node).translate};
+        });
+        const after = event.getBoundingClientRect().toJSON();
+        return {samples, eventStable: before.x === after.x && before.y === after.y};
+      })()`);
+      assert.equal(floating.samples.length, 8);
+      assert.ok(floating.samples.every(sample => sample?.iterations), "every circular asset keeps floating after entry");
+      assert.ok(new Set(floating.samples.map(sample => sample.duration)).size > 1, "the nodes do not all move in sync");
+      assert.ok(floating.eventStable, "the central event stays still");
+      for (const sample of floating.samples) {
+        for (const position of [sample.first, sample.second]) {
+          assert.ok(Math.abs(position.x) >= 2 && Math.abs(position.x) <= 5.1);
+          assert.ok(Math.abs(position.y) >= 3 && Math.abs(position.y) <= 5.1);
+          assert.ok(position.inside, "floating circles and their category dots are not clipped at the viewport edge");
+        }
+        assert.ok(sample.first.x * sample.second.x < 0 && sample.first.y * sample.second.y < 0,
+          "the motion moves both left/right and up/down relative to the node's own position");
+      }
+
+      await cdp("Input.dispatchKeyEvent", {type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
+      await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
+      assert.equal(await evaluate("document.querySelector('.timeline-focus-assets')?.inert"), true,
+        "the returning scene stops accepting input immediately");
+      assert.equal((await focus()).axis, "none", "the timeline waits until assets return to the center");
+      const dismissing = await evaluate(`([...document.querySelectorAll('.timeline-focus-asset-node')].map(node => {
+        const animations = node.getAnimations();
+        return {translate: animations[0]?.effect.getKeyframes()[0].translate,
+          finite: animations.every(animation => animation.effect.getTiming().iterations !== Infinity)};
+      }))`);
+      assert.deepEqual(dismissing.map(sample => sample.translate), floating.samples.map(sample => sample.translate),
+        "closing continues from the current floating position without a jump");
+      assert.ok(dismissing.every(sample => sample.finite), "idle loops are canceled before closing");
+      await waitFor(() => evaluate("!document.querySelector('.timeline-focus-assets')"), "the radial scene did not finish closing");
+      assert.deepEqual((await focus()).assets, []);
+      assert.notEqual((await focus()).axis, "none");
+      assert.deepEqual(await fixture("state"), before, "entering and exiting focus does not save or move the timeline");
+
+      await openAssetsAt(point);
+      const interrupted = await evaluate(`(() => {
+        const nodes = [...document.querySelectorAll('.timeline-focus-asset-node')];
+        for (const node of nodes) {
+          const animation = node.getAnimations()[0];
+          animation.pause(); animation.currentTime = animation.effect.getTiming().delay + 100;
+        }
+        return nodes.map(node => getComputedStyle(node).transform);
+      })()`);
+      await clickButtonNamed("返回时间线");
+      const reversed = await evaluate(`([...document.querySelectorAll('.timeline-focus-asset-node')]
+        .map(node => node.getAnimations()[0]?.effect.getKeyframes()[0].transform))`);
+      assert.deepEqual(reversed, interrupted, "closing mid-entry starts from each asset's visible position");
+      await fixture("open", "focus-interrupted");
+      await waitForFrame();
+      assert.deepEqual((await focus()).assets, [], "switching timelines clears a closing scene immediately");
+      await openAssetsAt(point);
+      await evaluate("new Promise(resolve => setTimeout(resolve, 500))");
+      assert.equal((await focus()).assets.length, 8, "an old exit callback cannot dismiss a new focus scene");
+      await clickButtonNamed("返回时间线");
+      await waitFor(() => evaluate("!document.querySelector('.timeline-focus-assets')"), "the reopened scene did not close");
+
+      await cdp("Emulation.setEmulatedMedia", {features: [{name: "prefers-reduced-motion", value: "reduce"}]});
+      await openAssetsAt(point);
+      assert.deepEqual((await focus()).animations, Array(8).fill("none"));
+      await clickAt(24, 160);
+      assert.deepEqual((await focus()).assets, []);
+
+      assert.equal(await evaluate(`(() => {
+        const target = [...document.querySelectorAll('.timeline-event-endpoint')]
+          .find(endpoint => endpoint.closest('[data-timeline-event-id]').dataset.timelineEventId === window.__timelineDragFixture.targetId());
+        target?.focus();
+        return document.activeElement === target;
+      })()`), true);
+      await cdp("Input.dispatchKeyEvent", {type: "keyDown", key: " ", code: "Space", windowsVirtualKeyCode: 32});
+      await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: " ", code: "Space", windowsVirtualKeyCode: 32});
+      assert.equal(await evaluate("document.activeElement.className"), "timeline-focus-event-title");
+      await cdp("Input.dispatchKeyEvent", {type: "keyDown", key: "Enter", code: "Enter",
+        windowsVirtualKeyCode: 13, text: "\r", unmodifiedText: "\r"});
+      await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13});
+      await waitFor(dialogVisible, "Enter did not open the editor from the centered event", 5000);
+      await clickButtonNamed("取消");
+      await waitForDialogClose();
+      assert.deepEqual((await focus()).assets, shown.assets);
+      await clickButtonNamed("返回时间线");
+
+      await fixture("setFocusAssets", true, 5);
+      await waitForFrame();
+      await openAssetsAt(point);
+      const allThirteen = await focus();
+      assert.equal(allThirteen.assets.length, 13, "all thirteen assets appear together");
+      assert.equal(allThirteen.pagination, false, "there are no pagination controls");
+      assert.equal(allThirteen.rings, 1, "thirteen assets fit around the event on one ring");
+      assert.deepEqual(allThirteen.assets.slice(8), Array(5).fill("资产不可用"), "missing associations are still represented");
+
+      await fixture("setFocusAssets", true, 32);
+      await waitForFrame();
+      const expanded = await focus();
+      assert.equal(expanded.assets.length, 40, "larger asset sets are not truncated");
+      assert.ok(expanded.rings > 1, "additional assets occupy outer rings");
+      assert.ok(expanded.circles, "outer rings retain readable node sizes");
+      for (let i = 0; i < expanded.points.length; i++) {
+        for (let j = i + 1; j < expanded.points.length; j++) {
+          const [x, y] = expanded.points[i];
+          const [otherX, otherY] = expanded.points[j];
+          assert.ok(Math.hypot(x - otherX, y - otherY) >= 90, "circles on the same or different rings do not overlap");
+        }
+      }
+      const scrollBefore = await evaluate("document.querySelector('.timeline-focus-viewport').scrollTop");
+      const viewBeforeScroll = await fixture("state");
+      await mouse("mouseWheel", 500, 150, {deltaY: 180, deltaX: 0});
+      await waitFor(() => evaluate(`document.querySelector('.timeline-focus-viewport')?.scrollTop > ${scrollBefore}`),
+        "outer rings cannot be reached by scrolling");
+      assert.deepEqual(await fixture("state"), viewBeforeScroll, "scrolling the asset diagram does not move the timeline or dismiss focus");
+      await fixture("setActive", false);
+      await waitForFrame();
+      assert.deepEqual((await focus()).assets, [], "the focused view closes when the timeline is deactivated");
+      await fixture("setActive", true);
+      await waitForFrame();
+      assert.notEqual((await focus()).axis, "none", "reactivating the timeline restores the axis");
+      await evaluate(`(() => {
+        for (const node of document.querySelectorAll('.fixture-host, .timeline-canvas-frame')) node.style.width = '450px';
+      })()`);
+      await waitFor(() => evaluate("document.querySelector('.timeline-events-overlay').offsetWidth === 450"), "the canvas did not resize");
+      const narrowPoint = await endpointPoint(before.target.title);
+      await openAssetsAt(narrowPoint);
+      assert.equal((await focus()).orbit, false);
+      assert.deepEqual((await focus()).groups, ["人物", "势力", "地点", "失效关联"]);
+      assert.equal((await focus()).assets.length, 40, "narrow windows also retain all associations without pagination");
+      assert.equal((await focus()).pagination, false);
+      assert.equal(await evaluate(`(() => { const region = document.querySelector('.timeline-focus-groups');
+        return region.scrollHeight > region.clientHeight && region.scrollWidth <= region.clientWidth; })()`), true,
+        "all assets remain reachable in the narrow scrolling list");
+      await clickButtonNamed("返回时间线");
+      await evaluate(`(() => {
+        for (const node of document.querySelectorAll('.fixture-host, .timeline-canvas-frame')) node.style.width = '';
+      })()`);
+      await waitFor(() => evaluate("document.querySelector('.timeline-events-overlay').offsetWidth === 1200"), "the canvas did not regain its size");
+      await cdp("Emulation.setEmulatedMedia", {features: []});
+      await fixture("setFocusAssets", false);
     });
 
     await t.test("stops pending drags when disabled, when the viewport changes, and on unmount", async () => {

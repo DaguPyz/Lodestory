@@ -22,6 +22,8 @@
       import {CanvasSurface} from "/src/plugins/canvas/CanvasSurface.tsx";
       import {createCanvasViewport} from "/src/plugins/canvas/createCanvasViewport.ts";
       import {TimelineCanvas} from "/src/plugins/timeline/TimelineCanvas.tsx";
+      import {ContextMenuProvider} from "/src/plugins/context-menu/ContextMenuProvider.tsx";
+      import {ContextMenuRegion} from "/src/plugins/context-menu/ContextMenuRegion.tsx";
 
       document.documentElement.dataset.uiThemeId = "lodestory.builtin.dark";
       const targetAssetIds = ["20000000-0000-4000-8000-000000000099"];
@@ -81,8 +83,25 @@
         async retry() { return true; },
         dispose() {},
       };
+      const relatedAssets = [
+        {id: targetAssetIds[0], name: "林舟", typeId: "person", description: "归乡的旅人"},
+        {id: makeId(21000), name: "旧街", typeId: "place", description: "阔别多年的故乡"},
+        {id: makeId(21002), name: "陈师傅", typeId: "person", description: "旧街上的修表匠"},
+        {id: makeId(21003), name: "方晴", typeId: "person", description: "从南方回来的学徒"},
+        {id: makeId(21004), name: "闻溪", typeId: "person", description: "旅人的旧友"},
+        {id: makeId(21005), name: "渡口", typeId: "place", description: "两人分别的地方"},
+        {id: makeId(21006), name: "守溪会", typeId: "faction", description: "在渡口帮忙的人"},
+        {id: makeId(21007), name: "造钟行", typeId: "faction", description: "旧街上的行会"},
+      ];
+      const catalogSnapshot = {
+        assets: relatedAssets,
+        types: [{id: "place", name: "地点", status: "active"}, {id: "faction", name: "势力", status: "active"},
+          {id: "person", name: "人物", status: "active"}],
+        loaded: true, loading: false, blocked: false, error: null,
+      };
+      const assetCatalog = {getSnapshot: () => catalogSnapshot, subscribe: () => () => {}, async retry() { return true; }};
       const canvas = {Surface: CanvasSurface};
-      const contextMenus = {Region: ({children}) => children};
+      const contextMenus = {Region: ContextMenuRegion};
       const root = createRoot(document.querySelector("#root"));
       let viewport = createCanvasViewport();
       let active = true;
@@ -90,9 +109,9 @@
       let mounted = true;
       const oldViewports = [];
       function render() {
-        root.render(mounted ? React.createElement("div", {className: "fixture-host"},
-          React.createElement(TimelineCanvas, {canvas, contextMenus, assetCatalog: null, viewport,
-            active, title: "性能回归", axis: axisStore, events: eventStore, openToken})) : null);
+        root.render(mounted ? React.createElement(ContextMenuProvider, null, React.createElement("div", {className: "fixture-host"},
+          React.createElement(TimelineCanvas, {canvas, contextMenus, assetCatalog, viewport,
+            active, title: "性能回归", axis: axisStore, events: eventStore, openToken}))) : null);
       }
       render();
 
@@ -113,6 +132,12 @@
         open(next) { openToken = next; render(); },
         setAnimationEvents(enabled) {
           events = enabled ? denseEvents.filter((_, index) => index % 25 === 0) : allEvents;
+          publishEvents();
+        },
+        setFocusAssets(enabled, missing = 0, known = relatedAssets.length) {
+          const ids = relatedAssets.slice(0, known).map(asset => asset.id).concat(Array.from({length: missing}, (_, index) => makeId(22000 + index)));
+          events = events.map(event => event.id === targetEvent.id
+            ? {...event, assetIds: enabled ? ids : [...targetAssetIds]} : event);
           publishEvents();
         },
         replaceViewport() {

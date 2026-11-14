@@ -485,6 +485,7 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, viewport, ac
         </svg>
       </div>}
       {snapshot.loaded && <TimelineEvents contextMenus={contextMenus} assetCatalog={assetCatalog} store={events} settings={snapshot.settings} view={view} size={size}
+        openToken={openToken}
         growthGeometryRef={growthGeometry}
         growthStemsRef={growthStems}
         axisLabelBounds={geometry.labelBounds}

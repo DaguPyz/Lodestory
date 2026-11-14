@@ -74,6 +74,10 @@
 
 .timeline-axis-unit .button { color: inherit; }
 
+.timeline-canvas-frame:has(.timeline-events-overlay[data-event-focused]) :is(.timeline-axis-overlay, .timeline-axis-unit) {
+  display: none;
+}
+
 .timeline-axis-feedback {
   position: absolute;
   z-index: 2;

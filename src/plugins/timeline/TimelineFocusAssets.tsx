@@ -1,4 +1,4 @@
-import {useLayoutEffect, useMemo, useRef, useSyncExternalStore, type CSSProperties, type ReactNode} from "react";
+import {useLayoutEffect, useMemo, useRef, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode} from "react";
 import type {AssetCatalog, AssetCatalogAsset, AssetCatalogSnapshot} from "@lodestory/sdk/asset-catalog";
 import {Button, Icon} from "@lodestory/ui";
 import type {TimelineEvent} from "./timelineEventStore";
@@ -26,6 +26,31 @@ const sceneVariables = {
   "--timeline-focus-event-x": `${timelineFocusEventCenter.x}%`,
   "--timeline-focus-event-y": `${timelineFocusEventCenter.y}%`,
 } as CSSProperties;
+
+function playAssetPress(event: MouseEvent<HTMLDivElement>) {
+  if (event.button !== 0 || event.ctrlKey) return;
+  const node = event.currentTarget;
+  const face = node.firstElementChild;
+  if (!(face instanceof HTMLElement)) return;
+  const style = getComputedStyle(face);
+  if (Number.parseFloat(style.getPropertyValue("--ui-duration-fast")) === 0) return;
+
+  face.style.setProperty("--timeline-focus-press-start", style.scale);
+  node.dataset.clicked = "";
+  face.dataset.pressing = "";
+  // Restart the same CSS animation on rapid clicks, using the size already on screen.
+  const press = face.getAnimations().find(animation => animation instanceof CSSAnimation
+    && animation.animationName === "timeline-focus-asset-press");
+  const clearPress = () => { delete face.dataset.pressing; };
+  if (!press) {
+    clearPress();
+    return;
+  }
+  press.onfinish = clearPress;
+  press.oncancel = clearPress;
+  press.currentTime = 0;
+  press.play();
+}
 
 function groupAssets(ids: readonly string[], snapshot: AssetCatalogSnapshot | null, available: boolean) {
   if (!ids.length) return [];
@@ -120,10 +145,11 @@ export function TimelineFocusAssets({event, catalog, size, closing, onExit, onEx
     const easing = styles.getPropertyValue("--ui-ease-exit").trim();
     const nodes = [...scene.current.querySelectorAll<HTMLElement>(".timeline-focus-asset-node")];
     const animations: Animation[] = [];
-    // Capture both entry and idle drift before canceling them, so closing never jumps.
+    // Capture entry, drift and interaction scale before canceling them, so closing never jumps.
     const frames = nodes.map(node => {
       const style = getComputedStyle(node);
-      return {transform: style.transform, translate: style.translate, opacity: style.opacity,
+      const face = node.querySelector<HTMLElement>(".timeline-focus-asset-face")!;
+      return {face, scale: getComputedStyle(face).scale, transform: style.transform, translate: style.translate, opacity: style.opacity,
         x: style.getPropertyValue("--timeline-focus-asset-offset-x").trim() || "0px",
         y: style.getPropertyValue("--timeline-focus-asset-offset-y").trim() || "0px"};
     });
@@ -131,6 +157,9 @@ export function TimelineFocusAssets({event, catalog, size, closing, onExit, onEx
       const frame = frames[index];
       node.getAnimations().forEach(animation => animation.cancel());
       node.style.animation = "none";
+      frame.face.style.animation = "none";
+      frame.face.style.transition = "none";
+      frame.face.style.scale = frame.scale;
       animations.push(node.animate([
         {transform: frame.transform, translate: frame.translate, opacity: frame.opacity},
         {transform: compact ? "none" : `translate(${frame.x}, ${frame.y}) scale(0.22)`, translate: "none", opacity: 0},
@@ -207,11 +236,14 @@ export function TimelineFocusAssets({event, catalog, size, closing, onExit, onEx
                     "--timeline-focus-asset-offset-y": `${position.offsetY}px`}),
                 } as CSSProperties;
                 return <li key={asset.id} className="timeline-focus-asset" style={style} title={asset.title}>
-                  <div className="timeline-focus-asset-node">
-                    <span className="timeline-focus-asset-dot" aria-hidden="true" />
-                    <div className="timeline-focus-asset-text">
-                      <span className="timeline-focus-asset-name">{asset.name}</span>
-                      <span className="timeline-focus-asset-type">{asset.detail}</span>
+                  <div className="timeline-focus-asset-node" onClick={compact ? undefined : playAssetPress}
+                    onPointerEnter={event => { delete event.currentTarget.dataset.clicked; }}>
+                    <div className="timeline-focus-asset-face">
+                      <span className="timeline-focus-asset-dot" aria-hidden="true" />
+                      <div className="timeline-focus-asset-text">
+                        <span className="timeline-focus-asset-name">{asset.name}</span>
+                        <span className="timeline-focus-asset-type">{asset.detail}</span>
+                      </div>
                     </div>
                   </div>
                 </li>;

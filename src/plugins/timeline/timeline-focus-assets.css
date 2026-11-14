@@ -180,6 +180,20 @@
 
 .timeline-focus-asset-node {
   position: relative;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  pointer-events: auto;
+  animation: timeline-focus-asset-reveal var(--timeline-focus-reveal-duration)
+      var(--ui-ease-enter) calc(var(--timeline-focus-asset-order) * var(--timeline-focus-reveal-step)) backwards,
+    timeline-focus-asset-drift var(--timeline-focus-drift-duration) ease-in-out
+      calc(var(--timeline-focus-reveal-duration) + var(--timeline-focus-asset-order) * var(--timeline-focus-reveal-step))
+      infinite var(--timeline-focus-drift-direction);
+}
+
+/* Scale the visible circle independently of the moving hit area. */
+.timeline-focus-asset-face {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -190,18 +204,24 @@
   padding: var(--ui-space-2);
   background: var(--ui-surface-control);
   border: 1px solid color-mix(in srgb, var(--timeline-focus-category-color) 60%, var(--ui-border-decoration));
-  border-radius: 50%;
+  border-radius: inherit;
   color: var(--ui-text-primary);
-  pointer-events: auto;
-  animation: timeline-focus-asset-reveal var(--timeline-focus-reveal-duration)
-      var(--ui-ease-enter) calc(var(--timeline-focus-asset-order) * var(--timeline-focus-reveal-step)) backwards,
-    timeline-focus-asset-drift var(--timeline-focus-drift-duration) ease-in-out
-      calc(var(--timeline-focus-reveal-duration) + var(--timeline-focus-asset-order) * var(--timeline-focus-reveal-step))
-      infinite var(--timeline-focus-drift-direction);
+  pointer-events: none;
+  scale: 1;
+  transition: scale var(--ui-duration-fast) var(--ui-ease-enter);
 }
 
-@media (hover: hover) {
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
   .timeline-focus-asset-node:hover { animation-play-state: running, paused; }
+  :root:not([data-ui-motion="reduce"]) .timeline-focus-assets:not([data-compact])
+    .timeline-focus-asset-node:hover:not([data-clicked]) .timeline-focus-asset-face:not([data-pressing]) { scale: 1.06; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :root:not([data-ui-motion="reduce"]) .timeline-focus-assets:not([data-compact]) .timeline-focus-asset-face[data-pressing] {
+    transition: none;
+    animation: timeline-focus-asset-press calc(var(--ui-duration-fast) * 1.5) var(--ui-ease-enter) both;
+  }
 }
 
 .timeline-focus-asset-dot {
@@ -317,14 +337,18 @@
   transform: none;
 }
 
-.timeline-focus-assets[data-compact] .timeline-focus-asset-node {
+:where(.timeline-focus-assets[data-compact]) .timeline-focus-asset-node {
+  border-radius: var(--ui-radius-control);
+  animation: timeline-focus-asset-fade var(--timeline-focus-reveal-duration)
+    var(--ui-ease-enter) calc(var(--timeline-focus-asset-order) * var(--timeline-focus-reveal-step)) backwards;
+}
+
+.timeline-focus-assets[data-compact] .timeline-focus-asset-face {
   flex-direction: row;
   justify-content: flex-start;
   gap: var(--ui-space-3);
   padding-inline: var(--ui-space-4);
-  border-radius: var(--ui-radius-control);
-  animation: timeline-focus-asset-fade var(--timeline-focus-reveal-duration)
-    var(--ui-ease-enter) calc(var(--timeline-focus-asset-order) * var(--timeline-focus-reveal-step)) backwards;
+  pointer-events: auto;
 }
 
 .timeline-focus-assets[data-compact] .timeline-focus-asset-dot { position: static; flex: none; }
@@ -357,6 +381,12 @@
   75% { translate: calc(-1 * var(--timeline-focus-drift-x)) var(--timeline-focus-drift-y); }
 }
 
+@keyframes timeline-focus-asset-press {
+  from { scale: var(--timeline-focus-press-start, 1); }
+  35% { scale: 0.94; }
+  to { scale: 1; }
+}
+
 @keyframes timeline-focus-asset-fade {
   from { opacity: 0; }
   to { opacity: 1; }
@@ -369,7 +399,7 @@
 }
 
 @media (forced-colors: active) {
-  .timeline-focus-asset-node { background: Canvas; color: CanvasText; border-color: CanvasText; }
+  .timeline-focus-asset-face { background: Canvas; color: CanvasText; border-color: CanvasText; }
   .timeline-focus-orbit { border-color: GrayText; }
   .timeline-focus-asset-dot,
   .timeline-focus-event-title::before,

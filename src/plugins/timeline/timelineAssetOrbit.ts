@@ -1,6 +1,6 @@
 export const timelineFocusEventCenter = {x: 50, y: 50};
 const nodeSpacing = 96;
-// Leave room for the 36px node radius, category dot and up to 5px of idle drift.
+// Leave room for the 36px node radius, hover growth, category dot and idle drift.
 const edgeInset = 48;
 
 /** Positions and travel share the same center, so assets emerge from the event. */

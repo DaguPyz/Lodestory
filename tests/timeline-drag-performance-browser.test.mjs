@@ -696,6 +696,50 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       assert.ok(movement > 200, "assets travel all the way from the event center");
       assert.equal((await eventDialogState()).found, false);
 
+      const assetCircle = () => evaluate(`(() => {
+        const [node, neighbor] = document.querySelectorAll('.timeline-focus-asset-node');
+        const face = node.querySelector('.timeline-focus-asset-face');
+        const drift = item => item.getAnimations().find(animation => animation.animationName === 'timeline-focus-asset-drift');
+        const {x, y, width, height} = node.getBoundingClientRect();
+        return {x: x + width / 2, y: y + height / 2, width,
+          scale: Number(getComputedStyle(face).scale), driftTime: drift(node)?.currentTime,
+          neighborTime: drift(neighbor)?.currentTime, paused: drift(node)?.playState === 'paused',
+          pressing: face.getAnimations().some(animation => animation.animationName === 'timeline-focus-asset-press')};
+      })()`);
+      const readyCircle = await waitFor(async () => {
+        const circle = await assetCircle();
+        return circle.neighborTime > 505 && circle;
+      }, "The asset circles did not finish entering.");
+      await move(readyCircle.x, readyCircle.y);
+      const hovered = await waitFor(async () => {
+        const circle = await assetCircle();
+        return circle.scale > 1.05 && circle.paused && circle;
+      }, "Hover should enlarge the asset circle and pause its drift.");
+      await waitForFrame();
+      const held = await assetCircle();
+      assert.equal(held.width, readyCircle.width, "hover does not resize the hit area");
+      assert.equal(held.driftTime, hovered.driftTime);
+      assert.ok(held.neighborTime > hovered.neighborTime, "the neighboring circle keeps floating");
+
+      await clickAt(held.x, held.y);
+      const compressed = await evaluate(`(() => {
+        const face = document.querySelector('.timeline-focus-asset-face');
+        const press = face.getAnimations().find(animation => animation.animationName === 'timeline-focus-asset-press');
+        if (!press) return null;
+        press.currentTime = press.effect.getTiming().duration * 0.35;
+        return Number(getComputedStyle(face).scale);
+      })()`);
+      assert.ok(compressed > 0 && compressed < 1, "click compresses the circle below its original size");
+      await waitFor(async () => {
+        const circle = await assetCircle();
+        return circle.scale === 1 && !circle.pressing && circle.paused;
+      }, "The circle should return to its original size while still hovered.");
+      await move(24, 160);
+      await waitFor(async () => {
+        const circle = await assetCircle();
+        return !circle.paused && circle.driftTime > held.driftTime;
+      }, "The circle did not resume drifting after the pointer left.");
+
       const floating = await evaluate(`(() => {
         const nodes = [...document.querySelectorAll('.timeline-focus-asset-node')];
         const event = document.querySelector('.timeline-focus-event');
@@ -781,6 +825,10 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       await cdp("Emulation.setEmulatedMedia", {features: [{name: "prefers-reduced-motion", value: "reduce"}]});
       await openAssetsAt(point);
       assert.deepEqual((await focus()).animations, Array(8).fill("none"));
+      const staticCircle = await assetCircle();
+      await move(staticCircle.x, staticCircle.y);
+      await clickAt(staticCircle.x, staticCircle.y);
+      assert.deepEqual(await assetCircle(), staticCircle, "reduced motion keeps the circles still under hover and click");
       await clickAt(24, 160);
       assert.deepEqual((await focus()).assets, []);
 

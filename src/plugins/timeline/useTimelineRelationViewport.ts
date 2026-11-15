@@ -2,73 +2,103 @@ import {useCallback, useLayoutEffect, useMemo, useRef, useState, type RefObject}
 import type {CanvasPoint} from "@lodestory/sdk/canvas";
 import type {OrbitViewport} from "./timelineAssetOrbit";
 
-type ZoomTarget = {assetId: string; zoom: number; center: CanvasPoint};
+const stageMinScale = 2;
+export const relationStageMinSize = `${stageMinScale * 100}%`;
 
-function centerScrollport(element: HTMLDivElement, target?: ZoomTarget) {
-  element.scrollLeft = (element.scrollWidth - element.clientWidth) / 2 + (target ? target.center.x * target.zoom : 0);
-  element.scrollTop = (element.scrollHeight - element.clientHeight) / 2 + (target ? target.center.y * target.zoom : 0);
+type RelationLayout = Readonly<{assetId?: string; width: number; height: number; diameter: number; compact: boolean}>;
+type ScrolledView = Readonly<{viewport: OrbitViewport; focusedPeerId: string | undefined}>;
+type ZoomView = Readonly<{
+  zoom: number;
+  target?: ScrolledView & {geometry: RelationLayout; center: CanvasPoint};
+}>;
+
+const initialZoom: ZoomView = {zoom: 1};
+
+function viewportStart(diagramSize: number, viewSize: number, scrollOffsetFromCenter: number) {
+  // The centered scene is clipped by its stage, so only the stage sets the scroll limits.
+  const scrollLimit = (Math.max(diagramSize, stageMinScale * viewSize) - viewSize) / 2;
+  return (diagramSize - viewSize) / 2 + Math.max(-scrollLimit, Math.min(scrollLimit, scrollOffsetFromCenter));
+}
+
+function focusedPeer(element: HTMLDivElement, target: EventTarget | null) {
+  return target instanceof Element && element.contains(target)
+    ? target.closest<HTMLElement>("[data-peer-id]")?.dataset.peerId : undefined;
 }
 
 export function useTimelineRelationViewport(scrollport: RefObject<HTMLDivElement | null>, {
   assetId, width, height, diameter, compact, closing,
-}: {assetId?: string; width: number; height: number; diameter: number; compact: boolean; closing: boolean}) {
-  const [zoom, setZoom] = useState(1);
-  const pendingZoom = useRef<ZoomTarget | null>(null);
+}: RelationLayout & {closing: boolean}) {
+  const geometry = useMemo(() => ({assetId, width, height, diameter, compact}), [assetId, width, height, diameter, compact]);
+  const [zoomView, setZoomView] = useState(initialZoom);
+  const pendingZoom = useRef<ZoomView | null>(null);
+  const zoom = zoomView.zoom;
   const diagramSize = diameter * (assetId && !compact ? zoom : 1);
   const overflow = !compact && (diagramSize > width || diagramSize > height);
+  const target = zoomView.target?.geometry === geometry ? zoomView.target : null;
   const layout = useMemo(() => ({
-    assetId, diagramSize, compact, zoom,
+    diagramSize, zoomView, geometry, target,
     initial: {left: (diagramSize - width) / 2, top: (diagramSize - height) / 2, width, height},
-  }), [assetId, diagramSize, width, height, compact, zoom]);
-  const previousLayout = useRef<typeof layout | null>(null);
-  const [scroll, setScroll] = useState<{
-    layout: typeof layout; viewport: OrbitViewport; focusedPeerId: string | undefined;
-  } | null>(null);
+  }), [diagramSize, zoomView, geometry, target, width, height]);
+  const [scroll, setScroll] = useState<(ScrolledView & {layout: typeof layout}) | null>(null);
+
+  const queueZoom = useCallback((element: HTMLDivElement, nextZoom: number, center: CanvasPoint,
+    viewWidth: number, viewHeight: number) => {
+    const nextSize = geometry.diameter * nextZoom;
+    const nextView: ZoomView = {zoom: nextZoom, target: {
+      geometry, center, focusedPeerId: focusedPeer(element, document.activeElement),
+      viewport: {
+        left: viewportStart(nextSize, viewWidth, center.x * nextZoom),
+        top: viewportStart(nextSize, viewHeight, center.y * nextZoom),
+        width: viewWidth, height: viewHeight,
+      },
+    }};
+    pendingZoom.current = nextView;
+    setZoomView(nextView);
+  }, [geometry]);
 
   const zoomTo = useCallback((requested: number, point?: CanvasPoint) => {
     const element = scrollport.current;
     if (!element || !assetId || compact || closing || !Number.isFinite(requested)) return;
-    const prior = pendingZoom.current?.assetId === assetId ? pendingZoom.current : null;
+    const prior = pendingZoom.current?.target?.geometry === geometry ? pendingZoom.current : null;
     const currentZoom = prior?.zoom ?? zoom;
     const nextZoom = Math.min(4, Math.max(0.25, requested));
     if (nextZoom === currentZoom) return;
     const {clientWidth, clientHeight, scrollWidth, scrollHeight, scrollLeft, scrollTop} = element;
     const dx = point ? point.x - clientWidth / 2 : 0;
     const dy = point ? point.y - clientHeight / 2 : 0;
-    const center = prior?.center ?? {
+    const center = prior?.target?.center ?? {
       x: (scrollLeft + (clientWidth - scrollWidth) / 2) / currentZoom,
       y: (scrollTop + (clientHeight - scrollHeight) / 2) / currentZoom,
     };
-    const target = {assetId, zoom: nextZoom, center: {
+    queueZoom(element, nextZoom, {
       x: center.x + dx / currentZoom - dx / nextZoom,
       y: center.y + dy / currentZoom - dy / nextZoom,
-    }};
-    pendingZoom.current = nextZoom === zoom ? null : target;
-    if (nextZoom === zoom) centerScrollport(element, target);
-    setZoom(nextZoom);
-  }, [assetId, compact, closing, scrollport, zoom]);
+    }, clientWidth, clientHeight);
+  }, [assetId, compact, closing, scrollport, geometry, zoom, queueZoom]);
 
   const resetView = useCallback(() => {
-    pendingZoom.current = null;
-    if (zoom === 1 && scrollport.current) centerScrollport(scrollport.current);
-    setZoom(1);
-  }, [scrollport, zoom]);
+    const element = scrollport.current;
+    if (!element || !assetId || compact || closing) return;
+    queueZoom(element, 1, {x: 0, y: 0}, element.clientWidth, element.clientHeight);
+  }, [scrollport, assetId, compact, closing, queueZoom]);
 
   useLayoutEffect(() => {
-    if (!assetId && zoom !== 1) resetView();
-  }, [assetId, resetView, zoom]);
+    if (!assetId && zoom !== 1) {
+      pendingZoom.current = null;
+      setZoomView(initialZoom);
+    }
+  }, [assetId, zoom]);
 
   useLayoutEffect(() => {
     const element = scrollport.current;
     if (!element) return;
-    const previous = previousLayout.current;
-    previousLayout.current = layout;
-    const anchor = pendingZoom.current;
-    pendingZoom.current = null;
-    centerScrollport(element, anchor?.assetId === layout.assetId && anchor?.zoom === layout.zoom ? anchor : undefined);
-    if (!layout.assetId || layout.compact) return;
-
+    if (pendingZoom.current === layout.zoomView) pendingZoom.current = null;
     const {clientWidth: width, clientHeight: height, scrollWidth, scrollHeight} = element;
+    const center = layout.target?.center;
+    element.scrollLeft = (scrollWidth - width) / 2 + (center ? center.x * layout.zoomView.zoom : 0);
+    element.scrollTop = (scrollHeight - height) / 2 + (center ? center.y * layout.zoomView.zoom : 0);
+    if (!layout.geometry.assetId || layout.geometry.compact) return;
+
     const offsetX = (layout.diagramSize - scrollWidth) / 2;
     const offsetY = (layout.diagramSize - scrollHeight) / 2;
     let previousLeft = element.scrollLeft;
@@ -76,11 +106,9 @@ export function useTimelineRelationViewport(scrollport: RefObject<HTMLDivElement
     let frame: number | null = null;
     const updateVisible = (scrollLeft: number, scrollTop: number) => {
       // Keep a keyboard-focused node or label mounted even when its position leaves the view.
-      const target = document.activeElement;
-      const focusedPeerId = element.contains(target) ? target?.closest<HTMLElement>("[data-peer-id]")?.dataset.peerId : undefined;
-      setScroll({layout, viewport: {left: scrollLeft + offsetX, top: scrollTop + offsetY, width, height}, focusedPeerId});
+      setScroll({layout, viewport: {left: scrollLeft + offsetX, top: scrollTop + offsetY, width, height},
+        focusedPeerId: focusedPeer(element, document.activeElement)});
     };
-    if (previous?.assetId === layout.assetId && previous.zoom !== layout.zoom) updateVisible(previousLeft, previousTop);
     const onScroll = () => {
       if (frame !== null) return;
       frame = requestAnimationFrame(() => {
@@ -92,11 +120,12 @@ export function useTimelineRelationViewport(scrollport: RefObject<HTMLDivElement
         updateVisible(scrollLeft, scrollTop);
       });
     };
-    const updateFocusedPeer = (target: EventTarget | null) => {
-      const focusedPeerId = target instanceof Element && element.contains(target)
-        ? target.closest<HTMLElement>("[data-peer-id]")?.dataset.peerId : undefined;
-      setScroll(current => current?.layout === layout && current.focusedPeerId !== focusedPeerId
-        ? {...current, focusedPeerId} : current);
+    const updateFocusedPeer = (elementTarget: EventTarget | null) => {
+      const focusedPeerId = focusedPeer(element, elementTarget);
+      setScroll(current => {
+        const view = current?.layout === layout ? current : layout.target;
+        return view && view.focusedPeerId !== focusedPeerId ? {layout, viewport: view.viewport, focusedPeerId} : current;
+      });
     };
     const onFocusIn = (event: FocusEvent) => updateFocusedPeer(event.target);
     const onFocusOut = (event: FocusEvent) => updateFocusedPeer(event.relatedTarget);
@@ -113,7 +142,7 @@ export function useTimelineRelationViewport(scrollport: RefObject<HTMLDivElement
 
   useLayoutEffect(() => {
     const element = scrollport.current;
-    if (!element || !layout.assetId || layout.compact || closing) return;
+    if (!element || !assetId || compact || closing) return;
     let drag: {pointerId: number; x: number; y: number; scrollLeft: number; scrollTop: number} | null = null;
 
     const stopDrag = () => {
@@ -161,7 +190,8 @@ export function useTimelineRelationViewport(scrollport: RefObject<HTMLDivElement
       stopDrag();
       const {left, top} = element.getBoundingClientRect();
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? element.clientHeight : 1;
-      zoomTo((pendingZoom.current?.zoom ?? layout.zoom) * Math.exp(-event.deltaY * unit * 0.002),
+      const pending = pendingZoom.current?.target?.geometry === geometry ? pendingZoom.current : null;
+      zoomTo((pending?.zoom ?? zoom) * Math.exp(-event.deltaY * unit * 0.002),
         {x: event.clientX - left, y: event.clientY - top});
     };
     element.addEventListener("pointerdown", onPointerDown);
@@ -183,7 +213,7 @@ export function useTimelineRelationViewport(scrollport: RefObject<HTMLDivElement
       window.removeEventListener("blur", stopDrag);
       stopDrag();
     };
-  }, [layout, scrollport, closing, resetView, zoomTo]);
+  }, [assetId, compact, geometry, zoom, scrollport, closing, resetView, zoomTo]);
 
-  return {diagramSize, overflow, zoom, zoomTo, resetView, initial: layout.initial, scrolled: scroll?.layout === layout ? scroll : null};
+  return {diagramSize, overflow, zoom, zoomTo, resetView, initial: layout.initial, scrolled: scroll?.layout === layout ? scroll : target};
 }

@@ -5,7 +5,7 @@ import {Button, CanvasZoomControls, Icon} from "@lodestory/ui";
 import type {TimelineEvent} from "./timelineEventStore";
 import {getTimelineAssetOrbit, isRelationInViewport, layoutRelationLabels, relationLabelPosition, timelineFocusEventCenter, type OrbitSlot} from "./timelineAssetOrbit";
 import {groupFocusAssets, relationLabelsByAsset} from "./timelineFocusAssetData";
-import {useTimelineRelationViewport} from "./useTimelineRelationViewport";
+import {relationStageMinSize, useTimelineRelationViewport} from "./useTimelineRelationViewport";
 import {TimelineTextZoomSwitch} from "./TimelineTextZoomSwitch";
 import "./timeline-focus-assets.css";
 
@@ -223,6 +223,7 @@ export function TimelineFocusAssets({event, catalog, network, focusedAsset, orig
   const message = assetId ? relationMessage : !total ? "暂无关联资产"
     : snapshot?.loading && !snapshot.loaded ? "正在读取关联资产…" : !catalogReady ? "资产目录暂不可用" : null;
   const sceneStyle = compact ? undefined : {width: diagramSize, height: diagramSize};
+  const stageStyle = pannable ? {...sceneStyle, minWidth: relationStageMinSize, minHeight: relationStageMinSize} : sceneStyle;
   const enteringCenter = !compact && Boolean(origin);
   const graphMoved = Boolean(scrolled);
   const style = {...sceneVariables,
@@ -358,7 +359,7 @@ export function TimelineFocusAssets({event, catalog, network, focusedAsset, orig
           || click.clientY >= bounds.top + click.currentTarget.clientHeight) return;
         if (!click.target.closest(".timeline-focus-event, .timeline-focus-relation-center, .timeline-focus-asset, .timeline-focus-relation-label")) onBack();
       } : undefined}>
-    <div key={assetId ?? "event"} className="timeline-focus-stage" style={sceneStyle}>
+    <div key={assetId ?? "event"} className="timeline-focus-stage" style={stageStyle}>
     <div ref={scene} className="timeline-focus-scene" data-empty={!total || undefined} data-scrolled={Boolean(scrolled) || undefined} style={sceneStyle}>
       {orbit?.rings.map(ring => <div key={ring.radius} className="timeline-focus-orbit" aria-hidden="true"
         style={{inset: diagramSize / 2 - ring.radius * graphZoom}} />)}

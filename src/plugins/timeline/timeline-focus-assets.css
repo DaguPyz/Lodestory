@@ -109,8 +109,7 @@
 }
 
 .timeline-focus-viewport[data-pannable] .timeline-focus-stage {
-  min-width: 200%;
-  min-height: 200%;
+  overflow: clip;
 }
 
 .timeline-focus-scene {

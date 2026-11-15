@@ -982,9 +982,29 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       assert.ok(Math.abs(afterGraphWheel.x - (pointer.x + (at125.x - pointer.x) * wheelFactor)) < 1
         && Math.abs(afterGraphWheel.y - (pointer.y + (at125.y - pointer.y) * wheelFactor)) < 1,
       "the point under the pointer stays anchored during graph zoom");
+      await evaluate(`(() => {
+        const scene = document.querySelector('.timeline-focus-scene');
+        let changes = 0;
+        const observer = new MutationObserver(records => { changes += records.length; });
+        observer.observe(scene, {attributeFilter: ['data-scrolled']});
+        window.__finishGraphZoom = () => {
+          changes += observer.takeRecords().length;
+          observer.disconnect();
+          delete window.__finishGraphZoom;
+          return changes;
+        };
+      })()`);
       await mouse("mouseWheel", pointer.x, pointer.y, {deltaY: -1200, modifiers: 2});
       await waitFor(() => evaluate(`document.querySelector(${JSON.stringify(graphToolbar)})
         .querySelector('.canvas-zoom-value').textContent === '400%'`), "the graph does not reach its maximum zoom");
+      const atMaximumZoom = await graphPosition();
+      const maxZoomFactor = 4 / (1.25 * wheelFactor);
+      const maxRadius = atOriginalZoom.width * 2;
+      assert.ok(Math.abs(atMaximumZoom.x + maxRadius - (pointer.x + (afterGraphWheel.x - pointer.x) * maxZoomFactor)) < 1
+        && Math.abs(atMaximumZoom.y + maxRadius - (pointer.y + (afterGraphWheel.y - pointer.y) * maxZoomFactor)) < 1,
+      "cursor anchoring survives the switch from minimum stage size to diagram size");
+      assert.equal(await evaluate("window.__finishGraphZoom()"), 0,
+        "zoom keeps the anchored viewport throughout the update without falling back to the centered layout");
       assert.equal(await evaluate("getComputedStyle(document.querySelector('.timeline-focus-relation-name')).fontSize"), "64px");
       assert.ok(await evaluate("document.querySelector('.timeline-focus-relation-line').getAttribute('d').length > 0"),
         "connections remain visible even when their nodes leave the view");

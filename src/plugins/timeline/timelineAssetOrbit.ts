@@ -5,9 +5,10 @@ const edgeInset = 48;
 
 export type OrbitSlot = Readonly<{x: number; y: number; offsetX: number; offsetY: number}>;
 export type OrbitViewport = Readonly<{left: number; top: number; width: number; height: number}>;
+type RelationLabel = Readonly<{id: string; position: OrbitSlot; labelPosition: {x: number; y: number}; label: string}>;
 
 export function relationLabelPosition(slot: OrbitSlot, rem: number) {
-  const ratio = 1 - 5.5 * rem / Math.hypot(slot.offsetX, slot.offsetY);
+  const ratio = Math.max(0.5, 1 - 5.5 * rem / Math.hypot(slot.offsetX, slot.offsetY));
   return {x: 50 + (slot.x - 50) * ratio, y: 50 + (slot.y - 50) * ratio};
 }
 
@@ -23,6 +24,53 @@ export function isRelationInViewport(slot: OrbitSlot, label: {x: number; y: numb
     return horizontal >= left && horizontal <= right && vertical >= top && vertical <= bottom;
   };
   return contains(slot) || contains(label);
+}
+
+/** Reserve space for nodes and labels when their text is larger than the zoomed layout. */
+export function layoutRelationLabels(relations: readonly RelationLabel[], diameter: number, nodeRem: number, textRem: number,
+  selectedId: string | null, focusedId?: string) {
+  const cellSize = 8 * textRem;
+  const occupied = new Map<string, OrbitViewport[]>();
+  const shown = new Set<string>();
+  const boundsAt = ({x, y}: {x: number; y: number}, width: number, height: number) => ({
+    left: x * diameter / 100 - width / 2, top: y * diameter / 100 - height / 2, width, height,
+  });
+  function cells(bounds: OrbitViewport) {
+    const keys: string[] = [];
+    for (let x = Math.floor(bounds.left / cellSize); x <= Math.floor((bounds.left + bounds.width) / cellSize); x++) {
+      for (let y = Math.floor(bounds.top / cellSize); y <= Math.floor((bounds.top + bounds.height) / cellSize); y++) {
+        keys.push(`${x},${y}`);
+      }
+    }
+    return keys;
+  }
+  function occupy(bounds: OrbitViewport, keys = cells(bounds)) {
+    for (const key of keys) {
+      const bucket = occupied.get(key);
+      if (bucket) bucket.push(bounds);
+      else occupied.set(key, [bounds]);
+    }
+  }
+  const centerSize = Math.max(24, 6 * nodeRem);
+  const peerSize = Math.max(24, 4.5 * nodeRem);
+  occupy(boundsAt(timelineFocusEventCenter, centerSize + 4, centerSize + 4));
+  for (const relation of relations) occupy(boundsAt(relation.position, peerSize + 4, peerSize + 4));
+
+  const preferred = relations.filter(({id}) => id === selectedId || id === focusedId);
+  for (const relation of [...preferred, ...relations]) {
+    if (!relation.label || shown.has(relation.id)) continue;
+    const measured = [...relation.label].reduce((width, char) => width + (char.codePointAt(0)! > 255 ? 0.875 : 0.5) * textRem, 0);
+    const width = Math.max(24, Math.min(measured + 0.5 * textRem, 8 * textRem));
+    const height = Math.max(24, (measured + 0.5 * textRem > width ? 2.75 : 1.5) * textRem);
+    const box = boundsAt(relation.labelPosition, width, height);
+    const keys = cells(box);
+    if (relation.id !== selectedId && relation.id !== focusedId && keys.some(key => occupied.get(key)?.some(other =>
+      box.left < other.left + other.width && box.left + box.width > other.left
+      && box.top < other.top + other.height && box.top + box.height > other.top))) continue;
+    shown.add(relation.id);
+    occupy(box, keys);
+  }
+  return shown;
 }
 
 /** Positions and travel share the same center, so assets emerge from the event. */

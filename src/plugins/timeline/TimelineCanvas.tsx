@@ -7,6 +7,7 @@ import {Button, Dialog, DialogActions, TextField} from "@lodestory/ui";
 import type {TimelineAxisStore, TimelineAxisSettings} from "./timelineAxisStore";
 import type {TimelineEventStore} from "./timelineEventStore";
 import {TimelineEvents} from "./TimelineEvents";
+import {TimelineTextZoomSwitch} from "./TimelineTextZoomSwitch";
 import type {TimelineEventsGeometry} from "./timelineEventsGeometry";
 import {getStemSegmentTiming, type TimelineStemSegment} from "./timelineStemSegments";
 import {formatTimelineAxisValue, getTimelineAxisGeometry, TIMELINE_AXIS_LABEL_LAYOUT, type TimelineAxisTick} from "./timelineAxisGeometry";
@@ -14,6 +15,27 @@ import {formatTimelineAxisValue, getTimelineAxisGeometry, TIMELINE_AXIS_LABEL_LA
 type Draft = {origin: string; step: string; unit: string};
 type Size = {width: number; height: number};
 
+export function createTimelineCanvasView(viewport: CanvasViewport) {
+  let scaleTextWithZoom = false;
+  const listeners = new Set<() => void>();
+  return {
+    viewport,
+    getScaleTextWithZoom: () => scaleTextWithZoom,
+    subscribe(listener: () => void) {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+    setScaleTextWithZoom(enabled: boolean) {
+      if (enabled === scaleTextWithZoom || viewport.getSnapshot().disposed) return;
+      scaleTextWithZoom = enabled;
+      for (const listener of [...listeners]) listener();
+    },
+    dispose() {
+      listeners.clear();
+      viewport.dispose();
+    },
+  };
+}
 
 function draftFromSettings(settings: TimelineAxisSettings): Draft {
   return {origin: String(settings.origin), step: String(settings.step), unit: settings.unit};
@@ -51,12 +73,12 @@ function AxisTicks({ticks, axisY, worldHalfWidth, zoom}: {ticks: readonly Timeli
   </g></>;
 }
 
-export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelations = null, viewport, active, title, axis, events, openToken = null, onEditingChange}: {
+export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelations = null, canvasView, active, title, axis, events, openToken = null, onEditingChange}: {
   canvas: CanvasService;
   contextMenus: ContextMenuService;
   assetCatalog: AssetCatalog | null;
   assetRelations?: AssetRelationNetwork | null;
-  viewport: CanvasViewport;
+  canvasView: ReturnType<typeof createTimelineCanvasView>;
   active: boolean;
   title: string;
   axis: TimelineAxisStore;
@@ -64,9 +86,11 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
   openToken?: string | null;
   onEditingChange?: (editing: boolean) => void;
 }) {
+  const {viewport, getScaleTextWithZoom} = canvasView;
   const snapshot = useSyncExternalStore(axis.subscribe, axis.getSnapshot, axis.getSnapshot);
   const eventSnapshot = useSyncExternalStore(events.subscribe, events.getSnapshot, events.getSnapshot);
   const view = useSyncExternalStore(viewport.subscribe, viewport.getSnapshot, viewport.getSnapshot);
+  const scaleTextWithZoom = useSyncExternalStore(canvasView.subscribe, getScaleTextWithZoom, getScaleTextWithZoom);
   const frame = useRef<HTMLDivElement>(null);
   const growthGeometry = useRef<TimelineEventsGeometry | null>(null);
   const growthStems = useRef<readonly TimelineStemSegment[] | null>(null);
@@ -84,6 +108,7 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
   const [size, setSize] = useState<Size>({width: 0, height: 0});
   const [editing, setEditing] = useState(false);
   const [eventEditing, setEventEditing] = useState(false);
+  const [relationFocused, setRelationFocused] = useState(false);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [operationError, setOperationError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -468,10 +493,13 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
     && Number.isFinite(parsedStep) && parsedStep >= 0.000001 && parsedStep <= 1_000_000_000
     && [...trimmedUnit].length <= 20 && !/[\u0000-\u001f\u007f-\u009f]/u.test(trimmedUnit);
   const Surface = canvas.Surface;
+  const surfaceActive = active && !editing && !eventEditing && !relationFocused;
 
   return <div className="timeline-canvas-frame" ref={frame} onPointerDownCapture={finishGrowth} onWheelCapture={finishGrowth}
     onKeyDownCapture={finishGrowth} onFocusCapture={finishGrowth}>
-    <Surface viewport={viewport} active={active && !editing && !eventEditing} label={`${title}时间轴`} grid="none">
+    <Surface viewport={viewport} active={surfaceActive} label={`${title}时间轴`} grid="none" showControls={!relationFocused}
+      zoomControls={<TimelineTextZoomSwitch checked={scaleTextWithZoom} disabled={!surfaceActive || view.disposed}
+        onChange={canvasView.setScaleTextWithZoom} />}>
       {snapshot.loaded && geometry.width > 0 && geometry.height > 0 && <div className="timeline-axis-overlay" style={axisOverlayStyle}>
         <svg className="timeline-axis-svg" role="img"
           aria-label={`${title}，单位${snapshot.settings.unit}，故事起点为${formatTimelineAxisValue(snapshot.settings.origin)}`}
@@ -492,8 +520,9 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
         growthGeometryRef={growthGeometry}
         growthStemsRef={growthStems}
         axisLabelBounds={geometry.labelBounds}
+        scaleTextWithZoom={scaleTextWithZoom}
         active={active && snapshot.loaded && !snapshot.loading && !snapshot.blocked && !editing}
-        onEditingChange={setIsEventEditing}/>}
+        onEditingChange={setIsEventEditing} onRelationFocusChange={setRelationFocused}/>}
     </Surface>
 
     <div className="timeline-axis-unit" style={{top: unitTop}}>

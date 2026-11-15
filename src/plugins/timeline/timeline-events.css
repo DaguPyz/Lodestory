@@ -148,8 +148,8 @@
 .timeline-event-offset {
   overflow: hidden;
   color: var(--ui-text-secondary);
-  font-size: var(--ui-font-size-caption);
-  line-height: var(--ui-line-height-caption);
+  font-size: calc(var(--ui-font-size-caption) * var(--timeline-text-scale, 1));
+  line-height: calc(var(--ui-line-height-caption) * var(--timeline-text-scale, 1));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -158,9 +158,9 @@
   display: block;
   overflow: hidden;
   color: var(--ui-text-primary);
-  font-size: var(--ui-font-size-title);
+  font-size: calc(var(--ui-font-size-title) * var(--timeline-text-scale, 1));
   font-weight: 600;
-  line-height: var(--ui-line-height-title);
+  line-height: calc(var(--ui-line-height-title) * var(--timeline-text-scale, 1));
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -189,30 +189,30 @@
 
 .timeline-event-title-rule {
   display: block;
-  width: 28px;
+  width: calc(28px * var(--timeline-text-scale, 1));
   height: 1px;
-  margin-top: 1px;
+  margin-top: calc(1px * var(--timeline-text-scale, 1));
   background: var(--ui-text-secondary);
 }
 
 .timeline-event-summary {
   display: -webkit-box;
-  max-height: 40px;
-  margin-top: 10px;
+  max-height: calc(40px * var(--timeline-text-scale, 1));
+  margin-top: calc(10px * var(--timeline-text-scale, 1));
   overflow: hidden;
   color: var(--ui-text-secondary);
-  font-size: var(--ui-font-size-label);
-  line-height: var(--ui-line-height-label);
+  font-size: calc(var(--ui-font-size-label) * var(--timeline-text-scale, 1));
+  line-height: calc(var(--ui-line-height-label) * var(--timeline-text-scale, 1));
   overflow-wrap: anywhere;
   text-overflow: ellipsis;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
 
-.timeline-event-label-above .timeline-event-title { margin-top: 1px; }
-.timeline-event-label-above .timeline-event-summary { margin-top: 12px; }
-.timeline-event-label-below .timeline-event-title { margin-top: 15px; }
-.timeline-event-label-below .timeline-event-summary { margin-top: 8px; }
+.timeline-event-label-above .timeline-event-title { margin-top: calc(1px * var(--timeline-text-scale, 1)); }
+.timeline-event-label-above .timeline-event-summary { margin-top: calc(12px * var(--timeline-text-scale, 1)); }
+.timeline-event-label-below .timeline-event-title { margin-top: calc(15px * var(--timeline-text-scale, 1)); }
+.timeline-event-label-below .timeline-event-summary { margin-top: calc(8px * var(--timeline-text-scale, 1)); }
 
 .timeline-event-label-important .timeline-event-offset,
 .timeline-event-label-important .timeline-event-title-rule { color: var(--ui-status-warning); }

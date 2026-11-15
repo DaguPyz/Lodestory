@@ -1,4 +1,5 @@
 export { Button, IconButton, type ButtonProps, type IconButtonProps } from "./Button.js";
+export { CanvasZoomControls, type CanvasZoomControlsProps } from "./CanvasZoomControls.js";
 export { Icon, type IconProps, type IconName, type IconSize } from "./Icon.js";
 export { BrandLogo, type BrandLogoProps } from "./BrandLogo.js";
 export { SearchField, type SearchFieldProps } from "./SearchField.js";

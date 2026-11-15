@@ -1,11 +1,12 @@
 import {useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode} from "react";
 import type {AssetCatalog, AssetCatalogSnapshot} from "@lodestory/sdk/asset-catalog";
 import type {AssetRelationNetwork, AssetRelationSnapshot} from "@lodestory/sdk/asset-relations";
-import {Button, Icon} from "@lodestory/ui";
+import {Button, CanvasZoomControls, Icon} from "@lodestory/ui";
 import type {TimelineEvent} from "./timelineEventStore";
-import {getTimelineAssetOrbit, isRelationInViewport, relationLabelPosition, timelineFocusEventCenter, type OrbitSlot} from "./timelineAssetOrbit";
-import {groupFocusAssets, relationLabelsByAsset, type FocusAsset} from "./timelineFocusAssetData";
+import {getTimelineAssetOrbit, isRelationInViewport, layoutRelationLabels, relationLabelPosition, timelineFocusEventCenter, type OrbitSlot} from "./timelineAssetOrbit";
+import {groupFocusAssets, relationLabelsByAsset} from "./timelineFocusAssetData";
 import {useTimelineRelationViewport} from "./useTimelineRelationViewport";
+import {TimelineTextZoomSwitch} from "./TimelineTextZoomSwitch";
 import "./timeline-focus-assets.css";
 
 const emptySubscribe = () => () => {};
@@ -13,6 +14,8 @@ const emptySnapshot = () => null;
 const fontSizeInPixels = () => Number.parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 
 export type AssetClickPosition = Readonly<{x: number; y: number; width: number}>;
+export type FocusedAsset = Readonly<{id: string; previous: FocusedAsset | null}>;
+export type TimelineFocusTarget = "timeline" | "event" | FocusedAsset;
 
 const sceneInset = {top: 56, bottom: 72, horizontal: 24};
 const entrancePhaseCount = 3;
@@ -84,28 +87,31 @@ function assetPressOrigin(button: HTMLButtonElement) {
   return {x: left + width / 2, y: top + height / 2, width};
 }
 
-type PositionedAsset = Readonly<{asset: FocusAsset; position: OrbitSlot; labelPosition: {x: number; y: number}}>;
+type PositionedAsset = Readonly<{id: string; name: string; position: OrbitSlot; labelPosition: {x: number; y: number}; label: string}>;
 type FocusNodeStyle = CSSProperties & Partial<Record<`--timeline-focus-${string}`, string | number>>;
 
-function relationSegment({offsetX, offsetY}: OrbitSlot, center: number, rem: number) {
-  const ratio = 1 - 2.2 * rem / Math.hypot(offsetX, offsetY);
+function relationSegment(position: OrbitSlot, center: number, zoom: number, nodeRem: number) {
+  const offsetX = position.offsetX * zoom;
+  const offsetY = position.offsetY * zoom;
+  const ratio = Math.max(0, 1 - Math.max(12, 2.2 * nodeRem) / Math.hypot(offsetX, offsetY));
   return `M${center} ${center}L${center - offsetX * ratio} ${center - offsetY * ratio}`;
 }
 
-export function TimelineFocusAssets({event, catalog, network, assetId, origin, size, closing, backLabel, onFocusAsset, onExit, onExited, children}: {
+export function TimelineFocusAssets({event, catalog, network, focusedAsset, origin, size, closing, onFocusAsset, onNavigate, onBack, onExited, children}: {
   event: TimelineEvent;
   catalog: AssetCatalog | null;
   network: AssetRelationNetwork | null;
-  assetId?: string;
+  focusedAsset: FocusedAsset | null;
   origin?: AssetClickPosition | null;
   size: Readonly<{width: number; height: number}>;
   closing: boolean;
-  backLabel: string;
   onFocusAsset(id: string, origin: AssetClickPosition | null): void;
-  onExit(): void;
+  onNavigate(target: TimelineFocusTarget): void;
+  onBack(): void;
   onExited(): void;
   children: ReactNode;
 }) {
+  const assetId = focusedAsset?.id;
   const snapshot = useSyncExternalStore<AssetCatalogSnapshot | null>(
     catalog?.subscribe ?? emptySubscribe, catalog?.getSnapshot ?? emptySnapshot, emptySnapshot,
   );
@@ -113,12 +119,24 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
   const relationSnapshot = useSyncExternalStore<AssetRelationSnapshot | null>(
     activeNetwork?.subscribe ?? emptySubscribe, activeNetwork?.getSnapshot ?? emptySnapshot, emptySnapshot,
   );
-  const relations = assetId && relationSnapshot?.loaded ? activeNetwork?.getRelations(assetId) : undefined;
-  const relationLabels = useMemo(() => assetId && relations ? relationLabelsByAsset(assetId, relations) : null, [assetId, relations]);
+  const relationLabels = useMemo(() => assetId && activeNetwork && relationSnapshot?.loaded
+    ? relationLabelsByAsset(assetId, activeNetwork.getRelations(assetId)) : null, [assetId, activeNetwork, relationSnapshot]);
   const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null);
+  const [scaleTextWithZoom, setScaleTextWithZoom] = useState(false);
   const highlightedPeerId = selectedPeerId && relationLabels?.has(selectedPeerId) ? selectedPeerId : null;
   const assetIds = useMemo(() => assetId ? [...(relationLabels?.keys() ?? [])] : event.assetIds, [assetId, relationLabels, event.assetIds]);
   const catalogReady = Boolean(snapshot?.loaded && !snapshot.blocked && !snapshot.error);
+  const breadcrumbs = useMemo(() => {
+    const path: {label: string; target: TimelineFocusTarget}[] = [];
+    if (focusedAsset) {
+      const names = new Map(snapshot?.assets.map(asset => [asset.id, asset.name]));
+      for (let asset: FocusedAsset | null = focusedAsset; asset; asset = asset.previous) {
+        path.push({label: names.get(asset.id) ?? (catalogReady ? "资产不可用" : "资产待确认"), target: asset});
+      }
+    }
+    path.push({label: event.title, target: "event"}, {label: "时间线", target: "timeline"});
+    return path.reverse();
+  }, [focusedAsset, event.title, snapshot?.assets, catalogReady]);
   const groups = useMemo(() => groupFocusAssets(assetIds, snapshot), [assetIds, snapshot]);
   const centerGroup = useMemo(() => assetId ? groupFocusAssets([assetId], snapshot)[0] : undefined, [assetId, snapshot]);
   const center = centerGroup?.items[0];
@@ -127,8 +145,9 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
   const relationLabelId = useId();
   const centerMotion = useRef<HTMLDivElement>(null);
   const summary = useRef<HTMLHeadingElement>(null);
-  const toolbarBack = useRef<HTMLButtonElement>(null);
-  const previousAsset = useRef(assetId);
+  const breadcrumbBar = useRef<HTMLElement>(null);
+  const timelineCrumb = useRef<HTMLButtonElement>(null);
+  const previousAsset = useRef(focusedAsset);
   const total = assetIds.length;
   const diameter = Math.min(size.width - 2 * sceneInset.horizontal,
     size.height - sceneInset.top - sceneInset.bottom, 600);
@@ -137,30 +156,42 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
   const orbit = useMemo(() => compact ? null : getTimelineAssetOrbit(groups.map(group => ({count: group.items.length})),
     {width: diameter, height: diameter}, assetId ? {spacing: 12 * rem, offsetRings: true} : undefined),
   [groups, diameter, compact, assetId, rem]);
-  const diagramSize = orbit?.diameter ?? diameter;
-  const overflow = !compact && (diagramSize > size.width - 2 * sceneInset.horizontal
-    || diagramSize > size.height - sceneInset.top - sceneInset.bottom);
-  const {initial, scrolled} = useTimelineRelationViewport(scrollport, {
-    assetId, diameter: diagramSize, overflow, compact,
+  const pannable = Boolean(assetId && !compact);
+  const {diagramSize, overflow, zoom, zoomTo, resetView, initial, scrolled} = useTimelineRelationViewport(scrollport, {
+    assetId, diameter: orbit?.diameter ?? diameter, compact, closing,
     width: size.width - 2 * sceneInset.horizontal, height: size.height - sceneInset.top - sceneInset.bottom,
   });
+  const scrollable = overflow || pannable;
+  const graphZoom = pannable ? zoom : 1;
+  const textScale = scaleTextWithZoom ? graphZoom : 1;
+  const nodeScale = scaleTextWithZoom ? textScale : Math.max(0.55, Math.min(1, graphZoom * 2));
+  const lineScale = scaleTextWithZoom ? textScale : Math.max(0.8, nodeScale);
+  const nodeRem = rem * nodeScale;
+  const textRem = rem * textScale;
   const shownGroups = useMemo(() => {
     let order = 0;
     return groups.map((group, groupIndex) => ({
       ...group, items: group.items.map((asset, index) => {
         const position = orbit?.groups[groupIndex].slots[index];
-        const relation = assetId && position ? {asset, position, labelPosition: relationLabelPosition(position, rem)} : null;
+        const relation = assetId && position
+          ? {id: asset.id, name: asset.name, position, label: relationLabels?.get(asset.id) ?? "",
+            labelPosition: relationLabelPosition(position, textRem / graphZoom)} : null;
         return {asset, order: order++, position, relation,
-          initial: !relation || !overflow || isRelationInViewport(relation.position, relation.labelPosition, diagramSize, initial, rem),
+          initial: !relation || !overflow || isRelationInViewport(relation.position, relation.labelPosition, diagramSize, initial, textRem),
         };
       }),
     }));
-  }, [groups, orbit, assetId, overflow, diagramSize, initial, rem]);
+  }, [groups, orbit, assetId, relationLabels, overflow, diagramSize, initial, textRem, graphZoom]);
   const visibleGroups = useMemo(() => shownGroups.map(group => ({
-    ...group, items: scrolled ? group.items.filter(({asset, relation}) => !relation || asset.id === scrolled.focusedPeerId
-      || isRelationInViewport(relation.position, relation.labelPosition, diagramSize, scrolled.viewport, rem))
+    ...group, items: scrolled && overflow ? group.items.filter(({asset, relation}) => !relation || asset.id === scrolled.focusedPeerId
+      || isRelationInViewport(relation.position, relation.labelPosition, diagramSize, scrolled.viewport, textRem))
       : group.items.filter(item => item.initial),
-  })), [shownGroups, scrolled, diagramSize, rem]);
+  })), [shownGroups, scrolled, overflow, diagramSize, textRem]);
+  const visibleLabels = useMemo(() => {
+    if (graphZoom >= textScale) return null;
+    const visible = visibleGroups.flatMap(group => group.items.flatMap(({relation}) => relation ? [relation] : []));
+    return layoutRelationLabels(visible, diagramSize, nodeRem, textRem, highlightedPeerId, scrolled?.focusedPeerId);
+  }, [visibleGroups, diagramSize, nodeRem, textRem, graphZoom, textScale, highlightedPeerId, scrolled?.focusedPeerId]);
   const entranceOrder = useMemo(() => {
     const initiallyVisible = shownGroups.flatMap(group => group.items.filter(item => item.relation && item.initial));
     const count = initiallyVisible.length;
@@ -177,9 +208,15 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
       }
     }
     return batches.map((items, phase) => ({
-      phase, items, path: items.map(({position}) => relationSegment(position, diagramSize / 2, rem)).join(""),
+      phase, items, path: items.map(({position}) => relationSegment(position, diagramSize / 2, graphZoom, nodeRem)).join(""),
     }));
-  }, [assetId, orbit, visibleGroups, entranceOrder, diagramSize, rem]);
+  }, [assetId, orbit, visibleGroups, entranceOrder, diagramSize, graphZoom, nodeRem]);
+  const fullRelationPath = useMemo(() => {
+    if (!overflow || graphZoom <= 1) return "";
+    // Keep connections crossing the view when their nodes and labels are outside it.
+    return shownGroups.flatMap(({items}) => items.flatMap(({relation}) => relation
+      ? [relationSegment(relation.position, diagramSize / 2, graphZoom, nodeRem)] : [])).join("");
+  }, [overflow, graphZoom, shownGroups, diagramSize, nodeRem]);
   const relationMessage = relationSnapshot?.loading ? "正在读取资产关系…"
     : !relationSnapshot?.loaded ? "资产关系读取失败"
     : !total ? "暂无资产关系" : null;
@@ -187,22 +224,36 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
     : snapshot?.loading && !snapshot.loaded ? "正在读取关联资产…" : !catalogReady ? "资产目录暂不可用" : null;
   const sceneStyle = compact ? undefined : {width: diagramSize, height: diagramSize};
   const enteringCenter = !compact && Boolean(origin);
+  const graphMoved = Boolean(scrolled);
   const style = {...sceneVariables,
+    "--timeline-focus-text-scale": textScale,
+    "--timeline-focus-node-scale": nodeScale,
+    "--timeline-focus-line-scale": lineScale,
     "--timeline-focus-summary-width": `${diameter * 0.52}px`,
     "--timeline-focus-reveal-step": `${Math.min(65, 720 / Math.max(1, total - 1))}ms`,
     "--timeline-focus-dismiss-step": `${Math.min(22, 154 / Math.max(1, total - 1))}ms`,
   } as CSSProperties;
 
   useLayoutEffect(() => {
-    if (selectedPeerId && (previousAsset.current !== assetId || !relationLabels?.has(selectedPeerId))) setSelectedPeerId(null);
-    if (previousAsset.current === assetId) return;
-    previousAsset.current = assetId;
-    (assetId ? summary.current : toolbarBack.current)?.focus({preventScroll: true});
-  }, [assetId, relationLabels, selectedPeerId]);
+    if (selectedPeerId && (previousAsset.current !== focusedAsset || !relationLabels?.has(selectedPeerId))) setSelectedPeerId(null);
+    if (previousAsset.current === focusedAsset) return;
+    previousAsset.current = focusedAsset;
+    if (!focusedAsset) setScaleTextWithZoom(false);
+    (focusedAsset ? summary.current : timelineCrumb.current)?.focus({preventScroll: true});
+  }, [focusedAsset, relationLabels, selectedPeerId]);
+
+  useLayoutEffect(() => {
+    const bar = breadcrumbBar.current;
+    if (bar) bar.scrollLeft = bar.scrollWidth;
+  }, [breadcrumbs, size.width]);
 
   useLayoutEffect(() => {
     if (centerMotion.current && origin && enteringCenter) return moveToCenter(centerMotion.current, origin);
   }, [assetId, enteringCenter, origin]);
+
+  useLayoutEffect(() => {
+    if (graphMoved) centerMotion.current?.getAnimations().forEach(animation => animation.cancel());
+  }, [graphMoved]);
 
   useLayoutEffect(() => {
     if (!closing || !scene.current) return;
@@ -264,38 +315,53 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
     };
   }, [closing, compact, onExited]);
 
-  function renderRelationLabel(asset: FocusAsset, label: string, position?: PositionedAsset["labelPosition"], phase?: number) {
-    return <button key={asset.id} type="button" data-canvas-interactive data-peer-id={asset.id}
+  function renderRelationLabel(id: string, name: string, label: string, position?: PositionedAsset["labelPosition"], phase?: number) {
+    return <button key={id} type="button" data-canvas-interactive data-peer-id={id}
       className={compact ? "timeline-focus-relation-list-label" : "timeline-focus-relation-label"}
       data-relation-motion={phase === entrancePhaseCount ? "scroll" : undefined}
-      aria-label={`${label}（${asset.name}）`} aria-pressed={highlightedPeerId === asset.id} title={label}
+      aria-label={`${label}（${name}）`} aria-pressed={highlightedPeerId === id} title={label}
       style={position && {left: `${position.x}%`, top: `${position.y}%`}}
       onClick={event => {
         if (event.ctrlKey) return;
-        setSelectedPeerId(current => current === asset.id ? null : asset.id);
-      }}><span id={`${relationLabelId}-${asset.id}`}>{label}</span></button>;
+        setSelectedPeerId(current => current === id ? null : id);
+      }}><span id={`${relationLabelId}-${id}`}>{label}</span></button>;
   }
 
   return <div className="timeline-focus-assets" style={style} data-compact={compact || undefined}
     data-relations={Boolean(assetId) || undefined} data-centering={enteringCenter || undefined}
+    data-small-nodes={nodeScale < 0.8 && !scaleTextWithZoom || undefined}
     inert={closing} data-closing={closing || undefined}>
-    <div className="timeline-focus-toolbar" data-canvas-interactive>
-      <Button ref={toolbarBack} variant="ghost" onClick={onExit}><Icon name="arrowLeft" />{backLabel}</Button>
+    <div className="timeline-focus-toolbar">
+      <nav ref={breadcrumbBar} className="timeline-focus-breadcrumbs" aria-label="时间线浏览路径" data-canvas-interactive>
+        <ol>
+          {breadcrumbs.map(({label, target}, index) => {
+            const text = <span className="timeline-focus-crumb-label">{label}</span>;
+            return <li key={index}>
+              {index > 0 && <Icon name="chevronRight" size="small" />}
+              {index === breadcrumbs.length - 1
+                ? <span className="timeline-focus-crumb-current" aria-current="page" title={label}>{text}</span>
+                : <Button ref={target === "timeline" ? timelineCrumb : undefined} variant="ghost" title={label}
+                  onClick={() => onNavigate(target)}>{text}</Button>}
+            </li>;
+          })}
+        </ol>
+      </nav>
     </div>
-    <div ref={scrollport} className="timeline-focus-viewport" data-overflow={overflow || undefined}
-      data-canvas-interactive={overflow || undefined} tabIndex={overflow ? 0 : undefined}
-      role={overflow ? "region" : undefined} aria-label={overflow ? assetId ? "资产与全部关系" : "事件与全部关联资产" : undefined}
-      onClick={click => {
-        if (!overflow || click.button !== 0 || click.ctrlKey || click.detail > 1 || !(click.target instanceof Element)) return;
+    <div ref={scrollport} className="timeline-focus-viewport" data-overflow={scrollable || undefined}
+      data-pannable={pannable || undefined} data-canvas-interactive={scrollable || undefined} tabIndex={scrollable ? 0 : undefined}
+      role={scrollable ? "region" : undefined} aria-label={scrollable ? assetId ? "资产与全部关系" : "事件与全部关联资产" : undefined}
+      aria-description={pannable ? "拖动空白处或用方向键平移图谱，Ctrl 或 Command 加滚轮缩放，Home 回到原点。" : undefined}
+      onClick={overflow && !assetId ? click => {
+        if (click.button !== 0 || click.ctrlKey || click.detail > 1 || !(click.target instanceof Element)) return;
         const bounds = click.currentTarget.getBoundingClientRect();
         if (click.clientX >= bounds.left + click.currentTarget.clientWidth
           || click.clientY >= bounds.top + click.currentTarget.clientHeight) return;
-        if (!click.target.closest(".timeline-focus-event, .timeline-focus-relation-center, .timeline-focus-asset, .timeline-focus-relation-label")) onExit();
-      }}>
+        if (!click.target.closest(".timeline-focus-event, .timeline-focus-relation-center, .timeline-focus-asset, .timeline-focus-relation-label")) onBack();
+      } : undefined}>
     <div key={assetId ?? "event"} className="timeline-focus-stage" style={sceneStyle}>
     <div ref={scene} className="timeline-focus-scene" data-empty={!total || undefined} data-scrolled={Boolean(scrolled) || undefined} style={sceneStyle}>
       {orbit?.rings.map(ring => <div key={ring.radius} className="timeline-focus-orbit" aria-hidden="true"
-        style={{inset: (diagramSize - ring.radius * 2) / 2}} />)}
+        style={{inset: diagramSize / 2 - ring.radius * graphZoom}} />)}
       {centerGroup && center ? <div className="timeline-focus-relation-center" data-canvas-interactive>
         <div ref={centerMotion} className="timeline-focus-relation-center-motion">
           <div className="timeline-focus-relation-center-node" data-highlighted={Boolean(highlightedPeerId) || undefined}
@@ -317,8 +383,9 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
             style={{"--timeline-focus-category-color": color} as CSSProperties}>
             <ul className="timeline-focus-asset-list">
               {items.map(({asset, order, position, initial}) => {
-                const labels = relationLabels?.get(asset.id);
-                const label = compact && labels?.join(" / ");
+                const relation = relationLabels?.get(asset.id);
+                const hasLabel = !visibleLabels || visibleLabels.has(asset.id);
+                const nodeTitle = relation && !hasLabel ? `${asset.title} · ${relation}` : asset.title;
                 const canInspect = Boolean(network && asset.known);
                 const style: FocusNodeStyle = {
                   "--timeline-focus-asset-order": order,
@@ -329,8 +396,8 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
                     "--timeline-focus-drift-direction": order % 2 ? "reverse" : "normal",
                   }),
                   ...(position && {left: `${position.x}%`, top: `${position.y}%`,
-                    "--timeline-focus-asset-offset-x": `${position.offsetX}px`,
-                    "--timeline-focus-asset-offset-y": `${position.offsetY}px`}),
+                    "--timeline-focus-asset-offset-x": `${position.offsetX * graphZoom}px`,
+                    "--timeline-focus-asset-offset-y": `${position.offsetY * graphZoom}px`}),
                 };
                 const face = <span className="timeline-focus-asset-face">
                   <span className="timeline-focus-asset-dot" aria-hidden="true" />
@@ -343,15 +410,16 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
                   data-relation-motion={assetId && position && (initial ? "enter" : "scroll") || undefined}
                   data-highlighted={highlightedPeerId === asset.id || undefined}>
                   {canInspect ? <button type="button" className="timeline-focus-asset-node" data-canvas-interactive
-                    title={asset.title} aria-label={`查看「${asset.name}」的资产关系`}
-                    aria-describedby={labels?.length ? `${relationLabelId}-${asset.id}` : undefined}
+                    title={nodeTitle} aria-label={`查看「${asset.name}」的资产关系`}
+                    aria-describedby={relation && hasLabel ? `${relationLabelId}-${asset.id}` : undefined}
+                    aria-description={hasLabel ? undefined : relation}
                     onClick={event => {
                       if (event.ctrlKey) return;
                       onFocusAsset(asset.id, compact ? null : assetPressOrigin(event.currentTarget));
                     }}>{face}</button>
-                    : <div className="timeline-focus-asset-node" title={asset.title} onClick={!compact && !network ? playAssetPress : undefined}
+                    : <div className="timeline-focus-asset-node" title={nodeTitle} onClick={!compact && !network ? playAssetPress : undefined}
                       onPointerEnter={event => { delete event.currentTarget.dataset.clicked; }}>{face}</div>}
-                  {label && compact && renderRelationLabel(asset, label)}
+                  {relation && compact && renderRelationLabel(asset.id, asset.name, relation)}
                 </li>;
               })}
             </ul>
@@ -359,25 +427,32 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
         })}
       </div>}
       {assetId && orbit && <div className="timeline-focus-relation-edges">
+        {fullRelationPath && <svg className="timeline-focus-relation-lines" width="100%" height="100%" aria-hidden="true">
+          <path className="timeline-focus-relation-line" d={fullRelationPath} />
+        </svg>}
         {relationPhases.map(({phase, items, path}) => {
-          const selected = items.find(({asset}) => asset.id === highlightedPeerId);
+          const selected = items.find(({id}) => id === highlightedPeerId);
           return items.length > 0 && <div key={phase} className="timeline-focus-relation-phase"
             data-entrance={phase < entrancePhaseCount || undefined} data-highlighted={Boolean(selected) || undefined}
             style={{"--timeline-focus-relation-phase": phase} as CSSProperties}>
             <svg className="timeline-focus-relation-lines" width="100%" height="100%" aria-hidden="true">
-              <path className="timeline-focus-relation-line" d={path} />
+              {!fullRelationPath && <path className="timeline-focus-relation-line" d={path} />}
               {selected && <path className="timeline-focus-relation-line" data-highlighted
-                d={relationSegment(selected.position, diagramSize / 2, rem)} />}
+                d={relationSegment(selected.position, diagramSize / 2, graphZoom, nodeRem)} />}
             </svg>
-            {items.map(({asset, labelPosition}) => {
-              const label = relationLabels?.get(asset.id)?.join(" / ");
-              return label && renderRelationLabel(asset, label, labelPosition, phase);
-            })}
+            {items.map(({id, name, label, labelPosition}) =>
+              label && (!visibleLabels || visibleLabels.has(id)) && renderRelationLabel(id, name, label, labelPosition, phase))}
           </div>;
         })}
       </div>}
     </div>
     </div>
     </div>
+    {pannable && <div className="timeline-focus-zoom">
+      <CanvasZoomControls label="关系图视图" zoom={zoom} disabled={closing}
+        onZoomChange={zoomTo} onResetZoom={() => zoomTo(1)} onResetView={resetView}>
+        <TimelineTextZoomSwitch checked={scaleTextWithZoom} disabled={closing} onChange={setScaleTextWithZoom} />
+      </CanvasZoomControls>
+    </div>}
   </div>;
 }

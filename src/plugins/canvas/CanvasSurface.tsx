@@ -1,6 +1,6 @@
 import {useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent} from "react";
 import type {CanvasSize, CanvasSurfaceProps, CanvasViewport} from "@lodestory/sdk/canvas";
-import {Button, Icon, IconButton} from "@lodestory/ui";
+import {CanvasZoomControls} from "@lodestory/ui";
 import "./canvas.css";
 
 type Drag = {pointerId: number; x: number; y: number};
@@ -75,7 +75,7 @@ function createPanAccumulator(viewport: CanvasViewport, host: Window): PanAccumu
 }
 
 /** All DOM listeners and pointer capture belong to this mounted surface, not the viewport model. */
-export function CanvasSurface({viewport, active, label, children, grid = "dots"}: CanvasSurfaceProps) {
+export function CanvasSurface({viewport, active, label, children, grid = "dots", showControls = true, zoomControls}: CanvasSurfaceProps) {
   const snapshot = useSyncExternalStore(viewport.subscribe, viewport.getSnapshot, viewport.getSnapshot);
   const surface = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
@@ -219,7 +219,6 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots"}
   const gridStep = 32 * 2 ** Math.ceil(Math.log2(24 / (32 * snapshot.zoom)));
   const pitch = gridStep * snapshot.zoom;
   const gridOffset = {x: ((offset.x % pitch) + pitch) % pitch, y: ((offset.y % pitch) + pitch) % pitch};
-  const percentage = `${Math.round(snapshot.zoom * 100)}%`;
 
   return <div ref={surface} className="canvas-surface" role="region" aria-label={label} tabIndex={0}
     aria-description="方向键平移，空格加左键或中键拖动，Ctrl 或 Command 加滚轮缩放，Home 回到原点。"
@@ -251,14 +250,11 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots"}
     <div className="canvas-world" style={{transform: `translate(${offset.x}px, ${offset.y}px) scale(${snapshot.zoom})`}}>
       {children}
     </div>
-    <div className="canvas-controls" role="toolbar" aria-label="画布视图">
-      <IconButton label="缩小画布" disabled={!enabled || snapshot.zoom <= 0.25} onClick={() => { flushPan(viewport); viewport.zoomTo(snapshot.zoom / 1.25); }}>
-        <Icon name="minus"/>
-      </IconButton>
-      <span className="canvas-zoom-value"><Button variant="ghost" title="恢复到 100%" aria-label={`画布缩放 ${percentage}，恢复到 100%`}
-        disabled={!enabled} onClick={() => { flushPan(viewport); viewport.resetZoom(); }}>{percentage}</Button></span>
-      <IconButton label="放大画布" disabled={!enabled || snapshot.zoom >= 4} onClick={() => { flushPan(viewport); viewport.zoomTo(snapshot.zoom * 1.25); }}><Icon name="plus"/></IconButton>
-      <Button variant="ghost" disabled={!enabled} onClick={() => { flushPan(viewport); viewport.resetView(); }}><Icon name="focus"/>回到原点</Button>
-    </div>
+    {showControls && <CanvasZoomControls zoom={snapshot.zoom} disabled={!enabled}
+      onZoomChange={zoom => { flushPan(viewport); viewport.zoomTo(zoom); }}
+      onResetZoom={() => { flushPan(viewport); viewport.resetZoom(); }}
+      onResetView={() => { flushPan(viewport); viewport.resetView(); }}>
+      {zoomControls}
+    </CanvasZoomControls>}
   </div>;
 }

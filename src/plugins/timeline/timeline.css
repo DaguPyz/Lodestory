@@ -8,6 +8,42 @@
   color: var(--ui-text-primary);
 }
 
+.timeline-text-zoom-switch .button {
+  --cmp-button-padding: var(--ui-space-3);
+}
+
+.timeline-text-zoom-track {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  inline-size: 1.625rem;
+  block-size: 0.875rem;
+  padding-inline: 0.125rem;
+  border: 1px solid currentColor;
+  border-radius: 1rem;
+}
+
+.timeline-text-zoom-track::before {
+  content: "";
+  flex: none;
+  inline-size: 0.5rem;
+  block-size: 0.5rem;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.timeline-text-zoom-switch [aria-checked="true"] .timeline-text-zoom-track {
+  justify-content: flex-end;
+  background: var(--ui-surface-selected);
+}
+
+@media (forced-colors: active) {
+  .timeline-text-zoom-track::before {
+    forced-color-adjust: none;
+    background: ButtonText;
+  }
+}
+
 .timeline-canvas-empty {
   display: grid;
   flex: 1;

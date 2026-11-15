@@ -176,6 +176,38 @@
 .icon--large { width: var(--ui-icon-large); height: var(--ui-icon-large); }
 .icon--brand { width: var(--ui-icon-brand); height: var(--ui-icon-brand); }
 
+.canvas-controls {
+  --canvas-controls-inset: var(--ui-panel-padding);
+  position: absolute;
+  right: var(--canvas-controls-inset);
+  bottom: var(--canvas-controls-inset);
+  max-inline-size: calc(100% - 2 * var(--canvas-controls-inset));
+  z-index: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--ui-space-1);
+  padding: var(--ui-space-1);
+  border: 1px solid var(--ui-border-divider);
+  border-radius: var(--ui-radius-control);
+  background: var(--ui-surface-chrome);
+  color: var(--ui-text-secondary);
+  pointer-events: auto;
+}
+
+.canvas-zoom-controls { display: flex; align-items: center; gap: var(--ui-space-1); }
+.canvas-zoom-value { display: flex; width: 4rem; font-variant-numeric: tabular-nums; }
+.canvas-zoom-value > button { width: 100%; }
+
+@container workbench-layout (max-width: 26rem) {
+  .canvas-controls { --canvas-controls-inset: var(--ui-space-3); }
+}
+
+@media (forced-colors: active) {
+  .canvas-controls { color: CanvasText; background: Canvas; border-color: ButtonText; }
+}
+
 .ui-text-control {
   --cmp-text-control-focus: var(--ui-focus-ring);
   --cmp-text-control-placeholder: var(--ui-text-placeholder);

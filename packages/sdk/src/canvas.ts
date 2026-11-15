@@ -37,6 +37,10 @@ export type CanvasSurfaceProps = Readonly<{
   label: string;
   /** Optional background guide; omitted uses dots. Business content stays in children. */
   grid?: "dots" | "none";
+  /** Omit the zoom and reset toolbar when another view owns navigation. Defaults to true. */
+  showControls?: boolean;
+  /** Optional controls supplied by the consumer, placed beside the standard zoom controls. */
+  zoomControls?: ReactNode;
   /** World-space content; this layer is translated and scaled by the surface. */
   children?: ReactNode;
 }>;

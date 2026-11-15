@@ -188,12 +188,17 @@ test("timeline owns the main canvas and one session-only viewport per timeline w
   }
 
   const firstId = await createTimeline("第一条时间线");
-  const firstViewport = canvasElement().props.sessions.get(sessionId).viewports.get(firstId);
+  const firstView = canvasElement().tree.props.canvasView;
+  const firstViewport = firstView.viewport;
   assert.ok(firstViewport);
   assert.equal(firstViewport.getSnapshot().center.x, 0);
   assert.equal(firstViewport.getSnapshot().center.y, 0);
   firstViewport.panBy(120, -40);
   firstViewport.zoomTo(2);
+  const firstPosition = firstViewport.getSnapshot();
+  assert.equal(firstView.getScaleTextWithZoom(), false);
+  firstView.setScaleTextWithZoom(true);
+  assert.strictEqual(firstViewport.getSnapshot(), firstPosition);
   const nav = contribution.render({active: true});
   layout.show("outline-design.navigation");
   assert.ok(layout.getSnapshot().shownIds.includes("body-editor.main"), "showing the outline navigation alone preserves the current main view");
@@ -216,9 +221,10 @@ test("timeline owns the main canvas and one session-only viewport per timeline w
   const secondId = await createTimeline("第二条时间线");
   assert.equal(await timelines.open(sessionId, secondId), true);
   assert.equal(timelineResource.openGeneration, 2, "opening a newly selected timeline triggers a new entrance");
-  const viewports = canvasElement().props.sessions.get(sessionId).viewports;
-  const secondViewport = viewports.get(secondId);
+  const secondView = canvasElement().tree.props.canvasView;
+  const secondViewport = secondView.viewport;
   assert.ok(secondViewport);
+  assert.equal(secondView.getScaleTextWithZoom(), false);
   assert.notStrictEqual(secondViewport, firstViewport);
   assert.equal(secondViewport.getSnapshot().center.x, 0);
   assert.equal(secondViewport.getSnapshot().center.y, 0);
@@ -231,8 +237,9 @@ test("timeline owns the main canvas and one session-only viewport per timeline w
   assert.equal(await listModel.remove(secondId), true);
   assert.equal(listModel.getSnapshot().selectedId, firstId, "deleting the selected item selects the adjacent timeline");
   assert.equal(secondViewport.getSnapshot().disposed, true);
-  assert.equal(viewports.has(secondId), false, "a deleted timeline releases its viewport");
-  assert.strictEqual(viewports.get(firstId), firstViewport);
+  assert.equal(timelineResource.views.has(secondId), false, "a deleted timeline releases its view");
+  assert.strictEqual(canvasElement().tree.props.canvasView, firstView);
+  assert.equal(firstView.getScaleTextWithZoom(), true, "returning to the first timeline restores its text zoom mode");
 
   await openReadyProject(workbench, {...project, id: "other", path: "/projects/other"});
   assert.equal(firstViewport.getSnapshot().disposed, true, "switching projects disposes every old-session viewport");

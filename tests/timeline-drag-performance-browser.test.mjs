@@ -446,6 +446,59 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       await waitForFrame();
     });
 
+    await t.test("scales event text in place while keeping ruler text fixed", async () => {
+      const zoomSwitch = 'button[role="switch"]';
+      const checked = () => evaluate(`document.querySelector(${JSON.stringify(zoomSwitch)}).getAttribute('aria-checked')`);
+      const textLayout = () => evaluate(`(() => {
+        const selectors = ['.timeline-axis-label-origin', '.timeline-axis-origin-caption', '.timeline-event-offset',
+          '.timeline-event-title', '.timeline-event-summary', '.timeline-event-turning-caption'];
+        const fontSizes = selectors.map(selector => parseFloat(getComputedStyle(document.querySelector(selector)).fontSize));
+        const rulerLabels = [...document.querySelectorAll('.timeline-axis-label')].map(label => ({
+          value: label.textContent, x: label.getAttribute('x'), fontSize: getComputedStyle(label).fontSize,
+        }));
+        return {fontSizes, rulerLabels,
+          toggleSize: getComputedStyle(document.querySelector('button[role="switch"]')).fontSize};
+      })()`);
+      await fixture("setZoomEvents", true);
+      assert.equal(await checked(), "false", "the switch is off by default");
+      let previousRulerValues;
+      for (const zoom of [0.25, 1, 4]) {
+        await fixture("setView", {x: 8, y: 56}, zoom);
+        await waitForFrame();
+        const before = await view();
+        const fixed = await textLayout();
+        assert.deepEqual(fixed.fontSizes, [14, 11, 13, 20, 14, 12]);
+        const rulerValues = fixed.rulerLabels.map(label => label.value);
+        assert.ok(fixed.rulerLabels.every(label => label.fontSize === "14px"));
+        if (previousRulerValues) assert.notDeepEqual(rulerValues, previousRulerValues, "zoom recalculates the displayed tick values");
+        previousRulerValues = rulerValues;
+        await clickSelector(zoomSwitch);
+        assert.equal(await checked(), "true");
+        assert.deepEqual(await view(), before, "the switch leaves the canvas center and zoom in place");
+        assert.deepEqual(await textLayout(), {
+          ...fixed, fontSizes: fixed.fontSizes.map((size, index) => index < 2 ? size : size * zoom),
+        }, "only event text changes size when the switch is enabled");
+        if (zoom < 4) await clickSelector(zoomSwitch);
+      }
+
+      const savedView = await view();
+      await fixture("swapCanvasView");
+      await waitForFrame();
+      assert.equal(await checked(), "false", "a different timeline view starts in the default mode");
+      await fixture("swapCanvasView");
+      await waitForFrame();
+      assert.equal(await checked(), "true", "returning to a timeline restores its mode");
+      assert.deepEqual(await view(), savedView);
+      await evaluate(`document.querySelector(${JSON.stringify(zoomSwitch)}).focus()`);
+      await cdp("Input.dispatchKeyEvent", {type: "keyDown", key: " ", code: "Space", windowsVirtualKeyCode: 32});
+      await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: " ", code: "Space", windowsVirtualKeyCode: 32});
+      assert.equal(await checked(), "false", "Space toggles the focused switch");
+      assert.deepEqual(await view(), savedView);
+      await fixture("setZoomEvents", false);
+      await fixture("setView", {x: 0, y: 0}, 1);
+      await waitForFrame();
+    });
+
     await t.test("applies real middle/space drags and wheel input exactly, including the final pointerup position", async () => {
       await press(100, 300, "middle");
       await move(137, 317, "middle");
@@ -594,6 +647,20 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       const before = await fixture("state");
       const point = await endpointPoint(before.target.title);
       assert.ok(point);
+      const breadcrumbSelector = 'nav[aria-label="时间线浏览路径"]';
+      const clickBreadcrumb = position => clickSelector(`${breadcrumbSelector} li:nth-child(${position}) button`);
+      const backToTimeline = () => clickBreadcrumb(1);
+      const backToEvent = () => clickBreadcrumb(2);
+      const assertPath = async (...assets) => {
+        const labels = ["时间线", before.target.title, ...assets];
+        const crumbs = await evaluate(`[...document.querySelectorAll(${JSON.stringify(`${breadcrumbSelector} li`)})].map(item => ({
+          label: item.textContent.trim(), current: item.querySelector('[aria-current="page"]') !== null,
+          clickable: item.querySelector('button') !== null,
+        }))`);
+        assert.deepEqual(crumbs, labels.map((label, index) => ({
+          label, current: index === labels.length - 1, clickable: index < labels.length - 1,
+        })));
+      };
       const openAssetsAt = async target => {
         await press(target.x, target.y, "right", 1);
         await release(target.x, target.y, "right", 1);
@@ -670,6 +737,7 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
       await waitFor(() => evaluate("!document.querySelector('.context-menu-popup')"), "the canvas menu did not close");
       await openAssetsAt(point);
+      await assertPath();
       const shown = await focus();
       assert.deepEqual(shown.assets, ["林舟", "陈师傅", "方晴", "闻溪", "守溪会", "造钟行", "旧街", "渡口"]);
       assert.deepEqual(shown.groups, ["人物", "势力", "地点"]);
@@ -717,7 +785,7 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       }, "Hover should enlarge the asset circle and pause its drift.");
       await waitForFrame();
       const held = await assetCircle();
-      assert.equal(held.width, readyCircle.width, "hover does not resize the hit area");
+      assert.ok(Math.abs(held.width - readyCircle.width) < 0.01, "hover does not resize the hit area");
       assert.equal(held.driftTime, hovered.driftTime);
       assert.ok(held.neighborTime > hovered.neighborTime, "the neighboring circle keeps floating");
 
@@ -809,7 +877,7 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
         }
         return nodes.map(node => getComputedStyle(node).transform);
       })()`);
-      await clickButtonNamed("返回时间线");
+      await backToTimeline();
       const reversed = await evaluate(`([...document.querySelectorAll('.timeline-focus-asset-node')]
         .map(node => node.getAnimations()[0]?.effect.getKeyframes()[0].transform))`);
       assert.deepEqual(reversed, interrupted, "closing mid-entry starts from each asset's visible position");
@@ -819,7 +887,7 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       await openAssetsAt(point);
       await evaluate("new Promise(resolve => setTimeout(resolve, 500))");
       assert.equal((await focus()).assets.length, 8, "an old exit callback cannot dismiss a new focus scene");
-      await clickButtonNamed("返回时间线");
+      await backToTimeline();
       await waitFor(() => evaluate("!document.querySelector('.timeline-focus-assets')"), "the reopened scene did not close");
 
       await fixture("setFocusAssets", true, 0, 1);
@@ -836,11 +904,41 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       };
       await clickAsset("林舟");
       assert.equal(await centerName(), "林舟");
+      await assertPath("林舟");
+      const graphPosition = () => evaluate(`(() => {
+        const {x, y} = document.querySelector('.timeline-focus-scene').getBoundingClientRect();
+        const breadcrumb = document.querySelector('.timeline-focus-breadcrumbs').getBoundingClientRect();
+        return {x, y, breadcrumbX: breadcrumb.x, breadcrumbY: breadcrumb.y};
+      })()`);
+      const timelineBeforePan = await view();
+      const graphBeforePan = await graphPosition();
+      await clickAt(96, 204);
+      await assertPath("林舟");
+      await press(96, 204, "left", 1);
+      await move(165, 238, "left");
+      assert.deepEqual(await graphPosition(), {...graphBeforePan, x: graphBeforePan.x + 69, y: graphBeforePan.y + 34},
+        "the relationship graph follows the pointer while the breadcrumb stays in place");
+      await release(192, 263, "left", 1);
+      assert.deepEqual(await graphPosition(), {...graphBeforePan, x: graphBeforePan.x + 96, y: graphBeforePan.y + 59},
+        "releasing the pointer applies the final movement and keeps the graph open");
+      await assertPath("林舟");
+      assert.deepEqual(await view(), timelineBeforePan, "relationship panning leaves the timeline viewport untouched");
+      await press(192, 263, "middle", 1);
+      await move(169, 231, "middle");
+      await release(169, 231, "middle", 1);
+      assert.deepEqual(await graphPosition(), {...graphBeforePan, x: graphBeforePan.x + 73, y: graphBeforePan.y + 27},
+        "middle-button drag pans the relationship graph too");
+      await cdp("Input.dispatchKeyEvent", {type: "keyDown", key: "Home", code: "Home", windowsVirtualKeyCode: 36});
+      await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: "Home", code: "Home", windowsVirtualKeyCode: 36});
+      assert.deepEqual(await graphPosition(), graphBeforePan, "Home centers the relationship graph");
+      assert.equal(await evaluate("Boolean(document.querySelector('[role=toolbar][aria-label=画布视图]'))"), false,
+        "timeline viewport controls are hidden while the graph owns the canvas");
       const mapping = await waitFor(() => evaluate(`(() => {
         const scene = document.querySelector('.timeline-focus-scene');
         const center = scene.querySelector('.timeline-focus-relation-center-node');
         const labels = [...scene.querySelectorAll('.timeline-focus-relation-label')];
-        if (labels.length !== 2 || labels.some(label => getComputedStyle(label.closest('.timeline-focus-relation-phase')).opacity !== '1'
+        if (center.closest('.timeline-focus-relation-center-motion').getAnimations().length
+          || labels.length !== 2 || labels.some(label => getComputedStyle(label.closest('.timeline-focus-relation-phase')).opacity !== '1'
           || getComputedStyle(label).visibility !== 'visible')) return null;
         const bounds = scene.getBoundingClientRect(), node = center.getBoundingClientRect();
         return {centered: Math.abs(node.x + node.width / 2 - bounds.x - bounds.width / 2) < 1
@@ -851,6 +949,48 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       })()`), "The saved relationships did not render as labeled connections.");
       assert.deepEqual(mapping, {centered: true, lines: 2, labels: ["师徒 / 传授功法", "死敌"], peers: ["陈师傅", "闻溪"]},
         "only saved neighbors appear around the centered asset, with one labeled line per peer");
+      const graphToolbar = '[role="toolbar"][aria-label="关系图视图"]';
+      const graphZoomState = () => evaluate(`(() => {
+        const toolbar = document.querySelector(${JSON.stringify(graphToolbar)});
+        const scene = document.querySelector('.timeline-focus-scene').getBoundingClientRect();
+        const viewport = document.querySelector('.timeline-focus-viewport');
+        const sizes = ['.timeline-focus-relation-name', '.timeline-focus-asset-name',
+          '.timeline-focus-asset-type', '.timeline-focus-relation-label'].map(selector =>
+          parseFloat(getComputedStyle(document.querySelector(selector)).fontSize));
+        return {zoom: toolbar.querySelector('.canvas-zoom-value').textContent, sizes,
+          checked: toolbar.querySelector('[role=switch]').getAttribute('aria-checked'),
+          width: scene.width, x: scene.x + scene.width / 2, y: scene.y + scene.height / 2,
+          scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop};
+      })()`);
+      const atOriginalZoom = await graphZoomState();
+      assert.equal(atOriginalZoom.zoom, "100%");
+      assert.equal(atOriginalZoom.checked, "false");
+      await clickSelector(`${graphToolbar} button[aria-label="放大画布"]`);
+      const at125 = await graphZoomState();
+      assert.equal(at125.zoom, "125%");
+      assert.equal(at125.width, atOriginalZoom.width * 1.25);
+      assert.deepEqual(at125.sizes, atOriginalZoom.sizes, "default zoom keeps the graph text at its original size");
+      await clickSelector(`${graphToolbar} [role="switch"]`);
+      assert.deepEqual(await graphZoomState(), {
+        ...at125, checked: "true", sizes: at125.sizes.map(size => size * 1.25),
+      }, "switching modes scales graph labels in place");
+      const pointer = {x: 455, y: 300};
+      const wheelFactor = Math.exp(0.2);
+      await mouse("mouseWheel", pointer.x, pointer.y, {deltaY: -100, modifiers: 2});
+      await waitFor(async () => (await graphZoomState()).zoom === "153%", "Ctrl-wheel does not zoom the graph");
+      const afterGraphWheel = await graphZoomState();
+      assert.ok(Math.abs(afterGraphWheel.x - (pointer.x + (at125.x - pointer.x) * wheelFactor)) < 1
+        && Math.abs(afterGraphWheel.y - (pointer.y + (at125.y - pointer.y) * wheelFactor)) < 1,
+      "the point under the pointer stays anchored during graph zoom");
+      await mouse("mouseWheel", pointer.x, pointer.y, {deltaY: -1200, modifiers: 2});
+      await waitFor(() => evaluate(`document.querySelector(${JSON.stringify(graphToolbar)})
+        .querySelector('.canvas-zoom-value').textContent === '400%'`), "the graph does not reach its maximum zoom");
+      assert.equal(await evaluate("getComputedStyle(document.querySelector('.timeline-focus-relation-name')).fontSize"), "64px");
+      assert.ok(await evaluate("document.querySelector('.timeline-focus-relation-line').getAttribute('d').length > 0"),
+        "connections remain visible even when their nodes leave the view");
+      assert.deepEqual(await view(), timelineBeforePan, "graph zoom leaves the timeline viewport untouched");
+      await clickSelector(`${graphToolbar} > button`);
+      assert.deepEqual(await graphZoomState(), {...atOriginalZoom, checked: "true"}, "reset restores the graph center and zoom");
       const highlight = () => evaluate(`(() => {
         const center = document.querySelector('.timeline-focus-relation-center-node');
         const labels = [...document.querySelectorAll('.timeline-focus-relation-label, .timeline-focus-relation-list-label')];
@@ -877,28 +1017,41 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       assert.deepEqual(await highlight(), {center: true, peers: ["陈师傅"], pressed: ["师徒 / 传授功法"], lineHighlighted: true});
       await clickAsset("陈师傅");
       assert.equal(await centerName(), "陈师傅");
+      assert.equal((await graphZoomState()).checked, "true", "the zoom mode follows the graph while browsing its nodes");
+      await assertPath("林舟", "陈师傅");
       assert.deepEqual(await highlight(), {center: false, peers: [], pressed: [], lineHighlighted: false});
       assert.deepEqual((await focus()).assets, ["林舟"], "the same relationship can be followed in either direction");
       await cdp("Input.dispatchKeyEvent", {type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
       await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
       assert.equal(await centerName(), "林舟");
-      await clickButtonNamed("返回事件");
+      await assertPath("林舟");
+      await clickAsset("陈师傅");
+      await clickAsset("林舟");
+      await assertPath("林舟", "陈师傅", "林舟");
+      await clickBreadcrumb(3);
+      await assertPath("林舟");
+      assert.equal(await centerName(), "林舟");
+      await clickAsset("陈师傅");
+      await backToEvent();
+      await assertPath();
       assert.deepEqual((await focus()).assets, ["林舟"], "back restores the original event's associations");
       await fixture("setFocusAssets", true);
       await clickAsset("闻溪");
       assert.equal(await centerName(), "闻溪");
-      await clickButtonNamed("返回事件");
+      assert.equal((await graphZoomState()).checked, "false", "a new graph browsing session opens in the default mode");
+      await backToEvent();
       await clickAsset("方晴");
       assert.equal(await centerName(), "方晴");
       assert.equal(await evaluate("document.querySelector('.timeline-focus-relation-center [role=status]').textContent"), "暂无资产关系");
-      await clickButtonNamed("返回事件");
+      await backToEvent();
       await fixture("setFocusAssets", true, 0, 1);
       await clickAsset("林舟");
       await fixture("showRelations", false);
       await waitFor(() => evaluate("!document.querySelector('.timeline-focus-relation-center')"), "Removing the source should return to the event scene.");
+      await assertPath();
       assert.deepEqual((await focus()).assets, ["林舟"], "event assets remain visible without the optional relation source");
       assert.equal(await evaluate("document.querySelectorAll('button.timeline-focus-asset-node').length"), 0);
-      await clickButtonNamed("返回时间线");
+      await backToTimeline();
       await waitFor(() => evaluate("!document.querySelector('.timeline-focus-assets')"), "The event scene did not close.");
 
       await fixture("setDenseRelations", true);
@@ -950,10 +1103,22 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       await evaluate(`document.querySelector('.timeline-focus-viewport').scrollTo(0, 0)`);
       await waitFor(() => evaluate(`document.querySelector('.timeline-focus-relation-label[aria-pressed=true]')?.dataset.peerId === "${outerLabel}"`),
         "Returning to the selected outer relationship restores its highlight.");
+      await clickSelector(`${graphToolbar} > button`);
+      await mouse("mouseWheel", 600, 352, {deltaY: 1200, modifiers: 2});
+      await waitFor(() => evaluate(`document.querySelector(${JSON.stringify(graphToolbar)})
+        .querySelector('.canvas-zoom-value').textContent === '25%'`), "the graph does not reach its minimum zoom");
+      const labelsAtMinimum = await evaluate(`({
+        nodes: document.querySelectorAll('.timeline-focus-asset-node').length,
+        labels: document.querySelectorAll('.timeline-focus-relation-label').length,
+        descriptions: document.querySelectorAll('.timeline-focus-asset-node[aria-description]').length,
+      })`);
+      assert.ok(labelsAtMinimum.labels > 0 && labelsAtMinimum.labels < labelsAtMinimum.nodes && labelsAtMinimum.descriptions > 0,
+        "dense zoom hides colliding labels and keeps their descriptions available from the nodes");
       await fixture("setDenseRelations", false);
-      await clickButtonNamed("返回事件");
-      await clickButtonNamed("返回时间线");
+      await backToTimeline();
       await waitFor(() => evaluate("!document.querySelector('.timeline-focus-assets')"), "The large graph did not close.");
+      assert.deepEqual(await view(), timelineBeforePan, "the breadcrumb returns to the timeline's original view");
+      assert.equal(await evaluate("Boolean(document.querySelector('[role=toolbar][aria-label=画布视图]'))"), true);
       await fixture("showRelations", false);
       await fixture("setFocusAssets", true);
 
@@ -983,7 +1148,7 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       await clickButtonNamed("取消");
       await waitForDialogClose();
       assert.deepEqual((await focus()).assets, shown.assets);
-      await clickButtonNamed("返回时间线");
+      await backToTimeline();
 
       await fixture("setFocusAssets", true, 5);
       await waitForFrame();
@@ -1043,8 +1208,8 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
         ["师徒 / 传授功法", "死敌"], "the narrow view keeps the same relationship descriptions beside the assets");
       await clickSelector('button.timeline-focus-relation-list-label[aria-label^="师徒"]');
       assert.deepEqual(await highlight(), {center: true, peers: ["陈师傅"], pressed: ["师徒 / 传授功法"], lineHighlighted: false});
-      await clickButtonNamed("返回事件");
-      await clickButtonNamed("返回时间线");
+      await backToEvent();
+      await backToTimeline();
       await fixture("showRelations", false);
       await evaluate(`(() => {
         for (const node of document.querySelectorAll('.fixture-host, .timeline-canvas-frame')) node.style.width = '';

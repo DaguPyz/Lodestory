@@ -15,27 +15,7 @@
 .canvas-surface:focus-visible { outline: var(--ui-focus-width) solid var(--ui-focus-ring); }
 .canvas-grid { position: absolute; inset: 0; pointer-events: none; color: var(--ui-border-divider); }
 .canvas-world { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
-.canvas-controls {
-  position: absolute;
-  right: var(--ui-panel-padding);
-  bottom: var(--ui-panel-padding);
-  z-index: 1;
-  display: flex;
-  align-items: center;
-  gap: var(--ui-space-1);
-  padding: var(--ui-space-1);
-  border: 1px solid var(--ui-border-divider);
-  border-radius: var(--ui-radius-control);
-  background: var(--ui-surface-chrome);
-  color: var(--ui-text-secondary);
-}
-.canvas-zoom-value { display: flex; width: 4rem; font-variant-numeric: tabular-nums; }
-.canvas-zoom-value > button { width: 100%; }
-@container workbench-layout (max-width: 26rem) {
-  .canvas-controls { right: var(--ui-space-3); bottom: var(--ui-space-3); }
-}
 @media (forced-colors: active) {
   .canvas-surface { background: Canvas; }
   .canvas-grid { color: GrayText; }
-  .canvas-controls { color: CanvasText; background: Canvas; border-color: ButtonText; }
 }

@@ -1,6 +1,6 @@
 import {useSyncExternalStore} from "react";
 import type {Plugin} from "@lodestory/sdk";
-import {canvasKey, type CanvasService, type CanvasViewport} from "@lodestory/sdk/canvas";
+import {canvasKey, type CanvasService} from "@lodestory/sdk/canvas";
 import {contextMenuKey, type ContextMenuService} from "@lodestory/sdk/context-menu";
 import {assetCatalogKey, type AssetCatalogService} from "@lodestory/sdk/asset-catalog";
 import {layoutKey} from "@lodestory/sdk/layout";
@@ -13,7 +13,7 @@ import {createTimelineListModel} from "./timelineListModel";
 import {createTimelineAxisStore, type TimelineAxisSettings, type TimelineAxisStore} from "./timelineAxisStore";
 import {createTimelineEventStore, type TimelineEvent, type TimelineEventStore} from "./timelineEventStore";
 import {timelineValueAtOffset} from "./timelineAxisGeometry";
-import {TimelineCanvas} from "./TimelineCanvas";
+import {createTimelineCanvasView, TimelineCanvas} from "./TimelineCanvas";
 import "./timeline.css";
 
 const MAIN_CONTENT_ID = "timeline.main";
@@ -31,7 +31,7 @@ type TimelineModel = ReturnType<typeof createTimelineListModel>;
 type TimelineSessionResources = {
   model: TimelineModel;
   publicModel: TimelineListModel;
-  viewports: Map<string, CanvasViewport>;
+  views: Map<string, ReturnType<typeof createTimelineCanvasView>>;
   axes: Map<string, TimelineAxisStore>;
   events: Map<string, TimelineEventStore>;
   summaries: Map<string, TimelineEntrySummary>;
@@ -108,13 +108,10 @@ export function createTimelinePlugin(): Plugin {
         return events;
       }
 
-      function createViewport(resource: TimelineSessionResources, timelineId: string): CanvasViewport {
-        let viewport = resource.viewports.get(timelineId);
-        if (!viewport) {
-          viewport = canvas.createViewport();
-          resource.viewports.set(timelineId, viewport);
+      function ensureView(resource: TimelineSessionResources, timelineId: string) {
+        if (!resource.views.has(timelineId)) {
+          resource.views.set(timelineId, createTimelineCanvasView(canvas.createViewport()));
         }
-        return viewport;
       }
 
       function syncResources(files: ProjectFiles, resource: TimelineSessionResources) {
@@ -123,10 +120,10 @@ export function createTimelinePlugin(): Plugin {
         for (const timelineId of resource.summaries.keys()) {
           if (!present.has(timelineId)) resource.summaries.delete(timelineId);
         }
-        for (const [timelineId, viewport] of resource.viewports) {
+        for (const [timelineId, view] of resource.views) {
           if (present.has(timelineId)) continue;
-          resource.viewports.delete(timelineId);
-          viewport.dispose();
+          resource.views.delete(timelineId);
+          view.dispose();
         }
         for (const [timelineId, axis] of resource.axes) {
           if (present.has(timelineId)) continue;
@@ -156,7 +153,7 @@ export function createTimelinePlugin(): Plugin {
         const selectionChanged = resource.selectedId !== snapshot.selectedId;
         resource.selectedId = snapshot.selectedId;
         if (snapshot.selectedId) {
-          createViewport(resource, snapshot.selectedId);
+          ensureView(resource, snapshot.selectedId);
           const axis = createAxis(files, resource, snapshot.selectedId);
           if (selectionChanged && !axis.getSnapshot().loaded && !axis.getSnapshot().loading) void axis.load().catch(() => false);
         }
@@ -175,7 +172,7 @@ export function createTimelinePlugin(): Plugin {
           const resource: TimelineSessionResources = {
             model,
             publicModel: undefined as unknown as TimelineListModel,
-            viewports: new Map(),
+            views: new Map(),
             axes: new Map(),
             events: new Map(),
             summaries: new Map(),
@@ -264,7 +261,7 @@ export function createTimelinePlugin(): Plugin {
           } catch (error) {
             removeSearch?.();
             resource.unsubscribe();
-            for (const viewport of resource.viewports.values()) viewport.dispose();
+            for (const view of resource.views.values()) view.dispose();
             for (const unsubscribe of resource.axisUnsubscribes.values()) unsubscribe();
             for (const axis of resource.axes.values()) axis.dispose();
             for (const unsubscribe of resource.eventUnsubscribes.values()) unsubscribe();
@@ -301,8 +298,8 @@ export function createTimelinePlugin(): Plugin {
               try { removeSearch?.(); resource.unsubscribe(); }
               finally {
                 try {
-                  for (const viewport of resource.viewports.values()) viewport.dispose();
-                  resource.viewports.clear();
+                  for (const view of resource.views.values()) view.dispose();
+                  resource.views.clear();
                 } finally {
                   try {
                     for (const unsubscribe of resource.axisUnsubscribes.values()) unsubscribe();
@@ -352,7 +349,7 @@ export function createTimelinePlugin(): Plugin {
           const opening = resource.openedId !== timelineId || snapshot.selectedId !== timelineId
             || !layout.getSnapshot().shownIds.includes(MAIN_CONTENT_ID);
           model.select(timelineId);
-          createViewport(resource, timelineId);
+          ensureView(resource, timelineId);
           layout.show(MAIN_CONTENT_ID);
           if (opening) {
             resource.openedId = timelineId;
@@ -415,16 +412,16 @@ function TimelineMain({workbench, canvas, contextMenus, assetCatalog, sessions, 
     () => 0,
   );
   const entry = snapshot.entries.find(item => item.id === snapshot.selectedId);
-  const viewport = entry ? resource?.viewports.get(entry.id) : undefined;
+  const canvasView = entry ? resource?.views.get(entry.id) : undefined;
   const axis = entry ? resource?.axes.get(entry.id) : undefined;
   const events = entry ? resource?.events.get(entry.id) : undefined;
   const current = Boolean(active && session && workbenchSnapshot.active && !workbenchSnapshot.busy
-    && !snapshot.busy && !snapshot.createDraft && entry && viewport && axis && events);
-  if (!entry || !viewport || !axis || !events || !session || !resource) {
+    && !snapshot.busy && !snapshot.createDraft && entry && canvasView && axis && events);
+  if (!entry || !canvasView || !axis || !events || !session || !resource) {
     return <div className="timeline-canvas-empty" role="status">选择或新建一条时间线以打开画布。</div>;
   }
   return <TimelineCanvas canvas={canvas} contextMenus={contextMenus} assetCatalog={assetCatalog.getCatalog(session.id)}
-    assetRelations={relationSource?.getNetwork(session.id) ?? null} viewport={viewport} active={current} title={entry.title} axis={axis} events={events}
+    assetRelations={relationSource?.getNetwork(session.id) ?? null} canvasView={canvasView} active={current} title={entry.title} axis={axis} events={events}
     openToken={openGeneration ? `${session.id}:${openGeneration}` : null}
     onEditingChange={editing => onEditingChange(session.id, entry.id, editing)}/>;
 }

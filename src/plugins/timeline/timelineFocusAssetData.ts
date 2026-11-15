@@ -42,7 +42,7 @@ export function groupFocusAssets(ids: readonly string[], snapshot: AssetCatalogS
 }
 
 /** Join the labels for each neighboring object without inferring a direction. */
-export function relationLabelsByAsset(assetId: string, relations: readonly AssetRelation[]): ReadonlyMap<string, readonly string[]> {
+export function relationLabelsByAsset(assetId: string, relations: readonly AssetRelation[]): ReadonlyMap<string, string> {
   const labels = new Map<string, Set<string>>();
   for (const {assets: [first, second], label} of relations) {
     const peer = first.assetsId === assetId ? second : second.assetsId === assetId ? first : null;
@@ -54,5 +54,5 @@ export function relationLabelsByAsset(assetId: string, relations: readonly Asset
     }
     entries.add(label);
   }
-  return new Map([...labels].map(([id, entries]) => [id, [...entries]]));
+  return new Map([...labels].map(([id, entries]) => [id, [...entries].join(" / ")]));
 }

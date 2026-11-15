@@ -30,11 +30,11 @@ function geometry(events, patch = {}) {
     width: 1200, height: 720, ...patch});
 }
 
-function layoutAgainstAxis(events, {settings = {origin: 1994, step: 5, unit: "年"}, ...patch} = {}) {
+function layoutAgainstAxis(events, {settings = {origin: 1994, step: 5, unit: "年"}, scaleTextWithZoom, ...patch} = {}) {
   const input = {center: {x: 0, y: 0}, zoom: 1, width: 1200, height: 720, ...patch};
   const axis = getTimelineAxisGeometry({...input, settings});
   const eventLayout = getTimelineEventsGeometry({events, origin: settings.origin, step: settings.step,
-    ...input, axisLabelBounds: axis.labelBounds});
+    ...input, axisLabelBounds: axis.labelBounds, scaleTextWithZoom});
   return {axis, eventLayout};
 }
 
@@ -128,6 +128,32 @@ test("origin critical-event captions avoid the year and origin description", () 
   assert.equal(point.x, 600, "the event remains anchored to its numeric origin");
   assert.ok(axis.labelBounds.length > 1, "the axis contributes both the year and origin caption bounds");
   assertCaptionAvoidsAxisAndStem(point, axis.labelBounds);
+});
+
+test("scaled event labels and turning captions leave room for fixed-size ruler labels", () => {
+  const events = [
+    event("above-a", 0, {important: true, summary: ""}),
+    event("above-b", 0, {important: true}),
+    event("below", 0, {important: true, placement: "below"}),
+  ];
+  for (const zoom of [0.25, 1, 4]) {
+    const {axis, eventLayout} = layoutAgainstAxis(events, {zoom, scaleTextWithZoom: true, height: 2200,
+      settings: {origin: 1_000_000_000, step: 5, unit: "年"}});
+    assert.ok(axis.labelBounds.length > 1);
+    const laidOut = Array.from(eventLayout.events);
+    assert.equal(laidOut.length, events.length);
+    for (const point of laidOut) {
+      assert.equal(point.x, 600);
+      assert.equal(point.turningCaption?.height, 18 * zoom);
+      assertCaptionAvoidsAxisAndStem(point, axis.labelBounds);
+    }
+    const boxes = [...eventLayout.labelBounds];
+    boxes.forEach((box, index) => {
+      for (const other of boxes.slice(index + 1)) {
+        assert.equal(rectanglesOverlap(box, other), false, `text bounds overlap at ${zoom}×`);
+      }
+    });
+  }
 });
 
 test("critical captions at non-origin major ticks clear the tick labels", () => {

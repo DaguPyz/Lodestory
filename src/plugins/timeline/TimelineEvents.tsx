@@ -12,7 +12,7 @@ import {getTimelineEventsGeometry, TIMELINE_TURNING_CAPTION_FONT_SIZE, type Time
 import {getTimelineStemSegments, type TimelineStemSegment} from "./timelineStemSegments";
 import {formatTimelineAxisValue, timelineValueAtOffset, TIMELINE_AXIS_BASE_PIXEL_INTERVAL, type TimelineLabelBounds} from "./timelineAxisGeometry";
 import {EventAssetPicker} from "./EventAssetPicker";
-import {TimelineFocusAssets, type AssetClickPosition} from "./TimelineFocusAssets";
+import {TimelineFocusAssets, type AssetClickPosition, type FocusedAsset, type TimelineFocusTarget} from "./TimelineFocusAssets";
 import "./timeline-events.css";
 
 type Size = Readonly<{width: number; height: number}>;
@@ -21,7 +21,6 @@ type Draft = {id: string | null; title: string; summary: string; offset: string;
 type Operation = {kind: "upsert"; draft: Draft} | {kind: "remove"; id: string};
 type EventMenuTarget = Readonly<{store: TimelineEventStore; eventId?: string}>;
 type DeleteTarget = Readonly<{id: string; title: string; source: "canvas" | "editor"}>;
-type FocusedAsset = Readonly<{id: string; previous: FocusedAsset | null}>;
 type EventFocus = Readonly<{
   id: string;
   store: TimelineEventStore;
@@ -196,13 +195,14 @@ const AxisAnchors = memo(function AxisAnchors({events, step, zoom, originWorldX,
   })}</>;
 });
 
-function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX, zoom, active, focusedId, onFocusEvent, onEdit}: {
+function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX, zoom, textScale, active, focusedId, onFocusEvent, onEdit}: {
   eventById: ReadonlyMap<string, TimelineEvent>;
   settings: TimelineAxisSettings;
   geometry: ReturnType<typeof getTimelineEventsGeometry>;
   stemSegments: readonly TimelineStemSegment[];
   centerX: number;
   zoom: number;
+  textScale: number;
   active: boolean;
   focusedId: string | null;
   onFocusEvent(id: string): void;
@@ -245,7 +245,7 @@ function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX,
           onDoubleClick={() => { if (active) onEdit(event); }}>
           <text className="timeline-event-turning-caption"
             x={point.turningCaption.left + point.turningCaption.width / 2 - point.x} y={point.turningCaption.top - point.axisY}
-            fontSize={TIMELINE_TURNING_CAPTION_FONT_SIZE} textAnchor="middle" dominantBaseline="hanging">关键转折</text>
+            fontSize={TIMELINE_TURNING_CAPTION_FONT_SIZE * textScale} textAnchor="middle" dominantBaseline="hanging">关键转折</text>
         </g>}
         {point.endpointVisible && <g className={["timeline-event-endpoint", originEvent ? "timeline-event-endpoint-origin" : "",
           event.important ? "timeline-event-endpoint-important" : ""].filter(Boolean).join(" ")}
@@ -330,7 +330,7 @@ function FocusedEvent({event, settings, onEdit}: {
   </div>;
 }
 
-export function TimelineEvents({contextMenus, assetCatalog, assetRelations = null, store, settings, view, size, axisLabelBounds, active, openToken, growthGeometryRef, growthStemsRef, onEditingChange}: {
+export function TimelineEvents({contextMenus, assetCatalog, assetRelations = null, store, settings, view, size, axisLabelBounds, scaleTextWithZoom = false, active, openToken, growthGeometryRef, growthStemsRef, onEditingChange, onRelationFocusChange}: {
   contextMenus: ContextMenuService;
   assetCatalog: AssetCatalog | null;
   assetRelations?: AssetRelationNetwork | null;
@@ -339,11 +339,13 @@ export function TimelineEvents({contextMenus, assetCatalog, assetRelations = nul
   view: View;
   size: Size;
   axisLabelBounds: readonly TimelineLabelBounds[];
+  scaleTextWithZoom?: boolean;
   active: boolean;
   openToken?: string | null;
   growthGeometryRef?: RefObject<TimelineEventsGeometry | null>;
   growthStemsRef?: RefObject<readonly TimelineStemSegment[] | null>;
   onEditingChange?: (editing: boolean) => void;
+  onRelationFocusChange?: (focused: boolean) => void;
 }) {
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   const formId = useId();
@@ -622,18 +624,25 @@ export function TimelineEvents({contextMenus, assetCatalog, assetRelations = nul
   const eventById = useMemo(() => new Map(snapshot.events.map(event => [event.id, event])), [snapshot.events]);
   const editedEvent = !isNewDraft && draft?.id ? eventById.get(draft.id) : undefined;
   const geometry = useMemo(() => getTimelineEventsGeometry({events: snapshot.events, origin: settings.origin, step: settings.step,
-    center: view.center, zoom: view.zoom, width: size.width, height: size.height, axisLabelBounds}),
-  [snapshot.events, settings.origin, settings.step, view.center.x, view.center.y, view.zoom, size.width, size.height, axisLabelBounds]);
+    center: view.center, zoom: view.zoom, width: size.width, height: size.height, axisLabelBounds, scaleTextWithZoom}),
+  [snapshot.events, settings.origin, settings.step, view.center.x, view.center.y, view.zoom, size.width, size.height, axisLabelBounds, scaleTextWithZoom]);
   const stemSegments = useMemo(() => getTimelineStemSegments(geometry), [geometry]);
   const focusInView = active && eventFocus?.store === store && eventFocus.view === view && eventFocus.openToken === openToken
     ? eventFocus : null;
   const focusedEvent = focusInView && eventById.get(focusInView.id);
   const focusedPoint = focusedEvent ? geometry.events.find(point => point.id === focusedEvent.id) : undefined;
-  const focusedAsset = assetRelations ? focusInView?.asset : null;
+  const focusedAsset = assetRelations ? focusInView?.asset ?? null : null;
+  const relationFocused = Boolean(focusedPoint && focusedAsset);
   useLayoutEffect(() => {
     if (eventFocus && !focusedPoint) setEventFocus(null);
     else if (eventFocus?.asset && !assetRelations) setEventFocus({...eventFocus, asset: null, assetClickPosition: null});
   }, [eventFocus, focusedPoint, assetRelations]);
+
+  useLayoutEffect(() => {
+    if (!relationFocused || !onRelationFocusChange) return;
+    onRelationFocusChange(true);
+    return () => onRelationFocusChange(false);
+  }, [relationFocused, onRelationFocusChange]);
 
   function focusEvent(id: string) {
     if (!active || editingRef.current || !eventById.has(id) || focusInView?.id === id) return;
@@ -647,13 +656,17 @@ export function TimelineEvents({contextMenus, assetCatalog, assetRelations = nul
       ? {...current, asset: {id, previous: current.asset ?? null}, assetClickPosition: origin} : current);
   }
 
-  function backFromFocus() {
+  function navigateFocus(target: TimelineFocusTarget) {
     setEventFocus(current => {
       if (!current || current.closing) return current;
-      if (current.asset) return {...current, asset: current.asset.previous, assetClickPosition: null};
-      return {...current, closing: true};
+      return target === "timeline" ? {...current, closing: true}
+        : {...current, asset: target === "event" ? null : target, assetClickPosition: null};
     });
-    if (!focusedAsset) menuSurface.current?.focus({preventScroll: true});
+    if (target === "timeline") menuSurface.current?.focus({preventScroll: true});
+  }
+
+  function backFromFocus() {
+    navigateFocus(focusedAsset ? focusedAsset.previous ?? "event" : "timeline");
   }
 
   const completeEventFocusExit = useCallback(() => {
@@ -661,7 +674,7 @@ export function TimelineEvents({contextMenus, assetCatalog, assetRelations = nul
   }, []);
 
   function handleCanvasClick(event: MouseEvent<HTMLDivElement>) {
-    if (!active || !focusedPoint || editingRef.current || event.button !== 0 || event.ctrlKey || event.detail > 1) return;
+    if (!active || !focusedPoint || relationFocused || editingRef.current || event.button !== 0 || event.ctrlKey || event.detail > 1) return;
     if (!(event.target instanceof Element) || !event.currentTarget.contains(event.target)) return;
     if (!event.target.closest(".timeline-focus-assets [data-canvas-interactive], .timeline-focus-asset")) backFromFocus();
   }
@@ -684,9 +697,11 @@ export function TimelineEvents({contextMenus, assetCatalog, assetRelations = nul
   const formValid = validTitle && validSummary && validOffset && validColor;
   const busy = submitting || snapshot.saving;
   const scale = view.zoom > 0 ? 1 / view.zoom : 1;
+  const textScale = scaleTextWithZoom ? view.zoom : 1;
   const overlayStyle = {
     width: size.width,
     height: size.height,
+    "--timeline-text-scale": textScale,
     transform: `translate(${view.center.x - size.width / (2 * Math.max(view.zoom, 0.0001))}px, ${view.center.y - size.height / (2 * Math.max(view.zoom, 0.0001))}px) scale(${scale})`,
   } as CSSProperties;
   const MenuRegion = contextMenus.Region;
@@ -721,15 +736,14 @@ export function TimelineEvents({contextMenus, assetCatalog, assetRelations = nul
         }
       }}>
       {snapshot.loaded && geometry.width > 0 && geometry.height > 0 && <>
-        <EventAxisMarkers eventById={eventById} settings={settings} geometry={geometry} stemSegments={stemSegments} centerX={view.center.x} zoom={view.zoom} active={active}
+        <EventAxisMarkers eventById={eventById} settings={settings} geometry={geometry} stemSegments={stemSegments} centerX={view.center.x} zoom={view.zoom} textScale={textScale} active={active}
           focusedId={focusedPoint?.id ?? null} onFocusEvent={focusEvent} onEdit={openEvent} />
         <EventLabels eventById={eventById} settings={settings} points={focusedPoint ? [focusedPoint] : geometry.events}
           onEdit={openEvent} />
         {focusedEvent && focusedPoint && <TimelineFocusAssets key={focusedEvent.id}
           event={focusedEvent} catalog={assetCatalog} size={size} closing={Boolean(focusInView?.closing)}
-          network={assetRelations} assetId={focusedAsset?.id} origin={focusedAsset ? focusInView?.assetClickPosition : null}
-          backLabel={focusedAsset ? focusedAsset.previous ? "返回上一资产" : "返回事件" : "返回时间线"}
-          onFocusAsset={focusAsset} onExit={backFromFocus} onExited={completeEventFocusExit}>
+          network={assetRelations} focusedAsset={focusedAsset} origin={focusedAsset ? focusInView?.assetClickPosition : null}
+          onFocusAsset={focusAsset} onNavigate={navigateFocus} onBack={backFromFocus} onExited={completeEventFocusExit}>
           <FocusedEvent event={focusedEvent} settings={settings} onEdit={openEvent} />
         </TimelineFocusAssets>}
       </>}

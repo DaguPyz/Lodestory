@@ -21,7 +21,7 @@
       import {createRoot} from "react-dom/client";
       import {CanvasSurface} from "/src/plugins/canvas/CanvasSurface.tsx";
       import {createCanvasViewport} from "/src/plugins/canvas/createCanvasViewport.ts";
-      import {TimelineCanvas} from "/src/plugins/timeline/TimelineCanvas.tsx";
+      import {createTimelineCanvasView, TimelineCanvas} from "/src/plugins/timeline/TimelineCanvas.tsx";
       import {ContextMenuProvider} from "/src/plugins/context-menu/ContextMenuProvider.tsx";
       import {ContextMenuRegion} from "/src/plugins/context-menu/ContextMenuRegion.tsx";
 
@@ -128,7 +128,8 @@
       const canvas = {Surface: CanvasSurface};
       const contextMenus = {Region: ContextMenuRegion};
       const root = createRoot(document.querySelector("#root"));
-      let viewport = createCanvasViewport();
+      let canvasView = createTimelineCanvasView(createCanvasViewport());
+      let otherCanvasView = createTimelineCanvasView(createCanvasViewport());
       let active = true;
       let openToken = null;
       let mounted = true;
@@ -136,7 +137,7 @@
       const oldViewports = [];
       function render() {
         root.render(mounted ? React.createElement(ContextMenuProvider, null, React.createElement("div", {className: "fixture-host"},
-          React.createElement(TimelineCanvas, {canvas, contextMenus, assetCatalog, viewport,
+          React.createElement(TimelineCanvas, {canvas, contextMenus, assetCatalog, canvasView,
             assetRelations: showRelations ? assetRelations : null,
             active, title: "性能回归", axis: axisStore, events: eventStore, openToken}))) : null);
       }
@@ -144,13 +145,14 @@
 
       window.__timelineDragFixture = {
         state() {
-          const view = viewport.getSnapshot();
+          const view = canvasView.viewport.getSnapshot();
           const current = events.find(event => event.id === targetEvent.id);
           return {center: {...view.center}, zoom: view.zoom, disposed: view.disposed,
             eventCount: events.length, saves, target: current ? {...current, assetIds: [...current.assetIds]} : null,
             targetIndex: events.findIndex(event => event.id === targetEvent.id)};
         },
         setView(center, zoom = 1) {
+          const {viewport} = canvasView;
           viewport.resetView();
           viewport.zoomTo(zoom);
           viewport.panBy(-center.x * zoom, -center.y * zoom);
@@ -169,6 +171,14 @@
           events = enabled ? denseEvents.filter((_, index) => index % 25 === 0) : allEvents;
           publishEvents();
         },
+        setZoomEvents(enabled) {
+          events = enabled ? [{...targetEvent, offset: 0, placement: "below", summary: "一封来自故乡的信"}] : allEvents;
+          publishEvents();
+        },
+        swapCanvasView() {
+          [canvasView, otherCanvasView] = [otherCanvasView, canvasView];
+          render();
+        },
         setFocusAssets(enabled, missing = 0, known = relatedAssets.length) {
           const ids = relatedAssets.slice(0, known).map(asset => asset.id).concat(Array.from({length: missing}, (_, index) => makeId(22000 + index)));
           events = events.map(event => event.id === targetEvent.id
@@ -176,9 +186,8 @@
           publishEvents();
         },
         replaceViewport() {
-          const oldViewport = viewport;
-          oldViewports.push(oldViewport);
-          viewport = createCanvasViewport();
+          oldViewports.push(canvasView.viewport);
+          canvasView = createTimelineCanvasView(createCanvasViewport());
           render();
           return oldViewports.length - 1;
         },

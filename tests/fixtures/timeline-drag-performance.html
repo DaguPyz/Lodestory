@@ -93,26 +93,37 @@
         {id: makeId(21006), name: "守溪会", typeId: "faction", description: "在渡口帮忙的人"},
         {id: makeId(21007), name: "造钟行", typeId: "faction", description: "旧街上的行会"},
       ];
-      const catalogSnapshot = {
+      let catalogSnapshot = {
         assets: relatedAssets,
         types: [{id: "place", name: "地点", status: "active"}, {id: "faction", name: "势力", status: "active"},
           {id: "person", name: "人物", status: "active"}],
         loaded: true, loading: false, blocked: false, error: null,
       };
-      const assetCatalog = {getSnapshot: () => catalogSnapshot, subscribe: () => () => {}, async retry() { return true; }};
+      const catalogListeners = new Set();
+      const assetCatalog = {
+        getSnapshot: () => catalogSnapshot,
+        subscribe(listener) { catalogListeners.add(listener); return () => catalogListeners.delete(listener); },
+        async retry() { return true; },
+      };
       const student = relatedAssets[0];
       const teacher = relatedAssets[2];
       const enemy = relatedAssets[4];
-      const assetRelationsSnapshot = {loaded: true, loading: false, saving: false, pending: false, error: null};
+      const outerAssets = Array.from({length: 125}, (_, index) => ({id: makeId(23000 + index),
+        name: `外圈资产 ${index + 1}`, typeId: "place", description: ""}));
+      let assetRelationsSnapshot = {loaded: true, loading: false, saving: false, pending: false, error: null};
+      const relationListeners = new Set();
       const savedRelations = [
         {assets: [{assetsId: student.id, tag: "徒弟"}, {assetsId: teacher.id, tag: "师父"}], label: "师徒"},
         {assets: [{assetsId: enemy.id}, {assetsId: student.id}], label: "死敌"},
         {assets: [{assetsId: teacher.id}, {assetsId: student.id}], label: "传授功法"},
       ];
+      const outerRelations = outerAssets.map(asset => ({assets: [{assetsId: student.id}, {assetsId: asset.id}], label: "相关"}));
+      let denseRelations = false;
       const assetRelations = {
         getSnapshot: () => assetRelationsSnapshot,
-        subscribe: () => () => {},
-        getRelations: id => savedRelations.filter(relation => relation.assets.some(asset => asset.assetsId === id)),
+        subscribe(listener) { relationListeners.add(listener); return () => relationListeners.delete(listener); },
+        getRelations: id => (denseRelations ? [...savedRelations, ...outerRelations] : savedRelations)
+          .filter(relation => relation.assets.some(asset => asset.assetsId === id)),
       };
       const canvas = {Surface: CanvasSurface};
       const contextMenus = {Region: ContextMenuRegion};
@@ -146,6 +157,13 @@
         },
         setActive(next) { active = next; render(); },
         showRelations(next) { showRelations = next; render(); },
+        setDenseRelations(next) {
+          denseRelations = next;
+          catalogSnapshot = {...catalogSnapshot, assets: next ? [...relatedAssets, ...outerAssets] : relatedAssets};
+          assetRelationsSnapshot = {...assetRelationsSnapshot};
+          for (const listener of catalogListeners) listener();
+          for (const listener of relationListeners) listener();
+        },
         open(next) { openToken = next; render(); },
         setAnimationEvents(enabled) {
           events = enabled ? denseEvents.filter((_, index) => index % 25 === 0) : allEvents;

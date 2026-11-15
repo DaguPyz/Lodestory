@@ -1,10 +1,11 @@
-import {useId, useLayoutEffect, useMemo, useRef, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode} from "react";
+import {useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode} from "react";
 import type {AssetCatalog, AssetCatalogSnapshot} from "@lodestory/sdk/asset-catalog";
 import type {AssetRelationNetwork, AssetRelationSnapshot} from "@lodestory/sdk/asset-relations";
 import {Button, Icon} from "@lodestory/ui";
 import type {TimelineEvent} from "./timelineEventStore";
-import {getTimelineAssetOrbit, timelineFocusEventCenter} from "./timelineAssetOrbit";
-import {groupFocusAssets, relationLabelsByAsset} from "./timelineFocusAssetData";
+import {getTimelineAssetOrbit, isRelationInViewport, relationLabelPosition, timelineFocusEventCenter, type OrbitSlot} from "./timelineAssetOrbit";
+import {groupFocusAssets, relationLabelsByAsset, type FocusAsset} from "./timelineFocusAssetData";
+import {useTimelineRelationViewport} from "./useTimelineRelationViewport";
 import "./timeline-focus-assets.css";
 
 const emptySubscribe = () => () => {};
@@ -14,6 +15,7 @@ const fontSizeInPixels = () => Number.parseFloat(getComputedStyle(document.docum
 export type AssetClickPosition = Readonly<{x: number; y: number; width: number}>;
 
 const sceneInset = {top: 56, bottom: 72, horizontal: 24};
+const entrancePhaseCount = 3;
 const sceneVariables = {
   "--timeline-focus-inset-top": `${sceneInset.top}px`,
   "--timeline-focus-inset-bottom": `${sceneInset.bottom}px`,
@@ -82,6 +84,14 @@ function assetPressOrigin(button: HTMLButtonElement) {
   return {x: left + width / 2, y: top + height / 2, width};
 }
 
+type PositionedAsset = Readonly<{asset: FocusAsset; position: OrbitSlot; labelPosition: {x: number; y: number}}>;
+type FocusNodeStyle = CSSProperties & Partial<Record<`--timeline-focus-${string}`, string | number>>;
+
+function relationSegment({offsetX, offsetY}: OrbitSlot, center: number, rem: number) {
+  const ratio = 1 - 2.2 * rem / Math.hypot(offsetX, offsetY);
+  return `M${center} ${center}L${center - offsetX * ratio} ${center - offsetY * ratio}`;
+}
+
 export function TimelineFocusAssets({event, catalog, network, assetId, origin, size, closing, backLabel, onFocusAsset, onExit, onExited, children}: {
   event: TimelineEvent;
   catalog: AssetCatalog | null;
@@ -105,6 +115,8 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
   );
   const relations = assetId && relationSnapshot?.loaded ? activeNetwork?.getRelations(assetId) : undefined;
   const relationLabels = useMemo(() => assetId && relations ? relationLabelsByAsset(assetId, relations) : null, [assetId, relations]);
+  const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null);
+  const highlightedPeerId = selectedPeerId && relationLabels?.has(selectedPeerId) ? selectedPeerId : null;
   const assetIds = useMemo(() => assetId ? [...(relationLabels?.keys() ?? [])] : event.assetIds, [assetId, relationLabels, event.assetIds]);
   const catalogReady = Boolean(snapshot?.loaded && !snapshot.blocked && !snapshot.error);
   const groups = useMemo(() => groupFocusAssets(assetIds, snapshot), [assetIds, snapshot]);
@@ -121,19 +133,53 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
   const diameter = Math.min(size.width - 2 * sceneInset.horizontal,
     size.height - sceneInset.top - sceneInset.bottom, 600);
   const rem = assetId ? fontSizeInPixels() : 16;
-  const sceneSize = {width: diameter, height: diameter};
   const compact = diameter < 440 * rem / 16;
-  let start = 0;
-  const shownGroups = groups.map(group => {
-    const first = start;
-    start += group.items.length;
-    return {...group, first};
-  });
-  const orbit = compact ? null : getTimelineAssetOrbit(shownGroups.map(group =>
-    ({count: group.items.length})), sceneSize, assetId ? {spacing: 12 * rem, offsetRings: true} : undefined);
+  const orbit = useMemo(() => compact ? null : getTimelineAssetOrbit(groups.map(group => ({count: group.items.length})),
+    {width: diameter, height: diameter}, assetId ? {spacing: 12 * rem, offsetRings: true} : undefined),
+  [groups, diameter, compact, assetId, rem]);
   const diagramSize = orbit?.diameter ?? diameter;
   const overflow = !compact && (diagramSize > size.width - 2 * sceneInset.horizontal
     || diagramSize > size.height - sceneInset.top - sceneInset.bottom);
+  const {initial, scrolled} = useTimelineRelationViewport(scrollport, {
+    assetId, diameter: diagramSize, overflow, compact,
+    width: size.width - 2 * sceneInset.horizontal, height: size.height - sceneInset.top - sceneInset.bottom,
+  });
+  const shownGroups = useMemo(() => {
+    let order = 0;
+    return groups.map((group, groupIndex) => ({
+      ...group, items: group.items.map((asset, index) => {
+        const position = orbit?.groups[groupIndex].slots[index];
+        const relation = assetId && position ? {asset, position, labelPosition: relationLabelPosition(position, rem)} : null;
+        return {asset, order: order++, position, relation,
+          initial: !relation || !overflow || isRelationInViewport(relation.position, relation.labelPosition, diagramSize, initial, rem),
+        };
+      }),
+    }));
+  }, [groups, orbit, assetId, overflow, diagramSize, initial, rem]);
+  const visibleGroups = useMemo(() => shownGroups.map(group => ({
+    ...group, items: scrolled ? group.items.filter(({asset, relation}) => !relation || asset.id === scrolled.focusedPeerId
+      || isRelationInViewport(relation.position, relation.labelPosition, diagramSize, scrolled.viewport, rem))
+      : group.items.filter(item => item.initial),
+  })), [shownGroups, scrolled, diagramSize, rem]);
+  const entranceOrder = useMemo(() => {
+    const initiallyVisible = shownGroups.flatMap(group => group.items.filter(item => item.relation && item.initial));
+    const count = initiallyVisible.length;
+    return new Map(initiallyVisible.map(({asset}, index) => [
+      asset.id, Math.floor(index * Math.min(entrancePhaseCount, count) / count),
+    ]));
+  }, [shownGroups]);
+  const relationPhases = useMemo(() => {
+    if (!assetId || !orbit) return [];
+    const batches = Array.from({length: entrancePhaseCount + 1}, (): PositionedAsset[] => []);
+    for (const group of visibleGroups) {
+      for (const {asset, relation} of group.items) {
+        if (relation) batches[entranceOrder.get(asset.id) ?? entrancePhaseCount].push(relation);
+      }
+    }
+    return batches.map((items, phase) => ({
+      phase, items, path: items.map(({position}) => relationSegment(position, diagramSize / 2, rem)).join(""),
+    }));
+  }, [assetId, orbit, visibleGroups, entranceOrder, diagramSize, rem]);
   const relationMessage = relationSnapshot?.loading ? "正在读取资产关系…"
     : !relationSnapshot?.loaded ? "资产关系读取失败"
     : !total ? "暂无资产关系" : null;
@@ -148,17 +194,11 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
   } as CSSProperties;
 
   useLayoutEffect(() => {
-    const element = scrollport.current;
-    if (!element) return;
-    element.scrollLeft = Math.max(0, (element.scrollWidth - element.clientWidth) / 2);
-    element.scrollTop = Math.max(0, (element.scrollHeight - element.clientHeight) / 2);
-  }, [assetId, diagramSize, size.width, size.height, compact]);
-
-  useLayoutEffect(() => {
+    if (selectedPeerId && (previousAsset.current !== assetId || !relationLabels?.has(selectedPeerId))) setSelectedPeerId(null);
     if (previousAsset.current === assetId) return;
     previousAsset.current = assetId;
     (assetId ? summary.current : toolbarBack.current)?.focus({preventScroll: true});
-  }, [assetId]);
+  }, [assetId, relationLabels, selectedPeerId]);
 
   useLayoutEffect(() => {
     if (centerMotion.current && origin && enteringCenter) return moveToCenter(centerMotion.current, origin);
@@ -224,6 +264,18 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
     };
   }, [closing, compact, onExited]);
 
+  function renderRelationLabel(asset: FocusAsset, label: string, position?: PositionedAsset["labelPosition"], phase?: number) {
+    return <button key={asset.id} type="button" data-canvas-interactive data-peer-id={asset.id}
+      className={compact ? "timeline-focus-relation-list-label" : "timeline-focus-relation-label"}
+      data-relation-motion={phase === entrancePhaseCount ? "scroll" : undefined}
+      aria-label={`${label}（${asset.name}）`} aria-pressed={highlightedPeerId === asset.id} title={label}
+      style={position && {left: `${position.x}%`, top: `${position.y}%`}}
+      onClick={event => {
+        if (event.ctrlKey) return;
+        setSelectedPeerId(current => current === asset.id ? null : asset.id);
+      }}><span id={`${relationLabelId}-${asset.id}`}>{label}</span></button>;
+  }
+
   return <div className="timeline-focus-assets" style={style} data-compact={compact || undefined}
     data-relations={Boolean(assetId) || undefined} data-centering={enteringCenter || undefined}
     inert={closing} data-closing={closing || undefined}>
@@ -238,15 +290,16 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
         const bounds = click.currentTarget.getBoundingClientRect();
         if (click.clientX >= bounds.left + click.currentTarget.clientWidth
           || click.clientY >= bounds.top + click.currentTarget.clientHeight) return;
-        if (!click.target.closest(".timeline-focus-event, .timeline-focus-relation-center, .timeline-focus-asset, .timeline-focus-relation-edge")) onExit();
+        if (!click.target.closest(".timeline-focus-event, .timeline-focus-relation-center, .timeline-focus-asset, .timeline-focus-relation-label")) onExit();
       }}>
     <div key={assetId ?? "event"} className="timeline-focus-stage" style={sceneStyle}>
-    <div ref={scene} className="timeline-focus-scene" data-empty={!total || undefined} style={sceneStyle}>
+    <div ref={scene} className="timeline-focus-scene" data-empty={!total || undefined} data-scrolled={Boolean(scrolled) || undefined} style={sceneStyle}>
       {orbit?.rings.map(ring => <div key={ring.radius} className="timeline-focus-orbit" aria-hidden="true"
         style={{inset: (diagramSize - ring.radius * 2) / 2}} />)}
       {centerGroup && center ? <div className="timeline-focus-relation-center" data-canvas-interactive>
         <div ref={centerMotion} className="timeline-focus-relation-center-motion">
-          <div className="timeline-focus-relation-center-node" style={{"--timeline-focus-category-color": centerGroup.color} as CSSProperties} title={center.title}>
+          <div className="timeline-focus-relation-center-node" data-highlighted={Boolean(highlightedPeerId) || undefined}
+            style={{"--timeline-focus-category-color": centerGroup.color} as CSSProperties} title={center.title}>
             <span className="timeline-focus-asset-dot" aria-hidden="true" />
             <h2 ref={summary} className="timeline-focus-relation-name" tabIndex={-1}>{center.name}</h2>
             <span className="timeline-focus-asset-type">{center.detail}</span>
@@ -259,27 +312,26 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
       </div>}
       {total > 0 && <div className="timeline-focus-groups" data-canvas-interactive={compact || undefined}
         tabIndex={compact ? 0 : undefined} role="region" aria-label={assetId ? "直接关联资产" : "关联资产"}>
-        {shownGroups.map(({id, label, color, items, first}, groupIndex) => {
-          const layout = orbit?.groups[groupIndex];
-          return <section className="timeline-focus-group" key={id} aria-label={label}
+        {visibleGroups.map(({id, label, color, items}) => {
+          return items.length > 0 && <section className="timeline-focus-group" key={id} aria-label={label}
             style={{"--timeline-focus-category-color": color} as CSSProperties}>
             <ul className="timeline-focus-asset-list">
-              {items.map((asset, index) => {
-                const position = layout?.slots[index];
-                const order = first + index;
+              {items.map(({asset, order, position, initial}) => {
                 const labels = relationLabels?.get(asset.id);
-                const label = labels?.join(" / ");
+                const label = compact && labels?.join(" / ");
                 const canInspect = Boolean(network && asset.known);
-                const style = {
+                const style: FocusNodeStyle = {
                   "--timeline-focus-asset-order": order,
-                  "--timeline-focus-drift-x": `${3 + order % 3}px`,
-                  "--timeline-focus-drift-y": `${4 + order % 2}px`,
-                  "--timeline-focus-drift-duration": `${6000 + order % 5 * 600}ms`,
-                  "--timeline-focus-drift-direction": order % 2 ? "reverse" : "normal",
+                  ...(assetId ? {"--timeline-focus-relation-phase": entranceOrder.get(asset.id)} : {
+                    "--timeline-focus-drift-x": `${3 + order % 3}px`,
+                    "--timeline-focus-drift-y": `${4 + order % 2}px`,
+                    "--timeline-focus-drift-duration": `${6000 + order % 5 * 600}ms`,
+                    "--timeline-focus-drift-direction": order % 2 ? "reverse" : "normal",
+                  }),
                   ...(position && {left: `${position.x}%`, top: `${position.y}%`,
                     "--timeline-focus-asset-offset-x": `${position.offsetX}px`,
                     "--timeline-focus-asset-offset-y": `${position.offsetY}px`}),
-                } as CSSProperties;
+                };
                 const face = <span className="timeline-focus-asset-face">
                   <span className="timeline-focus-asset-dot" aria-hidden="true" />
                   <span className="timeline-focus-asset-text">
@@ -287,17 +339,19 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
                     <span className="timeline-focus-asset-type">{asset.detail}</span>
                   </span>
                 </span>;
-                return <li key={asset.id} className="timeline-focus-asset" style={style}>
+                return <li key={asset.id} className="timeline-focus-asset" style={style} data-peer-id={asset.id}
+                  data-relation-motion={assetId && position && (initial ? "enter" : "scroll") || undefined}
+                  data-highlighted={highlightedPeerId === asset.id || undefined}>
                   {canInspect ? <button type="button" className="timeline-focus-asset-node" data-canvas-interactive
                     title={asset.title} aria-label={`查看「${asset.name}」的资产关系`}
-                    aria-describedby={label ? `${relationLabelId}-${asset.id}` : undefined}
+                    aria-describedby={labels?.length ? `${relationLabelId}-${asset.id}` : undefined}
                     onClick={event => {
                       if (event.ctrlKey) return;
                       onFocusAsset(asset.id, compact ? null : assetPressOrigin(event.currentTarget));
                     }}>{face}</button>
                     : <div className="timeline-focus-asset-node" title={asset.title} onClick={!compact && !network ? playAssetPress : undefined}
                       onPointerEnter={event => { delete event.currentTarget.dataset.clicked; }}>{face}</div>}
-                  {label && compact && <span id={`${relationLabelId}-${asset.id}`} className="timeline-focus-relation-list-label">{label}</span>}
+                  {label && compact && renderRelationLabel(asset, label)}
                 </li>;
               })}
             </ul>
@@ -305,21 +359,22 @@ export function TimelineFocusAssets({event, catalog, network, assetId, origin, s
         })}
       </div>}
       {assetId && orbit && <div className="timeline-focus-relation-edges">
-        {shownGroups.flatMap((group, groupIndex) => group.items.map((asset, index) => {
-          const {x, y, offsetX, offsetY} = orbit.groups[groupIndex].slots[index];
-          const length = Math.hypot(offsetX, offsetY);
-          const angle = Math.atan2(-offsetY, -offsetX);
-          // Place labels between rings, close enough to identify their own circle.
-          const labelPosition = (length - 5.5 * rem) / length;
-          const label = relationLabels?.get(asset.id)?.join(" / ");
-          return <div key={asset.id} className="timeline-focus-relation-edge"
-            style={{"--timeline-focus-asset-order": group.first + index} as CSSProperties}>
-            <span className="timeline-focus-relation-line" aria-hidden="true"
-              style={{width: `calc(${length}px - 2.2rem)`, rotate: `${angle}rad`}} />
-            <span id={`${relationLabelId}-${asset.id}`} data-canvas-interactive className="timeline-focus-relation-label" title={label}
-              style={{left: `${50 + (x - 50) * labelPosition}%`, top: `${50 + (y - 50) * labelPosition}%`}}>{label}</span>
+        {relationPhases.map(({phase, items, path}) => {
+          const selected = items.find(({asset}) => asset.id === highlightedPeerId);
+          return items.length > 0 && <div key={phase} className="timeline-focus-relation-phase"
+            data-entrance={phase < entrancePhaseCount || undefined} data-highlighted={Boolean(selected) || undefined}
+            style={{"--timeline-focus-relation-phase": phase} as CSSProperties}>
+            <svg className="timeline-focus-relation-lines" width="100%" height="100%" aria-hidden="true">
+              <path className="timeline-focus-relation-line" d={path} />
+              {selected && <path className="timeline-focus-relation-line" data-highlighted
+                d={relationSegment(selected.position, diagramSize / 2, rem)} />}
+            </svg>
+            {items.map(({asset, labelPosition}) => {
+              const label = relationLabels?.get(asset.id)?.join(" / ");
+              return label && renderRelationLabel(asset, label, labelPosition, phase);
+            })}
           </div>;
-        }))}
+        })}
       </div>}
     </div>
     </div>

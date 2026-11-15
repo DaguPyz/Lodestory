@@ -3,6 +3,28 @@ const nodeSpacing = 96;
 // Leave room for the 36px node radius, hover growth, category dot and idle drift.
 const edgeInset = 48;
 
+export type OrbitSlot = Readonly<{x: number; y: number; offsetX: number; offsetY: number}>;
+export type OrbitViewport = Readonly<{left: number; top: number; width: number; height: number}>;
+
+export function relationLabelPosition(slot: OrbitSlot, rem: number) {
+  const ratio = 1 - 5.5 * rem / Math.hypot(slot.offsetX, slot.offsetY);
+  return {x: 50 + (slot.x - 50) * ratio, y: 50 + (slot.y - 50) * ratio};
+}
+
+export function isRelationInViewport(slot: OrbitSlot, label: {x: number; y: number}, diameter: number, viewport: OrbitViewport, rem: number) {
+  const margin = 4.5 * rem; // Includes half the label width and a small scroll buffer.
+  const left = viewport.left - margin;
+  const top = viewport.top - margin;
+  const right = viewport.left + viewport.width + margin;
+  const bottom = viewport.top + viewport.height + margin;
+  const contains = ({x, y}: {x: number; y: number}) => {
+    const horizontal = x * diameter / 100;
+    const vertical = y * diameter / 100;
+    return horizontal >= left && horizontal <= right && vertical >= top && vertical <= bottom;
+  };
+  return contains(slot) || contains(label);
+}
+
 /** Positions and travel share the same center, so assets emerge from the event. */
 export function getTimelineAssetOrbit(groups: readonly {count: number}[], size: {width: number; height: number},
   {spacing = nodeSpacing, offsetRings = false}: {spacing?: number; offsetRings?: boolean} = {}) {

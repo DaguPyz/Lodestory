@@ -840,7 +840,7 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
         const scene = document.querySelector('.timeline-focus-scene');
         const center = scene.querySelector('.timeline-focus-relation-center-node');
         const labels = [...scene.querySelectorAll('.timeline-focus-relation-label')];
-        if (labels.length !== 2 || labels.some(label => getComputedStyle(label.parentElement).opacity !== '1'
+        if (labels.length !== 2 || labels.some(label => getComputedStyle(label.closest('.timeline-focus-relation-phase')).opacity !== '1'
           || getComputedStyle(label).visibility !== 'visible')) return null;
         const bounds = scene.getBoundingClientRect(), node = center.getBoundingClientRect();
         return {centered: Math.abs(node.x + node.width / 2 - bounds.x - bounds.width / 2) < 1
@@ -851,8 +851,33 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       })()`), "The saved relationships did not render as labeled connections.");
       assert.deepEqual(mapping, {centered: true, lines: 2, labels: ["师徒 / 传授功法", "死敌"], peers: ["陈师傅", "闻溪"]},
         "only saved neighbors appear around the centered asset, with one labeled line per peer");
+      const highlight = () => evaluate(`(() => {
+        const center = document.querySelector('.timeline-focus-relation-center-node');
+        const labels = [...document.querySelectorAll('.timeline-focus-relation-label, .timeline-focus-relation-list-label')];
+        return {
+          center: center.hasAttribute('data-highlighted'),
+          peers: [...document.querySelectorAll('.timeline-focus-asset[data-highlighted] .timeline-focus-asset-name')].map(node => node.textContent),
+          pressed: labels.filter(node => node.getAttribute('aria-pressed') === 'true').map(node => node.textContent),
+          lineHighlighted: getComputedStyle(document.querySelector('.timeline-focus-relation-line[data-highlighted]')
+            ?? center).strokeWidth === '2px',
+        };
+      })()`);
+      const teacherLabel = 'button.timeline-focus-relation-label[aria-label^="师徒"]';
+      const enemyLabel = 'button.timeline-focus-relation-label[aria-label^="死敌"]';
+      await clickSelector(teacherLabel);
+      assert.deepEqual(await highlight(), {center: true, peers: ["陈师傅"], pressed: ["师徒 / 传授功法"], lineHighlighted: true});
+      assert.equal(await centerName(), "林舟", "selecting a label keeps the same center asset");
+      await clickSelector(enemyLabel);
+      assert.deepEqual(await highlight(), {center: true, peers: ["闻溪"], pressed: ["死敌"], lineHighlighted: true});
+      await clickSelector(enemyLabel);
+      assert.deepEqual(await highlight(), {center: false, peers: [], pressed: [], lineHighlighted: false});
+      await evaluate(`document.querySelector(${JSON.stringify(teacherLabel)}).focus()`);
+      await cdp("Input.dispatchKeyEvent", {type: "keyDown", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13, text: "\r"});
+      await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: "Enter", code: "Enter", windowsVirtualKeyCode: 13});
+      assert.deepEqual(await highlight(), {center: true, peers: ["陈师傅"], pressed: ["师徒 / 传授功法"], lineHighlighted: true});
       await clickAsset("陈师傅");
       assert.equal(await centerName(), "陈师傅");
+      assert.deepEqual(await highlight(), {center: false, peers: [], pressed: [], lineHighlighted: false});
       assert.deepEqual((await focus()).assets, ["林舟"], "the same relationship can be followed in either direction");
       await cdp("Input.dispatchKeyEvent", {type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
       await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
@@ -875,6 +900,61 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       assert.equal(await evaluate("document.querySelectorAll('button.timeline-focus-asset-node').length"), 0);
       await clickButtonNamed("返回时间线");
       await waitFor(() => evaluate("!document.querySelector('.timeline-focus-assets')"), "The event scene did not close.");
+
+      await fixture("setDenseRelations", true);
+      await fixture("showRelations", true);
+      await openAssetsAt(point);
+      await clickAsset("林舟");
+      const relationEntry = await evaluate(`(() => {
+        const scene = document.querySelector('.timeline-focus-scene');
+        const port = scene.closest('.timeline-focus-viewport');
+        const nodes = [...scene.querySelectorAll('.timeline-focus-asset-node')];
+        const delays = nodes.flatMap(node => node.getAnimations().map(animation => animation.effect.getTiming().delay));
+        return {
+          ids: nodes.map(node => node.closest('[data-peer-id]').dataset.peerId),
+          centered: Math.abs(port.scrollLeft - (port.scrollWidth - port.clientWidth) / 2) < 2
+            && Math.abs(port.scrollTop - (port.scrollHeight - port.clientHeight) / 2) < 2,
+          phases: new Set(delays).size,
+          fades: scene.querySelectorAll('.timeline-focus-relation-phase').length,
+        };
+      })()`);
+      assert.ok(relationEntry.centered && relationEntry.ids.length < 127 && relationEntry.ids.length > 0,
+        "the first screen mounts only nearby nodes without shrinking the scrollable diagram");
+      assert.equal(relationEntry.phases, 3, "the first screen spreads nodes across three start times");
+      assert.equal(relationEntry.fades, 3, "each batch shares one line layer and one label fade");
+      await evaluate(`document.querySelector('.timeline-focus-viewport').scrollTo(0, 0)`);
+      const outerLabel = await waitFor(() => evaluate(`(() => {
+        const initial = new Set(${JSON.stringify(relationEntry.ids)});
+        const labels = [...document.querySelectorAll('.timeline-focus-relation-label')];
+        const label = labels.find(node => {
+          if (initial.has(node.dataset.peerId)) return false;
+          const r = node.getBoundingClientRect();
+          return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
+        });
+        return label?.dataset.peerId;
+      })()`), "No initially unmounted relationship was revealed by scrolling.");
+      await clickSelector(`button.timeline-focus-relation-label[data-peer-id="${outerLabel}"]`);
+      assert.equal(await evaluate(`document.querySelector('.timeline-focus-relation-label[aria-pressed=true]').dataset.peerId`), outerLabel);
+      assert.ok((await highlight()).lineHighlighted, "a deferred relationship can be selected and draws a highlighted line");
+      await evaluate(`document.querySelector('.timeline-focus-relation-label[aria-pressed=true]').focus({preventScroll: true})`);
+      await evaluate(`(() => {
+        const port = document.querySelector('.timeline-focus-viewport');
+        port.scrollTo((port.scrollWidth - port.clientWidth) / 2, (port.scrollHeight - port.clientHeight) / 2);
+      })()`);
+      await waitFor(() => evaluate(`document.activeElement.dataset.peerId === "${outerLabel}"
+        && document.querySelectorAll('.timeline-focus-asset[data-peer-id]').length >= ${relationEntry.ids.length}`),
+        "Scrolling keeps the keyboard-focused outer label mounted.");
+      await evaluate("document.querySelector('.timeline-focus-viewport').focus({preventScroll: true})");
+      await waitFor(() => evaluate(`!document.querySelector('.timeline-focus-relation-label[data-peer-id="${outerLabel}"]')`),
+        "Scrolling back culls the offscreen label.");
+      await evaluate(`document.querySelector('.timeline-focus-viewport').scrollTo(0, 0)`);
+      await waitFor(() => evaluate(`document.querySelector('.timeline-focus-relation-label[aria-pressed=true]')?.dataset.peerId === "${outerLabel}"`),
+        "Returning to the selected outer relationship restores its highlight.");
+      await fixture("setDenseRelations", false);
+      await clickButtonNamed("返回事件");
+      await clickButtonNamed("返回时间线");
+      await waitFor(() => evaluate("!document.querySelector('.timeline-focus-assets')"), "The large graph did not close.");
+      await fixture("showRelations", false);
       await fixture("setFocusAssets", true);
 
       await cdp("Emulation.setEmulatedMedia", {features: [{name: "prefers-reduced-motion", value: "reduce"}]});
@@ -961,6 +1041,8 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       assert.equal(await evaluate("document.activeElement.className"), "timeline-focus-relation-name");
       assert.deepEqual(await evaluate("[...document.querySelectorAll('.timeline-focus-relation-list-label')].map(node => node.textContent)"),
         ["师徒 / 传授功法", "死敌"], "the narrow view keeps the same relationship descriptions beside the assets");
+      await clickSelector('button.timeline-focus-relation-list-label[aria-label^="师徒"]');
+      assert.deepEqual(await highlight(), {center: true, peers: ["陈师傅"], pressed: ["师徒 / 传授功法"], lineHighlighted: false});
       await clickButtonNamed("返回事件");
       await clickButtonNamed("返回时间线");
       await fixture("showRelations", false);

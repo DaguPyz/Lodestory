@@ -9,6 +9,9 @@
   --timeline-focus-dismiss-duration: 220ms;
   --timeline-focus-center-duration: 225ms;
   --timeline-focus-neighbor-delay: 0ms;
+  --timeline-focus-relation-node-duration: 240ms;
+  --timeline-focus-relation-phase-step: 48ms;
+  --timeline-focus-relation-edge-delay: 145ms;
   --timeline-focus-gold: var(--ui-category-4-foreground);
 }
 
@@ -183,7 +186,6 @@
 }
 
 .timeline-focus-asset-node {
-  --timeline-focus-node-delay: calc(var(--timeline-focus-neighbor-delay) + var(--timeline-focus-asset-order) * var(--timeline-focus-reveal-step));
   z-index: 1;
   position: relative;
   width: 100%;
@@ -213,8 +215,17 @@
 }
 
 .timeline-focus-assets:where([data-relations]:not([data-compact])) .timeline-focus-asset-node {
-  animation: timeline-focus-asset-reveal var(--timeline-focus-reveal-duration)
-    var(--ui-ease-enter) var(--timeline-focus-node-delay) backwards;
+  animation: none;
+}
+
+.timeline-focus-scene:where(:not([data-scrolled])) :where(.timeline-focus-asset[data-relation-motion="enter"]) .timeline-focus-asset-node {
+  animation: timeline-focus-relation-node-reveal var(--timeline-focus-relation-node-duration) var(--ui-ease-enter)
+    calc(var(--timeline-focus-neighbor-delay) + var(--timeline-focus-relation-phase) * var(--timeline-focus-relation-phase-step)) backwards;
+}
+
+.timeline-focus-scene :where(.timeline-focus-asset[data-relation-motion="scroll"]) .timeline-focus-asset-node,
+.timeline-focus-relation-label:where([data-relation-motion="scroll"]) {
+  animation: timeline-focus-asset-fade var(--ui-duration-fast) var(--ui-ease-enter);
 }
 
 /* Scale the visible circle independently of the moving hit area. */
@@ -348,41 +359,92 @@
   transform: translateX(-50%);
 }
 
-.timeline-focus-relation-edges, .timeline-focus-relation-edge { position: absolute; inset: 0; pointer-events: none; }
-.timeline-focus-relation-edge {
-  animation: timeline-focus-relation-fade var(--ui-duration-fast) var(--ui-ease-enter)
-    calc(var(--timeline-focus-neighbor-delay) + var(--timeline-focus-reveal-duration) + var(--timeline-focus-asset-order) * var(--timeline-focus-reveal-step)) backwards;
+.timeline-focus-relation-edges, .timeline-focus-relation-phase, .timeline-focus-relation-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
 }
 
+.timeline-focus-relation-edges { z-index: 0; }
+.timeline-focus-assets[data-relations] .timeline-focus-asset { z-index: 1; }
+
+.timeline-focus-scene:where(:not([data-scrolled])) .timeline-focus-relation-phase:where([data-entrance]) {
+  animation: timeline-focus-relation-fade var(--ui-duration-fast) var(--ui-ease-enter)
+    calc(var(--timeline-focus-neighbor-delay) + var(--timeline-focus-relation-edge-delay)
+      + var(--timeline-focus-relation-phase) * var(--timeline-focus-relation-phase-step)) backwards;
+}
+
+.timeline-focus-relation-phase:is([data-highlighted], :focus-within),
+.timeline-focus-relation-label:is([aria-pressed="true"], :focus-visible) { z-index: 1; }
+
 .timeline-focus-relation-line {
-  position: absolute;
-  inset: 50% auto auto 50%;
-  border-block-start: 1px solid var(--ui-border-decoration);
-  transform-origin: left top;
+  fill: none;
+  stroke: var(--ui-border-decoration);
+  stroke-width: 1;
+}
+
+.timeline-focus-relation-line[data-highlighted] {
+  stroke: var(--ui-border-control);
+  stroke-width: var(--ui-indicator-width);
 }
 
 .timeline-focus-relation-label, .timeline-focus-relation-list-label {
+  min-block-size: max(24px, 1.5rem);
+  min-inline-size: 24px;
+  padding: var(--ui-space-1) var(--ui-space-2);
+  background: var(--ui-surface-workspace);
+  border: 0;
+  border-radius: var(--ui-radius-control);
   color: var(--ui-text-secondary);
+  font: inherit;
   font-size: var(--ui-font-size-caption);
   line-height: var(--ui-line-height-caption);
   overflow-wrap: anywhere;
+  cursor: pointer;
+  pointer-events: auto;
 }
 
 .timeline-focus-relation-label {
   position: absolute;
-  display: -webkit-box;
-  overflow: hidden;
   inline-size: max-content;
   max-inline-size: 8rem;
-  max-block-size: calc(2 * var(--ui-line-height-caption) + 2 * var(--ui-space-1));
-  padding: var(--ui-space-1) var(--ui-space-2);
-  background: var(--ui-surface-workspace);
   text-align: center;
   transform: translate(-50%, -50%);
-  pointer-events: auto;
+}
+
+.timeline-focus-relation-label > span {
+  display: -webkit-box;
+  overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+
+.timeline-focus-relation-list-label { justify-self: start; text-align: start; }
+
+:is(.timeline-focus-relation-label, .timeline-focus-relation-list-label):hover {
+  background: var(--ui-surface-hover);
+  color: var(--ui-state-hover-foreground);
+}
+
+:is(.timeline-focus-relation-label, .timeline-focus-relation-list-label)[aria-pressed="true"] {
+  background: var(--ui-surface-selected);
+  color: var(--ui-state-selected-foreground);
+}
+
+:is(.timeline-focus-relation-label, .timeline-focus-relation-list-label):focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: var(--ui-focus-offset);
+}
+
+.timeline-focus-relation-center-node[data-highlighted],
+.timeline-focus-asset[data-highlighted] .timeline-focus-asset-face {
+  background: var(--ui-surface-selected);
+  color: var(--ui-state-selected-foreground);
+  outline: var(--ui-indicator-width) solid var(--ui-border-control);
+  outline-offset: calc(-1 * var(--ui-indicator-width));
+}
+
+.timeline-focus-relation-center-node[data-highlighted] .timeline-focus-relation-name { color: inherit; }
 
 .timeline-focus-assets[data-compact] {
   inset-inline: var(--ui-space-4);
@@ -441,16 +503,16 @@
   transform: none;
 }
 
-.timeline-focus-assets[data-compact] .timeline-focus-relation-center-node {
+:where(.timeline-focus-assets[data-compact]) .timeline-focus-relation-center-node {
   flex-direction: row;
   justify-content: start;
   gap: var(--ui-space-3);
   inline-size: auto;
   block-size: auto;
-  padding: 0;
+  padding: var(--ui-space-2);
   background: none;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--ui-radius-control);
   text-align: start;
 }
 
@@ -507,7 +569,6 @@
 }
 
 .timeline-focus-assets[data-compact][data-relations] .timeline-focus-asset-node { min-height: var(--timeline-focus-card-height); }
-.timeline-focus-relation-list-label { padding: 0 var(--ui-space-3) var(--ui-space-2); }
 
 @keyframes timeline-focus-asset-reveal {
   from {
@@ -520,6 +581,15 @@
     opacity: 1;
     transform: translate(0, 0);
   }
+}
+
+@keyframes timeline-focus-relation-node-reveal {
+  from {
+    opacity: 0;
+    transform: translate(var(--timeline-focus-asset-offset-x), var(--timeline-focus-asset-offset-y)) scale(0.22);
+  }
+  40% { opacity: 1; }
+  to { transform: none; }
 }
 
 @keyframes timeline-focus-orbit-reveal {
@@ -557,19 +627,26 @@
   --timeline-focus-center-duration: 0ms;
 }
 
-:root[data-ui-motion="reduce"] .timeline-focus-assets :is(.timeline-focus-asset-node, .timeline-focus-orbit, .timeline-focus-relation-edge) {
+:root[data-ui-motion="reduce"] .timeline-focus-assets :is(.timeline-focus-asset-node, .timeline-focus-orbit, .timeline-focus-relation-phase, .timeline-focus-relation-label) {
   animation: none;
 }
 
 @media (prefers-reduced-motion: reduce) {
   :root .timeline-focus-assets { --timeline-focus-center-duration: 0ms; }
-  :root .timeline-focus-assets :is(.timeline-focus-asset-node, .timeline-focus-orbit, .timeline-focus-relation-edge) { animation: none; }
+  :root .timeline-focus-assets :is(.timeline-focus-asset-node, .timeline-focus-orbit, .timeline-focus-relation-phase, .timeline-focus-relation-label) { animation: none; }
 }
 
 @media (forced-colors: active) {
   .timeline-focus-asset-face, .timeline-focus-relation-center-node { background: Canvas; color: CanvasText; border-color: CanvasText; }
-  .timeline-focus-relation-line { border-color: GrayText; }
-  .timeline-focus-relation-label { background: Canvas; color: CanvasText; }
+  .timeline-focus-relation-line { stroke: GrayText; }
+  :is(.timeline-focus-relation-label, .timeline-focus-relation-list-label)[aria-pressed="true"] {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+  .timeline-focus-relation-center-node[data-highlighted],
+  .timeline-focus-asset[data-highlighted] .timeline-focus-asset-face { outline-color: Highlight; }
+  .timeline-focus-relation-line[data-highlighted] { stroke: Highlight; }
   .timeline-focus-orbit { border-color: GrayText; }
   .timeline-focus-asset-dot,
   .timeline-focus-event-title::before,

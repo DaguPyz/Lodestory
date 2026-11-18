@@ -4,7 +4,7 @@ import {tmpdir} from "node:os";
 import path from "node:path";
 
 describe("TXT-only document editor", () => {
-  it("completes project asset names in the packaged WebView", async () => {
+  it("completes and finds project asset names in the packaged WebView", async () => {
     const parent = await mkdtemp(path.join(tmpdir(), "lodestory-completion-"));
     try {
       await browser.waitUntil(() => browser.execute(() => !!window.__lodestoryLifecycleTest), {timeout: 10000});
@@ -42,6 +42,25 @@ describe("TXT-only document editor", () => {
           && place?.textContent === "林湾" && !place.style.getPropertyValue("--plain-text-highlight-color")
           && getComputedStyle(place).color !== getComputedStyle(place.parentElement).color;
       }), {timeout: 5000, timeoutMsg: "The TXT editor did not use the stored asset color and the default accent."});
+      await browser.execute(() => {
+        const input = document.querySelector("textarea.plain-text-input");
+        input.focus();
+        input.dispatchEvent(new KeyboardEvent("keydown", {key: "f", metaKey: true, ctrlKey: true, bubbles: true, cancelable: true}));
+      });
+      const query = await $('.plain-text-search input[aria-label="查找文本"]');
+      await query.waitForDisplayed({timeout: 5000});
+      await query.setValue("林川");
+      const next = await $('.plain-text-search button[aria-label="下一个"]');
+      assert.equal(await next.$("svg").isExisting(), true);
+      await next.click();
+      await browser.waitUntil(() => browser.execute(() => {
+        const match = document.querySelector(".plain-text-search-match");
+        return match?.textContent === "林川" && getComputedStyle(match).outlineStyle === "solid";
+      }), {timeout: 5000, timeoutMsg: "The selected find result did not get an outline."});
+      await $('.plain-text-search button[aria-label="关闭查找"]').click();
+      await query.waitForDisplayed({timeout: 5000, reverse: true});
+      assert.equal(await $(".plain-text-search-match").isExisting(), false);
+
       await browser.execute(() => {
         const input = document.querySelector("textarea.plain-text-input");
         input.focus();

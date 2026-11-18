@@ -1,6 +1,7 @@
-import {useEffect, useLayoutEffect, useRef} from "react";
+import {useEffect, useLayoutEffect, useRef, useState} from "react";
 import type {EditorProps} from "@lodestory/sdk/body-editor";
-import {createPlainTextDriver, type PlainTextDriver} from "./plainTextDriver";
+import {createPlainTextDriver, type PlainTextDriver, type SearchRequest} from "./plainTextDriver";
+import {PlainTextSearchBar} from "./PlainTextSearchBar";
 import "./plain-text-editor.css";
 
 /** One document owns one input, viewport, text model and undo stack. */
@@ -11,6 +12,7 @@ export default function PlainTextEditor(props: EditorProps) {
   const driver = useRef<PlainTextDriver | undefined>(undefined);
   const accepted = useRef(props.content);
   const observedProp = useRef(props.content);
+  const [search, setSearch] = useState<SearchRequest>();
 
   useLayoutEffect(() => {
     const instance = driver.current;
@@ -18,6 +20,7 @@ export default function PlainTextEditor(props: EditorProps) {
     instance.setReadOnly(props.readOnly || !props.active);
     instance.setCompletion(props.completion);
     instance.setHighlights(props.active ? props.highlights : undefined);
+    if (!props.active) instance.clearSearchMatch();
     if (props.content !== observedProp.current) {
       observedProp.current = props.content;
       if (props.content !== accepted.current) {
@@ -43,6 +46,7 @@ export default function PlainTextEditor(props: EditorProps) {
           current.current.onChange(content);
         },
         onError(error) { if (alive) current.current.onError(error); },
+        onOpenSearch(request) { if (alive && current.current.active) setSearch(request); },
       });
       driver.current = instance;
       instance.setReadOnly(current.current.readOnly || !current.current.active);
@@ -82,5 +86,20 @@ export default function PlainTextEditor(props: EditorProps) {
     };
   }, [props.documentId, props.format]);
 
-  return <div className="plain-text-editor" ref={mount} data-document-id={props.documentId} />;
+  function closeSearch() {
+    setSearch(undefined);
+    driver.current?.clearSearchMatch();
+    if (props.active) driver.current?.focus();
+  }
+
+  return <div className="plain-text-editor" data-document-id={props.documentId} onKeyDown={event => {
+    if (search && event.key === "Escape" && !event.defaultPrevented
+      && !event.nativeEvent.isComposing && event.nativeEvent.keyCode !== 229) {
+      event.preventDefault();
+      closeSearch();
+    }
+  }}>
+    <PlainTextSearchBar request={search} driver={driver} readOnly={props.readOnly || !props.active} onClose={closeSearch} />
+    <div className="plain-text-document" ref={mount} />
+  </div>;
 }

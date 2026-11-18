@@ -7,6 +7,7 @@ import type {EditorCompletionCandidate, EditorHandle, EditorHighlight, EditorPro
 import type {AssetCatalogSnapshot} from "../../packages/sdk/src/asset-catalog";
 import "../../src/styles/theme-colors.css";
 import "../../src/styles/tokens.css";
+import "@lodestory/ui/styles.css";
 
 const lineCount = 198_037;
 function lineText(index: number): string {
@@ -124,7 +125,7 @@ function render() {
 }
 
 function getDriver() {
-  const editor = document.querySelector<HTMLElement>(".plain-text-editor");
+  const editor = document.querySelector<HTMLElement>(".plain-text-document");
   return editor ? getPlainTextDriver(editor) : undefined;
 }
 
@@ -295,17 +296,15 @@ const fixture: FixtureApi = {
     queryInput.dispatchEvent(new Event("input", {bubbles: true}));
     replacementInput.value = replacement;
     replacementInput.dispatchEvent(new Event("input", {bubbles: true}));
-    for (const name of ["caseSensitive", "regexp", "wholeWord"] as const) {
-      const label = [...panel.querySelectorAll("label")].find(item => item.textContent?.includes(
-        name === "caseSensitive" ? "区分大小写" : name === "regexp" ? "正则表达式" : "全词匹配"));
-      const checkbox = label?.querySelector<HTMLInputElement>('input[type="checkbox"]');
-      if (!checkbox) throw new Error(`Search option ${name} is not present.`);
-      checkbox.checked = options[name] ?? false;
+    for (const [name, label] of [["caseSensitive", "区分大小写"], ["regexp", "正则表达式"], ["wholeWord", "全词匹配"]] as const) {
+      const button = panel.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+      if (!button) throw new Error(`Search option ${name} is not present.`);
+      if ((button.getAttribute("aria-pressed") === "true") !== (options[name] ?? false)) button.click();
     }
   },
   clickSearch(label) {
     const panel = document.querySelector<HTMLElement>(".plain-text-search");
-    const button = [...(panel?.querySelectorAll("button") ?? [])].find(item => item.textContent === label);
+    const button = [...(panel?.querySelectorAll("button") ?? [])].find(item => item.getAttribute("aria-label") === label);
     if (!button) throw new Error(`Search button '${label}' is not present.`);
     button.click();
   },
@@ -423,7 +422,7 @@ const fixture: FixtureApi = {
           value: class { constructor() { throw new Error("fixture ResizeObserver construction failure"); } }});
       }
       try {
-        createPlainTextDriver(root, "fixture", {onChange() {}, onError() {}});
+        createPlainTextDriver(root, "fixture", {onChange() {}, onError() {}, onOpenSearch() {}});
       } catch (error) {
         threw = true;
         message = error instanceof Error ? error.message : String(error);

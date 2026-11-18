@@ -75,7 +75,7 @@ export function createPlainTextHighlights(source: EditorHighlights, repaint: () 
 }
 
 export function appendStyledText(element: HTMLElement, text: string, rowFrom: number,
-  selectedFrom: number, selectedTo: number, ranges: readonly EditorHighlight[] = []) {
+  selectedFrom: number, selectedTo: number, selectionClass: string, ranges: readonly EditorHighlight[] = []) {
   let cursor = rowFrom;
   let low = 0, high = ranges.length;
   while (low < high) {
@@ -110,7 +110,7 @@ export function appendStyledText(element: HTMLElement, text: string, rowFrom: nu
   if (selectedFrom < selectedTo) {
     appendStyledThrough(selectedFrom);
     const mark = document.createElement("span");
-    mark.className = "plain-text-selected";
+    mark.className = selectionClass;
     mark.textContent = text.slice(selectedFrom - rowFrom, selectedTo - rowFrom);
     element.append(mark);
     cursor = selectedTo;

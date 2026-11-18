@@ -15,7 +15,6 @@
   padding: 0;
 }
 .plain-text-editor {
-  position: relative;
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -25,6 +24,14 @@
   font-family: var(--ui-font-document);
   font-size: var(--ui-font-size-document);
   line-height: var(--ui-line-height-document);
+}
+.plain-text-document {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
 }
 .plain-text-viewport {
   position: relative;
@@ -64,6 +71,13 @@
 }
 .plain-text-highlight { color: var(--plain-text-highlight-color, var(--ui-accent-foreground)); }
 .plain-text-selected-break { display: inline-block; min-width: .4em; }
+.plain-text-search-match {
+  border-radius: var(--ui-radius-row);
+  color: var(--ui-highlight-active-foreground);
+  background: var(--ui-highlight-active-background);
+  outline: 1px solid var(--ui-highlight-active-border);
+  outline-offset: -1px;
+}
 .plain-text-caret {
   position: absolute;
   width: 1px;
@@ -72,6 +86,11 @@
   animation: plain-text-caret-breathe 1.2s ease-in-out infinite;
 }
 .plain-text-caret[hidden] { display: none; }
+.plain-text-caret.plain-text-search-point {
+  width: 2px;
+  background: var(--ui-highlight-active-border);
+  animation: none;
+}
 @keyframes plain-text-caret-breathe {
   0%, 100% { opacity: 1; }
   50% { opacity: .2; }
@@ -164,7 +183,7 @@
   flex: 0 0 auto;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--ui-space-2);
+  gap: var(--ui-space-2) var(--ui-space-4);
   padding: var(--ui-space-3) var(--ui-space-5);
   border-bottom: 1px solid var(--ui-border-divider);
   color: var(--ui-text-primary);
@@ -174,36 +193,24 @@
   line-height: var(--ui-line-height-caption);
 }
 .plain-text-search[hidden] { display: none; }
-.plain-text-search input:not([type="checkbox"]) {
-  min-width: 6rem;
-  max-width: 14rem;
-  padding: var(--ui-space-2) var(--ui-space-3);
-  border: 1px solid var(--ui-border-control);
-  border-radius: var(--ui-radius-control);
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-control);
-  font: inherit;
+.plain-text-search-group {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-1);
+  max-width: 100%;
 }
-.plain-text-search button {
-  padding: var(--ui-space-2) var(--ui-space-3);
-  border: 1px solid var(--ui-border-control);
-  border-radius: var(--ui-radius-control);
-  color: var(--ui-text-primary);
-  background: var(--ui-surface-control);
-  font: inherit;
-  cursor: pointer;
+.plain-text-search .ui-text-field {
+  width: 11rem;
+  min-width: 0;
 }
-.plain-text-search button:hover:not(:disabled) { color: var(--ui-state-hover-foreground); background: var(--ui-surface-hover); }
-.plain-text-search button:active:not(:disabled) { color: var(--ui-state-pressed-foreground); background: var(--ui-surface-pressed); }
-.plain-text-search button:disabled { color: var(--ui-state-disabled-foreground); background: var(--ui-state-disabled-background); cursor: default; }
-.plain-text-search label { display: inline-flex; align-items: center; gap: var(--ui-space-1); white-space: nowrap; }
-.plain-text-search :is(input, button):focus-visible {
-  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
-  outline-offset: var(--ui-focus-offset);
-}
+.plain-text-search .icon-button { --cmp-icon-button-size: var(--ui-control-height); }
+.plain-text-search [role="status"] { color: var(--ui-text-secondary); }
+.plain-text-search [role="status"]:empty { position: absolute; }
 @media (forced-colors: active) {
-  .plain-text-selected { color: HighlightText; background: Highlight; forced-color-adjust: none; }
+  :is(.plain-text-selected, .plain-text-search-match) { color: HighlightText; background: Highlight; forced-color-adjust: none; }
+  .plain-text-search-match { outline-color: HighlightText; }
   .plain-text-caret { background: CanvasText; }
+  .plain-text-caret.plain-text-search-point { background: Highlight; forced-color-adjust: none; }
   .plain-text-completion { border-color: CanvasText; }
   .plain-text-completion-option:is(:hover, [aria-selected="true"]) {
     color: HighlightText;

@@ -448,6 +448,50 @@ test("self-built plain-text editor keeps a huge source editable with a bounded v
       await waitFor(() => fixture("exactSlice", 0, mixed.length, mixed), "Undo did not reverse the regex replace-all operation.");
     });
 
+    await t.test("find icons expose their actions and only the current asset match gains an outline", async () => {
+      const sample = "萧炎翻开名册。\n远处有人喊萧炎。";
+      await fixture("setProps", {content: sample});
+      await fixture("setCompletionAssets", [{name: "萧炎", color: "#4f82e8"}]);
+      const count = selector => evaluate(`document.querySelectorAll(${JSON.stringify(selector)}).length`);
+      await waitFor(() => count(".plain-text-highlight").then(value => value === 2), "The searchable asset color did not render.");
+      await fixture("focusAt", 0);
+      await shortcut("f", "KeyF", 70, commandModifier);
+      await waitFor(() => evaluate("document.activeElement?.getAttribute('aria-label') === '查找文本'"),
+        "The find shortcut did not focus the query.");
+      await fixture("setSearch", "萧炎", "林月", {});
+      const buttons = await evaluate(`[...document.querySelectorAll('.plain-text-search button')].map(button => ({
+        label: button.getAttribute('aria-label'), hint: button.title, iconOnly: !!button.querySelector('svg') && !button.textContent.trim()
+      }))`);
+      const labels = ["上一个", "下一个", "替换", "全部替换", "区分大小写", "正则表达式", "全词匹配", "关闭查找"];
+      assert.deepEqual(buttons, labels.map(label => ({label, hint: label, iconOnly: true})));
+
+      await shortcut("Enter", "Enter", 13, 0);
+      assert.equal((await fixture("snapshot")).selection.anchor, 0);
+      assert.equal(await count(".plain-text-search-match"), 1);
+      assert.equal(await evaluate(`getComputedStyle(document.querySelector('.plain-text-search-match')).outlineStyle`), "solid");
+      assert.equal(await evaluate(`getComputedStyle(document.querySelector('.plain-text-highlight')).color`), "rgb(79, 130, 232)");
+      await fixture("clickSearch", "下一个");
+      assert.equal((await fixture("snapshot")).selection.anchor, sample.lastIndexOf("萧炎"));
+      assert.equal(await count(".plain-text-search-match"), 1);
+      await shortcut("Enter", "Enter", 13, 8);
+      assert.equal((await fixture("snapshot")).selection.anchor, 0);
+
+      await fixture("clickSearch", "区分大小写");
+      await waitFor(() => count('.plain-text-search [aria-label="区分大小写"][aria-pressed="true"]').then(value => value === 1),
+        "The icon did not expose its enabled state.");
+      await waitFor(() => count(".plain-text-search-match").then(value => value === 0), "Changing a search option left a stale outline.");
+      await fixture("clickSearch", "上一个");
+      assert.equal((await fixture("snapshot")).selection.anchor, sample.lastIndexOf("萧炎"));
+      await fixture("clickSearch", "替换");
+      assert.ok(await fixture("hasText", "有人喊林月"));
+      assert.equal((await fixture("snapshot")).selection.anchor, 0);
+      await fixture("clickSearch", "关闭查找");
+      await waitFor(() => count(".plain-text-search[hidden]").then(value => value === 1), "The close icon did not hide find.");
+      assert.equal(await count(".plain-text-search-match"), 0);
+      assert.equal(await evaluate("document.activeElement?.classList.contains('plain-text-input')"), true);
+      await fixture("removeCompletion");
+    });
+
     await t.test("one 220k-character line virtualizes, and backspace keeps Unicode graphemes whole", async () => {
       const clusters = ["👩‍👩‍👧‍👦", "e\u0301", "🇨🇳", "👍🏽"];
       const prefix = "\uFEFF" + "a".repeat(220_000);

@@ -6,7 +6,8 @@ import {createPlainTextCompletion} from "./plainTextCompletion";
 import {appendStyledText, createPlainTextHighlights} from "./plainTextHighlights";
 
 export type TextSelection = {anchor: number; head: number};
-type SearchOptions = {caseSensitive?: boolean; regexp?: boolean; wholeWord?: boolean};
+export type SearchOptions = {caseSensitive?: boolean; regexp?: boolean; wholeWord?: boolean};
+export type SearchRequest = {replace: boolean; selected: string};
 export type PlainTextDriver = ReturnType<typeof createPlainTextDriver>;
 const drivers = new WeakMap<HTMLElement, PlainTextDriver>();
 const completionContextLimit = 128;
@@ -16,11 +17,13 @@ export function getPlainTextDriver(root: HTMLElement) { return drivers.get(root)
 export function createPlainTextDriver(root: HTMLElement, initialContent: string, callbacks: {
   onChange(content: string): void;
   onError(error: Error): void;
+  onOpenSearch(request: SearchRequest): void;
 }) {
   let model = createPlainTextModel(initialContent);
   let history = createPlainTextHistory(model);
   const initialCaret = initialContent.startsWith("\uFEFF") ? 1 : 0;
   let selection: TextSelection = {anchor: initialCaret, head: initialCaret};
+  let selectionIsSearchMatch = false;
   let readOnly = true;
   let destroyed = false;
   let composing = false;
@@ -57,10 +60,9 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
   input.autocomplete = "off";
   input.autocapitalize = "off";
   input.wrap = "off";
-  const search = createSearchPanel();
   content.append(layer, caret, input);
   viewport.append(content);
-  root.append(search.panel, viewport);
+  root.append(viewport);
   let layout: TextLayout;
   try { layout = new TextLayout(model, document.createElement("canvas")); }
   catch (error) { disposers.forEach(dispose => dispose()); root.replaceChildren(); throw error; }
@@ -110,6 +112,8 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     const last = Math.ceil((viewport.scrollTop + viewport.clientHeight - padding) / lineHeight) + 6;
     const fragment = document.createDocumentFragment();
     const from = Math.min(selection.anchor, selection.head), to = Math.max(selection.anchor, selection.head);
+    const selectionClass = selectionIsSearchMatch ? "plain-text-search-match" : "plain-text-selected";
+    const pointMatch = selectionIsSearchMatch && from === to;
     const highlightRanges = highlights?.ranges();
     let visibleFrom: number | undefined;
     let visibleTo = 0;
@@ -132,11 +136,11 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
       element.style.height = `${lineHeight}px`;
       const selectedFrom = Math.max(from, rowFrom), selectedTo = Math.min(to, rowTo);
       if (selectedFrom < selectedTo || highlightRanges?.length) {
-        appendStyledText(element, text, rowFrom, selectedFrom, selectedTo, highlightRanges);
+        appendStyledText(element, text, rowFrom, selectedFrom, selectedTo, selectionClass, highlightRanges);
       } else element.textContent = text;
       if (from <= rowTo && to > rowTo && row.end === line.text.length && line.toWithBreak > line.to) {
         const mark = document.createElement("span");
-        mark.className = "plain-text-selected plain-text-selected-break";
+        mark.className = `${selectionClass} plain-text-selected-break`;
         mark.textContent = " ";
         element.append(mark);
       }
@@ -150,7 +154,8 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     const x = textLeft + layout.xAt(line.text.slice(row.start, row.end), Math.max(0, Math.min(row.end, selection.head - line.from) - row.start));
     const y = padding + row.index * lineHeight;
     caret.style.cssText = `left:${x}px;top:${y}px;height:${lineHeight}px;`;
-    caret.hidden = selection.anchor !== selection.head || readOnly || document.activeElement !== input;
+    caret.classList.toggle("plain-text-search-point", pointMatch);
+    caret.hidden = !pointMatch && (from !== to || readOnly || document.activeElement !== input);
     input.style.left = `${Math.min(x, viewport.clientWidth - 4)}px`;
     input.style.top = `${y}px`;
     input.style.height = `${lineHeight}px`;
@@ -212,10 +217,11 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     input.value = bufferValue;
     input.setSelectionRange(from - bufferFrom, to - bufferFrom, selection.anchor > selection.head ? "backward" : "forward");
   }
-  function setSelection(anchor: number, head = anchor, scrollIntoView = true) {
+  function setSelection(anchor: number, head = anchor, scrollIntoView = true, isSearchMatch = false) {
     completion?.close();
     history.breakGroup();
     selection = {anchor: Math.max(0, Math.min(anchor, model.length)), head: Math.max(0, Math.min(head, model.length))};
+    selectionIsSearchMatch = isSearchMatch;
     preferredX = undefined;
     if (scrollIntoView) reveal();
     syncInput();
@@ -232,6 +238,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
   function edit(from: number, to: number, insert: string, group?: string, after?: TextSelection, preserveInput = false, rawInsert = false) {
     if (readOnly || destroyed) return;
     completion?.close();
+    selectionIsSearchMatch = false;
     const first = model.lineAt(from).number, last = model.lineAt(to).number;
     const beforeLines = model.lineCount;
     const normalized = rawInsert ? insert : normalizeInsertedText(insert, model.lineSeparator);
@@ -305,6 +312,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     if (!result) return;
     highlights?.edit(change.from, change.to, change.insert.length);
     selection = result;
+    selectionIsSearchMatch = false;
     layout.update(first, last - first + 1, model.lineCount - beforeLines + last - first + 1);
     syncInput(); reveal(); render(); notify();
   }
@@ -369,7 +377,6 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     if (command && (key === "z" || (!mac && key === "y"))) {
       event.preventDefault(); restore(event.shiftKey || key === "y" ? "redo" : "undo"); return;
     }
-    if (event.key === "Escape" && !search.panel.hidden) { event.preventDefault(); closeSearch(); return; }
     if (event.key === "Enter" || event.key === "Tab") {
       event.preventDefault();
       if (event.key === "Enter") replaceSelection("\n");
@@ -432,14 +439,20 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     if (options.wholeWord) pattern = `(?<![\\p{L}\\p{N}_])(?:${pattern})(?![\\p{L}\\p{N}_])`;
     return new RegExp(pattern, `gmu${options.caseSensitive ? "" : "i"}`);
   }
+  function clearSearchMatch() {
+    if (!selectionIsSearchMatch) return;
+    selectionIsSearchMatch = false;
+    scheduleRender();
+  }
   function find(query: string, backward = false, options: SearchOptions = {}) {
+    const previousWasPoint = selectionIsSearchMatch && selection.anchor === selection.head;
     const expression = searchPattern(query, options);
-    if (!expression) return false;
+    if (!expression) { clearSearchMatch(); return false; }
     const text = model.getText();
     const start = backward ? Math.min(selection.anchor, selection.head) : Math.max(selection.anchor, selection.head);
     let found: RegExpExecArray | null = null;
     if (!backward) {
-      expression.lastIndex = start;
+      expression.lastIndex = previousWasPoint ? start + ((text.codePointAt(start) ?? 0) > 0xffff ? 2 : 1) : start;
       found = expression.exec(text);
       if (!found) { expression.lastIndex = 0; found = expression.exec(text); }
     } else {
@@ -460,73 +473,34 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
         }
       }
     }
-    if (!found) return false;
-    setSelection(found.index, found.index + found[0].length);
+    if (!found) { clearSearchMatch(); return false; }
+    setSelection(found.index, found.index + found[0].length, true, true);
     return true;
   }
-  function createSearchPanel() {
-    const panel = document.createElement("div");
-    panel.className = "plain-text-search";
-    panel.hidden = true;
-    panel.setAttribute("role", "search");
-    const query = document.createElement("input");
-    query.type = "search"; query.placeholder = "查找"; query.setAttribute("aria-label", "查找文本");
-    const replacement = document.createElement("input");
-    replacement.placeholder = "替换为"; replacement.setAttribute("aria-label", "替换文本");
-    const status = document.createElement("span"); status.setAttribute("role", "status");
-    function button(label: string, action: () => void) {
-      const element = document.createElement("button"); element.type = "button"; element.textContent = label;
-      on(element, "click", () => guard(action)); panel.append(element); return element;
+  function replaceSearchMatch(query: string, replacement: string, options: SearchOptions) {
+    if (readOnly) return;
+    const pattern = searchPattern(query, options);
+    if (!pattern) return;
+    const selected = model.slice(Math.min(selection.anchor, selection.head), Math.max(selection.anchor, selection.head));
+    const match = pattern.exec(selected);
+    if (match?.index === 0 && match[0].length === selected.length) {
+      guard(() => replaceSelection(options.regexp ? selected.replace(pattern, replacement) : replacement));
     }
-    const flags: {caseSensitive?: HTMLInputElement; regexp?: HTMLInputElement; wholeWord?: HTMLInputElement} = {};
-    const options = () => Object.fromEntries(Object.entries(flags).map(([name, input]) => [name, input?.checked])) as SearchOptions;
-    const searchNext = (backward = false) => {
-      try { status.textContent = find(query.value, backward, options()) ? "" : "未找到匹配项"; }
-      catch { status.textContent = "查找表达式无效"; }
-    };
-    panel.append(query);
-    button("上一个", () => searchNext(true)); button("下一个", () => searchNext());
-    panel.append(replacement);
-    const replace = button("替换", () => {
-      if (readOnly) return;
-      const pattern = searchPattern(query.value, options());
-      const selected = model.slice(Math.min(selection.anchor, selection.head), Math.max(selection.anchor, selection.head));
-      const match = pattern?.exec(selected);
-      if (match && match.index === 0 && match[0].length === selected.length) {
-        replaceSelection(options().regexp ? selected.replace(pattern!, replacement.value) : replacement.value);
-      }
-      searchNext();
-    });
-    const replaceAll = button("全部替换", () => {
-      if (readOnly) return;
-      const pattern = searchPattern(query.value, options());
-      if (!pattern) return;
-      const before = model.getText();
-      const inserted = normalizeInsertedText(replacement.value, model.lineSeparator);
-      const after = options().regexp ? before.replace(pattern, inserted) : before.replace(pattern, () => inserted);
-      if (before !== after) edit(0, model.length, after, undefined, undefined, false, true);
-    });
-    for (const [name, label] of [["caseSensitive", "区分大小写"], ["regexp", "正则表达式"], ["wholeWord", "全词匹配"]] as const) {
-      const wrapper = document.createElement("label"), checkbox = document.createElement("input");
-      checkbox.type = "checkbox"; flags[name] = checkbox; wrapper.append(checkbox, label); panel.append(wrapper);
-    }
-    panel.append(status); button("关闭查找", closeSearch);
-    on(query, "keydown", event => {
-      if (event.key === "Enter") { event.preventDefault(); searchNext(event.shiftKey); }
-      if (event.key === "Escape") { event.preventDefault(); closeSearch(); }
-    });
-    on(replacement, "keydown", event => { if (event.key === "Escape") closeSearch(); });
-    return {panel, query, replacement, replace, replaceAll};
+  }
+  function replaceAllSearchMatches(query: string, replacement: string, options: SearchOptions) {
+    if (readOnly) return;
+    clearSearchMatch();
+    const pattern = searchPattern(query, options);
+    if (!pattern) return;
+    const before = model.getText();
+    const inserted = normalizeInsertedText(replacement, model.lineSeparator);
+    const after = options.regexp ? before.replace(pattern, inserted) : before.replace(pattern, () => inserted);
+    if (before !== after) guard(() => edit(0, model.length, after, undefined, undefined, false, true));
   }
   function openSearch(replace = false) {
-    search.panel.hidden = false;
     const selected = model.slice(Math.min(selection.anchor, selection.head), Math.max(selection.anchor, selection.head));
-    if (selected && selected.length < 1024 && !/[\r\n]/.test(selected)) search.query.value = selected;
-    (replace ? search.replacement : search.query).focus();
-    search.query.select();
-    scheduleRender();
+    callbacks.onOpenSearch({replace, selected: selected.length < 1024 && !/[\r\n]/.test(selected) ? selected : ""});
   }
-  function closeSearch() { search.panel.hidden = true; input.focus({preventScroll: true}); scheduleRender(); }
 
   on(viewport, "scroll", scheduleRender);
   on(input, "keydown", event => guard(() => keydown(event)));
@@ -663,12 +637,13 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
       if (value && !readOnly && composing) finishComposition(false);
       if (value) completion?.close();
       readOnly = value; input.readOnly = value; input.setAttribute("aria-readonly", String(value));
-      search.replace.disabled = value; search.replaceAll.disabled = value; render();
+      render();
     },
     replaceContent(text: string) {
       if (destroyed || text === model.getText()) return;
       completion?.close();
       highlights?.clear();
+      selectionIsSearchMatch = false;
       clearTimeout(compositionTimer);
       compositionTimer = 0;
       composing = false;
@@ -703,6 +678,9 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     undo() { guard(() => restore("undo")); },
     redo() { guard(() => restore("redo")); },
     find,
+    clearSearchMatch,
+    replaceSearchMatch,
+    replaceAllSearchMatches,
     replaceSelection(text: string) { guard(() => replaceSelection(text)); },
     openSearch,
   };

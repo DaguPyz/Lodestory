@@ -1,4 +1,5 @@
 import type {BodyEditorService, EditorDefinition, EditorFormat, EditorSearchTarget} from "@lodestory/sdk/body-editor";
+import {createEditorCompletionRegistry} from "./editorCompletionRegistry";
 
 type EditorModule = Awaited<ReturnType<EditorDefinition["load"]>>;
 type Entry = {
@@ -25,6 +26,7 @@ export function createBodyEditorRegistry(
     if (typeof id !== "string" || !id.trim()) throw new TypeError("Default editor id cannot be empty.");
   }
   const entries = new Map<string, Entry>();
+  const completions = createEditorCompletionRegistry();
   const listeners = new Set<() => void>();
   let started = false;
   let alive = true;
@@ -73,6 +75,7 @@ export function createBodyEditorRegistry(
   }
 
   const service: BodyEditorService = Object.freeze({
+    registerCompletionSource: completions.register,
     registerEditor(definition: EditorDefinition) {
       checkActive();
       if (started) throw new Error("Body editors must be registered before pluginsReady.");
@@ -155,6 +158,7 @@ export function createBodyEditorRegistry(
 
   return {
     service,
+    connectCompletion: completions.connect,
     start() {
       checkActive();
       started = true;
@@ -172,6 +176,7 @@ export function createBodyEditorRegistry(
         alive = false;
         for (const entry of entries.values()) entry.pending = undefined;
         entries.clear();
+        completions.dispose();
         notify();
         listeners.clear();
       }

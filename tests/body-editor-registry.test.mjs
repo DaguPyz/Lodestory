@@ -12,6 +12,37 @@ function definition(id, formats = ["plain-text"], load = async () => ({default: 
   return {id, formats, load};
 }
 
+test("completion source withdrawal invalidates late results without affecting other sessions", async () => {
+  const registry = createRegistry();
+  const first = registry.connectCompletion("first", "plain-text");
+  const second = registry.connectCompletion("second", "plain-text");
+  let finish;
+  const source = {
+    isAvailable: () => true,
+    subscribe: () => () => {},
+    query: () => new Promise(resolve => { finish = resolve; }),
+  };
+  const availability = [];
+  const unsubscribe = first.subscribe(() => availability.push(first.isAvailable()));
+  const remove = registry.service.registerCompletionSource("first", "plain-text", source);
+  assert.equal(first.isAvailable(), true);
+  assert.equal(second.isAvailable(), false);
+  const signal = new AbortController().signal;
+  const pending = first.query("林", signal);
+  remove();
+  const candidate = {match: "林", label: "林月", insertText: "林月"};
+  const removeNew = registry.service.registerCompletionSource("first", "plain-text", {...source, query: async () => [candidate]});
+  remove();
+  finish([candidate]);
+  assert.equal((await pending).length, 0);
+  assert.deepEqual(await first.query("林", signal), [candidate]);
+  assert.equal((await second.query("林", signal)).length, 0);
+  removeNew();
+  assert.deepEqual(availability, [true, false, true, false]);
+  unsubscribe();
+  registry.dispose();
+});
+
 test("body editor registry validates registrations and routes only through explicit defaults", () => {
   const registry = createRegistry({"plain-text": "missing-editor"});
 

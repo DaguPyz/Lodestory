@@ -94,7 +94,7 @@ test("the entry delegates UI composition and page registration to the plugin cat
   fixture.start();
   await flushStartup();
 
-  assert.deepEqual(fixture.catalogPluginIds, ["config", "i18n", "error-ui", "plugin-packages", "ui", "ui-interaction", "shortcuts", "theme", "builtin-themes", "context-menu", "window-shell", "navigation-layout", "default-layout", "workbench", "project-search", "project-storage", "background-tasks", "native-process-loader", "native-library-loader", "documents", "project-management", "canvas", "timeline", "outline-design", "asset-management", "asset-relations", "body-editor", "plain-text-editor", "document-search", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings", "language-settings", "external-plugins", "plugin-management"]);
+  assert.deepEqual(fixture.catalogPluginIds, ["config", "i18n", "error-ui", "plugin-packages", "ui", "ui-interaction", "shortcuts", "theme", "builtin-themes", "context-menu", "window-shell", "navigation-layout", "default-layout", "workbench", "project-search", "project-storage", "background-tasks", "native-process-loader", "native-library-loader", "documents", "project-management", "canvas", "timeline", "outline-design", "asset-management", "asset-relations", "body-editor", "plain-text-editor", "asset-completion", "document-search", "document-tabs", "writing-status", "workbench-toolbar", "welcome", "settings", "language-settings", "external-plugins", "plugin-management"]);
   assert.equal(fixture.catalogPluginIds.includes("markdown-editor"), false);
   assert.equal(fixture.catalogPluginIds.includes("rich-text-editor"), false);
   assert.deepEqual(fixture.appPluginsCalls, [[]]);

@@ -1,11 +1,14 @@
+import type {EditorCompletion} from "@lodestory/sdk/body-editor";
 import {createPlainTextModel, normalizeInsertedText} from "./textModel";
 import {createPlainTextHistory} from "./history";
 import {nextTextBoundary, previousTextBoundary, TextLayout} from "./textLayout";
+import {createPlainTextCompletion} from "./plainTextCompletion";
 
 export type TextSelection = {anchor: number; head: number};
 type SearchOptions = {caseSensitive?: boolean; regexp?: boolean; wholeWord?: boolean};
 export type PlainTextDriver = ReturnType<typeof createPlainTextDriver>;
 const drivers = new WeakMap<HTMLElement, PlainTextDriver>();
+const completionContextLimit = 128;
 export function getPlainTextDriver(root: HTMLElement) { return drivers.get(root); }
 
 /** Native input/IME is a small moving buffer; the complete document lives in our text model. */
@@ -30,6 +33,9 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
   let drag: {x: number; y: number} | undefined;
   let preferredX: number | undefined;
   let lastEditAt = 0;
+  let completionSource: EditorCompletion | undefined;
+  let completion: ReturnType<typeof createPlainTextCompletion> | undefined;
+  let completionFrame = 0;
   const disposers: (() => void)[] = [];
   const viewport = document.createElement("div");
   viewport.className = "plain-text-viewport";
@@ -67,9 +73,9 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     target.addEventListener(name, handler, capture);
     disposers.push(() => target.removeEventListener(name, handler, capture));
   }
-  function guard(action: () => void) {
+  function guard<T>(action: () => T) {
     if (destroyed) return;
-    try { action(); }
+    try { return action(); }
     catch (reason) { callbacks.onError(reason instanceof Error ? reason : new Error(String(reason))); }
   }
   function configure() {
@@ -144,6 +150,41 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     input.style.top = `${y}px`;
     input.style.height = `${lineHeight}px`;
     content.style.height = `${Math.max(viewport.clientHeight, layout.rowCount * lineHeight + padding * 2)}px`;
+    completion?.position();
+  }
+  function getCompletionContext() {
+    const {anchor, head} = selection;
+    if (readOnly || destroyed || composing || compositionTimer || anchor !== head || document.activeElement !== input) return;
+    const before = model.slice(Math.max(0, head - completionContextLimit), head);
+    const lineStart = Math.max(before.lastIndexOf("\n"), before.lastIndexOf("\r")) + 1;
+    return {head, textBefore: before.slice(lineStart).replace(/^[\uFEFF\uDC00-\uDFFF]/u, "")};
+  }
+  function setCompletion(source?: EditorCompletion) {
+    if (destroyed || source === completionSource) return;
+    completion?.destroy();
+    completion = undefined;
+    completionSource = source;
+    if (!source) return;
+    completion = createPlainTextCompletion(root, viewport, caret, input, source, getCompletionContext, (candidate, head) =>
+      guard(() => {
+        if (getCompletionContext()?.head !== head) return false;
+        const from = head - candidate.match.length;
+        if (from < 0 || model.slice(from, head) !== candidate.match) return false;
+        history.breakGroup();
+        edit(from, head, candidate.insertText);
+        return true;
+      }) ?? false);
+  }
+  function openCompletion() {
+    if (readOnly || destroyed || composing || completionFrame) return;
+    // The context menu must release its focus scope before focusing the editor.
+    completionFrame = requestAnimationFrame(() => guard(() => {
+      completionFrame = 0;
+      if (readOnly || composing || !completion?.isAvailable()) return;
+      input.focus({preventScroll: true});
+      render();
+      completion.request(false);
+    }));
   }
   function syncInput() {
     if (composing || destroyed) return;
@@ -167,6 +208,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     input.setSelectionRange(from - bufferFrom, to - bufferFrom, selection.anchor > selection.head ? "backward" : "forward");
   }
   function setSelection(anchor: number, head = anchor, scrollIntoView = true) {
+    completion?.close();
     history.breakGroup();
     selection = {anchor: Math.max(0, Math.min(anchor, model.length)), head: Math.max(0, Math.min(head, model.length))};
     preferredX = undefined;
@@ -184,6 +226,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
   function notify() { callbacks.onChange(model.getText()); }
   function edit(from: number, to: number, insert: string, group?: string, after?: TextSelection, preserveInput = false, rawInsert = false) {
     if (readOnly || destroyed) return;
+    completion?.close();
     const first = model.lineAt(from).number, last = model.lineAt(to).number;
     const beforeLines = model.lineCount;
     const normalized = rawInsert ? insert : normalizeInsertedText(insert, model.lineSeparator);
@@ -210,9 +253,9 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     edit(Math.min(selection.anchor, selection.head), Math.max(selection.anchor, selection.head), text, group);
   }
   function applyInput() {
-    if (readOnly) { syncInput(); return; }
+    if (readOnly) { syncInput(); return false; }
     const value = input.value;
-    if (value === bufferValue) return;
+    if (value === bufferValue) return false;
     let prefix = 0;
     while (prefix < value.length && prefix < bufferValue.length && value[prefix] === bufferValue[prefix]) prefix++;
     let suffix = 0;
@@ -231,6 +274,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     bufferReplacesSelection = false;
     bufferValue = value;
     if (!composing) syncInput();
+    return true;
   }
   function finishComposition(keepFocus = true) {
     if (!composing) return;
@@ -246,6 +290,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
   }
   function restore(action: "undo" | "redo") {
     if (readOnly || composing || destroyed) return;
+    completion?.close();
     const change = action === "undo" ? history.peekUndo() : history.peekRedo();
     if (!change) return;
     const first = model.lineAt(change.from).number, last = model.lineAt(change.to).number;
@@ -275,10 +320,16 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     return start + previousTextBoundary(model.slice(start, offset), offset - start);
   }
   function deleteSelection(forward: boolean, byWord = false, toLineEnd = false) {
-    if (selection.anchor !== selection.head) { replaceSelection(""); return; }
-    const other = toLineEnd ? model.lineAt(selection.head)[forward ? "to" : "from"]
-      : byWord ? wordBoundary(selection.head, forward) : boundary(selection.head, forward);
-    edit(Math.min(other, selection.head), Math.max(other, selection.head), "", "delete");
+    const {anchor, head} = selection;
+    if (anchor !== head) {
+      replaceSelection("");
+    } else {
+      const other = toLineEnd ? model.lineAt(head)[forward ? "to" : "from"]
+        : byWord ? wordBoundary(head, forward) : boundary(head, forward);
+      if (other === head) return;
+      edit(Math.min(other, head), Math.max(other, head), "", "delete");
+    }
+    completion?.request(true);
   }
   function wordBoundary(offset: number, forward: boolean) {
     const start = Math.max(0, offset - 4096), end = Math.min(model.length, offset + 4096);
@@ -297,6 +348,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
   }
   function keydown(event: KeyboardEvent) {
     if (composing || event.isComposing || event.keyCode === 229) return;
+    if (completion?.handleKey(event)) { event.preventDefault(); return; }
     const mac = /Mac|iPhone|iPad/.test(navigator.platform);
     const command = mac ? event.metaKey : event.ctrlKey;
     const word = mac ? event.altKey : event.ctrlKey;
@@ -477,22 +529,40 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
       event.preventDefault(); restore(event.inputType === "historyUndo" ? "undo" : "redo");
     } else if (!composing && (event.inputType === "insertLineBreak" || event.inputType === "insertParagraph")) {
       event.preventDefault(); replaceSelection("\n");
-    } else if (!composing && bufferReplacesSelection && event.inputType.startsWith("delete")) {
-      event.preventDefault(); replaceSelection("");
-    } else if (!composing && /^delete(Content|Word|SoftLine)(Backward|Forward)$/.test(event.inputType)) {
+    } else if (!composing && !event.isComposing && event.inputType.startsWith("delete")
+      && (bufferReplacesSelection || /^delete(Content|Word|SoftLine)(Backward|Forward)$/.test(event.inputType))) {
       event.preventDefault();
       deleteSelection(event.inputType.endsWith("Forward"), event.inputType.includes("Word"), event.inputType.includes("SoftLine"));
     }
   }));
-  on(input, "input", () => guard(applyInput));
-  on(input, "compositionstart", () => { composing = true; compositionId++; history.breakGroup(); });
-  on(input, "compositionend", () => guard(() => {
+  on(input, "input", event => guard(() => {
+    const changed = applyInput();
+    if (changed && !composing && !event.isComposing && !compositionTimer
+      && (event.inputType === "insertText" || event.inputType === "insertReplacementText" || event.inputType.startsWith("delete"))) {
+      completion?.request(true);
+    }
+  }));
+  on(input, "compositionstart", () => {
+    completion?.close();
+    clearTimeout(compositionTimer);
+    compositionTimer = 0;
+    composing = true;
+    compositionId++;
+    history.breakGroup();
+  });
+  on(input, "compositionend", event => guard(() => {
     applyInput(); composing = false; history.breakGroup();
     clearTimeout(compositionTimer);
-    compositionTimer = window.setTimeout(() => guard(() => { applyInput(); syncInput(); }), 0);
+    compositionTimer = window.setTimeout(() => guard(() => {
+      compositionTimer = 0;
+      const changed = applyInput();
+      syncInput();
+      if (event.data || changed) completion?.request(true);
+    }), 0);
   }));
   on(input, "focus", scheduleRender);
   on(input, "blur", () => guard(() => {
+    completion?.close();
     if (composing) { applyInput(); composing = false; history.breakGroup(); syncInput(); }
     history.breakGroup(); scheduleRender();
   }));
@@ -533,6 +603,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     viewport.setPointerCapture(event.pointerId);
     drag = {x: event.clientX, y: event.clientY};
   }));
+  on(viewport, "contextmenu", () => completion?.close());
   on(viewport, "pointermove", event => {
     if (!drag) return;
     drag = {x: event.clientX, y: event.clientY};
@@ -573,17 +644,23 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     destroy() {
       if (destroyed) return;
       destroyed = true;
+      completion?.destroy();
+      cancelAnimationFrame(completionFrame);
       cancelAnimationFrame(frame); cancelAnimationFrame(dragFrame); clearTimeout(compositionTimer);
       resize?.disconnect(); themeObserver?.disconnect(); document.fonts?.removeEventListener("loadingdone", fontsChanged);
       disposers.forEach(dispose => dispose()); root.replaceChildren(); drivers.delete(root);
     },
     setReadOnly(value: boolean) {
       if (value && !readOnly && composing) finishComposition(false);
+      if (value) completion?.close();
       readOnly = value; input.readOnly = value; input.setAttribute("aria-readonly", String(value));
       search.replace.disabled = value; search.replaceAll.disabled = value; render();
     },
     replaceContent(text: string) {
       if (destroyed || text === model.getText()) return;
+      completion?.close();
+      clearTimeout(compositionTimer);
+      compositionTimer = 0;
       composing = false;
       model = createPlainTextModel(text); history = createPlainTextHistory(model);
       layout = new TextLayout(model, document.createElement("canvas"));
@@ -599,6 +676,9 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     },
     getSelection() { return {...selection}; },
     setSelection,
+    setCompletion,
+    openCompletion,
+    canComplete() { return !readOnly && !composing && (completion?.isAvailable() ?? false); },
     getDebugState() {
       return {length: model.length, lineCount: model.lineCount, renderedLines: layer.childElementCount,
         selection: {...selection}, readOnly, visualRows: layout.rowCount};

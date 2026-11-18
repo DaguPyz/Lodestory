@@ -14,6 +14,8 @@ export type EditorContextMenuAction = Readonly<{
     id: string;
     label: string;
     disabled?: boolean;
+    /** Disable automatic focus restoration when the action sets its own focus. */
+    restoreFocus?: boolean;
     run(): void | Promise<void>;
 }>;
 
@@ -30,6 +32,22 @@ export type EditorHandle = Readonly<{
 export type EditorSearchRange = Readonly<{text: string; start: number; end: number}>;
 export type EditorSearchTarget = Readonly<{documentId: string; content: string; range: EditorSearchRange}>;
 
+/** Replace the exact suffix of the supplied context with insertText. */
+export type EditorCompletionCandidate = Readonly<{
+    match: string;
+    label: string;
+    detail?: string;
+    insertText: string;
+}>;
+
+export type EditorCompletion = Readonly<{
+    isAvailable(): boolean;
+    /** Notify synchronously when availability or candidates change, invalidating previous results. */
+    subscribe(listener: () => void): () => void;
+    /** Context contains only text immediately before the caret, within its logical line. */
+    query(textBefore: string, signal: AbortSignal): Promise<readonly EditorCompletionCandidate[]>;
+}>;
+
 /** 正文编辑器宿主传给格式实现的文档内容与交互状态。 */
 export type EditorProps = Readonly<{
     documentId: string;
@@ -38,6 +56,8 @@ export type EditorProps = Readonly<{
     content: string;
     readOnly: boolean;
     active: boolean;
+    /** Optional completion backed by the active project's registered source. */
+    completion?: EditorCompletion;
     /** 用户编辑后的完整内容；初始化和纯 UI 状态变化不得触发。 */
     onChange(content: string): void;
     /** 编辑器实例可聚焦时上报句柄，卸载时以 null 清除。 */
@@ -62,6 +82,8 @@ export type EditorDefinition = Readonly<{
 export type BodyEditorService = {
     /** 登记一个编辑器并将句柄交给 context.track；启动完成后暂不支持单独在线撤回。 */
     registerEditor(definition: EditorDefinition): PluginContribution;
+    /** One optional source per project session and format. Dispose before releasing the source. */
+    registerCompletionSource(sessionId: string, format: EditorFormat, source: EditorCompletion): () => void;
     getText(fileName: string, content: string): string | undefined;
     getSearchText(fileName: string, content: string, signal?: AbortSignal): Promise<string | undefined>;
     revealSearchTarget(sessionId: string, target: EditorSearchTarget): boolean;

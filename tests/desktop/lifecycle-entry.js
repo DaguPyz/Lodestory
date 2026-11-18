@@ -45,6 +45,7 @@ export function installLifecycleTest(runtime) {
      const {project} = await invoke("create_project", {parentPath, name: "生命周期测试"});
      return workbench.openProject(project);
    },
+   openPreparedProject(project) { return workbench.openProject(project); },
    snapshot() { return workbench.getSnapshot(); },
    async openDocument(path) {
      const session = workbench.getSnapshot().session;

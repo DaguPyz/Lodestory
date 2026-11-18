@@ -1,9 +1,83 @@
 import assert from "node:assert/strict";
-import {mkdtemp, readFile, rm, writeFile} from "node:fs/promises";
+import {mkdir, mkdtemp, readFile, rm, writeFile} from "node:fs/promises";
 import {tmpdir} from "node:os";
 import path from "node:path";
 
 describe("TXT-only document editor", () => {
+  it("completes project asset names in the packaged WebView", async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), "lodestory-completion-"));
+    try {
+      await browser.waitUntil(() => browser.execute(() => !!window.__lodestoryLifecycleTest), {timeout: 10000});
+      const project = await browser.execute(async parentPath => {
+        const {project} = await window.__TAURI__.core.invoke("create_project", {parentPath, name: "白石城"});
+        return project;
+      }, parent);
+      const objects = path.join(project.path, ".lodestory", "assets", "objects");
+      await mkdir(objects, {recursive: true});
+      const people = "00000000-0000-4000-8000-000000000001";
+      const places = "00000000-0000-4000-8000-000000000002";
+      await writeFile(path.join(objects, "..", "templates.json"), JSON.stringify([
+        {id: people, order: 0, name: "角色", status: "active", description: ""},
+        {id: places, order: 1, name: "地点", status: "active", description: ""},
+      ]));
+      for (const [typeId, names] of [[people, ["林川", "林月", "林月见"]], [places, ["林湾"]]]) {
+        const assets = names.map((name, index) => ({id: `${typeId.slice(0, -2)}${typeId.at(-1)}${index}`,
+          name, typeId, description: "", values: {}}));
+        await writeFile(path.join(objects, `${typeId}.json`), JSON.stringify({assets, fields: []}));
+      }
+      const manuscript = "第七章  回城\n\n暮色漫过白石城的城墙，晚钟响了三下。\n\n守门人翻开名册，指尖停在墨迹未干的那一页。\n她低声念道：「";
+      const documentPath = path.join(project.path, "回城.txt");
+      await writeFile(documentPath, manuscript);
+      assert.equal(await browser.execute(project => window.__lodestoryLifecycleTest.openPreparedProject(project), project), true);
+      await browser.waitUntil(() => browser.execute(() => {
+        const state = window.__lodestoryLifecycleTest.snapshot();
+        if (state.loading?.error) throw new Error(state.loading.error.message);
+        return !!state.session && !state.busy && !state.loading;
+      }), {timeout: 10000});
+      assert.equal(await browser.execute(() => window.__lodestoryLifecycleTest.openDocument("回城.txt")), true);
+      await $('textarea[aria-autocomplete="list"]').waitForExist({timeout: 10000});
+      await browser.execute(() => {
+        const input = document.querySelector("textarea.plain-text-input");
+        input.focus();
+        input.dispatchEvent(new KeyboardEvent("keydown", {key: "End", metaKey: true, ctrlKey: true, bubbles: true}));
+        input.setRangeText("林", input.selectionStart, input.selectionEnd, "end");
+        input.dispatchEvent(new InputEvent("input", {data: "林", inputType: "insertText", bubbles: true}));
+      });
+      const popup = await $(".plain-text-completion:not([hidden])");
+      await popup.waitForDisplayed({timeout: 10000});
+      assert.deepEqual(await browser.execute(() => Array.from(document.querySelectorAll(".plain-text-completion-name"),
+        node => node.textContent)), ["林川", "林月", "林月见", "林湾"]);
+      await browser.keys("ArrowDown");
+      await browser.keys("ArrowDown");
+      if (process.env.LODESTORY_COMPLETION_PREVIEW_PATH) await browser.saveScreenshot(process.env.LODESTORY_COMPLETION_PREVIEW_PATH);
+      await browser.keys("Escape");
+      await browser.execute(() => {
+        const input = document.querySelector("textarea.plain-text-input");
+        input.focus();
+        input.dispatchEvent(new KeyboardEvent("keydown", {key: "F10", shiftKey: true, bubbles: true, cancelable: true}));
+      });
+      const showCompletion = await $('//*[@role="menuitem" and normalize-space(.)="显示补全"]');
+      await showCompletion.waitForDisplayed({timeout: 5000});
+      await browser.execute(() => {
+        Array.from(document.querySelectorAll('[role="menuitem"]'))
+          .find(item => item.textContent.trim() === "显示补全").click();
+      });
+      try { await popup.waitForDisplayed({timeout: 5000}); }
+      catch (error) {
+        const state = await browser.execute(() => ({focus: document.activeElement?.className,
+          menuOpen: !!document.querySelector(".context-menu-popup[data-open]"),
+          prefix: document.querySelector("textarea.plain-text-input")?.value}));
+        throw new Error(`Completion did not reopen after the context-menu action. ${JSON.stringify(state)}`, {cause: error});
+      }
+      await browser.execute(() => document.querySelector(".plain-text-completion-option:nth-child(2)").click());
+      assert.equal(await browser.execute(() => window.__lodestoryLifecycleTest.closeProject()), true);
+      assert.equal(await readFile(documentPath, "utf8"), manuscript + "林月");
+    } finally {
+      await browser.execute(() => window.__lodestoryLifecycleTest?.closeProject()).catch(() => {});
+      await rm(parent, {recursive: true, force: true});
+    }
+  });
+
   it("creates and saves TXT documents while rejecting Markdown and .lode files", async () => {
     const parent = await mkdtemp(path.join(tmpdir(), "lodestory-txt-editor-"));
     try {

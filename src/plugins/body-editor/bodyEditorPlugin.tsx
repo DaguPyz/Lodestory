@@ -74,7 +74,8 @@ export function createBodyEditorPlugin(): Plugin {
       ];
       for (const content of contents) {
         removeContents.push(context.track(layout.registerContent({...content, render: props =>
-          <BodyEditorContentProvider workbench={workbench} models={models} resolveEditor={resolveEditor}>
+          <BodyEditorContentProvider workbench={workbench} models={models} resolveEditor={resolveEditor}
+            connectCompletion={editorRegistry.connectCompletion}>
             {content.render(props)}
           </BodyEditorContentProvider>})));
       }

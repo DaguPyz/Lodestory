@@ -1,17 +1,18 @@
-import {Component, useCallback, useEffect, useRef, useState, type ComponentType, type ErrorInfo, type ReactNode} from "react";
+import {Component, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ErrorInfo, type ReactNode} from "react";
 import { Button, Icon } from "@lodestory/ui";
 import type {OpenDocument} from "@lodestory/sdk/documents";
-import type {EditorDefinition, EditorFormat, EditorHandle, EditorProps} from "@lodestory/sdk/body-editor";
+import type {EditorCompletion, EditorDefinition, EditorFormat, EditorHandle, EditorProps} from "@lodestory/sdk/body-editor";
 import {ContextMenuRegion, type MenuEntry} from "../context-menu";
 import {createEditorCallbackGuard, type EditorCallbackGuard} from "./editorCallbackGuard";
 
-export function Manuscript({document, visible, active, readOnly = false, format, definition, onChange, onSave, onEditorReady}: {
+export function Manuscript({document, visible, active, readOnly = false, format, definition, connectCompletion, onChange, onSave, onEditorReady}: {
   document: OpenDocument;
   visible: boolean;
   active: boolean;
   readOnly?: boolean;
   format?: EditorFormat;
   definition?: Readonly<EditorDefinition>;
+  connectCompletion?: (format: EditorFormat) => EditorCompletion;
   onChange: (content: string) => void;
   onSave: () => unknown | Promise<unknown>;
   onEditorReady: (documentId: string, handle: EditorHandle | null) => void;
@@ -37,6 +38,7 @@ export function Manuscript({document, visible, active, readOnly = false, format,
     onEditorReady(document.id, handle);
   }, [document.id, onEditorReady]);
   const editorActive = active && visible;
+  const completion = useMemo(() => format && connectCompletion?.(format), [connectCompletion, format]);
   const editorActions = editorHandle?.getContextMenuActions?.() ?? [];
 
   const menuItems = (contextDocumentId: string): readonly MenuEntry<string>[] => {
@@ -60,6 +62,7 @@ export function Manuscript({document, visible, active, readOnly = false, format,
       entries.push({
         id: `editor:${generation}:${action.id}`,
         label: action.label,
+        restoreFocus: action.restoreFocus,
         disabled: !current.visible || !current.active || current.readOnly || action.disabled,
         onSelect: id => {
           const now = latest.current;
@@ -94,7 +97,7 @@ export function Manuscript({document, visible, active, readOnly = false, format,
         {definition && format
           ? <EditorRuntime key={format + ":" + definition.id} definition={definition} documentId={document.id} format={format}
               content={document.content} readOnly={readOnly || !visible} active={editorActive}
-              onChange={onChange} onReady={ready}/>
+              completion={completion} onChange={onChange} onReady={ready}/>
           : <p className="editor-document-feedback" role="status">
               {format ? "当前没有可用的编辑器实现。" : "暂不支持该文档格式。"}
             </p>}
@@ -104,13 +107,14 @@ export function Manuscript({document, visible, active, readOnly = false, format,
   );
 }
 
-function EditorRuntime({definition, documentId, format, content, readOnly, active, onChange, onReady}: {
+function EditorRuntime({definition, documentId, format, content, readOnly, active, completion, onChange, onReady}: {
   definition: Readonly<EditorDefinition>;
   documentId: string;
   format: EditorFormat;
   content: string;
   readOnly: boolean;
   active: boolean;
+  completion?: EditorCompletion;
   onChange: (content: string) => void;
   onReady: (handle: EditorHandle | null) => void;
 }) {
@@ -173,7 +177,7 @@ function EditorRuntime({definition, documentId, format, content, readOnly, activ
   const guard = activeGuard.current;
   if (!guard) return <p className="editor-document-feedback" role="status">正在准备编辑器…</p>;
   const props: EditorProps = {
-    documentId, format, content, readOnly, active,
+    documentId, format, content, readOnly, active, completion,
     onChange: guard.onChange,
     onReady: guard.onReady,
     onError: guard.onError,

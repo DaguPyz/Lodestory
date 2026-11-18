@@ -23,6 +23,7 @@ import {createCanvasPlugin} from "../plugins/canvas/canvasPlugin";
 import {createTimelinePlugin} from "../plugins/timeline/timelinePlugin";
 import {createBodyEditorPlugin} from "../plugins/body-editor/bodyEditorPlugin";
 import {createPlainTextEditorPlugin} from "../plugins/plain-text-editor/plainTextEditorPlugin";
+import {createAssetCompletionPlugin} from "../plugins/asset-completion/assetCompletionPlugin";
 import {createDocumentTabsPlugin} from "../plugins/document-tabs/documentTabsPlugin";
 import {createWritingStatusPlugin} from "../plugins/writing-status/writingStatusPlugin";
 import {createWorkbenchToolbarPlugin} from "../plugins/workbench-toolbar/workbenchToolbarPlugin";
@@ -70,6 +71,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createAssetRelationsPlugin(),
         createBodyEditorPlugin(),
         createPlainTextEditorPlugin(),
+        createAssetCompletionPlugin(),
         createDocumentSearchPlugin(),
         createDocumentTabsPlugin(),
         createWritingStatusPlugin(),

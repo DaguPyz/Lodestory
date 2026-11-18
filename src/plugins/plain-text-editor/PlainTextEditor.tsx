@@ -16,6 +16,7 @@ export default function PlainTextEditor(props: EditorProps) {
     const instance = driver.current;
     if (!instance) return;
     instance.setReadOnly(props.readOnly || !props.active);
+    instance.setCompletion(props.completion);
     if (props.content !== observedProp.current) {
       observedProp.current = props.content;
       if (props.content !== accepted.current) {
@@ -23,7 +24,7 @@ export default function PlainTextEditor(props: EditorProps) {
         accepted.current = props.content;
       }
     }
-  }, [props.content, props.readOnly, props.active]);
+  }, [props.content, props.readOnly, props.active, props.completion]);
 
   useEffect(() => {
     const root = mount.current;
@@ -44,8 +45,13 @@ export default function PlainTextEditor(props: EditorProps) {
       });
       driver.current = instance;
       instance.setReadOnly(current.current.readOnly || !current.current.active);
+      instance.setCompletion(current.current.completion);
       current.current.onReady({
         focus() { if (alive && current.current.active) instance?.focus(); },
+        getContextMenuActions() {
+          if (!alive || !instance?.canComplete()) return [];
+          return [{id: "show-completion", label: "显示补全", restoreFocus: false, run: () => instance?.openCompletion()}];
+        },
         revealSearchRange(target) {
           if (!alive || !instance || !current.current.active || instance.getContent() !== target.text
             || target.start < 0 || target.end <= target.start || target.end > target.text.length) return false;

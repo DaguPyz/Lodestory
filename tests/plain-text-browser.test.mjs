@@ -585,6 +585,125 @@ test("self-built plain-text editor keeps a huge source editable with a bounded v
       }
     });
 
+    await t.test("worker completion follows committed input and accepts as one undoable edit", async () => {
+      const sample = "她在名册上找到了";
+      await fixture("setProps", {content: sample});
+      await fixture("setCompletionAssets", ["林月", "林川", "林月见", "林湾"]);
+      await waitFor(() => evaluate("document.querySelector('textarea.plain-text-input')?.getAttribute('aria-autocomplete') === 'list'"),
+        "The registered completion source did not reach the editor.");
+      await fixture("focusAt", sample.length);
+      const list = () => evaluate(`[...document.querySelectorAll('.plain-text-completion:not([hidden]) .plain-text-completion-name')].map(node => node.textContent)`);
+      await cdp("Input.imeSetComposition", {text: "林", selectionStart: 1, selectionEnd: 1});
+      assert.deepEqual(await list(), [], "the popup stays closed while the applied IME text is provisional");
+      await cdp("Input.insertText", {text: "林"});
+      const names = await waitFor(() => list().then(values => values.length && values), "The first Chinese character did not trigger worker completion.");
+      assert.deepEqual(names, ["林川", "林月", "林月见", "林湾"]);
+      await cdp("Input.insertText", {text: "月"});
+      await waitFor(() => list().then(values => values.length === 1 && values[0] === "林月见"),
+        "The displayed candidates did not follow the new prefix.");
+      await shortcut("ArrowDown", "ArrowDown", 40, 0);
+      assert.equal(await evaluate("document.querySelector('textarea.plain-text-input') === document.activeElement"), true);
+      await shortcut("Enter", "Enter", 13, 0);
+      assert.equal(await fixture("exactSlice", 0, sample.length + 3, sample + "林月见"), true);
+      assert.equal((await fixture("snapshot")).modelLength, sample.length + 3);
+      await shortcut("z", "KeyZ", 90, commandModifier);
+      assert.equal(await fixture("exactSlice", 0, sample.length + 2, sample + "林月"), true);
+      assert.equal((await fixture("snapshot")).modelLength, sample.length + 2);
+
+      await fixture("setCompletionAssets", ["林舟"]);
+      await fixture("setProps", {content: sample});
+      await waitFor(() => fixture("snapshot").then(state => state.modelLength === sample.length), "The completion sample did not reset.");
+      await fixture("focusAt", sample.length);
+      await cdp("Input.insertText", {text: "林"});
+      await waitFor(() => list().then(values => values.length === 1 && values[0] === "林舟"), "The new asset snapshot did not replace the worker index.");
+      await shortcut("Enter", "Enter", 13, 0);
+      assert.equal(await fixture("exactSlice", 0, sample.length + 2, sample + "林\n"), true, "Enter inserts a newline before a candidate is selected");
+      await fixture("focusAt", sample.length + 1);
+      await fixture("openCompletion");
+      await waitFor(() => list().then(values => values[0] === "林舟"), "The manual completion action did not reopen the list.");
+      await fixture("removeCompletion");
+      assert.deepEqual(await list(), []);
+      assert.equal(await evaluate("document.querySelector('textarea.plain-text-input').hasAttribute('aria-autocomplete')"), false);
+    });
+
+    await t.test("deleting back to a matching prefix reopens a settled empty completion list", async () => {
+      const start = "仪式名为";
+      const word = start + "焚烧";
+      const prefix = start + "焚";
+      const candidates = () => evaluate(`[...document.querySelectorAll('.plain-text-completion:not([hidden]) .plain-text-completion-name')].map(node => node.textContent)`);
+      await fixture("setProps", {content: start});
+      await fixture("setCompletionAssets", ["焚烧"]);
+      await waitFor(() => evaluate("document.querySelector('textarea.plain-text-input').getAttribute('aria-autocomplete') === 'list'"),
+        "The completion source did not reach the editor.");
+      await fixture("focusAt", start.length);
+      await cdp("Input.insertText", {text: "焚"});
+      await waitFor(() => candidates().then(names => names[0] === "焚烧"), "Typing the prefix did not show the candidate.");
+      await cdp("Input.insertText", {text: "烧"});
+      await fixture("completionSettled");
+      assert.deepEqual(await candidates(), [], "the complete word has no candidates");
+      assert.equal(await fixture("exactSlice", 0, word.length, word), true);
+
+      await shortcut("Backspace", "Backspace", 8, 0);
+      await waitFor(() => candidates().then(names => names[0] === "焚烧"), "Backspace did not restore the candidate.");
+      assert.equal(await fixture("exactSlice", 0, prefix.length, prefix), true);
+
+      await cdp("Input.insertText", {text: "烧"});
+      await fixture("completionSettled");
+      await fixture("focusAt", prefix.length);
+      await shortcut("Delete", "Delete", 46, 0);
+      await waitFor(() => candidates().then(names => names[0] === "焚烧"), "Forward delete did not restore the candidate.");
+
+      await cdp("Input.insertText", {text: "烧"});
+      await fixture("completionSettled");
+      await evaluate(`document.querySelector('textarea.plain-text-input').dispatchEvent(new InputEvent('beforeinput',
+        {inputType: 'deleteContentBackward', bubbles: true, cancelable: true}))`);
+      await waitFor(() => candidates().then(names => names[0] === "焚烧"), "Native backward deletion did not restore the candidate.");
+      await fixture("removeCompletion");
+    });
+
+    await t.test("completion shows ten rows and scrolls to candidates beyond the first screen", async () => {
+      const names = Array.from({length: 41}, (_, index) => "林" + String(index).padStart(2, "0"));
+      await fixture("setProps", {content: ""});
+      await fixture("setCompletionAssets", names);
+      await waitFor(() => evaluate("document.querySelector('textarea.plain-text-input').getAttribute('aria-autocomplete') === 'list'"),
+        "The completion source did not reach the editor.");
+      await fixture("focusAt", 0);
+      await cdp("Input.insertText", {text: "林"});
+      const metrics = () => evaluate(`(() => {
+        const scroll = document.querySelector('.plain-text-completion:not([hidden]) .plain-text-completion-scroll');
+        if (!scroll) return null;
+        const rows = [...scroll.querySelectorAll('[role=option]')];
+        const active = document.querySelector('.plain-text-input').getAttribute('aria-activedescendant');
+        const rect = scroll.getBoundingClientRect();
+        return {visibleRows: scroll.clientHeight / rows[0].getBoundingClientRect().height,
+          listSize: Number(rows[0].getAttribute('aria-setsize')), renderedRows: rows.length, scrollTop: scroll.scrollTop,
+          activeIndex: Number(document.getElementById(active)?.dataset.index),
+          x: rect.left + rect.width / 2, y: rect.top + rect.height / 2};
+      })()`);
+      const initial = await waitFor(metrics, "The scrolling completion list did not open.");
+      assert.equal(initial.visibleRows, 10);
+      assert.equal(initial.listSize, names.length);
+      assert.ok(initial.renderedRows < names.length);
+
+      for (let index = 0; index < 11; index++) await shortcut("ArrowDown", "ArrowDown", 40, 0);
+      const selected = await metrics();
+      assert.equal(selected.activeIndex, 10);
+      assert.ok(selected.scrollTop > 0, "keyboard selection scrolls to the eleventh option");
+
+      await cdp("Input.dispatchMouseEvent", {type: "mouseWheel", x: initial.x, y: initial.y, deltaY: 1500, deltaX: 0});
+      const last = await waitFor(() => evaluate(`(() => {
+        const row = document.querySelector('.plain-text-completion-option[data-index="${names.length - 1}"]');
+        if (!row) return null;
+        const bounds = row.getBoundingClientRect();
+        const clip = row.closest('.plain-text-completion-scroll').getBoundingClientRect();
+        return bounds.bottom <= clip.bottom ? {x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2} : null;
+      })()`), "Scrolling did not reach the final candidate.");
+      await mouse("mousePressed", last.x, last.y, "left", 1);
+      await mouse("mouseReleased", last.x, last.y, "left", 0);
+      assert.equal(await fixture("flushContent"), names.at(-1));
+      await fixture("removeCompletion");
+    });
+
     await t.test("unmount releases the handle, input and rendered line nodes", async () => {
       await fixture("unmount");
       await waitFor(() => evaluate(`document.querySelectorAll('.plain-text-editor').length === 0`),

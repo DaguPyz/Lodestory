@@ -151,8 +151,8 @@ test("self-built plain-text editor keeps a huge source editable with a bounded v
       await key("keyDown", keyName, code, virtualKey, modifiers);
       await key("keyUp", keyName, code, virtualKey, modifiers);
     };
-    const mouse = (type, x, y, button = "none", buttons = 0) => cdp("Input.dispatchMouseEvent", {
-      type, x, y, button, buttons, clickCount: type.endsWith("Pressed") ? 1 : 0,
+    const mouse = (type, x, y, button = "none", buttons = 0, modifiers = 0) => cdp("Input.dispatchMouseEvent", {
+      type, x, y, button, buttons, modifiers, clickCount: type.endsWith("Pressed") ? 1 : 0,
     });
     const commandModifier = process.platform === "darwin" ? 4 : 2;
 
@@ -635,6 +635,7 @@ test("self-built plain-text editor keeps a huge source editable with a bounded v
       await fixture("setCompletionAssets", ["林月", "林川", "林月见", "林湾"]);
       await waitFor(() => evaluate("document.querySelector('textarea.plain-text-input')?.getAttribute('aria-autocomplete') === 'list'"),
         "The registered completion source did not reach the editor.");
+      await waitFor(() => fixture("snapshot").then(state => state.modelMatchesHost), "The composition sample did not reach the editor.");
       await fixture("focusAt", sample.length);
       const list = () => evaluate(`[...document.querySelectorAll('.plain-text-completion:not([hidden]) .plain-text-completion-name')].map(node => node.textContent)`);
       await cdp("Input.imeSetComposition", {text: "林", selectionStart: 1, selectionEnd: 1});
@@ -679,6 +680,7 @@ test("self-built plain-text editor keeps a huge source editable with a bounded v
       await fixture("setCompletionAssets", ["焚烧"]);
       await waitFor(() => evaluate("document.querySelector('textarea.plain-text-input').getAttribute('aria-autocomplete') === 'list'"),
         "The completion source did not reach the editor.");
+      await waitFor(() => fixture("snapshot").then(state => state.modelMatchesHost), "The deletion sample did not reach the editor.");
       await fixture("focusAt", start.length);
       await cdp("Input.insertText", {text: "焚"});
       await waitFor(() => candidates().then(names => names[0] === "焚烧"), "Typing the prefix did not show the candidate.");
@@ -796,6 +798,122 @@ test("self-built plain-text editor keeps a huge source editable with a bounded v
       await fixture("removeCompletion");
       await waitFor(() => spans().then(result => result.length === 0), "Withdrawing the provider did not clear the styles.");
       assert.equal(await fixture("flushContent"), wrapped);
+    });
+
+    await t.test("modifier-click opens resident asset cards which follow data and support pointer and keyboard movement", async () => {
+      const text = "林川穿过林湾，遇见林月。\n" + "山路隐入晨雾。\n".repeat(120);
+      const assets = [
+        {name: "林川", description: "守城人，负责夜间巡逻。", color: "#ee7766"},
+        {name: "林湾", description: "城北的港口。"},
+        {name: "林月", description: "角色的简介。"},
+        {name: "林月", description: "地点的简介。", typeId: "places"},
+      ];
+      const rect = selector => evaluate(`document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect().toJSON()`);
+      const assetPoint = name => evaluate(`(() => {
+        const target = [...document.querySelectorAll('[data-inspectable]')].find(node => node.textContent === ${JSON.stringify(name)});
+        if (!target) return null;
+        const box = target.getBoundingClientRect();
+        return {x: box.x + box.width / 2, y: box.y + box.height / 2};
+      })()`);
+      const clickAt = async ({x, y}, modifier = 0) => {
+        await mouse("mousePressed", x, y, "left", 1, modifier);
+        await mouse("mouseReleased", x, y, "left", 0, modifier);
+      };
+      const cards = ".plain-text-highlight-card";
+      const count = () => evaluate(`document.querySelectorAll('${cards}').length`);
+      await fixture("setProps", {content: text});
+      await fixture("setCompletionAssets", assets);
+      await fixture("focusAt", 0);
+      const point = await waitFor(() => assetPoint("林川"), "The first asset was not rendered as an inspectable span.");
+      await clickAt(point);
+      assert.equal(await count(), 0, "an ordinary click only positions the caret");
+      const before = await fixture("snapshot");
+      await clickAt(point, commandModifier);
+      const opened = await waitFor(() => rect(cards), "The asset card did not open on modifier-click.", 5000, browserDiagnostics);
+      assert.equal(await evaluate(`document.querySelector('${cards} h2').textContent`), "林川");
+      assert.equal(await evaluate(`document.querySelector('${cards} [aria-label="资产简介"]').textContent`), "守城人，负责夜间巡逻。");
+      assert.deepEqual(await evaluate(`[...document.querySelectorAll('${cards} header button')].map(button => button.getAttribute('aria-label'))`),
+        ["展开详情", "关闭卡片 林川"]);
+      assert.equal(await evaluate(`document.querySelector('${cards} [aria-expanded="false"]') !== null
+        && !document.querySelector('${cards} .plain-text-highlight-card-category, ${cards} dl')`), true);
+      assert.deepEqual((await fixture("snapshot")).selection, before.selection, "inspection keeps the editor selection");
+      const handle = await rect(`${cards} [role="group"]`);
+      const start = {x: handle.x + 15, y: handle.y + handle.height / 2};
+      await mouse("mousePressed", start.x, start.y, "left", 1);
+      await mouse("mouseMoved", start.x + 120, start.y + 70, "left", 1);
+      await mouse("mouseReleased", start.x + 120, start.y + 70, "left", 0);
+      const moved = await rect(cards);
+      assert.equal(Math.round(moved.x - opened.x), 120);
+      assert.equal(Math.round(moved.y - opened.y), 70);
+      await shortcut("ArrowRight", "ArrowRight", 39, 0);
+      const placed = await rect(cards);
+      assert.equal(Math.round(placed.x - moved.x), 8);
+
+      await evaluate("document.querySelector('.plain-text-viewport').scrollTop = 1500");
+      await waitFor(() => assetPoint("林川").then(value => !value), "The original asset did not scroll out of the virtual rows.");
+      assert.deepEqual(await rect(cards), placed, "scrolling the manuscript keeps the card in place");
+      await fixture("setProps", {active: false});
+      await waitFor(() => rect(cards).then(box => box.width === 0), "Deactivating the document did not hide the card.");
+      await fixture("setProps", {active: true});
+      await waitFor(() => rect(cards).then(box => box.x === placed.x), "Reactivating the document did not restore the card position.");
+      await fixture("focusAt", 0);
+      const repeated = await waitFor(() => assetPoint("林川"), "The asset did not reappear.");
+      await clickAt(repeated, commandModifier);
+      assert.equal(await count(), 1, "opening the same asset twice reuses the moved card");
+      assert.deepEqual(await rect(cards), placed);
+
+      await clickAt(await assetPoint("林月"), commandModifier);
+      await waitFor(() => count().then(value => value === 2), "A second asset card did not remain open alongside the first.");
+      assert.equal(await evaluate(`document.querySelectorAll('${cards} [aria-label="选择同名资产"]').length`), 0);
+      await evaluate(`document.querySelector('${cards}[data-front] [aria-expanded="false"]').click()`);
+      await waitFor(() => evaluate(`document.querySelector('${cards}[data-front] [aria-expanded="true"]') !== null`),
+        "The second card did not expand.");
+      assert.equal(await evaluate(`document.querySelectorAll('${cards} [aria-label="选择同名资产"]').length`), 1);
+      await evaluate(`document.querySelector('${cards}[data-front] [aria-label="选择同名资产"]').click()`);
+      await waitFor(() => evaluate("[...document.querySelectorAll('[role=option]')].some(node => node.textContent === '林月 · 地点')"),
+        "The same-name picker did not expose the second asset.");
+      await evaluate("[...document.querySelectorAll('[role=option]')].find(node => node.textContent === '林月 · 地点').click()");
+      await waitFor(() => evaluate(`document.querySelector('${cards}[data-front]').textContent.includes('地点的简介')`),
+        "Selecting the homonym did not switch the displayed details.");
+      await evaluate(`document.querySelector('${cards}[data-front] [role="group"]').focus()`);
+      await shortcut("Escape", "Escape", 27, 0);
+      await waitFor(() => count().then(value => value === 1), "Closing one card also affected the other card.");
+
+      await fixture("setCompletionAssets", [{...assets[0], description: "新简介。"}, ...assets.slice(1)]);
+      await waitFor(() => evaluate(`document.querySelector('${cards}').textContent.includes('新简介')`), "The resident card did not update.");
+      await fixture("setAssetDetails", "0", {
+        templateFields: [{id: "role", label: "身份", value: "守城人"}, {id: "age", label: "年龄", value: "未填写"}],
+        customFields: [{id: "memo", label: "巡逻手记", value: "穿过城门，查看灯火。\n".repeat(32) + "此处是手记末尾。"}],
+      });
+      const body = `${cards} [aria-label="卡片详情"]`;
+      const bounds = await rect(`${cards} [aria-expanded="false"]`);
+      await clickAt({x: bounds.x + bounds.width / 2, y: bounds.y + bounds.height / 2});
+      const scroll = await waitFor(() => evaluate(`(() => {
+        const area = document.querySelector('${body}');
+        if (!area.textContent.includes('此处是手记末尾。') || area.scrollHeight <= area.clientHeight) return null;
+        return area.getBoundingClientRect().toJSON();
+      })()`), "Field-only changes did not populate the open card and make its body scrollable.");
+      assert.match(await evaluate(`document.querySelector('${body}').textContent`), /#EE7766.*模板字段身份守城人年龄未填写专属属性巡逻手记/u);
+      const headerBeforeScroll = await rect(`${cards} header`);
+      const manuscriptBeforeScroll = (await fixture("viewportState")).scrollTop;
+      await cdp("Input.dispatchMouseEvent", {type: "mouseWheel", x: scroll.x + 120, y: scroll.y + 40,
+        deltaX: 0, deltaY: 2000});
+      await waitFor(() => evaluate(`(() => {
+        const area = document.querySelector('${body}');
+        return area.scrollTop > 0 && area.scrollHeight - area.clientHeight - area.scrollTop <= 1;
+      })()`), "The card did not scroll to the last line of the field.");
+      assert.deepEqual(await rect(`${cards} header`), headerBeforeScroll, "the draggable title and close button remain fixed");
+      assert.equal((await fixture("viewportState")).scrollTop, manuscriptBeforeScroll, "the wheel only scrolls the card body");
+      const expanded = await rect(cards);
+      const collapse = await rect(`${cards} [aria-expanded="true"]`);
+      await clickAt({x: collapse.x + collapse.width / 2, y: collapse.y + collapse.height / 2});
+      await waitFor(() => rect(cards).then(box => box.height < expanded.height), "Collapsing did not restore the compact card.");
+      assert.equal(await evaluate(`document.querySelector('${cards} [aria-label="资产简介"]').textContent`), "新简介。");
+      assert.equal(await evaluate(`document.querySelector('${body}').hidden`), true);
+      assert.equal(await fixture("flushContent"), text);
+      assert.equal((await fixture("snapshot")).changeCount, before.changeCount);
+      await fixture("removeCompletion");
+      await waitFor(() => count().then(value => value === 0), "Withdrawing the provider left a stale card open.");
     });
 
     await t.test("unmount releases the handle, input and rendered line nodes", async () => {

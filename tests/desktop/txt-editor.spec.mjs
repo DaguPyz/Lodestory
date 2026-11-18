@@ -4,7 +4,7 @@ import {tmpdir} from "node:os";
 import path from "node:path";
 
 describe("TXT-only document editor", () => {
-  it("completes and finds project asset names in the packaged WebView", async () => {
+  it("completes, finds and inspects project asset names in the packaged WebView", async () => {
     const parent = await mkdtemp(path.join(tmpdir(), "lodestory-completion-"));
     try {
       await browser.waitUntil(() => browser.execute(() => !!window.__lodestoryLifecycleTest), {timeout: 10000});
@@ -16,14 +16,28 @@ describe("TXT-only document editor", () => {
       await mkdir(objects, {recursive: true});
       const people = "00000000-0000-4000-8000-000000000001";
       const places = "00000000-0000-4000-8000-000000000002";
+      const assetId = (typeId, index) => `${typeId.slice(0, -2)}${typeId.at(-1)}${index}`;
+      const field = (suffix, owner, title, order, valueType = "text", config = {}) => ({
+        id: `00000000-0000-4000-8000-0000000000${suffix}`, owner, title, order, valueType, config, status: "active",
+      });
+      const role = field("30", {kind: "type", id: people}, "身份", 0);
+      const post = field("31", {kind: "type", id: people}, "驻守地点", 1, "reference", {targetTypeId: places});
+      const home = field("32", {kind: "type", id: people}, "籍贯", 2);
+      const notes = field("40", {kind: "asset", id: assetId(people, 0)}, "巡逻手记", 0);
+      const record = "暮色时检查城门与灯火。\n沿北墙巡视，记下经过的船只。\n交班时核对守夜名册。\n".repeat(5) + "交班后归还钥匙。";
       await writeFile(path.join(objects, "..", "templates.json"), JSON.stringify([
         {id: people, order: 0, name: "角色", status: "active", description: ""},
         {id: places, order: 1, name: "地点", status: "active", description: ""},
       ]));
+      const templates = path.join(objects, "..", "templates");
+      await mkdir(templates, {recursive: true});
+      await writeFile(path.join(templates, `${people}.json`), JSON.stringify({fields: [role, post, home]}));
       for (const [typeId, names] of [[people, ["林川", "林月", "林月见"]], [places, ["林湾"]]]) {
-        const assets = names.map((name, index) => ({id: `${typeId.slice(0, -2)}${typeId.at(-1)}${index}`,
-          name, typeId, description: "", values: {}, ...(name === "林川" ? {color: "#ee7766"} : {})}));
-        await writeFile(path.join(objects, `${typeId}.json`), JSON.stringify({assets, fields: []}));
+        const assets = names.map((name, index) => name === "林川"
+          ? {id: assetId(typeId, index), name, typeId, description: "白石城的守门人。暮色时换岗，负责城门的夜间巡逻。",
+            color: "#ee7766", values: {[role.id]: "城门守卫", [post.id]: assetId(places, 0), [notes.id]: record}}
+          : {id: assetId(typeId, index), name, typeId, description: "", values: {}});
+        await writeFile(path.join(objects, `${typeId}.json`), JSON.stringify({assets, fields: typeId === people ? [notes] : []}));
       }
       const manuscript = "第七章  回城\n\n暮色漫过白石城的城墙，晚钟响了三下。\n\n林川从林湾归来，守门人翻开名册。\n她低声念道：「";
       const documentPath = path.join(project.path, "回城.txt");
@@ -42,6 +56,40 @@ describe("TXT-only document editor", () => {
           && place?.textContent === "林湾" && !place.style.getPropertyValue("--plain-text-highlight-color")
           && getComputedStyle(place).color !== getComputedStyle(place.parentElement).color;
       }), {timeout: 5000, timeoutMsg: "The TXT editor did not use the stored asset color and the default accent."});
+      await browser.execute(() => {
+        const asset = [...document.querySelectorAll(".plain-text-highlight")].find(element => element.textContent === "林川");
+        const {x, y, width, height} = asset.getBoundingClientRect();
+        for (const type of ["pointerdown", "pointerup"]) {
+          asset.dispatchEvent(new PointerEvent(type, {bubbles: true, cancelable: true, pointerId: 1, button: 0,
+            metaKey: /Mac/.test(navigator.platform), ctrlKey: !/Mac/.test(navigator.platform), clientX: x + width / 2, clientY: y + height / 2}));
+        }
+      });
+      const card = await $(".plain-text-highlight-card");
+      await card.waitForDisplayed({timeout: 5000});
+      assert.equal(await card.$("h2").getText(), "林川");
+      assert.match(await card.$('[aria-label="资产简介"]').getText(), /^白石城的守门人/u);
+      assert.equal(await card.$(".plain-text-highlight-card-category").isExisting(), false);
+      await card.$('button[aria-label="展开详情"][aria-expanded="false"]').click();
+      const collapse = await card.$('button[aria-label="收起详情"][aria-expanded="true"]');
+      await collapse.waitForDisplayed({timeout: 5000});
+      assert.equal(await card.$(".plain-text-highlight-card-category").getText(), "角色");
+      assert.match(await card.$(".plain-text-highlight-card-description").getText(), /^白石城的守门人/u);
+      const details = await browser.execute(() => {
+        const body = document.querySelector('.plain-text-highlight-card-body[aria-label="卡片详情"]');
+        const display = Array.from(body.querySelectorAll("dt"), term => [term.textContent, term.nextElementSibling.textContent]);
+        const scrollable = body.scrollHeight > body.clientHeight;
+        body.scrollTop = body.scrollHeight;
+        const scrolled = body.scrollTop > 0;
+        body.scrollTop = 0;
+        return {display, scrollable, scrolled};
+      });
+      assert.deepEqual(Object.fromEntries(details.display), {颜色标记: "#EE7766", 身份: "城门守卫", 驻守地点: "林湾", 籍贯: "未填写", 巡逻手记: record});
+      assert.equal(details.scrollable && details.scrolled, true);
+      await collapse.click();
+      await card.$('[aria-label="资产简介"]').waitForDisplayed({timeout: 5000});
+      await card.$('button[aria-label="关闭卡片 林川"]').click();
+      await card.waitForExist({timeout: 5000, reverse: true});
+
       await browser.execute(() => {
         const input = document.querySelector("textarea.plain-text-input");
         input.focus();

@@ -4,7 +4,7 @@ import {createPlainTextDriver, getPlainTextDriver} from "../../src/plugins/plain
 import {createAssetCompletionSource} from "../../src/plugins/asset-completion/assetCompletionSource";
 import {createEditorTextSourceRegistry} from "../../src/plugins/body-editor/editorTextSourceRegistry";
 import type {EditorCompletionCandidate, EditorHandle, EditorHighlight, EditorProps} from "../../packages/sdk/src/body-editor";
-import type {AssetCatalogSnapshot} from "../../packages/sdk/src/asset-catalog";
+import type {AssetCatalogAssetDetails, AssetCatalogSnapshot} from "../../packages/sdk/src/asset-catalog";
 import "../../src/styles/theme-colors.css";
 import "../../src/styles/tokens.css";
 import "@lodestory/ui/styles.css";
@@ -40,7 +40,8 @@ type FixtureApi = {
   setPropsWithoutRender(patch: Partial<Pick<EditorProps, "content" | "readOnly" | "active">>): void;
   renderProps(): void;
   flushContent(currentContent?: string): string;
-  setCompletionAssets(names: readonly (string | {name: string; color?: string})[]): void;
+  setCompletionAssets(names: readonly (string | {name: string; color?: string; description?: string; typeId?: string})[]): void;
+  setAssetDetails(assetId: string, details: AssetCatalogAssetDetails): void;
   completionSettled(): Promise<void>;
   openCompletion(): void;
   removeCompletion(): void;
@@ -79,6 +80,8 @@ const completionRegistry = createEditorTextSourceRegistry<EditorCompletionCandid
 const highlightRegistry = createEditorTextSourceRegistry<EditorHighlight>();
 let catalogSnapshot: AssetCatalogSnapshot;
 const catalogListeners = new Set<() => void>();
+const assetDetails = new Map<string, AssetCatalogAssetDetails>();
+const assetDetailListeners = new Set<() => void>();
 let removeCompletion: (() => void) | undefined;
 let lastCompletionQuery: Promise<unknown> | undefined;
 const contentCheckpoints = new Map<string, string>();
@@ -331,7 +334,7 @@ const fixture: FixtureApi = {
       types: [{id: "people", name: "角色", status: "active"}, {id: "places", name: "地点", status: "active"}],
       assets: names.map((entry, index) => {
         const asset = typeof entry === "string" ? {name: entry} : entry;
-        return {...asset, id: String(index), description: "", typeId: asset.name.endsWith("湾") ? "places" : "people"};
+        return {id: String(index), description: "", typeId: asset.name.endsWith("湾") ? "places" : "people", ...asset};
       }),
       loaded: true, loading: false, error: null, blocked: false,
     };
@@ -339,6 +342,10 @@ const fixture: FixtureApi = {
       const source = createAssetCompletionSource({
         getSnapshot: () => catalogSnapshot,
         subscribe(listener) { catalogListeners.add(listener); return () => catalogListeners.delete(listener); },
+        details: {
+          getSnapshot: assetId => assetDetails.get(assetId) ?? null,
+          subscribe(listener) { assetDetailListeners.add(listener); return () => assetDetailListeners.delete(listener); },
+        },
         retry: async () => true,
       });
       const remove = completionRegistry.register("fixture", "plain-text", source);
@@ -353,10 +360,15 @@ const fixture: FixtureApi = {
       render();
     } else catalogListeners.forEach(listener => listener());
   },
+  setAssetDetails(assetId, details) {
+    assetDetails.set(assetId, details);
+    assetDetailListeners.forEach(listener => listener());
+  },
   async completionSettled() { await lastCompletionQuery; },
   removeCompletion() {
     removeCompletion?.();
     removeCompletion = undefined;
+    assetDetails.clear();
   },
   openCompletion() {
     const action = handle?.getContextMenuActions?.().find(item => item.id === "show-completion");

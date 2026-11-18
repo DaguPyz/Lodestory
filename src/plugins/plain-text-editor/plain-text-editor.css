@@ -25,7 +25,7 @@
   font-size: var(--ui-font-size-document);
   line-height: var(--ui-line-height-document);
 }
-.plain-text-document {
+.plain-text-work-area, .plain-text-document {
   position: relative;
   display: flex;
   flex: 1;
@@ -70,6 +70,115 @@
   background: var(--ui-surface-selected);
 }
 .plain-text-highlight { color: var(--plain-text-highlight-color, var(--ui-accent-foreground)); }
+.plain-text-lines [data-inspectable] { pointer-events: auto; }
+.plain-text-viewport[data-inspect-gesture] [data-inspectable]:hover {
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: .18em;
+}
+.plain-text-highlight-cards {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: hidden;
+  pointer-events: none;
+}
+.plain-text-highlight-card {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  width: min(22rem, calc(100% - 16px));
+  max-height: min(28rem, calc(100% - 16px));
+  border: 1px solid var(--ui-border-divider);
+  border-radius: var(--ui-radius-dialog);
+  color: var(--ui-text-primary);
+  background: var(--ui-surface-overlay);
+  box-shadow: var(--ui-shadow-popover);
+  font: var(--ui-font-size-body)/var(--ui-line-height-body) var(--ui-font-interface);
+  pointer-events: auto;
+}
+.plain-text-highlight-card[data-front] { z-index: 1; }
+.plain-text-highlight-card > header {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: start;
+  gap: var(--ui-space-2);
+  padding: var(--ui-space-3);
+}
+.plain-text-highlight-card-handle {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+  min-height: var(--ui-icon-button-size);
+  padding-inline: var(--ui-space-3);
+  border-radius: var(--ui-radius-row);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+.plain-text-highlight-card[data-dragging] .plain-text-highlight-card-handle { cursor: grabbing; }
+.plain-text-highlight-card-handle:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: calc(-1 * var(--ui-focus-width));
+}
+.plain-text-highlight-card h2 {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  font-size: var(--ui-font-size-strong);
+  line-height: var(--ui-line-height-strong);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.plain-text-highlight-card-body {
+  display: grid;
+  align-content: start;
+  gap: var(--ui-space-3);
+  min-height: 0;
+  overflow: hidden auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  padding: 0 var(--ui-space-6) var(--ui-space-6);
+}
+.plain-text-highlight-card-body:focus-visible {
+  outline: var(--ui-focus-width) solid var(--ui-focus-ring);
+  outline-offset: calc(-1 * var(--ui-focus-width));
+}
+.plain-text-highlight-card-body[hidden] { display: none; }
+.plain-text-highlight-card-body p { margin: 0; overflow-wrap: anywhere; white-space: pre-wrap; }
+.plain-text-highlight-card-category {
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+.plain-text-highlight-card-section {
+  min-width: 0;
+  border-top: 1px solid var(--ui-border-divider);
+  padding-top: var(--ui-space-3);
+}
+.plain-text-highlight-card-section h3 {
+  margin: 0 0 var(--ui-space-2);
+  font-size: var(--ui-font-size-label);
+  line-height: var(--ui-line-height-label);
+  font-weight: 600;
+}
+.plain-text-highlight-card-section dl {
+  display: grid;
+  gap: var(--ui-space-2);
+  margin: 0;
+}
+.plain-text-highlight-card-section dl > div {
+  display: grid;
+  grid-template-columns: minmax(0, 6rem) minmax(0, 1fr);
+  gap: var(--ui-space-3);
+  overflow-wrap: anywhere;
+}
+.plain-text-highlight-card-section dt { color: var(--ui-text-secondary); }
+.plain-text-highlight-card-section dd { margin: 0; white-space: pre-wrap; }
 .plain-text-selected-break { display: inline-block; min-width: .4em; }
 .plain-text-search-match {
   border-radius: var(--ui-radius-row);
@@ -99,6 +208,7 @@
 @media (prefers-reduced-motion: reduce) {
   .plain-text-caret { animation: none; }
 }
+/* The viewport owns pointer input, including clicks where the IME caret buffer overlaps text. */
 .plain-text-input {
   position: absolute;
   z-index: 1;
@@ -111,6 +221,7 @@
   border-radius: 0;
   resize: none;
   overflow: hidden;
+  pointer-events: none;
   color: transparent;
   background: transparent;
   caret-color: transparent;
@@ -207,6 +318,7 @@
 .plain-text-search [role="status"] { color: var(--ui-text-secondary); }
 .plain-text-search [role="status"]:empty { position: absolute; }
 @media (forced-colors: active) {
+  .plain-text-highlight-card { border-color: CanvasText; }
   :is(.plain-text-selected, .plain-text-search-match) { color: HighlightText; background: Highlight; forced-color-adjust: none; }
   .plain-text-search-match { outline-color: HighlightText; }
   .plain-text-caret { background: CanvasText; }

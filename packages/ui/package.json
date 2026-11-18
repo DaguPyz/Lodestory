@@ -12,7 +12,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./styles.css": "./styles.css"
+    "./styles.css": "./styles.css",
+    "./pointer-drag": {
+      "types": "./dist/dialogDragController.d.ts",
+      "import": "./dist/dialogDragController.js"
+    }
   },
   "sideEffects": ["**/*.css"],
   "scripts": {

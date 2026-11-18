@@ -1,4 +1,4 @@
-import type {EditorHighlight, EditorHighlights} from "@lodestory/sdk/body-editor";
+import type {EditorHighlight, EditorHighlightPreview, EditorHighlights} from "@lodestory/sdk/body-editor";
 
 // Cover words that cross the viewport edge and reuse nearby matches when scrolling.
 const context = 128;
@@ -58,11 +58,12 @@ export function createPlainTextHighlights(source: EditorHighlights, repaint: () 
           const from = item.from + start, to = item.to + start;
           if (to <= request.from || from >= request.to) continue;
           const color = /^#[0-9a-f]{6}$/i.test(item.color ?? "") ? item.color : undefined;
-          next.push({from, to, color});
+          next.push({from, to, color, preview: item.preview});
         }
         const changed = next.length !== ranges.length || next.some((range, index) => {
           const previous = ranges[index];
-          return range.from !== previous.from || range.to !== previous.to || range.color !== previous.color;
+          return range.from !== previous.from || range.to !== previous.to || range.color !== previous.color
+            || range.preview?.key !== previous.preview?.key;
         });
         ranges = next;
         if (changed) repaint();
@@ -75,7 +76,8 @@ export function createPlainTextHighlights(source: EditorHighlights, repaint: () 
 }
 
 export function appendStyledText(element: HTMLElement, text: string, rowFrom: number,
-  selectedFrom: number, selectedTo: number, selectionClass: string, ranges: readonly EditorHighlight[] = []) {
+  selection: {from: number; to: number; className: string}, targetByElement: WeakMap<Element, EditorHighlightPreview>,
+  ranges: readonly EditorHighlight[] = []) {
   let cursor = rowFrom;
   let low = 0, high = ranges.length;
   while (low < high) {
@@ -84,36 +86,43 @@ export function appendStyledText(element: HTMLElement, text: string, rowFrom: nu
     else high = middle;
   }
   let index = low;
-  function appendThrough(to: number) {
+  function appendThrough(to: number, parent: HTMLElement) {
     if (cursor === to) return;
-    element.append(text.slice(cursor - rowFrom, to - rowFrom));
+    parent.append(text.slice(cursor - rowFrom, to - rowFrom));
     cursor = to;
   }
-  function appendStyledThrough(to: number) {
+  function appendStyledThrough(to: number, parent = element) {
+    if (cursor === to) return;
     for (; index < ranges.length; index++) {
       const match = ranges[index];
       if (match.from >= to) break;
       if (match.to <= cursor) continue;
-      appendThrough(Math.max(cursor, match.from));
+      appendThrough(Math.max(cursor, match.from), parent);
       const end = Math.min(to, match.to);
-      const span = document.createElement("span");
-      span.className = "plain-text-highlight";
-      if (match.color) span.style.setProperty("--plain-text-highlight-color", match.color);
-      span.textContent = text.slice(cursor - rowFrom, end - rowFrom);
-      element.append(span);
-      cursor = end;
+      if (parent === element || match.preview) {
+        const span = document.createElement("span");
+        if (parent === element) {
+          span.className = "plain-text-highlight";
+          if (match.color) span.style.setProperty("--plain-text-highlight-color", match.color);
+        }
+        if (match.preview) {
+          span.dataset.inspectable = "";
+          targetByElement.set(span, match.preview);
+        }
+        appendThrough(end, span);
+        parent.append(span);
+      } else appendThrough(end, parent);
       if (match.to > to) break;
     }
-    appendThrough(to);
+    appendThrough(to, parent);
   }
 
-  if (selectedFrom < selectedTo) {
-    appendStyledThrough(selectedFrom);
+  if (selection.from < selection.to) {
+    appendStyledThrough(selection.from);
     const mark = document.createElement("span");
-    mark.className = selectionClass;
-    mark.textContent = text.slice(selectedFrom - rowFrom, selectedTo - rowFrom);
+    mark.className = selection.className;
+    appendStyledThrough(selection.to, mark);
     element.append(mark);
-    cursor = selectedTo;
   }
   appendStyledThrough(rowFrom + text.length);
 }

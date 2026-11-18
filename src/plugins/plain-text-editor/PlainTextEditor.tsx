@@ -1,6 +1,7 @@
 import {useEffect, useLayoutEffect, useRef, useState} from "react";
 import type {EditorProps} from "@lodestory/sdk/body-editor";
-import {createPlainTextDriver, type PlainTextDriver, type SearchRequest} from "./plainTextDriver";
+import {createPlainTextDriver, type HighlightInspection, type PlainTextDriver, type SearchRequest} from "./plainTextDriver";
+import {PlainTextHighlightCard} from "./PlainTextHighlightCard";
 import {PlainTextSearchBar} from "./PlainTextSearchBar";
 import "./plain-text-editor.css";
 
@@ -13,6 +14,8 @@ export default function PlainTextEditor(props: EditorProps) {
   const accepted = useRef(props.content);
   const observedProp = useRef(props.content);
   const [search, setSearch] = useState<SearchRequest>();
+  const [cards, setCards] = useState<HighlightInspection[]>([]);
+  const [frontCard, setFrontCard] = useState<string>();
 
   useLayoutEffect(() => {
     const instance = driver.current;
@@ -47,6 +50,12 @@ export default function PlainTextEditor(props: EditorProps) {
         },
         onError(error) { if (alive) current.current.onError(error); },
         onOpenSearch(request) { if (alive && current.current.active) setSearch(request); },
+        onInspect(inspection) {
+          if (!alive || !current.current.active) return;
+          const key = inspection.preview.key;
+          setCards(open => open.some(item => item.preview.key === key) ? open : [...open, inspection]);
+          setFrontCard(key);
+        },
       });
       driver.current = instance;
       instance.setReadOnly(current.current.readOnly || !current.current.active);
@@ -100,6 +109,18 @@ export default function PlainTextEditor(props: EditorProps) {
     }
   }}>
     <PlainTextSearchBar request={search} driver={driver} readOnly={props.readOnly || !props.active} onClose={closeSearch} />
-    <div className="plain-text-document" ref={mount} />
+    <div className="plain-text-work-area">
+      <div className="plain-text-document" ref={mount} />
+      <div className="plain-text-highlight-cards" hidden={!props.active}>
+        {cards.map(inspection => {
+          const key = inspection.preview.key;
+          return <PlainTextHighlightCard key={key} inspection={inspection} active={props.active} front={frontCard === key}
+            onRaise={() => setFrontCard(key)} onClose={restoreFocus => {
+              setCards(open => open.filter(item => item.preview.key !== key));
+              if (restoreFocus && props.active) driver.current?.focus();
+            }} />;
+        })}
+      </div>
+    </div>
   </div>;
 }

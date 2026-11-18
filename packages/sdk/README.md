@@ -270,7 +270,9 @@ export const inkThemePlugin: Plugin = {
 
 `@lodestory/sdk/timeline` 提供共享 `timelineKey`。`timeline` 拥有时间线列表元信息、事件数据、当前选中项、数值轴设置和视口，通过工作台参与者管理项目会话。`outline-design` 通过公开服务订阅列表并发出新建、删除、打开请求；不直接导入列表模型、读写文件或创建视口。列表快照中的 `eventCount` 和 `period` 是事件与轴设置派生出的展示值，不写入既有列表元信息文件。事件编辑和事件文件格式由 `timeline` 插件内部拥有，当前不另设跨插件事件 CRUD 契约。打开操作校验当前会话并通过布局显示时间线 main 内容。
 
-`@lodestory/sdk/asset-catalog` 提供共享 `assetCatalogKey`。资产管理插件拥有资产类型、资产记录及其属性，并按工作台会话发布只读目录；类型与资产条目仅包含类型 ID、名称和状态，以及资产 ID、名称、说明和类型 ID，不暴露属性值或私有 store；快照另含 `loaded`、`loading`、`error`、`blocked` 状态。类型和资产 ID 都是稳定的规范小写 UUID，消费者可以将资产 ID 作为不透明引用保存；类型 ID 与资产的 `typeId` 对应，未分类资产使用 `typeId: null`。目录提供稳定快照、订阅和重试能力，会话结束后失效且不能再重试；没有对应活动会话时 `getCatalog` 返回 `null`。类型保留 `active` 和 `archived` 状态。消费者可自行按类型筛选或搜索目录内容，资产目录不提供查询或修改命令。
+`@lodestory/sdk/asset-catalog` 提供共享 `assetCatalogKey`。资产管理插件拥有资产类型、资产记录及其属性，并按工作台会话发布只读目录。快照包含类型 ID、名称和状态，以及资产 ID、名称、说明、类型 ID 和可选颜色，另含 `loaded`、`loading`、`error`、`blocked` 状态。类型和资产 ID 都是稳定的规范小写 UUID，消费者可以将资产 ID 作为不透明引用保存。类型 ID 与资产的 `typeId` 对应，未分类资产使用 `typeId: null`。目录提供稳定快照、订阅和重试能力，会话结束后失效且不能再重试。没有对应活动会话时 `getCatalog` 返回 `null`。类型保留 `active` 和 `archived` 状态。
+
+可选的 `catalog.details` 按资产 ID 提供已格式化的模板字段和专属属性，供只读卡片使用。它有独立订阅，单独修改字段不会触发目录订阅。资产缺失或会话关闭时，详情快照返回 `null`。
 
 关系提供者可把既有的 `AssetRelationsService` 通过目录服务的可选 `relationSource.register` 接口登记。消费者订阅 `relationSource` 的快照，再按会话取得只读网络。没有登记或撤回后，快照为 `null`。提供者通过 `context.track` 追踪撤回，关系数据和写入仍归提供者所有。
 

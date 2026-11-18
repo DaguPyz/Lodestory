@@ -1,24 +1,28 @@
-import type {EditorCompletionCandidate, EditorHighlight} from "@lodestory/sdk/body-editor";
-import type {AssetCompletionMessage, AssetCompletionReply} from "./assetCompletionProtocol";
+import type {EditorCompletionCandidate} from "@lodestory/sdk/body-editor";
+import type {AssetCompletionMessage, AssetCompletionReply, AssetTextHighlight} from "./assetCompletionProtocol";
 
 let names: string[] = [];
 let details = new Map<string, string>();
 let maxNameLength = 0;
-type NameNode = {children: Map<string, NameNode>; match?: {color?: string}};
+type NameNode = {children: Map<string, NameNode>; match?: Pick<AssetTextHighlight, "color" | "assetIds">};
 let nameRoot: NameNode = {children: new Map()};
 
 function buildIndex({assets, types}: Extract<AssetCompletionMessage, {kind: "index"}>) {
   const typeNames = new Map(types.map(type => [type.id, type.name]));
   const namesToTypes = new Map<string, Set<string>>();
   const colors = new Map<string, string | undefined>();
+  const idsByName = new Map<string, string[]>();
   maxNameLength = 0;
-  for (const {name, typeId, color} of assets) {
+  for (const {id, name, typeId, color} of assets) {
     if (!name || /[\r\n]/u.test(name)) continue;
     const labels = namesToTypes.get(name) ?? new Set();
     labels.add((typeId && typeNames.get(typeId)) || "未分类");
     namesToTypes.set(name, labels);
     // Identical names with conflicting colors are visually ambiguous.
     colors.set(name, colors.has(name) && colors.get(name) !== color ? undefined : color);
+    const ids = idsByName.get(name) ?? [];
+    ids.push(id);
+    idsByName.set(name, ids);
     maxNameLength = Math.max(maxNameLength, [...name].length);
   }
   names = [...namesToTypes.keys()].sort();
@@ -31,7 +35,7 @@ function buildIndex({assets, types}: Extract<AssetCompletionMessage, {kind: "ind
       if (!child) { child = {children: new Map()}; node.children.set(name[i], child); }
       node = child;
     }
-    node.match = {color: colors.get(name)};
+    node.match = {color: colors.get(name), assetIds: idsByName.get(name)!.sort()};
   }
 }
 
@@ -64,8 +68,8 @@ function query(textBefore: string): EditorCompletionCandidate[] {
   return [];
 }
 
-function highlight(text: string): EditorHighlight[] {
-  const highlights: EditorHighlight[] = [];
+function highlight(text: string): AssetTextHighlight[] {
+  const highlights: AssetTextHighlight[] = [];
   for (let from = 0; from < text.length; from++) {
     let node = nameRoot;
     let match: NameNode["match"];

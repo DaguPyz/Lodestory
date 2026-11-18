@@ -50,8 +50,29 @@ export type EditorTextSource<Result> = Readonly<{
 /** Context contains only text immediately before the caret, within its logical line. */
 export type EditorCompletion = EditorTextSource<EditorCompletionCandidate>;
 
+export type EditorHighlightInfoSection = Readonly<{
+    id: string;
+    title?: string;
+    fields: readonly Readonly<{id: string; label: string; value: string}>[];
+}>;
+export type EditorHighlightInfo = Readonly<{
+    id: string;
+    title: string;
+    subtitle?: string;
+    description?: string;
+    sections?: readonly EditorHighlightInfoSection[];
+}>;
+
+/** Optional read-only information attached to a highlight. All occurrences of the same target share a key. */
+export type EditorHighlightPreview = Readonly<{
+    key: string;
+    /** A stable snapshot until the data changes. Empty when the target or source is withdrawn. */
+    getSnapshot(): readonly EditorHighlightInfo[];
+    subscribe(listener: () => void): () => void;
+}>;
+
 /** A foreground style for a range of UTF-16 offsets relative to the queried text. */
-export type EditorHighlight = Readonly<{from: number; to: number; color?: string}>;
+export type EditorHighlight = Readonly<{from: number; to: number; color?: string; preview?: EditorHighlightPreview}>;
 
 /** Accepts the visible document excerpt with surrounding context. Return sorted, disjoint ranges.
  * Color is #RRGGBB, or omitted to use the editor's theme accent.

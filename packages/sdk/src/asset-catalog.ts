@@ -29,10 +29,24 @@ export type AssetCatalogSnapshot = Readonly<{
   blocked: boolean;
 }>;
 
+/** A display value formatted by the asset owner, including resolved options and references. */
+export type AssetCatalogFieldValue = Readonly<{id: string; label: string; value: string}>;
+
+export type AssetCatalogAssetDetails = Readonly<{
+  templateFields: readonly AssetCatalogFieldValue[];
+  customFields: readonly AssetCatalogFieldValue[];
+}>;
+
 /** Read-only project asset metadata for cross-plugin selection and display. */
 export type AssetCatalog = {
   getSnapshot(): AssetCatalogSnapshot;
   subscribe(listener: () => void): () => void;
+  /** On-demand detail view. Field-only changes do not invalidate the directory snapshot. */
+  details?: Readonly<{
+    /** Read ordered, active fields, or null when the asset or session is unavailable. */
+    getSnapshot(assetId: string): AssetCatalogAssetDetails | null;
+    subscribe(listener: () => void): () => void;
+  }>;
   /** Retry loading or saving the catalog while its project session remains active. */
   retry(): Promise<boolean>;
 };

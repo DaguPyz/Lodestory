@@ -1,4 +1,4 @@
-import type {EditorCompletion, EditorHighlights} from "@lodestory/sdk/body-editor";
+import type {EditorCompletion, EditorHighlightPreview, EditorHighlights} from "@lodestory/sdk/body-editor";
 import {createPlainTextModel, normalizeInsertedText} from "./textModel";
 import {createPlainTextHistory} from "./history";
 import {nextTextBoundary, previousTextBoundary, TextLayout} from "./textLayout";
@@ -8,6 +8,7 @@ import {appendStyledText, createPlainTextHighlights} from "./plainTextHighlights
 export type TextSelection = {anchor: number; head: number};
 export type SearchOptions = {caseSensitive?: boolean; regexp?: boolean; wholeWord?: boolean};
 export type SearchRequest = {replace: boolean; selected: string};
+export type HighlightInspection = {preview: EditorHighlightPreview; anchor: {left: number; top: number; bottom: number}};
 export type PlainTextDriver = ReturnType<typeof createPlainTextDriver>;
 const drivers = new WeakMap<HTMLElement, PlainTextDriver>();
 const completionContextLimit = 128;
@@ -18,6 +19,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
   onChange(content: string): void;
   onError(error: Error): void;
   onOpenSearch(request: SearchRequest): void;
+  onInspect?(inspection: HighlightInspection): void;
 }) {
   let model = createPlainTextModel(initialContent);
   let history = createPlainTextHistory(model);
@@ -42,6 +44,8 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
   let completionFrame = 0;
   let highlightSource: EditorHighlights | undefined;
   let highlights: ReturnType<typeof createPlainTextHighlights> | undefined;
+  const previewTargets = new WeakMap<Element, EditorHighlightPreview>();
+  let previewPress: {pointerId: number; x: number; y: number; preview: EditorHighlightPreview} | undefined;
   const disposers: (() => void)[] = [];
   const viewport = document.createElement("div");
   viewport.className = "plain-text-viewport";
@@ -136,7 +140,8 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
       element.style.height = `${lineHeight}px`;
       const selectedFrom = Math.max(from, rowFrom), selectedTo = Math.min(to, rowTo);
       if (selectedFrom < selectedTo || highlightRanges?.length) {
-        appendStyledText(element, text, rowFrom, selectedFrom, selectedTo, selectionClass, highlightRanges);
+        appendStyledText(element, text, rowFrom, {from: selectedFrom, to: selectedTo, className: selectionClass},
+          previewTargets, highlightRanges);
       } else element.textContent = text;
       if (from <= rowTo && to > rowTo && row.end === line.text.length && line.toWithBreak > line.to) {
         const mark = document.createElement("span");
@@ -552,10 +557,16 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     if (composing && event.target instanceof Node && !root.contains(event.target)) finishComposition(false);
   }), true);
   on(document, "keydown", event => guard(() => {
+    if ((event.key === "Meta" || event.key === "Control") && viewport.matches(":hover")) {
+      viewport.toggleAttribute("data-inspect-gesture", event.metaKey || event.ctrlKey);
+    }
     if (composing && (event.metaKey || event.ctrlKey) && ["s", "w", "tab"].includes(event.key.toLowerCase())) {
       finishComposition(event.key.toLowerCase() === "s");
     }
   }), true);
+  on(document, "keyup", event => {
+    if (!event.metaKey && !event.ctrlKey) viewport.removeAttribute("data-inspect-gesture");
+  }, true);
   on(input, "copy", event => {
     if (!event.clipboardData) return;
     event.preventDefault();
@@ -574,8 +585,15 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     if (text) replaceSelection(text);
   }));
   on(viewport, "pointerdown", event => guard(() => {
+    previewPress = undefined;
     if (event.button !== 0) return;
     event.preventDefault();
+    const preview = event.target instanceof Element && previewTargets.get(event.target);
+    if (!composing && preview && callbacks.onInspect && (event.metaKey || event.ctrlKey)) {
+      completion?.close();
+      previewPress = {pointerId: event.pointerId, x: event.clientX, y: event.clientY, preview};
+      return;
+    }
     if (composing) { input.blur(); composing = false; }
     const offset = positionAt(event.clientX, event.clientY);
     if (event.detail >= 3) { const line = model.lineAt(offset); setSelection(line.from, line.toWithBreak, false); }
@@ -587,12 +605,24 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
   }));
   on(viewport, "contextmenu", () => completion?.close());
   on(viewport, "pointermove", event => {
+    viewport.toggleAttribute("data-inspect-gesture", event.metaKey || event.ctrlKey);
     if (!drag) return;
     drag = {x: event.clientX, y: event.clientY};
     if (!dragFrame) dragFrame = requestAnimationFrame(dragTick);
   });
+  on(viewport, "pointerleave", () => viewport.removeAttribute("data-inspect-gesture"));
   const endDrag = () => { drag = undefined; cancelAnimationFrame(dragFrame); dragFrame = 0; syncInput(); render(); };
-  on(viewport, "pointerup", endDrag); on(viewport, "pointercancel", endDrag);
+  on(viewport, "pointerup", event => guard(() => {
+    const press = previewPress;
+    previewPress = undefined;
+    if (!press) { endDrag(); return; }
+    const target = event.target;
+    if (event.pointerId !== press.pointerId || Math.hypot(event.clientX - press.x, event.clientY - press.y) > 4
+      || !(target instanceof Element) || previewTargets.get(target)?.key !== press.preview.key) return;
+    const {left, top, bottom} = target.getBoundingClientRect();
+    callbacks.onInspect?.({preview: press.preview, anchor: {left, top, bottom}});
+  }));
+  on(viewport, "pointercancel", () => { previewPress = undefined; if (drag) endDrag(); });
   on(viewport, "dragover", event => { if (!readOnly && event.dataTransfer?.types.includes("text/plain")) event.preventDefault(); });
   on(viewport, "drop", event => guard(() => {
     if (readOnly || !event.dataTransfer?.types.includes("text/plain")) return;

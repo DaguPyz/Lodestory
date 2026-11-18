@@ -9,7 +9,7 @@ import {AssetValueFields} from "./AssetValueFields";
 import {observeAssetCardMasonry} from "./assetCardMasonry";
 import {AssetColorPicker} from "./AssetColorPicker";
 import {assetCardColorStyle, isAssetColor} from "./assetCardColor";
-import {displayedValue} from "./assetDisplayValue";
+import {displayedValue, orderedFields} from "./assetDisplayValue";
 import type {AssetFieldDefinition, AssetPropertyValue, AssetRecord} from "./assetSchemaStore";
 
 type AssetDraft = {
@@ -25,11 +25,6 @@ type AssetDraft = {
 type DeleteTarget =
   | {kind: "asset"; id: string; name: string}
   | {kind: "field"; id: string; title: string; assetId: string; assetName: string};
-
-function orderedFields(fields: readonly AssetFieldDefinition[], kind: "type" | "asset", id: string | null) {
-  return fields.filter(field => field.status === "active" && field.owner.kind === kind && field.owner.id === id)
-    .slice().sort((a, b) => a.order - b.order);
-}
 
 function clonePropertyValue(value: AssetPropertyValue): AssetPropertyValue {
   return Array.isArray(value) ? [...value] : value;

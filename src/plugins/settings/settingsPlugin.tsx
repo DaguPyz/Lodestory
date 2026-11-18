@@ -12,7 +12,6 @@ import {MotionSettings} from "./MotionSettings";
 import {SettingsDialog} from "./SettingsDialog";
 import {createMotionSettingsModel} from "./motionSettingsModel";
 import {createSettingsStore} from "./settingsStore";
-import {settingsMessages} from "./i18n";
 
 /** Application-scoped settings shell; contributors own their views and data. */
 export function createSettingsPlugin(): Plugin {
@@ -33,7 +32,6 @@ export function createSettingsPlugin(): Plugin {
       const removeSections: (() => void)[] = [];
       let removeWrapper: (() => void) | undefined;
       let removeAction: (() => void) | undefined;
-      let removeMessages: (() => void) | undefined;
       cleanup = async () => {
         const errors: unknown[] = [];
         for (const remove of [removeWrapper, removeAction, ...removeSections.reverse()]) {
@@ -41,10 +39,8 @@ export function createSettingsPlugin(): Plugin {
         }
         try { store.dispose(); } catch (error) { errors.push(error); }
         try { await motion.dispose(); } catch (error) { errors.push(error); }
-        try { removeMessages?.(); } catch (error) { errors.push(error); }
         if (errors.length) throw Object.assign(new Error("Settings failed to stop."), {errors});
       };
-      removeMessages = i18n.registerMessages("settings", settingsMessages);
       removeSections.push(store.service.registerSection({
         id: "appearance.theme", group: "外观", title: "主题", order: 10,
         render: () => <ThemeSettings service={theme} i18n={i18n}/>,

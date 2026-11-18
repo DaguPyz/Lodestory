@@ -1,6 +1,6 @@
 import type {MessageCatalog} from "@lodestory/sdk/i18n";
 
-export const settingsMessages = {
+export default {
   en: {
     "设置": "Settings",
     "设置分类": "Settings sections",

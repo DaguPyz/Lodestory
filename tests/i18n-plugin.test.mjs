@@ -87,7 +87,7 @@ test("language writes apply after persistence, can be retried and finish before 
   await restored.stop();
 });
 
-test("the language settings contribution can withdraw while the application language stays active", async t => {
+test("built-in catalogs are registered and withdrawn as their plugins are enabled and disabled", async t => {
   const fixture = createMainFixture({tauri: false, configOverrides: {"i18n.locale": "en"}});
   const {createAppPlugins} = fixture.loadModule("app/appPlugins.ts");
   const {createAppRuntime} = fixture.loadModule("app/createAppRuntime.ts");
@@ -98,14 +98,75 @@ test("the language settings contribution can withdraw while the application lang
   t.after(() => runtime.stop());
   const {settingsKey} = fixture.requireSdk("@lodestory/sdk/settings");
   const {i18nKey} = fixture.requireSdk("@lodestory/sdk/i18n");
+  const {pluginRuntimeKey} = fixture.requireSdk("@lodestory/sdk/plugin-runtime");
   const settings = runtime.get(settingsKey);
   const i18n = runtime.get(i18nKey);
 
+  assert.equal(i18n.getSnapshot().t("快捷键", {namespace: "shortcuts"}), "Shortcuts");
+  assert.equal(i18n.getSnapshot().t("界面语言"), "Interface language");
   assert.equal(settings.open("general.language"), true);
   await assert.rejects(runtime.unmount("i18n"), /required by plugins/);
   await runtime.unmount("language-settings");
   assert.equal(settings.open("general.language"), false);
   assert.equal(settings.open("appearance.theme"), true);
   assert.equal(i18n.getSnapshot().locale, "en");
+  assert.equal(i18n.getSnapshot().t("界面语言"), "界面语言");
   assert.equal(i18n.getSnapshot().t("作品"), "Projects");
+
+  await runtime.get(pluginRuntimeKey).mount(plugins.find(plugin => plugin.id === "language-settings"));
+  assert.equal(settings.open("general.language"), true);
+  assert.equal(i18n.getSnapshot().t("界面语言"), "Interface language");
+});
+
+test("automatic catalog cleanup follows plugin rollback and withdrawal", async t => {
+  const fixture = createMainFixture({tauri: false, configOverrides: {"i18n.locale": "en"}});
+  const {createAppRuntime} = fixture.loadModule("app/createAppRuntime.ts");
+  const {createConfigPlugin} = fixture.loadModule("plugins/config/configPlugin.ts");
+  const {createI18nPlugin} = fixture.loadModule("plugins/i18n/i18nPlugin.ts");
+  const {withPluginCatalog} = fixture.loadModule("plugins/i18n/withPluginCatalog.ts");
+  const {i18nKey} = fixture.requireSdk("@lodestory/sdk/i18n");
+  const {pluginRuntimeKey} = fixture.requireSdk("@lodestory/sdk/plugin-runtime");
+  const runtime = await createAppRuntime([createConfigPlugin(), createI18nPlugin()]);
+  const i18n = runtime.get(i18nKey);
+  const plugins = runtime.get(pluginRuntimeKey);
+  const translate = () => i18n.getSnapshot().t("测试词条");
+  let activationFails = true;
+  let stopBlocked = false;
+  let cleanups = 0;
+  t.after(() => { stopBlocked = false; return runtime.stop(); });
+
+  const plugin = {
+    id: "catalog-probe", requires: [], provides: [],
+    async activate(context) {
+      assert.equal(translate(), "Probe");
+      context.onStop({
+        check() { if (stopBlocked) throw new Error("Probe is busy"); },
+        withdraw() { assert.equal(translate(), "Probe"); },
+      });
+      if (activationFails) throw new Error("Probe activation failed");
+    },
+    deactivate() {
+      assert.equal(translate(), "Probe");
+      cleanups++;
+    },
+  };
+  assert.strictEqual(withPluginCatalog(plugin, undefined), plugin);
+  await assert.rejects(plugins.mount(withPluginCatalog(plugin, {en: {"测试词条": ""}})), /Invalid translation/);
+  assert.equal(cleanups, 0);
+
+  const localized = withPluginCatalog(plugin, {en: {"测试词条": "Probe"}});
+  assert.deepEqual(Array.from(localized.requires), [i18nKey]);
+  await assert.rejects(plugins.mount(localized), /Probe activation failed/);
+  assert.equal(cleanups, 1);
+  assert.equal(translate(), "测试词条");
+
+  activationFails = false;
+  await plugins.mount(localized);
+  stopBlocked = true;
+  await assert.rejects(plugins.unmount(plugin.id), /stop check failed/);
+  assert.equal(translate(), "Probe");
+  stopBlocked = false;
+  await plugins.unmount(plugin.id);
+  assert.equal(cleanups, 2);
+  assert.equal(translate(), "测试词条");
 });

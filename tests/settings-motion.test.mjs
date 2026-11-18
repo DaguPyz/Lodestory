@@ -35,8 +35,7 @@ test("motion preference keeps the effective selection after a failed write and r
   const { MotionSettings } = f.loadSource("plugins/settings/MotionSettings.tsx");
   const { createMotionSettingsModel } = f.loadSource("plugins/settings/motionSettingsModel.ts");
   const {i18n, stop} = createI18nFixture(f.loadSource);
-  const {settingsMessages} = f.loadSource("plugins/settings/i18n.ts");
-  i18n.registerMessages("settings", settingsMessages);
+  i18n.registerMessages("settings", f.loadSource("plugins/settings/i18n.ts").default);
   const model = createMotionSettingsModel(f.config);
   const instance = {};
   const render = () => f.withHooks(instance, () => MotionSettings({ config: f.config, model, i18n }));

@@ -125,7 +125,8 @@ export function createI18nPlugin(): Plugin {
           if (catalogs.has(namespace)) throw new Error(`Messages for '${namespace}' are already registered.`);
           const catalog = copyCatalog(source);
           catalogs.set(namespace, catalog);
-          publish();
+          try { publish(); }
+          catch (error) { catalogs.delete(namespace); throw error; }
           return () => {
             if (catalogs.get(namespace) !== catalog) return;
             catalogs.delete(namespace);

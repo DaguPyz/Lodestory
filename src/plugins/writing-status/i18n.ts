@@ -1,6 +1,6 @@
 import type {MessageCatalog} from "@lodestory/sdk/i18n";
 
-export const writingStatusMessages = {
+export default {
   en: {
     "写作状态": "Writing status",
     "已保存": "Saved",

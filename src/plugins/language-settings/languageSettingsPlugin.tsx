@@ -3,7 +3,6 @@ import type {Plugin} from "@lodestory/sdk";
 import {i18nKey, type I18nService} from "@lodestory/sdk/i18n";
 import {settingsKey} from "@lodestory/sdk/settings";
 import {Button, Select} from "@lodestory/ui";
-import {messages} from "./i18n";
 import "./language-settings.css";
 
 function LanguageSettings({i18n}: {i18n: I18nService}) {
@@ -27,25 +26,20 @@ function LanguageSettings({i18n}: {i18n: I18nService}) {
 /** The settings entry is optional. Language state and saving belong to i18n. */
 export function createLanguageSettingsPlugin(): Plugin {
   let removeSection: (() => void) | undefined;
-  let removeMessages: (() => void) | undefined;
   return {
     id: "language-settings", requires: [settingsKey, i18nKey], provides: [],
     activate(context) {
       const i18n = context.get(i18nKey);
       const settings = context.get(settingsKey);
-      removeMessages = i18n.registerMessages("language-settings", messages);
       removeSection = settings.registerSection({
         id: "general.language", group: "通用", title: "语言", order: 25,
         render: () => <LanguageSettings i18n={i18n}/>,
       });
     },
     deactivate() {
-      try { removeSection?.(); }
-      finally {
-        removeSection = undefined;
-        removeMessages?.();
-        removeMessages = undefined;
-      }
+      const remove = removeSection;
+      removeSection = undefined;
+      remove?.();
     },
   };
 }

@@ -15,8 +15,7 @@ test("writing status counts extracted plain text and formats it in the selected 
   const {EditorStatusBar} = fixture.loadModule("plugins/writing-status/EditorStatusBar.tsx");
   const document = {saveState: "saved"};
   const {i18n, stop} = createI18nFixture(fixture.loadModule);
-  const {writingStatusMessages} = fixture.loadModule("plugins/writing-status/i18n.ts");
-  i18n.registerMessages("writing-status", writingStatusMessages);
+  i18n.registerMessages("writing-status", fixture.loadModule("plugins/writing-status/i18n.ts").default);
 
   const unavailable = textContent(EditorStatusBar({document, text: undefined, i18n}));
   assert.match(unavailable, /文稿 —/);
@@ -65,6 +64,7 @@ test("writing status follows the public body main visibility and preserves the p
   const {layoutKey} = fixture.requireSdk("@lodestory/sdk/layout");
   const {i18nKey} = fixture.requireSdk("@lodestory/sdk/i18n");
   const {i18n, stop} = createI18nFixture(fixture.loadModule);
+  i18n.registerMessages("writing-status", fixture.loadModule("plugins/writing-status/i18n.ts").default);
   const session = {id: "status-session", project: {id: "status-project", name: "正文", path: "/stories/status"}};
   const workbench = {getSnapshot: () => ({session}), subscribe: () => () => {}};
   const workspace = {getSnapshot: () => ({documents: [], activeId: null}), subscribe: () => () => {}};

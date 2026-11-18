@@ -104,7 +104,7 @@ function createHookReact() {
 async function loadHarness({scheduler = createScheduler(), counter = () => 777, clock = () => performance.now(), withChannel = true} = {}) {
   const {loadModule} = createMainFixture();
   const {i18n, stop} = createI18nFixture(loadModule);
-  i18n.registerMessages("writing-status", loadModule("plugins/writing-status/i18n.ts").writingStatusMessages);
+  i18n.registerMessages("writing-status", loadModule("plugins/writing-status/i18n.ts").default);
   const countExports = {countDocumentCharacters: counter};
   const chunkExports = {};
   const chunkContext = {

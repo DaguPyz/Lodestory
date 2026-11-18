@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { dirname, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
@@ -296,6 +296,12 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     if (cached) return cached;
     const relativePath = relative(sourceRoot, path);
     if (Object.hasOwn(moduleMocks, relativePath)) return {...moduleMocks[relativePath], __esModule: true};
+    if (relativePath === "app/builtinPluginCatalogs.ts") return {
+      getBuiltinPluginCatalog(id) {
+        const catalogPath = resolve(sourceRoot, "plugins", id, "i18n.ts");
+        return existsSync(catalogPath) ? load(catalogPath).default : undefined;
+      },
+    };
     if (relativePath === "plugins/welcome/WelcomePage.tsx") return { __esModule: true, WelcomePage: components.WelcomePage };
     if (relativePath === "plugins/navigation-layout/NavigationLayout.tsx") return { __esModule: true, NavigationLayout: components.NavigationLayout };
     if (relativePath === "plugins/document-tabs/DocumentTabs.tsx") return { __esModule: true, DocumentTabs: components.DocumentTabs };

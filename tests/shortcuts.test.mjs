@@ -57,7 +57,6 @@ function fixture() {
         sections.set(section.id, section);
         return () => sections.delete(section.id);
       }};
-      if (key.id === "app/i18n") return {registerMessages: () => () => {}};
       throw new Error(`Unexpected capability ${key?.id}`);
     },
     provide(key, value) { this.services.set(key, value); },

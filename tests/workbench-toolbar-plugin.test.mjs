@@ -6,12 +6,11 @@ import {createI18nFixture} from "./helpers/i18nFixture.mjs";
 
 const shortcutSnapshot = Object.freeze({commands: [], bindings: [], conflicts: []});
 const shortcutService = {subscribe: () => () => {}, getSnapshot: () => shortcutSnapshot, getShortcut: () => "⌘ ⇧ F", execute: async () => true};
-const mockI18n = {registerMessages: () => () => {}};
+const mockI18n = {};
 
 function toolbarI18n(fixture) {
   const {i18n} = createI18nFixture(fixture.loadModule);
-  const {toolbarMessages} = fixture.loadModule("plugins/workbench-toolbar/i18n.ts");
-  i18n.registerMessages("workbench-toolbar", toolbarMessages);
+  i18n.registerMessages("workbench-toolbar", fixture.loadModule("plugins/workbench-toolbar/i18n.ts").default);
   return i18n;
 }
 

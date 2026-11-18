@@ -28,6 +28,7 @@ import {createWritingStatusPlugin} from "../plugins/writing-status/writingStatus
 import {createWorkbenchToolbarPlugin} from "../plugins/workbench-toolbar/workbenchToolbarPlugin";
 import {createConfigPlugin} from "../plugins/config/configPlugin";
 import {createI18nPlugin} from "../plugins/i18n/i18nPlugin";
+import {withPluginCatalog} from "../plugins/i18n/withPluginCatalog";
 import {createLanguageSettingsPlugin} from "../plugins/language-settings/languageSettingsPlugin";
 import {createSettingsPlugin} from "../plugins/settings/settingsPlugin";
 import {createProjectSearchPlugin} from "../plugins/project-search/projectSearchPlugin";
@@ -36,6 +37,7 @@ import {createShortcutsPlugin} from "../plugins/shortcuts";
 import {createPluginPackagesPlugin} from "../plugins/plugin-packages/pluginPackagesPlugin";
 import {createPluginManagementPlugin} from "../plugins/plugin-management/pluginManagementPlugin";
 import {createExternalPluginsPlugin} from "../plugins/external-plugins/externalPluginsPlugin";
+import {getBuiltinPluginCatalog} from "./builtinPluginCatalogs";
 
 /** 应用选择哪些插件；启动和渲染流程不根据具体插件添加分支。 */
 export function createAppPlugins(): readonly Plugin[] {
@@ -77,5 +79,5 @@ export function createAppPlugins(): readonly Plugin[] {
         createLanguageSettingsPlugin(),
         createExternalPluginsPlugin(),
         createPluginManagementPlugin(),
-    ];
+    ].map(plugin => withPluginCatalog(plugin, getBuiltinPluginCatalog(plugin.id)));
 }

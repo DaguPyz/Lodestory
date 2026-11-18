@@ -17,8 +17,7 @@ async function mount(f) {
 }
 function settingsI18n(f) {
   const {i18n} = createI18nFixture(f.loadModule);
-  const {settingsMessages} = f.loadModule("plugins/settings/i18n.ts");
-  i18n.registerMessages("settings", settingsMessages);
+  i18n.registerMessages("settings", f.loadModule("plugins/settings/i18n.ts").default);
   return i18n;
 }
 function renderSettings(f, service) {

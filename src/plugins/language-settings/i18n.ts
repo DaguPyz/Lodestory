@@ -1,6 +1,6 @@
 import type {MessageCatalog} from "@lodestory/sdk/i18n";
 
-export const messages = {
+export default {
   en: {
     "通用": "General",
     "语言": "Language",

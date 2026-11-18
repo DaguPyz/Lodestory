@@ -1,6 +1,6 @@
 import type {MessageCatalog} from "@lodestory/sdk/i18n";
 
-export const navigationMessages = {
+export default {
   en: {
     "应用导航": "App navigation",
     "小说创作工作空间": "Fiction workspace",

@@ -10,7 +10,6 @@ import {i18nKey} from "@lodestory/sdk/i18n";
 import {DefaultLayout} from "./DefaultLayout";
 import {createLayoutStore} from "./layoutStore";
 import {createNavigationWidthModel} from "./navigationWidth";
-import {layoutMessages} from "./i18n";
 
 /** 默认工作台布局；其他实现只需提供相同的 layoutKey，无需修改内容插件。 */
 export function createDefaultLayoutPlugin(): Plugin {
@@ -27,7 +26,6 @@ export function createDefaultLayoutPlugin(): Plugin {
       const widths = createNavigationWidthModel(context.get(configKey));
       let removeWrapper: (() => void) | undefined;
       let removeCapability: (() => void) | undefined;
-      let removeMessages: (() => void) | undefined;
       const store = createLayoutStore(remove => flushSync(remove));
       cleanup = () => {
         try { removeWrapper?.(); }
@@ -35,11 +33,10 @@ export function createDefaultLayoutPlugin(): Plugin {
           try { store.dispose(); }
           finally {
             try { widths.dispose(); }
-            finally { try { removeCapability?.(); } finally { removeMessages?.(); } }
+            finally { removeCapability?.(); }
           }
         }
       };
-      removeMessages = i18n.registerMessages("default-layout", layoutMessages);
       if (typeof window !== "undefined") store.setViewport(window.innerWidth, 16);
       const service: LayoutService = {
         View: ({active}) => <DefaultLayout store={store} widths={widths} active={active} ErrorBoundary={ErrorBoundary} i18n={i18n}/>,

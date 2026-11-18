@@ -3,13 +3,11 @@ import type {Plugin} from "@lodestory/sdk";
 import {configKey, type ConfigItem} from "@lodestory/sdk/config";
 import {shortcutsKey, shortcutScopeIds} from "@lodestory/sdk/shortcuts";
 import {settingsKey} from "@lodestory/sdk/settings";
-import {i18nKey} from "@lodestory/sdk/i18n";
 import {uiInteractionKey, uiKey} from "@lodestory/sdk/ui";
 import type {ConfigValue} from "@lodestory/sdk/config";
 import {createShortcutsStore, normalizeShortcut} from "./shortcutsStore";
 import {createShortcutSettingsModel} from "./shortcutSettingsModel";
 import {ShortcutSettings} from "./ShortcutSettings";
-import {settingsMessages} from "./i18n";
 
 type Overrides = Readonly<Record<string, string | null>>;
 
@@ -52,23 +50,21 @@ function ShortcutListener({children, hasActiveOverlay, handleKeyDown}: {
 export function createShortcutsPlugin(): Plugin {
   let dispose: (() => Promise<void>) | undefined;
   return {
-    id: "shortcuts", requires: [uiKey, uiInteractionKey, configKey, settingsKey, i18nKey], provides: [shortcutsKey],
+    id: "shortcuts", requires: [uiKey, uiInteractionKey, configKey, settingsKey], provides: [shortcutsKey],
     async activate(context) {
       const ui = context.get(uiKey), config = context.get(configKey);
       const interaction = context.get(uiInteractionKey);
       const settings = context.get(settingsKey);
-      const i18n = context.get(i18nKey);
       let removeConfig: (() => void) | undefined;
       let removeConfigSubscription: (() => void) | undefined;
       let removeWrapper: (() => void) | undefined;
       let removeSettingsSection: (() => void) | undefined;
-      let removeMessages: (() => void) | undefined;
       let removeApplicationScope: (() => void) | undefined;
       let store: ReturnType<typeof createShortcutsStore> | undefined;
       let settingsModel: ReturnType<typeof createShortcutSettingsModel> | undefined;
       const stop = async () => {
         const errors: unknown[] = [];
-        for (const remove of [removeWrapper, removeSettingsSection, removeMessages]) {
+        for (const remove of [removeWrapper, removeSettingsSection]) {
           try { remove?.(); } catch (error) { errors.push(error); }
         }
         try { await settingsModel?.dispose(); } catch (error) { errors.push(error); }
@@ -97,7 +93,6 @@ export function createShortcutsPlugin(): Plugin {
         context.provide(shortcutsKey, shortcuts);
         settingsModel = createShortcutSettingsModel(shortcuts);
         const model = settingsModel;
-        removeMessages = i18n.registerMessages("shortcuts", settingsMessages);
         removeSettingsSection = settings.registerSection({
           id: "shortcuts.keymap", group: "操作", title: "快捷键", order: 30,
           render: () => <ShortcutSettings shortcuts={shortcuts} model={model}/>,

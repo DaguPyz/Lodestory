@@ -1,6 +1,6 @@
 import type {MessageCatalog} from "@lodestory/sdk/i18n";
 
-export const welcomeMessages = {
+export default {
   en: {
     "作品": "Projects",
     "欢迎使用 Lodestory": "Welcome to Lodestory",

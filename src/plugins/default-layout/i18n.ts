@@ -1,6 +1,6 @@
 import type {MessageCatalog} from "@lodestory/sdk/i18n";
 
-export const layoutMessages = {
+export default {
   en: {
     "导航内容": "Navigation panel",
     "辅助内容": "Auxiliary panel",

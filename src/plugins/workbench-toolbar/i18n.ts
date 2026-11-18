@@ -1,6 +1,6 @@
 import type {MessageCatalog} from "@lodestory/sdk/i18n";
 
-export const toolbarMessages = {
+export default {
   en: {
     "工作台工具栏": "Workbench toolbar",
     "{name}项目菜单": "Project menu for {name}",

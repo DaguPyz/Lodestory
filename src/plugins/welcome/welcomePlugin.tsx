@@ -7,12 +7,10 @@ import {workbenchKey} from "@lodestory/sdk/workbench";
 import {themeKey} from "@lodestory/sdk/theme";
 import {errorUiKey} from "@lodestory/sdk/error";
 import {i18nKey} from "@lodestory/sdk/i18n";
-import {welcomeMessages} from "./i18n";
 
 /** 向导航布局登记欢迎页；项目进入流程交给工作台能力。 */
 export function createWelcomePlugin(): Plugin {
     let removePage: (() => void) | undefined;
-    let removeMessages: (() => void) | undefined;
 
     return {
         id: "welcome",
@@ -24,7 +22,6 @@ export function createWelcomePlugin(): Plugin {
             const workbench = context.get(workbenchKey);
             const {ErrorBoundary} = context.get(errorUiKey);
             const i18n = context.get(i18nKey);
-            removeMessages = i18n.registerMessages("welcome", welcomeMessages);
             removePage = context.track(navigation.registerPage({
                 id: appPages.welcome,
                 navigation: {label: "作品", icon: <Icon name="folder" />, group: "primary", order: 0},
@@ -39,11 +36,7 @@ export function createWelcomePlugin(): Plugin {
         deactivate() {
             const remove = removePage;
             removePage = undefined;
-            try { remove?.(); }
-            finally {
-                removeMessages?.();
-                removeMessages = undefined;
-            }
+            remove?.();
         },
     };
 }

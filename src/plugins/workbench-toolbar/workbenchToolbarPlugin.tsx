@@ -5,7 +5,6 @@ import {layoutKey} from "@lodestory/sdk/layout";
 import {shortcutCommandIds, shortcutsKey} from "@lodestory/sdk/shortcuts";
 import {settingsKey} from "@lodestory/sdk/settings";
 import {i18nKey} from "@lodestory/sdk/i18n";
-import {toolbarMessages} from "./i18n";
 import {WorkbenchToolbar, ToolbarRecovery} from "./WorkbenchToolbar";
 import {workbenchToolbarId} from "./workbenchToolbarIds";
 import {createWorkbenchToolbarModel, type WorkbenchToolbarModel} from "./workbenchToolbarModel";
@@ -15,7 +14,6 @@ export function createWorkbenchToolbarPlugin(): Plugin {
   const models = new Map<string, WorkbenchToolbarModel>();
   const removeViews: (() => void)[] = [];
   let removeParticipant: (() => Promise<void>) | undefined;
-  let removeMessages: (() => void) | undefined;
   return {
     id: "workbench-toolbar",
     requires: [workbenchKey, uiKey, layoutKey, shortcutsKey, settingsKey, i18nKey],
@@ -27,7 +25,6 @@ export function createWorkbenchToolbarPlugin(): Plugin {
       const shortcuts = context.get(shortcutsKey);
       const settings = context.get(settingsKey);
       const i18n = context.get(i18nKey);
-      removeMessages = i18n.registerMessages("workbench-toolbar", toolbarMessages);
       removeParticipant = context.track(workbench.registerParticipant({
         id: "workbench-toolbar",
         label: "工具栏",
@@ -63,8 +60,6 @@ export function createWorkbenchToolbarPlugin(): Plugin {
       const remove = removeParticipant;
       removeParticipant = undefined;
       try { await remove?.(); } catch (error) { errors.push(error); }
-      try { removeMessages?.(); } catch (error) { errors.push(error); }
-      removeMessages = undefined;
       if (errors.length) throw Object.assign(new Error("Workbench toolbar failed to stop."), {errors});
     },
   };

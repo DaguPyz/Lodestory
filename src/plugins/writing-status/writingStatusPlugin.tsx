@@ -6,7 +6,6 @@ import {layoutKey, type LayoutContent, type LayoutService} from "@lodestory/sdk/
 import {workbenchKey, type WorkbenchService} from "@lodestory/sdk/workbench";
 import {i18nKey, type I18nService} from "@lodestory/sdk/i18n";
 import {EditorStatusBar} from "./EditorStatusBar";
-import {writingStatusMessages} from "./i18n";
 import "./writing-status.css";
 
 const contentId = "writing-status.status";
@@ -14,7 +13,6 @@ const contentId = "writing-status.status";
 /** Writing status reads the current document directly from the documents workspace. */
 export function createWritingStatusPlugin(): Plugin {
   let removeContent: (() => void) | undefined;
-  let removeMessages: (() => void) | undefined;
   return {
     id: "writing-status",
     requires: [workbenchKey, documentsKey, layoutKey, bodyEditorKey, i18nKey],
@@ -25,7 +23,6 @@ export function createWritingStatusPlugin(): Plugin {
       const layout = context.get(layoutKey);
       const bodyEditor = context.get(bodyEditorKey);
       const i18n = context.get(i18nKey);
-      removeMessages = i18n.registerMessages("writing-status", writingStatusMessages);
       const content: LayoutContent = {
         id: contentId,
         title: "写作状态",
@@ -37,11 +34,7 @@ export function createWritingStatusPlugin(): Plugin {
     deactivate() {
       const remove = removeContent;
       removeContent = undefined;
-      try { remove?.(); }
-      finally {
-        removeMessages?.();
-        removeMessages = undefined;
-      }
+      remove?.();
     },
   };
 }

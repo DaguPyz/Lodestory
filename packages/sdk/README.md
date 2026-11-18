@@ -149,9 +149,9 @@ UI 插件声明并导出 `uiInitialPageConfig`（ID 为 `ui.initialPage`，默�
 
 ## 国际化
 
-各插件在自己的目录下用 `i18n.ts` 导出词表。插件声明 `requires: [i18nKey]`，激活时调用 `registerMessages("example", {en: {"打开 {name}": "Open {name}"}})`，停用时在撤回界面后注销词表。登记名采用小写字母、数字和连字符，以字母开头。各语言只需登记已有译文。
+内置插件在 `src/plugins/<插件 ID>/i18n.ts` 默认导出词表，例如 `export default {en: {"打开 {name}": "Open {name}"}}`。装配时会为有词表的插件补上 `i18nKey` 依赖，激活时自动登记，激活失败或停用时在界面清理后撤回。各语言只需登记已有译文。
 
-界面订阅 `getSnapshot()` 与 `subscribe()`，用快照的 `t("打开 {name}", {values: {name}})` 按原文查询当前语言，缺译时显示原文。导航、布局和设置直接用登记的标题和分组名称查译文，设置仍按原始 `group` 归组。
+直接使用翻译服务的插件声明 `requires: [i18nKey]`。界面订阅 `getSnapshot()` 与 `subscribe()`，用快照的 `t("打开 {name}", {values: {name}})` 按原文查询当前语言，缺译时显示原文。导航、布局和设置直接用登记的标题和分组名称查译文，设置仍按原始 `group` 归组。
 
 同一原文登记了不同译文时，普通查询显示原文。需要选定译法时，传入 `{namespace: "example"}` 查该插件的词表。数量词条可登记 `one`、`other` 等形式，由 `t` 的 `count` 参数按当前语言选择。
 

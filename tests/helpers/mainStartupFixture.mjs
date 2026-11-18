@@ -562,6 +562,7 @@ export function createMainFixture({ tauri = true, nativeSetGate = null, nativeSe
     rootCalls,
     roots,
     rootElement,
+    documentRoot,
     body,
     nativeCalls,
     tauriCalls,

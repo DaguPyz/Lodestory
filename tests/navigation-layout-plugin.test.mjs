@@ -240,6 +240,7 @@ test("navigation validates registrations and allows runtime actions", async () =
       if (key === themeKey) return {};
       if (key === windowShellKey) return Object.freeze({View: FakeWindowShell});
       if (key === pluginPackagesKey) return {registerCapability() {return () => {};}};
+      if (key.id === "app/i18n") return {registerMessages: () => () => {}};
       throw new Error(`Unexpected dependency '${key.id}'.`);
     },
     provide(key, value) { services.set(key, value); },

@@ -905,6 +905,7 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       await clickAsset("林舟");
       assert.equal(await centerName(), "林舟");
       await assertPath("林舟");
+      const graphCanvas = '.canvas-surface[aria-label="资产关系图"]';
       const graphPosition = () => evaluate(`(() => {
         const {x, y} = document.querySelector('.timeline-focus-scene').getBoundingClientRect();
         const breadcrumb = document.querySelector('.timeline-focus-breadcrumbs').getBoundingClientRect();
@@ -916,6 +917,7 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       await assertPath("林舟");
       await press(96, 204, "left", 1);
       await move(165, 238, "left");
+      await waitForFrame();
       assert.deepEqual(await graphPosition(), {...graphBeforePan, x: graphBeforePan.x + 69, y: graphBeforePan.y + 34},
         "the relationship graph follows the pointer while the breadcrumb stays in place");
       await release(192, 263, "left", 1);
@@ -928,6 +930,21 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       await release(169, 231, "middle", 1);
       assert.deepEqual(await graphPosition(), {...graphBeforePan, x: graphBeforePan.x + 73, y: graphBeforePan.y + 27},
         "middle-button drag pans the relationship graph too");
+      await evaluate(`(() => {
+        const surface = document.querySelector(${JSON.stringify(graphCanvas)});
+        surface.focus({preventScroll: true});
+        for (const key of ['ArrowRight', 'ArrowDown']) {
+          for (let step = 0; step < 12; step++) surface.dispatchEvent(new KeyboardEvent('keydown', {key, shiftKey: true, bubbles: true}));
+        }
+      })()`);
+      await waitForFrame();
+      assert.deepEqual(await graphPosition(), {...graphBeforePan, x: graphBeforePan.x + 73 - 2880, y: graphBeforePan.y + 27 - 2880},
+        "relationship panning continues beyond the diagram in both axes");
+      assert.deepEqual(await evaluate(`(() => {
+        const surface = document.querySelector(${JSON.stringify(graphCanvas)});
+        const {overflowX, overflowY} = getComputedStyle(surface);
+        return [overflowX, overflowY, surface.scrollLeft, surface.scrollTop];
+      })()`), ["clip", "clip", 0, 0], "the relationship surface clips at the view without creating a scroll container");
       await cdp("Input.dispatchKeyEvent", {type: "keyDown", key: "Home", code: "Home", windowsVirtualKeyCode: 36});
       await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: "Home", code: "Home", windowsVirtualKeyCode: 36});
       assert.deepEqual(await graphPosition(), graphBeforePan, "Home centers the relationship graph");
@@ -953,14 +970,12 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       const graphZoomState = () => evaluate(`(() => {
         const toolbar = document.querySelector(${JSON.stringify(graphToolbar)});
         const scene = document.querySelector('.timeline-focus-scene').getBoundingClientRect();
-        const viewport = document.querySelector('.timeline-focus-viewport');
         const sizes = ['.timeline-focus-relation-name', '.timeline-focus-asset-name',
           '.timeline-focus-asset-type', '.timeline-focus-relation-label'].map(selector =>
           parseFloat(getComputedStyle(document.querySelector(selector)).fontSize));
         return {zoom: toolbar.querySelector('.canvas-zoom-value').textContent, sizes,
           checked: toolbar.querySelector('[role=switch]').getAttribute('aria-checked'),
-          width: scene.width, x: scene.x + scene.width / 2, y: scene.y + scene.height / 2,
-          scrollLeft: viewport.scrollLeft, scrollTop: viewport.scrollTop};
+          width: scene.width, x: scene.x + scene.width / 2, y: scene.y + scene.height / 2};
       })()`);
       const atOriginalZoom = await graphZoomState();
       assert.equal(atOriginalZoom.zoom, "100%");
@@ -974,7 +989,10 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       assert.deepEqual(await graphZoomState(), {
         ...at125, checked: "true", sizes: at125.sizes.map(size => size * 1.25),
       }, "switching modes scales graph labels in place");
-      const pointer = {x: 455, y: 300};
+      const pointer = await evaluate(`(() => {
+        const node = document.querySelector('.timeline-focus-relation-center-node').getBoundingClientRect();
+        return {x: Math.round(node.x + node.width * 0.67), y: Math.round(node.y + node.height * 0.4)};
+      })()`);
       const wheelFactor = Math.exp(0.2);
       await mouse("mouseWheel", pointer.x, pointer.y, {deltaY: -100, modifiers: 2});
       await waitFor(async () => (await graphZoomState()).zoom === "153%", "Ctrl-wheel does not zoom the graph");
@@ -1002,7 +1020,7 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       const maxRadius = atOriginalZoom.width * 2;
       assert.ok(Math.abs(atMaximumZoom.x + maxRadius - (pointer.x + (afterGraphWheel.x - pointer.x) * maxZoomFactor)) < 1
         && Math.abs(atMaximumZoom.y + maxRadius - (pointer.y + (afterGraphWheel.y - pointer.y) * maxZoomFactor)) < 1,
-      "cursor anchoring survives the switch from minimum stage size to diagram size");
+      "cursor anchoring holds over the relationship node through large zoom changes");
       assert.equal(await evaluate("window.__finishGraphZoom()"), 0,
         "zoom keeps the anchored viewport throughout the update without falling back to the centered layout");
       assert.equal(await evaluate("getComputedStyle(document.querySelector('.timeline-focus-relation-name')).fontSize"), "64px");
@@ -1037,6 +1055,7 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       assert.deepEqual(await highlight(), {center: true, peers: ["陈师傅"], pressed: ["师徒 / 传授功法"], lineHighlighted: true});
       await clickAsset("陈师傅");
       assert.equal(await centerName(), "陈师傅");
+      assert.equal((await fixture("relationView", -2)).disposed, true, "switching center assets releases the old graph viewport");
       assert.equal((await graphZoomState()).checked, "true", "the zoom mode follows the graph while browsing its nodes");
       await assertPath("林舟", "陈师傅");
       assert.deepEqual(await highlight(), {center: false, peers: [], pressed: [], lineHighlighted: false});
@@ -1066,8 +1085,33 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       await backToEvent();
       await fixture("setFocusAssets", true, 0, 1);
       await clickAsset("林舟");
+      const filterTrigger = ".timeline-focus-filter > button";
+      const filterModes = ".timeline-focus-filter-modes";
+      const filterPopup = ".timeline-focus-filter-popup";
+      const filterMode = label => `${filterModes} button[aria-label="${label}"]`;
+      const filterLayers = () => evaluate(`({
+        modes: Boolean(document.querySelector('${filterModes}[data-open]')),
+        categories: Boolean(document.querySelector('${filterPopup}[data-open]')),
+      })`);
+      const openFilterModes = async () => {
+        await clickSelector(filterTrigger);
+        await waitFor(() => evaluate(`(() => {
+          const modes = document.querySelector('${filterModes}[data-open]');
+          return modes && getComputedStyle(modes).opacity === '1';
+        })()`), "the filter mode transition did not finish");
+      };
+      const dismissFilterLayer = async () => {
+        await cdp("Input.dispatchKeyEvent", {type: "keyDown", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
+        await cdp("Input.dispatchKeyEvent", {type: "keyUp", key: "Escape", code: "Escape", windowsVirtualKeyCode: 27});
+      };
+      await openFilterModes();
+      await clickSelector(filterMode("排除"));
+      assert.deepEqual(await filterLayers(), {modes: true, categories: true});
       await fixture("showRelations", false);
       await waitFor(() => evaluate("!document.querySelector('.timeline-focus-relation-center')"), "Removing the source should return to the event scene.");
+      assert.equal((await fixture("relationView")).disposed, true, "removing the relation source releases the graph viewport");
+      assert.equal(await evaluate(`Boolean(document.querySelector('${filterTrigger}, ${filterModes}, ${filterPopup}'))`), false,
+        "removing the relation source also dismisses the category filter");
       await assertPath();
       assert.deepEqual((await focus()).assets, ["林舟"], "event assets remain visible without the optional relation source");
       assert.equal(await evaluate("document.querySelectorAll('button.timeline-focus-asset-node').length"), 0);
@@ -1080,22 +1124,25 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       await clickAsset("林舟");
       const relationEntry = await evaluate(`(() => {
         const scene = document.querySelector('.timeline-focus-scene');
-        const port = scene.closest('.timeline-focus-viewport');
+        const {width, height, x, y} = scene.getBoundingClientRect();
+        const port = scene.closest('.canvas-surface').getBoundingClientRect();
         const nodes = [...scene.querySelectorAll('.timeline-focus-asset-node')];
         const delays = nodes.flatMap(node => node.getAnimations().map(animation => animation.effect.getTiming().delay));
         return {
           ids: nodes.map(node => node.closest('[data-peer-id]').dataset.peerId),
-          centered: Math.abs(port.scrollLeft - (port.scrollWidth - port.clientWidth) / 2) < 2
-            && Math.abs(port.scrollTop - (port.scrollHeight - port.clientHeight) / 2) < 2,
+          centered: Math.abs(x + width / 2 - port.x - port.width / 2) < 1
+            && Math.abs(y + height / 2 - port.y - port.height / 2) < 1,
+          pan: {x: (width - port.width) / 2, y: (height - port.height) / 2},
           phases: new Set(delays).size,
           fades: scene.querySelectorAll('.timeline-focus-relation-phase').length,
         };
       })()`);
       assert.ok(relationEntry.centered && relationEntry.ids.length < 127 && relationEntry.ids.length > 0,
-        "the first screen mounts only nearby nodes without shrinking the scrollable diagram");
+        "the first screen mounts only nearby nodes in the full diagram");
       assert.equal(relationEntry.phases, 3, "the first screen spreads nodes across three start times");
       assert.equal(relationEntry.fades, 3, "each batch shares one line layer and one label fade");
-      await evaluate(`document.querySelector('.timeline-focus-viewport').scrollTo(0, 0)`);
+      const {x: panX, y: panY} = relationEntry.pan;
+      await fixture("panRelation", panX, panY);
       const outerLabel = await waitFor(() => evaluate(`(() => {
         const initial = new Set(${JSON.stringify(relationEntry.ids)});
         const labels = [...document.querySelectorAll('.timeline-focus-relation-label')];
@@ -1105,22 +1152,19 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
           return node.contains(document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2));
         });
         return label?.dataset.peerId;
-      })()`), "No initially unmounted relationship was revealed by scrolling.");
+      })()`), "No initially unmounted relationship was revealed by panning.");
       await clickSelector(`button.timeline-focus-relation-label[data-peer-id="${outerLabel}"]`);
       assert.equal(await evaluate(`document.querySelector('.timeline-focus-relation-label[aria-pressed=true]').dataset.peerId`), outerLabel);
       assert.ok((await highlight()).lineHighlighted, "a deferred relationship can be selected and draws a highlighted line");
       await evaluate(`document.querySelector('.timeline-focus-relation-label[aria-pressed=true]').focus({preventScroll: true})`);
-      await evaluate(`(() => {
-        const port = document.querySelector('.timeline-focus-viewport');
-        port.scrollTo((port.scrollWidth - port.clientWidth) / 2, (port.scrollHeight - port.clientHeight) / 2);
-      })()`);
+      await fixture("panRelation", -panX, -panY);
       await waitFor(() => evaluate(`document.activeElement.dataset.peerId === "${outerLabel}"
         && document.querySelectorAll('.timeline-focus-asset[data-peer-id]').length >= ${relationEntry.ids.length}`),
-        "Scrolling keeps the keyboard-focused outer label mounted.");
-      await evaluate("document.querySelector('.timeline-focus-viewport').focus({preventScroll: true})");
+        "Panning keeps the keyboard-focused outer label mounted.");
+      await evaluate(`document.querySelector(${JSON.stringify(graphCanvas)}).focus({preventScroll: true})`);
       await waitFor(() => evaluate(`!document.querySelector('.timeline-focus-relation-label[data-peer-id="${outerLabel}"]')`),
-        "Scrolling back culls the offscreen label.");
-      await evaluate(`document.querySelector('.timeline-focus-viewport').scrollTo(0, 0)`);
+        "Panning back culls the offscreen label.");
+      await fixture("panRelation", panX, panY);
       await waitFor(() => evaluate(`document.querySelector('.timeline-focus-relation-label[aria-pressed=true]')?.dataset.peerId === "${outerLabel}"`),
         "Returning to the selected outer relationship restores its highlight.");
       await clickSelector(`${graphToolbar} > button`);
@@ -1134,6 +1178,79 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
       })`);
       assert.ok(labelsAtMinimum.labels > 0 && labelsAtMinimum.labels < labelsAtMinimum.nodes && labelsAtMinimum.descriptions > 0,
         "dense zoom hides colliding labels and keeps their descriptions available from the nodes");
+      const selectedMode = () => evaluate(`document.querySelector('${filterModes} [aria-pressed="true"]').getAttribute('aria-label')`);
+      const filterEntry = () => evaluate(`(() => {
+        const button = document.querySelector('${filterTrigger}');
+        return {text: button.textContent, label: button.getAttribute('aria-label'), active: button.hasAttribute('data-filter-active')};
+      })()`);
+      const filterHint = () => evaluate(`document.querySelector('${filterPopup} .timeline-focus-filter-caption').textContent`);
+      const graphStatus = () => evaluate("document.querySelector('.timeline-focus-relation-center [role=status]')?.textContent");
+      const relationSegments = () => evaluate(`([...document.querySelectorAll('.timeline-focus-relation-line')])
+        .reduce((segments, path) => segments + path.getAttribute('d').split('M').length - 1, 0)`);
+      const category = id => `${filterPopup} input[type=checkbox][value="${id}"]`;
+      const emptyFilter = "没有符合筛选条件的关联资产";
+      await openFilterModes();
+      assert.deepEqual(await filterLayers(), {modes: true, categories: false});
+      assert.equal(await evaluate(`(() => {
+        const modes = document.querySelector('${filterModes}').getBoundingClientRect();
+        const trigger = document.querySelector('${filterTrigger}').getBoundingClientRect();
+        const toolbar = document.querySelector('.timeline-focus-toolbar').getBoundingClientRect();
+        const path = document.querySelector('.timeline-focus-breadcrumbs').getBoundingClientRect();
+        const centerY = bounds => bounds.top + bounds.height / 2;
+        return Math.abs(trigger.right - toolbar.right) < 1 && modes.right < trigger.left
+          && Math.abs(centerY(modes) - centerY(trigger)) <= 2 && modes.left >= path.right - 0.5;
+      })()`), true, "the mode icons share the trigger row and leave room for the breadcrumb path");
+      assert.equal(await selectedMode(), "全部");
+      assert.deepEqual(await filterEntry(), {text: "", label: "分类筛选", active: false});
+      await clickSelector(filterMode("包含"));
+      assert.deepEqual(await filterLayers(), {modes: true, categories: true});
+      await waitForFrame();
+      assert.equal(await evaluate(`(() => {
+        const modes = document.querySelector('${filterModes}').getBoundingClientRect();
+        const options = document.querySelector('${filterPopup}').getBoundingClientRect();
+        return options.top >= modes.bottom && Math.abs(options.right - modes.right) < 1;
+      })()`), true, "the category options open directly beneath the mode icons");
+      assert.deepEqual(await filterEntry(), {text: "", label: "分类筛选，包含 0 类", active: true});
+      assert.equal(await filterHint(), "勾选要显示的分类");
+      assert.equal(await graphStatus(), emptyFilter);
+      await clickSelector(category("person"));
+      assert.equal(await filterHint(), "只显示所选分类");
+      assert.deepEqual((await focus()).assets, ["陈师傅", "闻溪"]);
+      assert.equal(await centerName(), "林舟");
+      assert.equal(await relationSegments(), 2);
+
+      await clickSelector(filterMode("排除"));
+      assert.equal(await filterHint(), "隐藏所选分类");
+      const places = (await focus()).assets;
+      assert.ok(places.length > 0 && places.every(name => name.startsWith("外圈资产")));
+      await clickSelector(category("place"));
+      assert.equal(await graphStatus(), emptyFilter);
+      assert.equal(await evaluate("document.querySelectorAll('.timeline-focus-relation-line, .timeline-focus-relation-label').length"), 0);
+      await clickSelector(filterMode("全部"));
+      assert.deepEqual(await filterLayers(), {modes: true, categories: false});
+      assert.equal((await focus()).assets.length, labelsAtMinimum.nodes);
+
+      await clickSelector(filterMode("包含"));
+      await clickSelector(category("person"));
+      await dismissFilterLayer();
+      assert.deepEqual(await filterLayers(), {modes: true, categories: false});
+      await dismissFilterLayer();
+      assert.deepEqual(await filterLayers(), {modes: false, categories: false});
+      assert.equal(await centerName(), "林舟", "Escape dismisses the filter popup first");
+      await openFilterModes();
+      assert.deepEqual(await filterLayers(), {modes: true, categories: false});
+      assert.equal(await selectedMode(), "包含", "opening the modes again retains the category filter");
+      await clickSelector(filterTrigger);
+      await waitFor(() => evaluate("!document.querySelector('.timeline-focus-filter[data-modes-visible]')"),
+        "the closed mode strip did not release its toolbar space");
+      await mouse("mouseWheel", 600, 352, {deltaY: -1600, modifiers: 2});
+      await waitFor(() => evaluate(`document.querySelector('${graphToolbar} .canvas-zoom-value').textContent === '400%'`),
+        "the filtered graph did not zoom in");
+      assert.equal(await relationSegments(), 2, "connections to filtered categories stay hidden at high zoom");
+      await clickSelector(`${graphToolbar} > button`);
+      await clickAsset("陈师傅");
+      assert.deepEqual(await filterEntry(), {text: "", label: "分类筛选", active: false},
+        "the new center starts with all categories");
       await fixture("setDenseRelations", false);
       await backToTimeline();
       await waitFor(() => evaluate("!document.querySelector('.timeline-focus-assets')"), "The large graph did not close.");
@@ -1228,6 +1345,17 @@ test("timeline canvas virtualizes dense events and preserves real drag, zoom, ed
         ["师徒 / 传授功法", "死敌"], "the narrow view keeps the same relationship descriptions beside the assets");
       await clickSelector('button.timeline-focus-relation-list-label[aria-label^="师徒"]');
       assert.deepEqual(await highlight(), {center: true, peers: ["陈师傅"], pressed: ["师徒 / 传授功法"], lineHighlighted: false});
+      await openFilterModes();
+      await clickSelector(filterMode("排除"));
+      await clickSelector(category("person"));
+      assert.equal(await evaluate(`(() => {
+        const options = document.querySelector('${filterPopup}').getBoundingClientRect();
+        const frame = document.querySelector('.timeline-canvas-frame').getBoundingClientRect();
+        return options.left >= frame.left && options.right <= frame.right;
+      })()`), true, "the options panel fits within the narrow timeline");
+      assert.equal(await graphStatus(), emptyFilter);
+      assert.deepEqual((await focus()).assets, []);
+      assert.equal((await highlight()).center, false, "filtering a category clears the hidden label's highlight in the list");
       await backToEvent();
       await backToTimeline();
       await fixture("showRelations", false);

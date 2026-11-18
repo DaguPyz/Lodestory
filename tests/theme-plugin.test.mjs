@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { deferred, fixture } from "./helpers/themeFixture.mjs";
+import { createI18nFixture } from "./helpers/i18nFixture.mjs";
 
 const darkId = "lodestory.builtin.dark";
 const lightId = "lodestory.builtin.light";
@@ -14,9 +15,15 @@ async function mount(f) {
   await f.prepareUi();
   return plugin;
 }
+function settingsI18n(f) {
+  const {i18n} = createI18nFixture(f.loadModule);
+  const {settingsMessages} = f.loadModule("plugins/settings/i18n.ts");
+  i18n.registerMessages("settings", settingsMessages);
+  return i18n;
+}
 function renderSettings(f, service) {
   const { ThemeSettings } = f.loadModule("plugins/settings/ThemeSettings.tsx");
-  return f.renderToStaticMarkup(f.React.createElement(ThemeSettings, {service}));
+  return f.renderToStaticMarkup(f.React.createElement(ThemeSettings, {service, i18n: settingsI18n(f)}));
 }
 function renderMotionSettings(f, motionPreference = "system") {
   const { MotionSettings } = f.loadModule("plugins/settings/MotionSettings.tsx");
@@ -39,7 +46,7 @@ function renderMotionSettings(f, motionPreference = "system") {
     reset() { return Promise.resolve(); },
     register() { throw new Error("Unexpected config registration in settings view."); },
   };
-  return f.renderToStaticMarkup(f.React.createElement(MotionSettings, {config, model: createMotionSettingsModel(config)}));
+  return f.renderToStaticMarkup(f.React.createElement(MotionSettings, {config, model: createMotionSettingsModel(config), i18n: settingsI18n(f)}));
 }
 
 test("settings page renders from an injected ThemeService without a ThemeProvider", () => {

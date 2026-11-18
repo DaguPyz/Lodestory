@@ -3,6 +3,8 @@ import {readFile} from "node:fs/promises";
 import test from "node:test";
 import vm from "node:vm";
 import ts from "typescript";
+import {createI18nFixture} from "./helpers/i18nFixture.mjs";
+import {createMainFixture} from "./helpers/mainStartupFixture.mjs";
 
 const compile = async path => ts.transpileModule(await readFile(new URL(path, import.meta.url), "utf8"), {
   compilerOptions: {target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX},
@@ -76,6 +78,7 @@ function createHookReact() {
       for (const hook of hooks) hook?.kind === "effect" && hook.cleanup?.();
     },
     get stateUpdates() { return stateUpdates; },
+    useSyncExternalStore(_subscribe, getSnapshot) { return getSnapshot(); },
     useMemo(factory, deps) {
       const slot = index++;
       const previous = hooks[slot];
@@ -99,6 +102,9 @@ function createHookReact() {
 }
 
 async function loadHarness({scheduler = createScheduler(), counter = () => 777, clock = () => performance.now(), withChannel = true} = {}) {
+  const {loadModule} = createMainFixture();
+  const {i18n, stop} = createI18nFixture(loadModule);
+  i18n.registerMessages("writing-status", loadModule("plugins/writing-status/i18n.ts").writingStatusMessages);
   const countExports = {countDocumentCharacters: counter};
   const chunkExports = {};
   const chunkContext = {
@@ -132,11 +138,11 @@ async function loadHarness({scheduler = createScheduler(), counter = () => 777, 
 
   function render(props) {
     React.beginRender();
-    const tree = editorExports.EditorStatusBar(props);
+    const tree = editorExports.EditorStatusBar({...props, i18n});
     React.commitEffects();
     return tree;
   }
-  return {scheduler, React, render, unmount: () => React.unmount()};
+  return {scheduler, React, render, i18n, unmount() { React.unmount(); void stop(); }};
 }
 
 function textContent(node) {
@@ -160,6 +166,9 @@ test("small text stays synchronous and large plain text starts with an explicit 
   const large = {document: document("large"), text: "a".repeat(1024 * 1024)};
   assert.match(textContent(harness.render(large)), /文稿 统计中…/);
   assert.equal(syncCalls, 1, "large TXT must not run the synchronous counter during render");
+  await harness.i18n.setLocale("en");
+  assert.match(textContent(harness.render(large)), /Manuscript · Counting…/);
+  assert.equal(harness.scheduler.channels.length, 1, "locale changes do not restart counting");
   harness.unmount();
   assert.equal(harness.scheduler.channels[0].closed, true);
 });

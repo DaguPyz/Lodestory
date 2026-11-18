@@ -26,10 +26,17 @@ export function fixture({ saved = null, preference, system = "dark", desktop = t
   const values = new Map(saved === null ? [] : [[storageKey, saved]]);
   if (preference !== undefined) values.set("lodestory.theme-preference", typeof preference === "string" ? preference : JSON.stringify(preference));
   const controls = { system, writeError: false, readError, nativeSetError, nativeDelay: nativeSetGate, uiDisposeError: false };
-  const root = { dataset: {}, style: {
-    setProperty(name, value) { this[name] = value; },
-    removeProperty(name) { delete this[name]; },
-  } };
+  const rootAttributes = new Map();
+  const root = {
+    dataset: {},
+    getAttribute(name) { return rootAttributes.get(name) ?? null; },
+    setAttribute(name, value) { rootAttributes.set(name, value); },
+    removeAttribute(name) { rootAttributes.delete(name); },
+    style: {
+      setProperty(name, value) { this[name] = value; },
+      removeProperty(name) { delete this[name]; },
+    },
+  };
   const windowListeners = new Map();
   const mediaListeners = new Set();
   const nativeListeners = new Set();

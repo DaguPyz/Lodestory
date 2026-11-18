@@ -18,6 +18,8 @@
     <script type="module">
       import React from "react";
       import {createRoot} from "react-dom/client";
+      import {CanvasSurface} from "/src/plugins/canvas/CanvasSurface.tsx";
+      import {createCanvasViewport} from "/src/plugins/canvas/createCanvasViewport.ts";
       import TimelineEvents from "/src/plugins/timeline/TimelineEvents.tsx";
 
       const params = new URLSearchParams(location.search);
@@ -90,6 +92,7 @@
       const view = {center: {x: 0, y: 0}, zoom: 1};
       const root = createRoot(document.querySelector("#root"));
       root.render(React.createElement("div", {className: "fixture-canvas"}, React.createElement(TimelineEvents, {
+        canvas: {Surface: CanvasSurface, createViewport: createCanvasViewport},
         contextMenus, store, assetCatalog, settings, view, size: {width: 900, height: 560},
         axisLabelBounds: [], active: true,
       })));

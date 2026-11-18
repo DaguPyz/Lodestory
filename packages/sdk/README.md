@@ -10,6 +10,7 @@ Lodestory 插件使用的共享契约包，提供插件生命周期类型、能�
 - `@lodestory/sdk/ui`：UI 服务类型与共享单例 `uiKey`。
 - `@lodestory/sdk/navigation-layout`：应用导航布局服务、页面与导航元数据类型，以及共享单例 `navigationLayoutKey`。
 - `@lodestory/sdk/settings`：设置分类贡献与打开弹框的契约，以及共享 `settingsKey`。
+- `@lodestory/sdk/i18n` 提供应用语言、插件词表、翻译快照和共享 `i18nKey`。
 - `@lodestory/sdk/plugin-packages`：本地插件包导入、安装记录、文件移除、开发产物校验与暂存，以及共享 `pluginPackagesKey`。
 - `@lodestory/sdk/external-plugins`：外部插件启用、停用、卸载和开发模式的操作及状态。插件工厂可从 `ExternalPluginOptions.backend` 调用自身后端。
 - `@lodestory/sdk/plugin-runtime`：宿主通用的运行中插件激活和停用能力。
@@ -146,6 +147,16 @@ export const editorPlugin: Plugin = {
 
 UI 插件声明并导出 `uiInitialPageConfig`（ID 为 `ui.initialPage`，默认值为 `null`，生效方式为 `restart`）。配置插件提供 `welcome` 基础值。UI 在全部页面完成登记后读取它并选择启动页；运行期间 `set` 此项只更新配置，不触发跳页。配置指向未登记页面会使启动失败并回滚插件。
 
+## 国际化
+
+各插件在自己的目录下用 `i18n.ts` 导出词表。插件声明 `requires: [i18nKey]`，激活时调用 `registerMessages("example", {en: {"打开 {name}": "Open {name}"}})`，停用时在撤回界面后注销词表。登记名采用小写字母、数字和连字符，以字母开头。各语言只需登记已有译文。
+
+界面订阅 `getSnapshot()` 与 `subscribe()`，用快照的 `t("打开 {name}", {values: {name}})` 按原文查询当前语言，缺译时显示原文。导航、布局和设置直接用登记的标题和分组名称查译文，设置仍按原始 `group` 归组。
+
+同一原文登记了不同译文时，普通查询显示原文。需要选定译法时，传入 `{namespace: "example"}` 查该插件的词表。数量词条可登记 `one`、`other` 等形式，由 `t` 的 `count` 参数按当前语言选择。
+
+`setLocale(id)` 保存成功后发布新语言。语言设置入口由独立插件登记，撤回入口后已选语言继续生效。应用装配中的内置插件可使用本契约，外部包的能力由其加载契约管理。
+
 ## UI 与主题
 
 页面插件通过 `@lodestory/sdk/ui` 声明对 `uiKey` 的依赖并登记页面；UI 宿主负责调用页面并保留已访问页面。应用应共享同一份 React 运行时。此入口只把 `ReactNode` 用作类型，因此 SDK 没有 React 运行时依赖；使用 UI 类型的项目须安装 `@types/react`。它声明为可选 peer，因此只使用核心或主题契约的项目无需安装 React 类型。
@@ -250,6 +261,8 @@ export const inkThemePlugin: Plugin = {
 ## 通用画布服务
 
 `@lodestory/sdk/canvas` 导出共享单例 `canvasKey`。通用 `canvas` 插件提供画布表面与视口状态：视口快照包含中心坐标、缩放比例和销毁状态；调用 `panBy`、`zoomTo`、`resetZoom`、`resetView` 可改变视口，返回布尔值表示操作是否接受。缩放以可选的指针锚点为中心，并限制在 25% 到 400%。画布表面接收 `viewport`、`active`、`label` 和可选子内容；`grid` 可选 `"dots"`（默认）或 `"none"`，不含业务语义。
+
+`panOnPrimaryDrag` 可启用左键拖动空白处平移，`wheelOnWorldControls` 可让画布内容上的控件接收滚轮导航。`controls.label` 设置缩放工具栏的无障碍名称，`controls.target` 可把工具栏挂载到同一视图的指定位置。
 
 画布服务只负责通用视口和手势，不定义时间线、事件或文件格式。具体功能插件通过 `canvasKey` 创建视口并拥有它们的用途和生命周期；当前时间线插件按项目会话和时间线条目保留视口，结束会话或删除条目时释放。视口位置只保留在当前会话内，不写入项目文件。
 

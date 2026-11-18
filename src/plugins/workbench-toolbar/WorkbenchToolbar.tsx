@@ -1,6 +1,7 @@
 import {useEffect, useId, useRef, useState, useSyncExternalStore} from "react";
 import {Menu} from "@base-ui/react/menu";
 import type {LayoutService} from "@lodestory/sdk/layout";
+import type {I18nService} from "@lodestory/sdk/i18n";
 import type {WorkbenchService} from "@lodestory/sdk/workbench";
 import {shortcutCommandIds, type ShortcutsService} from "@lodestory/sdk/shortcuts";
 import {BrandLogo, Button, IconButton, Icon, useInteractionRef} from "@lodestory/ui";
@@ -13,6 +14,7 @@ type ToolbarServices = {
   workbench: WorkbenchService;
   layout: LayoutService;
   models: ReadonlyMap<string, WorkbenchToolbarModel>;
+  i18n: I18nService;
 };
 
 type MenuCloseReason = "dismiss" | "switch" | "action" | "lifecycle";
@@ -21,21 +23,22 @@ const pendingSnapshot: ToolbarSnapshot = Object.freeze({focusMode: false, restor
 const getPendingSnapshot = () => pendingSnapshot;
 const subscribePending = () => () => {};
 
-export function WorkbenchToolbar({workbench, layout, models, onSearch, active, shortcuts}: ToolbarServices & {active: boolean; onSearch(sessionId: string): void; shortcuts: ShortcutsService}) {
+export function WorkbenchToolbar({workbench, layout, models, i18n, onSearch, active, shortcuts}: ToolbarServices & {active: boolean; onSearch(sessionId: string): void; shortcuts: ShortcutsService}) {
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
   useSyncExternalStore(shortcuts.subscribe, shortcuts.getSnapshot, shortcuts.getSnapshot);
   const session = state.session;
   const model = session ? models.get(session.id) : undefined;
   // Project identity is available before this plugin's session participant starts.
   // Keep the same toolbar visible throughout loading; only enable a ready session's actions.
-  return session ? <ToolbarView key={session.id} model={model} layout={layout}
+  return session ? <ToolbarView key={session.id} model={model} layout={layout} i18n={i18n}
     projectName={session.project.name} onSearch={() => onSearch(session.id)} searchShortcut={shortcuts.getShortcut(shortcutCommandIds.projectSearch)}
     enabled={Boolean(model) && active && state.active && !state.busy && !state.loading}/> : null;
 }
 
-function ToolbarView({model, layout, projectName, enabled, onSearch, searchShortcut}: {
+function ToolbarView({model, layout, i18n, projectName, enabled, onSearch, searchShortcut}: {
   model?: WorkbenchToolbarModel;
   layout: LayoutService;
+  i18n: I18nService;
   projectName: string;
   enabled: boolean;
   onSearch(): void;
@@ -44,6 +47,7 @@ function ToolbarView({model, layout, projectName, enabled, onSearch, searchShort
   const {focusMode} = useSyncExternalStore(model?.subscribe ?? subscribePending,
     model?.getSnapshot ?? getPendingSnapshot, model?.getSnapshot ?? getPendingSnapshot);
   const snapshot = useSyncExternalStore(layout.subscribe, layout.getSnapshot, layout.getSnapshot);
+  const {t} = useSyncExternalStore(i18n.subscribe, i18n.getSnapshot, i18n.getSnapshot);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [instantCloseOwners, setInstantCloseOwners] = useState<ReadonlySet<string>>(() => new Set());
   const [menuDensity, setMenuDensity] = useState("comfortable");
@@ -135,7 +139,7 @@ function ToolbarView({model, layout, projectName, enabled, onSearch, searchShort
   const contentPopupRef = useInteractionRef(contentOpen, "menu");
   const menuIsImmediate = (owner: string) => !enabled || instantCloseOwners.has(owner);
 
-  return <div className="workbench-toolbar" role="toolbar" aria-label="工作台工具栏" ref={toolbar}>
+  return <div className="workbench-toolbar" role="toolbar" aria-label={t("工作台工具栏")} ref={toolbar}>
     <div className="toolbar-project-actions">
       <div className="toolbar-brand" aria-label="Lodestory"><BrandLogo size="large"/><span>Lodestory</span></div>
       <Menu.Root modal={false} disabled={!enabled} open={projectOpen}
@@ -146,49 +150,54 @@ function ToolbarView({model, layout, projectName, enabled, onSearch, searchShort
         </Menu.Trigger>
         <Menu.Portal className="toolbar-menu-portal" data-ui-density={menuDensity}>
           <Menu.Positioner className="toolbar-menu-positioner" side="bottom" align="start" sideOffset={4} collisionPadding={8}>
-            <Menu.Popup ref={projectPopupRef} className="toolbar-menu-popup" aria-label={`${projectName}项目菜单`}
+            <Menu.Popup ref={projectPopupRef} className="toolbar-menu-popup"
+              aria-label={t("{name}项目菜单", {values: {name: projectName}})}
               data-toolbar-menu-instant={menuIsImmediate(projectOwner) || undefined}>
               <Menu.Item nativeButton={true} render={<Button variant="ghost" data-toolbar-menu-item/>} disabled={!enabled}
-                onClick={() => perform(model?.leaveProject)}>返回欢迎页</Menu.Item>
+                onClick={() => perform(model?.leaveProject)}>{t("返回欢迎页")}</Menu.Item>
               <Menu.Item nativeButton={true} render={<Button variant="ghost" data-toolbar-menu-item/>} disabled={!enabled}
-                onClick={() => perform(model?.openSettings)}>设置</Menu.Item>
+                onClick={() => perform(model?.openSettings)}>{t("设置")}</Menu.Item>
             </Menu.Popup>
           </Menu.Positioner>
         </Menu.Portal>
       </Menu.Root>
       <div className="toolbar-common-actions">
-        <IconButton label="搜索项目" tooltip={searchShortcut ? `搜索项目 (${searchShortcut})` : undefined} disabled={!enabled} onClick={() => perform(onSearch)}><Icon name="search"/></IconButton>
-        <IconButton label="设置" disabled={!enabled} onClick={() => perform(model?.openSettings)}><Icon name="settings"/></IconButton>
+        <IconButton label={t("搜索项目", {namespace: "workbench-toolbar"})}
+          tooltip={searchShortcut ? t("搜索项目 ({shortcut})", {values: {shortcut: searchShortcut}}) : undefined}
+          disabled={!enabled} onClick={() => perform(onSearch)}><Icon name="search"/></IconButton>
+        <IconButton label={t("设置")} disabled={!enabled}
+          onClick={() => perform(model?.openSettings)}><Icon name="settings"/></IconButton>
       </div>
     </div>
     <div className="toolbar-controls">
       {snapshot.contents.filter(entry => entry.role === "navigation").map(entry => <span className="toolbar-navigation-toggle" key={entry.id}>
-        <IconButton label={entry.title} disabled={!enabled} aria-pressed={shown(entry.id)}
+        <IconButton label={t(entry.title)} disabled={!enabled} aria-pressed={shown(entry.id)}
           onClick={() => perform(() => model?.toggleContent(entry.id))}><Icon name="file"/></IconButton>
       </span>)}
       {snapshot.contents.filter(entry => entry.role === "auxiliary").map(entry => <span className="toolbar-auxiliary-toggle" key={entry.id}>
-        <IconButton label={`${shown(entry.id) ? "收起" : "显示"}${entry.title}`} disabled={!enabled} aria-pressed={shown(entry.id)}
+        <IconButton label={t(shown(entry.id) ? "收起{title}" : "显示{title}", {values: {title: t(entry.title)}})}
+          disabled={!enabled} aria-pressed={shown(entry.id)}
           onClick={() => perform(() => model?.toggleContent(entry.id))}><Icon name="split"/></IconButton>
       </span>)}
       <Button variant="ghost" data-toolbar-focus-button ref={focusButton} disabled={!enabled}
-        aria-label={focusMode ? "退出专注模式" : "专注模式"} aria-pressed={focusMode}
+        aria-label={t(focusMode ? "退出专注模式" : "专注模式")} aria-pressed={focusMode}
         onClick={() => perform(focusMode ? model?.exitFocus : model?.enterFocus)}>
-        <Icon name="focus"/><span>{focusMode ? "退出专注" : "专注模式"}</span>
+        <Icon name="focus"/><span>{t(focusMode ? "退出专注" : "专注模式")}</span>
       </Button>
       <Menu.Root modal={false} disabled={!enabled} open={contentOpen}
         onOpenChange={(nextOpen, details) => menuOpenChanged(contentOwner, nextOpen, details)}
         onOpenChangeComplete={isOpen => menuCloseCompleted(contentOwner, isOpen)}>
-        <Menu.Trigger id={contentTriggerId} render={<IconButton label="布局内容" data-toolbar-content-trigger/>}>
+        <Menu.Trigger id={contentTriggerId} render={<IconButton label={t("布局内容")} data-toolbar-content-trigger/>}>
           <Icon name="more"/>
         </Menu.Trigger>
         <Menu.Portal className="toolbar-menu-portal" data-ui-density={menuDensity}>
           <Menu.Positioner className="toolbar-menu-positioner" side="bottom" align="end" sideOffset={4} collisionPadding={8}>
-            <Menu.Popup ref={contentPopupRef} className="toolbar-menu-popup" aria-label="显示或隐藏内容"
+            <Menu.Popup ref={contentPopupRef} className="toolbar-menu-popup" aria-label={t("显示或隐藏内容")}
               data-toolbar-menu-instant={menuIsImmediate(contentOwner) || undefined}>
               {snapshot.contents.filter(entry => entry.id !== workbenchToolbarId).map(entry => <Menu.Item key={entry.id}
                 nativeButton={true} render={<Button variant="ghost" data-toolbar-menu-item/>} disabled={!enabled} closeOnClick={false}
                 aria-pressed={shown(entry.id)} onClick={() => perform(() => model?.toggleContent(entry.id))}>
-                {shown(entry.id) ? "隐藏" : "显示"}{entry.title}
+                {t(shown(entry.id) ? "隐藏{title}" : "显示{title}", {values: {title: t(entry.title)}})}
               </Menu.Item>)}
             </Menu.Popup>
           </Menu.Positioner>
@@ -199,14 +208,15 @@ function ToolbarView({model, layout, projectName, enabled, onSearch, searchShort
 }
 
 /** 独立于 actions 内容挂载，工具栏自身被隐藏后仍可恢复。 */
-export function ToolbarRecovery({workbench, layout, models}: ToolbarServices) {
+export function ToolbarRecovery({workbench, layout, models, i18n}: ToolbarServices) {
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
   const snapshot = useSyncExternalStore(layout.subscribe, layout.getSnapshot, layout.getSnapshot);
+  const {t} = useSyncExternalStore(i18n.subscribe, i18n.getSnapshot, i18n.getSnapshot);
   const model = state.session && models.get(state.session.id);
   if (!model || !state.active || state.busy || snapshot.shownIds.includes(workbenchToolbarId)) return null;
   return <div className="toolbar-recovery">
     <Button variant="secondary" onClick={() => {
       try { model.showToolbar(); } catch (error) { console.error("Could not restore workbench toolbar.", {error}); }
-    }}><Icon name="more"/>显示工具栏</Button>
+    }}><Icon name="more"/>{t("显示工具栏")}</Button>
   </div>;
 }

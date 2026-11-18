@@ -14,6 +14,7 @@ const publicEntries = {
   "@lodestory/sdk/asset-editor": ["asset-editor.ts"],
   "@lodestory/sdk/asset-relations": ["asset-relations.ts"],
   "@lodestory/sdk/config": ["config.ts"],
+  "@lodestory/sdk/i18n": ["i18n.ts"],
   "@lodestory/sdk/context-menu": ["context-menu.ts"],
   "@lodestory/sdk/documents": ["documents.ts"],
   "@lodestory/sdk/project-storage": ["project-storage.ts"],

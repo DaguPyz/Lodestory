@@ -4,7 +4,9 @@ import {documentsKey, type DocumentWorkspace, type DocumentsService} from "@lode
 import {bodyEditorContentIds, bodyEditorKey, type BodyEditorService} from "@lodestory/sdk/body-editor";
 import {layoutKey, type LayoutContent, type LayoutService} from "@lodestory/sdk/layout";
 import {workbenchKey, type WorkbenchService} from "@lodestory/sdk/workbench";
+import {i18nKey, type I18nService} from "@lodestory/sdk/i18n";
 import {EditorStatusBar} from "./EditorStatusBar";
+import {writingStatusMessages} from "./i18n";
 import "./writing-status.css";
 
 const contentId = "writing-status.status";
@@ -12,36 +14,44 @@ const contentId = "writing-status.status";
 /** Writing status reads the current document directly from the documents workspace. */
 export function createWritingStatusPlugin(): Plugin {
   let removeContent: (() => void) | undefined;
+  let removeMessages: (() => void) | undefined;
   return {
     id: "writing-status",
-    requires: [workbenchKey, documentsKey, layoutKey, bodyEditorKey],
+    requires: [workbenchKey, documentsKey, layoutKey, bodyEditorKey, i18nKey],
     provides: [],
     activate(context) {
       const workbench = context.get(workbenchKey);
       const documents = context.get(documentsKey);
       const layout = context.get(layoutKey);
       const bodyEditor = context.get(bodyEditorKey);
+      const i18n = context.get(i18nKey);
+      removeMessages = i18n.registerMessages("writing-status", writingStatusMessages);
       const content: LayoutContent = {
         id: contentId,
         title: "写作状态",
         role: "status",
-        render: () => <WritingStatusContent workbench={workbench} documents={documents} bodyEditor={bodyEditor} layout={layout}/>,
+        render: () => <WritingStatusContent workbench={workbench} documents={documents} bodyEditor={bodyEditor} layout={layout} i18n={i18n}/>,
       };
       removeContent = context.track(layout.registerContent(content));
     },
     deactivate() {
       const remove = removeContent;
       removeContent = undefined;
-      remove?.();
+      try { remove?.(); }
+      finally {
+        removeMessages?.();
+        removeMessages = undefined;
+      }
     },
   };
 }
 
-function WritingStatusContent({workbench, documents, bodyEditor, layout}: {
+function WritingStatusContent({workbench, documents, bodyEditor, layout, i18n}: {
   workbench: WorkbenchService;
   documents: DocumentsService;
   bodyEditor: BodyEditorService;
   layout: LayoutService;
+  i18n: I18nService;
 }) {
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
   const layoutSnapshot = useSyncExternalStore(layout.subscribe, layout.getSnapshot, layout.getSnapshot);
@@ -49,14 +59,15 @@ function WritingStatusContent({workbench, documents, bodyEditor, layout}: {
   const session = state.session;
   const workspace = session ? documents.getWorkspace(session.id) : null;
   return session && workspace
-    ? <WritingStatusWorkspace key={session.id} workspace={workspace} bodyEditor={bodyEditor} showDocumentDetails={showDocumentDetails}/>
-    : <EditorStatusBar document={undefined} showDocumentDetails={showDocumentDetails}/>;
+    ? <WritingStatusWorkspace key={session.id} workspace={workspace} bodyEditor={bodyEditor} showDocumentDetails={showDocumentDetails} i18n={i18n}/>
+    : <EditorStatusBar document={undefined} showDocumentDetails={showDocumentDetails} i18n={i18n}/>;
 }
 
-function WritingStatusWorkspace({workspace, bodyEditor, showDocumentDetails}: {
+function WritingStatusWorkspace({workspace, bodyEditor, showDocumentDetails, i18n}: {
   workspace: DocumentWorkspace;
   bodyEditor: BodyEditorService;
   showDocumentDetails: boolean;
+  i18n: I18nService;
 }) {
   const subscribeWorkspace = useCallback((listener: () => void) => workspace.subscribe(listener), [workspace]);
   const getWorkspaceSnapshot = useCallback(() => workspace.getSnapshot(), [workspace]);
@@ -67,5 +78,5 @@ function WritingStatusWorkspace({workspace, bodyEditor, showDocumentDetails}: {
     ? bodyEditor.getText(document.fileName, document.content)
     : undefined, [bodyEditor, document?.fileName, document?.content]);
   const text = useSyncExternalStore(subscribe, getText, getText);
-  return <EditorStatusBar document={document} text={text} showDocumentDetails={showDocumentDetails}/>;
+  return <EditorStatusBar document={document} text={text} showDocumentDetails={showDocumentDetails} i18n={i18n}/>;
 }

@@ -41,6 +41,7 @@ test("settings plugin registers one shell and an action, and cleans up partial a
   const {errorUiKey} = fixture.requireSdk("@lodestory/sdk/error");
   const {navigationLayoutKey} = fixture.requireSdk("@lodestory/sdk/navigation-layout");
   const {settingsKey} = fixture.requireSdk("@lodestory/sdk/settings");
+  const {i18nKey} = fixture.requireSdk("@lodestory/sdk/i18n");
   const plugin = fixture.loadModule("plugins/settings/settingsPlugin.tsx").createSettingsPlugin();
   const events = [];
   let service;
@@ -50,6 +51,7 @@ test("settings plugin registers one shell and an action, and cleans up partial a
     [uiKey, {addWrapper(value) { wrapper = value; return () => events.push("unmount"); }}],
     [navigationLayoutKey, {registerAction(value) { action = value; return () => events.push("action removed"); }}],
     [themeKey, {}], [configKey, {}], [errorUiKey, {ErrorBoundary: () => null}],
+    [i18nKey, {registerMessages: () => () => events.push("messages removed")}],
   ]);
   plugin.activate({get: key => services.get(key), track: value => value, provide(key, value) { assert.equal(key, settingsKey); service = value; }});
   assert.equal(service.open(), false, "the shell waits until startup preparation");
@@ -60,12 +62,12 @@ test("settings plugin registers one shell and an action, and cleans up partial a
   assert.equal(element.props.store.getSnapshot().open, true);
   assert.deepEqual(Array.from(element.props.store.getSnapshot().sections, item => item.id), ["appearance.theme", "appearance.motion"]);
   await plugin.deactivate();
-  assert.deepEqual(events, ["unmount", "action removed"]);
+  assert.deepEqual(events, ["unmount", "action removed", "messages removed"]);
   assert.equal(service.open(), false);
 
   const failed = fixture.loadModule("plugins/settings/settingsPlugin.tsx").createSettingsPlugin();
   services.set(navigationLayoutKey, {registerAction() { throw new Error("action failed"); }});
   assert.throws(() => failed.activate({get: key => services.get(key), track: value => value, provide() {}}), /action failed/);
   await failed.deactivate();
-  assert.deepEqual(events, ["unmount", "action removed", "unmount"]);
+  assert.deepEqual(events, ["unmount", "action removed", "messages removed", "unmount", "messages removed"]);
 });

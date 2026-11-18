@@ -149,7 +149,7 @@ function loadSurface({raf = false} = {}) {
   };
 
   const module = {exports: {}};
-  const ui = {Button: "Button", Icon: "Icon", IconButton: "IconButton"};
+  const ui = {CanvasZoomControls: "CanvasZoomControls"};
   const context = {
     module,
     exports: module.exports,
@@ -160,6 +160,7 @@ function loadSurface({raf = false} = {}) {
     console,
     require(specifier) {
       if (specifier === "react") return react;
+      if (specifier === "react-dom") return {createPortal: (children, target) => ({children, target})};
       if (specifier === "react/jsx-runtime") return jsxRuntime;
       if (specifier === "@lodestory/ui") return ui;
       if (specifier === "./canvas.css") return {};
@@ -354,27 +355,24 @@ test("wheel pans coalesce and flush before zoom, keyboard pan, and reset", () =>
 
 test("canvas zoom and reset controls flush pending wheel movement first", () => {
   const {renderer, surface, viewport, output} = createMountedSurface({raf: true});
-  const controls = output.props.children.at(-1).props.children;
-  const zoomIn = controls[2].props.onClick;
-  const resetZoom = controls[1].props.children.props.onClick;
-  const resetView = controls[3].props.onClick;
+  const controls = output.props.children.at(-1).props;
 
   surface.dispatch("wheel", wheelEvent(surface, {deltaX: 1, deltaY: 2}));
-  zoomIn();
+  controls.onZoomChange(1.25);
   assert.deepEqual(viewport.calls.slice(0, 2), [
     {kind: "pan", x: -1, y: -2},
     {kind: "zoom", zoom: 1.25, anchor: undefined},
   ]);
 
   surface.dispatch("wheel", wheelEvent(surface, {deltaY: 3}));
-  resetZoom();
+  controls.onResetZoom();
   assert.deepEqual(viewport.calls.slice(2), [
     {kind: "pan", x: 0, y: -3},
     {kind: "reset-zoom"},
   ]);
 
   surface.dispatch("wheel", wheelEvent(surface, {deltaY: 4}));
-  resetView();
+  controls.onResetView();
   assert.deepEqual(viewport.calls.slice(4), [
     {kind: "pan", x: 0, y: -4},
     {kind: "reset-view"},

@@ -125,7 +125,12 @@
         getRelations: id => (denseRelations ? [...savedRelations, ...outerRelations] : savedRelations)
           .filter(relation => relation.assets.some(asset => asset.assetsId === id)),
       };
-      const canvas = {Surface: CanvasSurface};
+      const relationViewports = [];
+      const canvas = {Surface: CanvasSurface, createViewport(initial) {
+        const viewport = createCanvasViewport(initial);
+        relationViewports.push(viewport);
+        return viewport;
+      }};
       const contextMenus = {Region: ContextMenuRegion};
       const root = createRoot(document.querySelector("#root"));
       let canvasView = createTimelineCanvasView(createCanvasViewport());
@@ -195,6 +200,8 @@
           const view = oldViewports[index]?.getSnapshot();
           return view ? {center: {...view.center}, zoom: view.zoom, disposed: view.disposed} : null;
         },
+        relationView(index = -1) { return relationViewports.at(index)?.getSnapshot(); },
+        panRelation(x, y) { return relationViewports.at(-1)?.panBy(x, y); },
         unmount() { mounted = false; root.render(null); },
         eventCount() { return eventSnapshot.events.length; },
         saveCount() { return saves; },

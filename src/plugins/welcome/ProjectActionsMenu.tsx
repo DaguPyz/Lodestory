@@ -5,9 +5,9 @@ import { useContextMenus, type MenuAction } from "../context-menu";
 import type { MenuCloseReason } from "../context-menu/menuCoordinator";
 
 /** The welcome plugin owns its actions; the coordinator only arbitrates open surfaces. */
-export function ProjectActionsMenu({ projectId, name, disabled, actions }: {
+export function ProjectActionsMenu({ projectId, label, disabled, actions }: {
   projectId: string;
-  name: string;
+  label: string;
   disabled: boolean;
   actions: MenuAction<string>[];
 }) {
@@ -44,7 +44,7 @@ export function ProjectActionsMenu({ projectId, name, disabled, actions }: {
       }
       setOpen(next);
     }}>
-    <Menu.Trigger ref={trigger} disabled={disabled} render={<IconButton label={`${name}的更多操作`} />}>
+    <Menu.Trigger ref={trigger} disabled={disabled} render={<IconButton label={label} />}>
       <Icon name="more" />
     </Menu.Trigger>
     <Menu.Portal data-ui-density={density}>

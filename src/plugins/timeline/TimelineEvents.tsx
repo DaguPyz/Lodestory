@@ -1,7 +1,7 @@
 import {memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type MouseEvent, type RefObject} from "react";
 import {Menu} from "@base-ui/react/menu";
 import {Popover} from "@base-ui/react/popover";
-import type {CanvasViewportSnapshot} from "@lodestory/sdk/canvas";
+import type {CanvasService, CanvasViewportSnapshot} from "@lodestory/sdk/canvas";
 import type {ContextMenuService, MenuEntry} from "@lodestory/sdk/context-menu";
 import type {AssetCatalog} from "@lodestory/sdk/asset-catalog";
 import type {AssetRelationNetwork} from "@lodestory/sdk/asset-relations";
@@ -330,7 +330,8 @@ function FocusedEvent({event, settings, onEdit}: {
   </div>;
 }
 
-export function TimelineEvents({contextMenus, assetCatalog, assetRelations = null, store, settings, view, size, axisLabelBounds, scaleTextWithZoom = false, active, openToken, growthGeometryRef, growthStemsRef, onEditingChange, onRelationFocusChange}: {
+export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelations = null, store, settings, view, size, axisLabelBounds, scaleTextWithZoom = false, active, openToken, growthGeometryRef, growthStemsRef, onEditingChange, onRelationFocusChange}: {
+  canvas: CanvasService;
   contextMenus: ContextMenuService;
   assetCatalog: AssetCatalog | null;
   assetRelations?: AssetRelationNetwork | null;
@@ -740,7 +741,7 @@ export function TimelineEvents({contextMenus, assetCatalog, assetRelations = nul
           focusedId={focusedPoint?.id ?? null} onFocusEvent={focusEvent} onEdit={openEvent} />
         <EventLabels eventById={eventById} settings={settings} points={focusedPoint ? [focusedPoint] : geometry.events}
           onEdit={openEvent} />
-        {focusedEvent && focusedPoint && <TimelineFocusAssets key={focusedEvent.id}
+        {focusedEvent && focusedPoint && <TimelineFocusAssets key={focusedEvent.id} canvas={canvas}
           event={focusedEvent} catalog={assetCatalog} size={size} closing={Boolean(focusInView?.closing)}
           network={assetRelations} focusedAsset={focusedAsset} origin={focusedAsset ? focusInView?.assetClickPosition : null}
           onFocusAsset={focusAsset} onNavigate={navigateFocus} onBack={backFromFocus} onExited={completeEventFocusExit}>

@@ -1,5 +1,6 @@
 import { isTauri } from "@tauri-apps/api/core";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import type { I18nService } from "@lodestory/sdk/i18n";
 import { NewProjectDialog } from "./NewProjectDialog";
 import { ProjectActionsMenu } from "./ProjectActionsMenu";
 import { Button, Icon, SearchField } from "@lodestory/ui";
@@ -24,11 +25,19 @@ function ProjectPath({ path, id }: { path: string; id: string }) {
 
 type WelcomePageProps = {
   active: boolean;
+  i18n: I18nService;
   onOpenProject: (project: ProjectRecord) => void | Promise<unknown>;
 };
 
-export function WelcomePage({ active, onOpenProject }: WelcomePageProps) {
+export function WelcomePage({ active, i18n, onOpenProject }: WelcomePageProps) {
   const menus = useContextMenus();
+  const {locale, t} = useSyncExternalStore(i18n.subscribe, i18n.getSnapshot, i18n.getSnapshot);
+  const dateDisplay = {
+    locale,
+    today: (time: string) => t("今天 {time}", {values: {time}}),
+    yesterday: (time: string) => t("昨天 {time}", {values: {time}}),
+    unknown: t("时间未知"),
+  };
   const heading = useRef<HTMLHeadingElement>(null);
   const operationPending = useRef(false);
   const loadSequence = useRef(0);
@@ -107,7 +116,7 @@ export function WelcomePage({ active, onOpenProject }: WelcomePageProps) {
 
   async function openDirectory() {
     await runAction(async () => {
-      const path = await pickProjectDirectory("打开项目目录");
+      const path = await pickProjectDirectory(t("打开项目目录"));
       if (path) await enterProject(await openProject(path));
     });
   }
@@ -131,7 +140,7 @@ export function WelcomePage({ active, onOpenProject }: WelcomePageProps) {
 
   async function relocate(project: RecentProject) {
     await runAction(async () => {
-      const path = await pickProjectDirectory(`重新定位 ${project.name}`);
+      const path = await pickProjectDirectory(t("重新定位 {name}", {values: {name: project.name}}));
       if (path) await enterProject(await relocateProject(project.id, path));
     });
   }
@@ -158,9 +167,9 @@ export function WelcomePage({ active, onOpenProject }: WelcomePageProps) {
       else await remove(target);
     }
     return [
-      { id: "open", label: "打开项目", icon: <Icon name="folder" />, disabled: disabled || !project?.available, restoreFocus: false, onSelect: (target) => perform(target, "open") },
-      { id: "relocate", label: "重新定位目录", disabled: disabled || !project, restoreFocus: false, onSelect: (target) => perform(target, "relocate") },
-      { id: "remove", label: "从最近项目移除", disabled: disabled || !project, restoreFocus: false, onSelect: (target) => perform(target, "remove") },
+      { id: "open", label: t("打开项目"), icon: <Icon name="folder" />, disabled: disabled || !project?.available, restoreFocus: false, onSelect: (target) => perform(target, "open") },
+      { id: "relocate", label: t("重新定位目录"), disabled: disabled || !project, restoreFocus: false, onSelect: (target) => perform(target, "relocate") },
+      { id: "remove", label: t("从最近项目移除"), disabled: disabled || !project, restoreFocus: false, onSelect: (target) => perform(target, "remove") },
     ];
   }
 
@@ -179,41 +188,41 @@ export function WelcomePage({ active, onOpenProject }: WelcomePageProps) {
         <div className="welcome-content">
           <header className="welcome-header">
             <div className="welcome-heading">
-              <h1 id="welcome-page-heading" ref={heading} tabIndex={-1}>欢迎使用 Lodestory</h1>
-              <p>继续写作，或开始一个新故事。</p>
+              <h1 id="welcome-page-heading" ref={heading} tabIndex={-1}>{t("欢迎使用 Lodestory")}</h1>
+              <p>{t("继续写作，或开始一个新故事。")}</p>
             </div>
-            <div className="welcome-actions" aria-label="项目操作">
+            <div className="welcome-actions" aria-label={t("项目操作")}>
               <Button variant="primary" disabled={disabled} onClick={() => { setError(null); setCreateDialogOpen(true); }}>
-                <Icon name="plus" />开始新创作
+                <Icon name="plus" />{t("开始新创作")}
               </Button>
-              <Button variant="secondary" disabled={disabled} onClick={() => void openDirectory()}><Icon name="folder" />打开已有作品</Button>
+              <Button variant="secondary" disabled={disabled} onClick={() => void openDirectory()}><Icon name="folder" />{t("打开已有作品")}</Button>
             </div>
           </header>
 
           <section className="recent-projects" aria-labelledby="recent-projects-heading">
             <div className="section-toolbar">
-              <h2 id="recent-projects-heading" tabIndex={-1}>最近项目</h2>
-              <SearchField label="搜索项目" value={search} onChange={(event) => setSearch(event.target.value)} />
+              <h2 id="recent-projects-heading" tabIndex={-1}>{t("最近项目")}</h2>
+              <SearchField label={t("搜索项目", {namespace: "welcome"})} value={search} onChange={(event) => setSearch(event.target.value)} />
             </div>
 
             {error && !createDialogOpen && <div className="project-feedback" role="alert">
               <p className="project-error">{error}</p>
-              <Button variant="ghost" onClick={() => void reload()} disabled={busy || loading}>刷新列表</Button>
+              <Button variant="ghost" onClick={() => void reload()} disabled={busy || loading}>{t("刷新列表")}</Button>
             </div>}
-            {loading ? <p className="project-list-message" role="status">正在加载最近项目…</p>
+            {loading ? <p className="project-list-message" role="status">{t("正在加载最近项目…")}</p>
               : !loadFailed && matchingProjects.length === 0 && <div className="project-list-message" role="status">
-                <p>{query ? "没有找到匹配的项目。" : "还没有最近项目。"}</p>
-                {!query && <p>{desktop ? "新建项目，或打开已有的小说目录。" : "请在桌面应用中创建或打开项目。"}</p>}
+                <p>{t(query ? "没有找到匹配的项目。" : "还没有最近项目。")}</p>
+                {!query && <p>{t(desktop ? "新建项目，或打开已有的小说目录。" : "请在桌面应用中创建或打开项目。")}</p>}
               </div>}
 
-            <ul className="project-list" aria-label="最近打开的小说项目" aria-busy={busy || loading}>
+            <ul className="project-list" aria-label={t("最近打开的小说项目")} aria-busy={busy || loading}>
               {matchingProjects.map((project) => (
-                <ContextMenuRegion key={project.id} context={project.id} label={`${project.name}项目操作`} items={projectActions}>
+                <ContextMenuRegion key={project.id} context={project.id} label={t("{name}项目操作", {values: {name: project.name}})} items={projectActions}>
                 <li className="project-row" key={project.id}>
                   <button
                     className="project-entry"
                     type="button"
-                    aria-label={`${project.available ? "打开项目" : "重新定位项目"} ${project.name}`}
+                    aria-label={t(project.available ? "打开项目 {name}" : "重新定位项目 {name}", {values: {name: project.name}})}
                     aria-describedby={`project-path-${project.id}`}
                     disabled={disabled}
                     onClick={() => void openRecent(project)}
@@ -222,11 +231,12 @@ export function WelcomePage({ active, onOpenProject }: WelcomePageProps) {
                     <span className="project-details">
                       <span className="project-name" title={project.name}>{project.name}</span>
                       <ProjectPath path={project.path} id={`project-path-${project.id}`} />
-                      {!project.available && <span className="project-unavailable">目录不可用，点击重新定位</span>}
+                      {!project.available && <span className="project-unavailable">{t("目录不可用，点击重新定位")}</span>}
                     </span>
-                    <time className="project-time" dateTime={project.lastOpenedAt}>{formatLastOpened(project.lastOpenedAt)}</time>
+                    <time className="project-time" dateTime={project.lastOpenedAt}>{formatLastOpened(project.lastOpenedAt, undefined, dateDisplay)}</time>
                   </button>
-                  <ProjectActionsMenu projectId={project.id} name={project.name} disabled={disabled} actions={projectActions(project.id)} />
+                  <ProjectActionsMenu projectId={project.id} label={t("{name}的更多操作", {values: {name: project.name}})}
+                    disabled={disabled} actions={projectActions(project.id)} />
                 </li>
                 </ContextMenuRegion>
               ))}
@@ -234,10 +244,10 @@ export function WelcomePage({ active, onOpenProject }: WelcomePageProps) {
           </section>
         </div>
 
-        <footer className="welcome-footer">一个目录，一部小说。</footer>
+        <footer className="welcome-footer">{t("一个目录，一部小说。")}</footer>
       </main>
-      {active && <NewProjectDialog open={createDialogOpen} busy={busy} error={error} onClose={() => setCreateDialogOpen(false)}
-        onPickDirectory={() => runAction(() => pickProjectDirectory("选择项目保存位置"))} onCreate={create} />}
+      {active && <NewProjectDialog open={createDialogOpen} busy={busy} error={error} t={t} onClose={() => setCreateDialogOpen(false)}
+        onPickDirectory={() => runAction(() => pickProjectDirectory(t("选择项目保存位置")))} onCreate={create} />}
     </>
   );
 }

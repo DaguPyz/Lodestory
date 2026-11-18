@@ -5,19 +5,24 @@ import {pluginPackagesKey} from "@lodestory/sdk/plugin-packages";
 import {uiKey} from "@lodestory/sdk/ui";
 import {themeKey} from "@lodestory/sdk/theme";
 import {windowShellKey} from "@lodestory/sdk/window-shell";
+import {i18nKey} from "@lodestory/sdk/i18n";
 import {NavigationLayout, type RegisteredNavigationItem} from "./NavigationLayout";
+import {navigationMessages} from "./i18n";
 
 /** 拥有应用导航布局；页面内容由各插件登记，页面状态和切换仍交给 UI。 */
 export function createNavigationLayoutPlugin(): Plugin {
     let cleanup: (() => void) | undefined;
+    let removeMessages: (() => void) | undefined;
 
     return {
         id: "navigation-layout",
-        requires: [uiKey, themeKey, windowShellKey, pluginPackagesKey],
+        requires: [uiKey, themeKey, windowShellKey, pluginPackagesKey, i18nKey],
         provides: [navigationLayoutKey],
         activate(context) {
             const ui = context.get(uiKey);
             const WindowShell = context.get(windowShellKey).View;
+            const i18n = context.get(i18nKey);
+            removeMessages = i18n.registerMessages("navigation-layout", navigationMessages);
             const removeCapability = context.get(pluginPackagesKey).registerCapability(navigationLayoutExternalCapability);
             const entries = new Map<string, { item: RegisteredNavigationItem; run?: () => void | Promise<void>; remove: () => void }>();
             const listeners = new Set<() => void>();
@@ -80,6 +85,7 @@ export function createNavigationLayoutPlugin(): Plugin {
                                     subscribeItems={subscribe}
                                     getItems={() => snapshot}
                                     ui={ui}
+                                    i18n={i18n}
                                     onNavigate={async target => {
                                         const entry = entries.get(target);
                                         if (!entry) return false;
@@ -161,8 +167,13 @@ export function createNavigationLayoutPlugin(): Plugin {
             context.provide(navigationLayoutKey, Object.freeze(service));
         },
         deactivate() {
-            cleanup?.();
+            const stop = cleanup;
             cleanup = undefined;
+            try { stop?.(); }
+            finally {
+                removeMessages?.();
+                removeMessages = undefined;
+            }
         },
     };
 }

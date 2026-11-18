@@ -1,4 +1,5 @@
 import {useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type PointerEvent as ReactPointerEvent} from "react";
+import {createPortal} from "react-dom";
 import type {CanvasSize, CanvasSurfaceProps, CanvasViewport} from "@lodestory/sdk/canvas";
 import {CanvasZoomControls} from "@lodestory/ui";
 import "./canvas.css";
@@ -75,9 +76,11 @@ function createPanAccumulator(viewport: CanvasViewport, host: Window): PanAccumu
 }
 
 /** All DOM listeners and pointer capture belong to this mounted surface, not the viewport model. */
-export function CanvasSurface({viewport, active, label, children, grid = "dots", showControls = true, zoomControls}: CanvasSurfaceProps) {
+export function CanvasSurface({viewport, active, label, children, grid = "dots", showControls = true, controls, zoomControls,
+  panOnPrimaryDrag = false, wheelOnWorldControls = false}: CanvasSurfaceProps) {
   const snapshot = useSyncExternalStore(viewport.subscribe, viewport.getSnapshot, viewport.getSnapshot);
   const surface = useRef<HTMLDivElement>(null);
+  const world = useRef<HTMLDivElement>(null);
   const drag = useRef<Drag | null>(null);
   const panAccumulator = useRef<PanAccumulator | null>(null);
   const spaceDown = useRef(false);
@@ -107,7 +110,7 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots",
 
   useLayoutEffect(() => {
     const element = surface.current;
-    if (!element) return;
+    if (!element || grid === "none") return;
     const measure = () => {
       const rect = element.getBoundingClientRect();
       setSize(current => current.width === rect.width && current.height === rect.height ? current : {width: rect.width, height: rect.height});
@@ -120,7 +123,7 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots",
     }
     window.addEventListener("resize", measure);
     return () => window.removeEventListener("resize", measure);
-  }, []);
+  }, [grid]);
 
   useLayoutEffect(() => {
     const element = surface.current;
@@ -128,7 +131,7 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots",
     const pan = createPanAccumulator(viewport, window);
     panAccumulator.current = pan;
     function wheel(event: WheelEvent) {
-      if (isInteractive(event.target)) return;
+      if (isInteractive(event.target) && !(wheelOnWorldControls && world.current?.contains(event.target as Node))) return;
       event.preventDefault();
       const rect = element!.getBoundingClientRect();
       const unit = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? rect.height : 1;
@@ -172,7 +175,7 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots",
       pan.discard();
       finishGesture(false, false);
     };
-  }, [enabled, viewport]);
+  }, [enabled, viewport, wheelOnWorldControls]);
 
   // A timeline can swap its viewport without unmounting this surface.
   useLayoutEffect(() => { finishGesture(); }, [viewport]);
@@ -180,7 +183,8 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots",
   function pointerDown(event: ReactPointerEvent<HTMLDivElement>) {
     if (!enabled || isInteractive(event.target)) return;
     if (event.button === 0) event.currentTarget.focus({preventScroll: true});
-    if (drag.current || event.button !== 1 && !(event.button === 0 && spaceDown.current)) return;
+    const primaryPan = event.button === 0 && !event.ctrlKey && (panOnPrimaryDrag || spaceDown.current);
+    if (drag.current || event.button !== 1 && !primaryPan) return;
     event.preventDefault();
     event.currentTarget.focus({preventScroll: true});
     drag.current = {pointerId: event.pointerId, x: event.clientX, y: event.clientY};
@@ -214,15 +218,23 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots",
     finishDrag();
   }
 
-  const offset = {x: size.width / 2 - snapshot.center.x * snapshot.zoom, y: size.height / 2 - snapshot.center.y * snapshot.zoom};
+  const translation = {x: -snapshot.center.x * snapshot.zoom, y: -snapshot.center.y * snapshot.zoom};
+  const offset = {x: size.width / 2 + translation.x, y: size.height / 2 + translation.y};
   // Keep the dot pitch between 24 and 48 CSS pixels while anchoring it in world coordinates.
   const gridStep = 32 * 2 ** Math.ceil(Math.log2(24 / (32 * snapshot.zoom)));
   const pitch = gridStep * snapshot.zoom;
   const gridOffset = {x: ((offset.x % pitch) + pitch) % pitch, y: ((offset.y % pitch) + pitch) % pitch};
+  const toolbar = showControls ? <CanvasZoomControls label={controls?.label} zoom={snapshot.zoom} disabled={!enabled}
+    onZoomChange={zoom => { flushPan(viewport); viewport.zoomTo(zoom); }}
+    onResetZoom={() => { flushPan(viewport); viewport.resetZoom(); }}
+    onResetView={() => { flushPan(viewport); viewport.resetView(); }}>
+    {zoomControls}
+  </CanvasZoomControls> : null;
+  const dragDescription = panOnPrimaryDrag ? "拖动空白处或用方向键平移" : "方向键平移，空格加左键或中键拖动";
 
   return <div ref={surface} className="canvas-surface" role="region" aria-label={label} tabIndex={0}
-    aria-description="方向键平移，空格加左键或中键拖动，Ctrl 或 Command 加滚轮缩放，Home 回到原点。"
-    data-canvas-active={enabled} data-canvas-hand={hand} data-canvas-dragging={dragging}
+    aria-description={`${dragDescription}，Ctrl 或 Command 加滚轮缩放，Home 回到原点。`}
+    data-canvas-active={enabled} data-canvas-hand={hand || enabled && panOnPrimaryDrag} data-canvas-dragging={dragging}
     data-canvas-center-x={snapshot.center.x} data-canvas-center-y={snapshot.center.y} data-canvas-zoom={snapshot.zoom}
     onPointerDown={pointerDown} onPointerMove={pointerMove}
     onPointerUp={pointerUp} onPointerCancel={pointerEnd}
@@ -247,14 +259,9 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots",
       </pattern></defs>
       <rect width="100%" height="100%" fill={`url(#${patternId})`}/>
     </svg>}
-    <div className="canvas-world" style={{transform: `translate(${offset.x}px, ${offset.y}px) scale(${snapshot.zoom})`}}>
+    <div ref={world} className="canvas-world" style={{transform: `translate(${translation.x}px, ${translation.y}px) scale(${snapshot.zoom})`}}>
       {children}
     </div>
-    {showControls && <CanvasZoomControls zoom={snapshot.zoom} disabled={!enabled}
-      onZoomChange={zoom => { flushPan(viewport); viewport.zoomTo(zoom); }}
-      onResetZoom={() => { flushPan(viewport); viewport.resetZoom(); }}
-      onResetView={() => { flushPan(viewport); viewport.resetView(); }}>
-      {zoomControls}
-    </CanvasZoomControls>}
+    {toolbar && controls?.target ? createPortal(toolbar, controls.target) : toolbar}
   </div>;
 }

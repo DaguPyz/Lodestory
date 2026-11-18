@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {createMainFixture} from "./helpers/mainStartupFixture.mjs";
+import {createI18nFixture} from "./helpers/i18nFixture.mjs";
 
 function textContent(node) {
   if (node == null || typeof node === "boolean") return "";
@@ -9,23 +10,31 @@ function textContent(node) {
   return node.props ? textContent(node.props.children) : "";
 }
 
-test("writing status counts extracted plain text and shows a placeholder when extraction is unavailable", () => {
+test("writing status counts extracted plain text and formats it in the selected language", async () => {
   const fixture = createMainFixture();
   const {EditorStatusBar} = fixture.loadModule("plugins/writing-status/EditorStatusBar.tsx");
   const document = {saveState: "saved"};
+  const {i18n, stop} = createI18nFixture(fixture.loadModule);
+  const {writingStatusMessages} = fixture.loadModule("plugins/writing-status/i18n.ts");
+  i18n.registerMessages("writing-status", writingStatusMessages);
 
-  const unavailable = textContent(EditorStatusBar({document, text: undefined}));
+  const unavailable = textContent(EditorStatusBar({document, text: undefined, i18n}));
   assert.match(unavailable, /文稿 —/);
   assert.doesNotMatch(unavailable, /字/);
 
-  const extracted = textContent(EditorStatusBar({document, text: "A\n猫"}));
+  const extracted = textContent(EditorStatusBar({document, text: "A\n猫", i18n}));
   assert.match(extracted, /文稿 2 字/);
 
-  const hiddenStatus = EditorStatusBar({document, text: "A\n猫", showDocumentDetails: false});
+  const hiddenStatus = EditorStatusBar({document, text: "A\n猫", showDocumentDetails: false, i18n});
   assert.equal(hiddenStatus.props["data-document-details-hidden"], true);
   const hiddenDocument = textContent(hiddenStatus);
   assert.doesNotMatch(hiddenDocument, /已保存|文稿|字/);
   assert.match(hiddenDocument, /100%/);
+
+  await i18n.setLocale("en");
+  assert.match(textContent(EditorStatusBar({document, text: "猫", i18n})), /1 character(?!s)/);
+  assert.match(textContent(EditorStatusBar({document, text: "猫".repeat(1200), i18n})), /1,200 characters/);
+  await stop();
 });
 
 test("writing status character counting matches the former Unicode and whitespace semantics", () => {
@@ -48,12 +57,14 @@ test("writing status character counting matches the former Unicode and whitespac
   assert.equal(countDocumentCharacters("猫😀 \n".repeat(50_000)), 100_000);
 });
 
-test("writing status follows the public body main visibility and preserves the percentage display", () => {
+test("writing status follows the public body main visibility and preserves the percentage display", async () => {
   const fixture = createMainFixture();
   const {workbenchKey} = fixture.requireSdk("@lodestory/sdk/workbench");
   const {documentsKey} = fixture.requireSdk("@lodestory/sdk/documents");
   const {bodyEditorKey, bodyEditorContentIds} = fixture.requireSdk("@lodestory/sdk/body-editor");
   const {layoutKey} = fixture.requireSdk("@lodestory/sdk/layout");
+  const {i18nKey} = fixture.requireSdk("@lodestory/sdk/i18n");
+  const {i18n, stop} = createI18nFixture(fixture.loadModule);
   const session = {id: "status-session", project: {id: "status-project", name: "正文", path: "/stories/status"}};
   const workbench = {getSnapshot: () => ({session}), subscribe: () => () => {}};
   const workspace = {getSnapshot: () => ({documents: [], activeId: null}), subscribe: () => () => {}};
@@ -65,7 +76,7 @@ test("writing status follows the public body main visibility and preserves the p
     getSnapshot: () => layoutSnapshot,
     subscribe: () => () => {},
   };
-  const services = new Map([[workbenchKey, workbench], [documentsKey, documents], [bodyEditorKey, bodyEditor], [layoutKey, layout]]);
+  const services = new Map([[workbenchKey, workbench], [documentsKey, documents], [bodyEditorKey, bodyEditor], [layoutKey, layout], [i18nKey, i18n]]);
   const plugin = fixture.loadModule("plugins/writing-status/writingStatusPlugin.tsx").createWritingStatusPlugin();
   plugin.activate({get: key => services.get(key), track: contribution => contribution});
 
@@ -77,18 +88,19 @@ test("writing status follows the public body main visibility and preserves the p
 
   const {EditorStatusBar} = fixture.loadModule("plugins/writing-status/EditorStatusBar.tsx");
   const document = {saveState: "saved", content: "正文"};
-  const visibleText = textContent(EditorStatusBar({document, text: "正文", showDocumentDetails: visibilityProp()}));
+  const visibleText = textContent(EditorStatusBar({document, text: "正文", showDocumentDetails: visibilityProp(), i18n}));
   assert.match(visibleText, /已保存/);
   assert.match(visibleText, /文稿 2 字/);
 
   layoutSnapshot = {contents: [], shownIds: []};
-  const canvasText = textContent(EditorStatusBar({document, text: "正文", showDocumentDetails: visibilityProp()}));
+  const canvasText = textContent(EditorStatusBar({document, text: "正文", showDocumentDetails: visibilityProp(), i18n}));
   assert.doesNotMatch(canvasText, /已保存|文稿|字/);
   assert.match(canvasText, /100%/);
 
   layoutSnapshot = {contents: [], shownIds: [bodyEditorContentIds.main]};
-  const restoredText = textContent(EditorStatusBar({document, text: "正文", showDocumentDetails: visibilityProp()}));
+  const restoredText = textContent(EditorStatusBar({document, text: "正文", showDocumentDetails: visibilityProp(), i18n}));
   assert.match(restoredText, /已保存/);
   assert.match(restoredText, /文稿 2 字/);
   plugin.deactivate();
+  await stop();
 });

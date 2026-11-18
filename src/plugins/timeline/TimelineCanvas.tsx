@@ -514,7 +514,7 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
           </g>}
         </svg>
       </div>}
-      {snapshot.loaded && <TimelineEvents contextMenus={contextMenus} assetCatalog={assetCatalog} assetRelations={assetRelations}
+      {snapshot.loaded && <TimelineEvents canvas={canvas} contextMenus={contextMenus} assetCatalog={assetCatalog} assetRelations={assetRelations}
         store={events} settings={snapshot.settings} view={view} size={size}
         openToken={openToken}
         growthGeometryRef={growthGeometry}

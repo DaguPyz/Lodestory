@@ -1,0 +1,40 @@
+.language-settings {
+  max-width: 42rem;
+}
+
+.language-settings-control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, 18rem);
+  align-items: center;
+  gap: var(--ui-space-6);
+}
+
+.language-settings-saving,
+.language-settings-error {
+  margin: var(--ui-space-5) 0 0;
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+.language-settings-saving {
+  color: var(--ui-text-secondary);
+}
+
+.language-settings-error {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--ui-space-3);
+  color: var(--ui-status-danger);
+}
+
+.language-settings-error p {
+  margin: 0;
+}
+
+@container settings-content (max-width: 25rem) {
+  .language-settings-control {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--ui-space-3);
+  }
+}

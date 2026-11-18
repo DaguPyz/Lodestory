@@ -15,6 +15,9 @@ export type DialogProps = {
   /** Fill lets children scroll. Flush also removes body padding and separates the header. */
   bodyLayout?: "scroll" | "fill" | "flush";
   description?: ReactNode;
+  /** Localized text for the dialog's keyboard-accessible movement controls. */
+  moveLabel?: string;
+  moveHint?: string;
   /** Optional controls beside the draggable title. */
   headerActions?: ReactNode;
   children: ReactNode;
@@ -29,7 +32,7 @@ type Density = "comfortable" | "spacious" | "compact";
 const DialogBusyContext = createContext(false);
 
 /** Controlled modal shell. The owning plugin retains all form and operation state. */
-export function Dialog({ open, onOpenChange, onOpenChangeComplete, title, size = "regular", bodyLayout = "scroll", description, headerActions, children, busy = false, initialFocus, finalFocus }: DialogProps) {
+export function Dialog({ open, onOpenChange, onOpenChangeComplete, title, size = "regular", bodyLayout = "scroll", description, moveLabel, moveHint, headerActions, children, busy = false, initialFocus, finalFocus }: DialogProps) {
   const [density, setDensity] = useState<Density>("comfortable");
   const movement = useDialogPosition(open);
   const interactionRef = useInteractionRef<HTMLDivElement>(open, "dialog");
@@ -74,11 +77,11 @@ export function Dialog({ open, onOpenChange, onOpenChangeComplete, title, size =
             onKeyDownCapture={movement.onKeyDownCapture}
             initialFocus={initialFocus} finalFocus={finalFocus}>
             <div ref={movement.headerRef} className="ui-dialog-header" role="group" tabIndex={-1}
-              aria-label={`移动弹框：${title}`} aria-describedby={movementHint} {...movement.headerProps}>
+              aria-label={moveLabel ?? `移动弹框：${title}`} aria-describedby={movementHint} {...movement.headerProps}>
               <BaseDialog.Title className="ui-dialog-title">{title}</BaseDialog.Title>
               {headerActions != null && <div className="ui-dialog-header-actions" data-no-drag
                 onDoubleClick={event => event.stopPropagation()}>{headerActions}</div>}
-              <span id={movementHint} className="ui-dialog-move-hint">拖动标题移动；方向键移动，Shift 加速，Home 居中，拖动时按 Escape 取消。</span>
+              <span id={movementHint} className="ui-dialog-move-hint">{moveHint ?? "拖动标题移动；方向键移动，Shift 加速，Home 居中，拖动时按 Escape 取消。"}</span>
             </div>
             <div className="ui-dialog-body">
               {description != null && <BaseDialog.Description className="ui-dialog-description">{description}</BaseDialog.Description>}

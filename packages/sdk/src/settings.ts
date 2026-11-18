@@ -4,6 +4,7 @@ import {createServiceKey} from "./ServiceKey.js";
 /** A plugin-owned settings view, rendered only when the user selects it. */
 export type SettingsSection = Readonly<{
   id: string;
+  /** Stable grouping value and fallback heading. */
   group: string;
   title: string;
   order?: number;

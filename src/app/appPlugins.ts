@@ -27,6 +27,8 @@ import {createDocumentTabsPlugin} from "../plugins/document-tabs/documentTabsPlu
 import {createWritingStatusPlugin} from "../plugins/writing-status/writingStatusPlugin";
 import {createWorkbenchToolbarPlugin} from "../plugins/workbench-toolbar/workbenchToolbarPlugin";
 import {createConfigPlugin} from "../plugins/config/configPlugin";
+import {createI18nPlugin} from "../plugins/i18n/i18nPlugin";
+import {createLanguageSettingsPlugin} from "../plugins/language-settings/languageSettingsPlugin";
 import {createSettingsPlugin} from "../plugins/settings/settingsPlugin";
 import {createProjectSearchPlugin} from "../plugins/project-search/projectSearchPlugin";
 import {createDocumentSearchPlugin} from "../plugins/document-search/documentSearchPlugin";
@@ -39,6 +41,7 @@ import {createExternalPluginsPlugin} from "../plugins/external-plugins/externalP
 export function createAppPlugins(): readonly Plugin[] {
     return [
         createConfigPlugin(),
+        createI18nPlugin(),
         createErrorUiPlugin(),
         createPluginPackagesPlugin(),
         createUiPlugin(),
@@ -71,6 +74,7 @@ export function createAppPlugins(): readonly Plugin[] {
         createWorkbenchToolbarPlugin(),
         createWelcomePlugin(),
         createSettingsPlugin(),
+        createLanguageSettingsPlugin(),
         createExternalPluginsPlugin(),
         createPluginManagementPlugin(),
     ];

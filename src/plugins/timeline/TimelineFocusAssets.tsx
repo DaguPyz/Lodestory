@@ -1,11 +1,13 @@
-import {useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode} from "react";
+import {useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode} from "react";
 import type {AssetCatalog, AssetCatalogSnapshot} from "@lodestory/sdk/asset-catalog";
 import type {AssetRelationNetwork, AssetRelationSnapshot} from "@lodestory/sdk/asset-relations";
-import {Button, CanvasZoomControls, Icon} from "@lodestory/ui";
+import type {CanvasService} from "@lodestory/sdk/canvas";
+import {Button, Icon} from "@lodestory/ui";
 import type {TimelineEvent} from "./timelineEventStore";
 import {getTimelineAssetOrbit, isRelationInViewport, layoutRelationLabels, relationLabelPosition, timelineFocusEventCenter, type OrbitSlot} from "./timelineAssetOrbit";
 import {groupFocusAssets, relationLabelsByAsset} from "./timelineFocusAssetData";
-import {relationStageMinSize, useTimelineRelationViewport} from "./useTimelineRelationViewport";
+import {useTimelineRelationViewport} from "./useTimelineRelationViewport";
+import {allRelationCategories, TimelineRelationCategoryFilter, type RelationCategoryFilter} from "./TimelineRelationCategoryFilter";
 import {TimelineTextZoomSwitch} from "./TimelineTextZoomSwitch";
 import "./timeline-focus-assets.css";
 
@@ -97,7 +99,8 @@ function relationSegment(position: OrbitSlot, center: number, zoom: number, node
   return `M${center} ${center}L${center - offsetX * ratio} ${center - offsetY * ratio}`;
 }
 
-export function TimelineFocusAssets({event, catalog, network, focusedAsset, origin, size, closing, onFocusAsset, onNavigate, onBack, onExited, children}: {
+export function TimelineFocusAssets({canvas, event, catalog, network, focusedAsset, origin, size, closing, onFocusAsset, onNavigate, onBack, onExited, children}: {
+  canvas: CanvasService;
   event: TimelineEvent;
   catalog: AssetCatalog | null;
   network: AssetRelationNetwork | null;
@@ -122,8 +125,15 @@ export function TimelineFocusAssets({event, catalog, network, focusedAsset, orig
   const relationLabels = useMemo(() => assetId && activeNetwork && relationSnapshot?.loaded
     ? relationLabelsByAsset(assetId, activeNetwork.getRelations(assetId)) : null, [assetId, activeNetwork, relationSnapshot]);
   const [selectedPeerId, setSelectedPeerId] = useState<string | null>(null);
+  const [focusedPeerId, setFocusedPeerId] = useState<string>();
   const [scaleTextWithZoom, setScaleTextWithZoom] = useState(false);
-  const highlightedPeerId = selectedPeerId && relationLabels?.has(selectedPeerId) ? selectedPeerId : null;
+  const [controlsTarget, setControlsTarget] = useState<HTMLDivElement | null>(null);
+  const [categorySelection, setCategorySelection] = useState<{asset: FocusedAsset; filter: RelationCategoryFilter} | null>(null);
+  const activeCategorySelection = categorySelection?.asset === focusedAsset ? categorySelection : null;
+  const categoryFilter = activeCategorySelection?.filter ?? allRelationCategories;
+  const changeCategoryFilter = useCallback((filter: RelationCategoryFilter) => {
+    if (focusedAsset) setCategorySelection({asset: focusedAsset, filter});
+  }, [focusedAsset]);
   const assetIds = useMemo(() => assetId ? [...(relationLabels?.keys() ?? [])] : event.assetIds, [assetId, relationLabels, event.assetIds]);
   const catalogReady = Boolean(snapshot?.loaded && !snapshot.blocked && !snapshot.error);
   const breadcrumbs = useMemo(() => {
@@ -137,32 +147,42 @@ export function TimelineFocusAssets({event, catalog, network, focusedAsset, orig
     path.push({label: event.title, target: "event"}, {label: "时间线", target: "timeline"});
     return path.reverse();
   }, [focusedAsset, event.title, snapshot?.assets, catalogReady]);
-  const groups = useMemo(() => groupFocusAssets(assetIds, snapshot), [assetIds, snapshot]);
+  const categoryGroups = useMemo(() => groupFocusAssets(assetIds, snapshot), [assetIds, snapshot]);
+  const groups = useMemo(() => categoryFilter.mode === "all" ? categoryGroups : categoryGroups.filter(({id}) =>
+    categoryFilter.categoryIds.has(id) === (categoryFilter.mode === "include")), [categoryGroups, categoryFilter]);
+  const highlightedPeerId = useMemo(() => selectedPeerId && groups.some(group => group.items.some(({id}) => id === selectedPeerId))
+    ? selectedPeerId : null, [groups, selectedPeerId]);
   const centerGroup = useMemo(() => assetId ? groupFocusAssets([assetId], snapshot)[0] : undefined, [assetId, snapshot]);
   const center = centerGroup?.items[0];
   const scene = useRef<HTMLDivElement>(null);
-  const scrollport = useRef<HTMLDivElement>(null);
+  const viewportElement = useRef<HTMLDivElement>(null);
   const relationLabelId = useId();
   const centerMotion = useRef<HTMLDivElement>(null);
   const summary = useRef<HTMLHeadingElement>(null);
   const breadcrumbBar = useRef<HTMLElement>(null);
   const timelineCrumb = useRef<HTMLButtonElement>(null);
   const previousAsset = useRef(focusedAsset);
-  const total = assetIds.length;
-  const diameter = Math.min(size.width - 2 * sceneInset.horizontal,
-    size.height - sceneInset.top - sceneInset.bottom, 600);
+  const total = useMemo(() => groups.reduce((count, group) => count + group.items.length, 0), [groups]);
+  const viewWidth = size.width - 2 * sceneInset.horizontal;
+  const viewHeight = size.height - sceneInset.top - sceneInset.bottom;
+  const diameter = Math.min(viewWidth, viewHeight, 600);
   const rem = assetId ? fontSizeInPixels() : 16;
   const compact = diameter < 440 * rem / 16;
   const orbit = useMemo(() => compact ? null : getTimelineAssetOrbit(groups.map(group => ({count: group.items.length})),
     {width: diameter, height: diameter}, assetId ? {spacing: 12 * rem, offsetRings: true} : undefined),
   [groups, diameter, compact, assetId, rem]);
   const pannable = Boolean(assetId && !compact);
-  const {diagramSize, overflow, zoom, zoomTo, resetView, initial, scrolled} = useTimelineRelationViewport(scrollport, {
-    assetId, diameter: orbit?.diameter ?? diameter, compact, closing,
-    width: size.width - 2 * sceneInset.horizontal, height: size.height - sceneInset.top - sceneInset.bottom,
-  });
-  const scrollable = overflow || pannable;
-  const graphZoom = pannable ? zoom : 1;
+  const {viewport: relationViewport, view: relationView, moved: relationMoved} = useTimelineRelationViewport(canvas, assetId);
+  const graphZoom = pannable ? relationView?.zoom ?? 1 : 1;
+  const diagramSize = (orbit?.diameter ?? diameter) * graphZoom;
+  const overflow = !compact && (diagramSize > viewWidth || diagramSize > viewHeight);
+  const scrollableEvent = !assetId && overflow;
+  const initial = useMemo(() => ({left: (diagramSize - viewWidth) / 2, top: (diagramSize - viewHeight) / 2,
+    width: viewWidth, height: viewHeight}), [diagramSize, viewWidth, viewHeight]);
+  const panX = (relationView?.center.x ?? 0) * graphZoom;
+  const panY = (relationView?.center.y ?? 0) * graphZoom;
+  const graphPanned = pannable && (panX !== 0 || panY !== 0);
+  const visibleViewport = useMemo(() => ({...initial, left: initial.left + panX, top: initial.top + panY}), [initial, panX, panY]);
   const textScale = scaleTextWithZoom ? graphZoom : 1;
   const nodeScale = scaleTextWithZoom ? textScale : Math.max(0.55, Math.min(1, graphZoom * 2));
   const lineScale = scaleTextWithZoom ? textScale : Math.max(0.8, nodeScale);
@@ -183,15 +203,14 @@ export function TimelineFocusAssets({event, catalog, network, focusedAsset, orig
     }));
   }, [groups, orbit, assetId, relationLabels, overflow, diagramSize, initial, textRem, graphZoom]);
   const visibleGroups = useMemo(() => shownGroups.map(group => ({
-    ...group, items: scrolled && overflow ? group.items.filter(({asset, relation}) => !relation || asset.id === scrolled.focusedPeerId
-      || isRelationInViewport(relation.position, relation.labelPosition, diagramSize, scrolled.viewport, textRem))
-      : group.items.filter(item => item.initial),
-  })), [shownGroups, scrolled, overflow, diagramSize, textRem]);
+    ...group, items: group.items.filter(({asset, relation, initial}) => !relation || asset.id === focusedPeerId
+      || (graphPanned ? isRelationInViewport(relation.position, relation.labelPosition, diagramSize, visibleViewport, textRem) : initial)),
+  })), [shownGroups, focusedPeerId, graphPanned, visibleViewport, diagramSize, textRem]);
   const visibleLabels = useMemo(() => {
     if (graphZoom >= textScale) return null;
     const visible = visibleGroups.flatMap(group => group.items.flatMap(({relation}) => relation ? [relation] : []));
-    return layoutRelationLabels(visible, diagramSize, nodeRem, textRem, highlightedPeerId, scrolled?.focusedPeerId);
-  }, [visibleGroups, diagramSize, nodeRem, textRem, graphZoom, textScale, highlightedPeerId, scrolled?.focusedPeerId]);
+    return layoutRelationLabels(visible, diagramSize, nodeRem, textRem, highlightedPeerId, focusedPeerId);
+  }, [visibleGroups, diagramSize, nodeRem, textRem, graphZoom, textScale, highlightedPeerId, focusedPeerId]);
   const entranceOrder = useMemo(() => {
     const initiallyVisible = shownGroups.flatMap(group => group.items.filter(item => item.relation && item.initial));
     const count = initiallyVisible.length;
@@ -211,21 +230,23 @@ export function TimelineFocusAssets({event, catalog, network, focusedAsset, orig
       phase, items, path: items.map(({position}) => relationSegment(position, diagramSize / 2, graphZoom, nodeRem)).join(""),
     }));
   }, [assetId, orbit, visibleGroups, entranceOrder, diagramSize, graphZoom, nodeRem]);
+  const drawFullRelations = graphZoom > 1 && (overflow || graphPanned);
   const fullRelationPath = useMemo(() => {
-    if (!overflow || graphZoom <= 1) return "";
+    if (!drawFullRelations) return "";
     // Keep connections crossing the view when their nodes and labels are outside it.
     return shownGroups.flatMap(({items}) => items.flatMap(({relation}) => relation
       ? [relationSegment(relation.position, diagramSize / 2, graphZoom, nodeRem)] : [])).join("");
-  }, [overflow, graphZoom, shownGroups, diagramSize, nodeRem]);
+  }, [drawFullRelations, graphZoom, shownGroups, diagramSize, nodeRem]);
   const relationMessage = relationSnapshot?.loading ? "正在读取资产关系…"
     : !relationSnapshot?.loaded ? "资产关系读取失败"
-    : !total ? "暂无资产关系" : null;
+    : !assetIds.length ? "暂无资产关系" : !total ? "没有符合筛选条件的关联资产" : null;
   const message = assetId ? relationMessage : !total ? "暂无关联资产"
     : snapshot?.loading && !snapshot.loaded ? "正在读取关联资产…" : !catalogReady ? "资产目录暂不可用" : null;
-  const sceneStyle = compact ? undefined : {width: diagramSize, height: diagramSize};
-  const stageStyle = pannable ? {...sceneStyle, minWidth: relationStageMinSize, minHeight: relationStageMinSize} : sceneStyle;
+  const sceneStyle = compact ? undefined : {width: diagramSize, height: diagramSize,
+    // The world layer places the origin. Keep projected text and edges in screen pixels.
+    transform: pannable ? `scale(${1 / graphZoom}) translate(-50%, -50%)` : undefined};
   const enteringCenter = !compact && Boolean(origin);
-  const graphMoved = Boolean(scrolled);
+  const graphMoved = (pannable && relationMoved) || Boolean(activeCategorySelection);
   const style = {...sceneVariables,
     "--timeline-focus-text-scale": textScale,
     "--timeline-focus-node-scale": nodeScale,
@@ -236,12 +257,14 @@ export function TimelineFocusAssets({event, catalog, network, focusedAsset, orig
   } as CSSProperties;
 
   useLayoutEffect(() => {
-    if (selectedPeerId && (previousAsset.current !== focusedAsset || !relationLabels?.has(selectedPeerId))) setSelectedPeerId(null);
-    if (previousAsset.current === focusedAsset) return;
+    if (selectedPeerId && (previousAsset.current !== focusedAsset || !highlightedPeerId)) setSelectedPeerId(null);
+    if (previousAsset.current === focusedAsset || pannable && !relationViewport) return;
     previousAsset.current = focusedAsset;
+    setCategorySelection(null);
+    setFocusedPeerId(undefined);
     if (!focusedAsset) setScaleTextWithZoom(false);
     (focusedAsset ? summary.current : timelineCrumb.current)?.focus({preventScroll: true});
-  }, [focusedAsset, relationLabels, selectedPeerId]);
+  }, [focusedAsset, highlightedPeerId, selectedPeerId, pannable, relationViewport]);
 
   useLayoutEffect(() => {
     const bar = breadcrumbBar.current;
@@ -249,8 +272,15 @@ export function TimelineFocusAssets({event, catalog, network, focusedAsset, orig
   }, [breadcrumbs, size.width]);
 
   useLayoutEffect(() => {
+    const element = viewportElement.current;
+    if (!element || !scrollableEvent) return;
+    element.scrollLeft = (element.scrollWidth - element.clientWidth) / 2;
+    element.scrollTop = (element.scrollHeight - element.clientHeight) / 2;
+  }, [scrollableEvent, diagramSize, viewWidth, viewHeight]);
+
+  useLayoutEffect(() => {
     if (centerMotion.current && origin && enteringCenter) return moveToCenter(centerMotion.current, origin);
-  }, [assetId, enteringCenter, origin]);
+  }, [assetId, enteringCenter, origin, relationViewport]);
 
   useLayoutEffect(() => {
     if (graphMoved) centerMotion.current?.getAnimations().forEach(animation => animation.cancel());
@@ -328,39 +358,13 @@ export function TimelineFocusAssets({event, catalog, network, focusedAsset, orig
       }}><span id={`${relationLabelId}-${id}`}>{label}</span></button>;
   }
 
-  return <div className="timeline-focus-assets" style={style} data-compact={compact || undefined}
-    data-relations={Boolean(assetId) || undefined} data-centering={enteringCenter || undefined}
-    data-small-nodes={nodeScale < 0.8 && !scaleTextWithZoom || undefined}
-    inert={closing} data-closing={closing || undefined}>
-    <div className="timeline-focus-toolbar">
-      <nav ref={breadcrumbBar} className="timeline-focus-breadcrumbs" aria-label="时间线浏览路径" data-canvas-interactive>
-        <ol>
-          {breadcrumbs.map(({label, target}, index) => {
-            const text = <span className="timeline-focus-crumb-label">{label}</span>;
-            return <li key={index}>
-              {index > 0 && <Icon name="chevronRight" size="small" />}
-              {index === breadcrumbs.length - 1
-                ? <span className="timeline-focus-crumb-current" aria-current="page" title={label}>{text}</span>
-                : <Button ref={target === "timeline" ? timelineCrumb : undefined} variant="ghost" title={label}
-                  onClick={() => onNavigate(target)}>{text}</Button>}
-            </li>;
-          })}
-        </ol>
-      </nav>
-    </div>
-    <div ref={scrollport} className="timeline-focus-viewport" data-overflow={scrollable || undefined}
-      data-pannable={pannable || undefined} data-canvas-interactive={scrollable || undefined} tabIndex={scrollable ? 0 : undefined}
-      role={scrollable ? "region" : undefined} aria-label={scrollable ? assetId ? "资产与全部关系" : "事件与全部关联资产" : undefined}
-      aria-description={pannable ? "拖动空白处或用方向键平移图谱，Ctrl 或 Command 加滚轮缩放，Home 回到原点。" : undefined}
-      onClick={overflow && !assetId ? click => {
-        if (click.button !== 0 || click.ctrlKey || click.detail > 1 || !(click.target instanceof Element)) return;
-        const bounds = click.currentTarget.getBoundingClientRect();
-        if (click.clientX >= bounds.left + click.currentTarget.clientWidth
-          || click.clientY >= bounds.top + click.currentTarget.clientHeight) return;
-        if (!click.target.closest(".timeline-focus-event, .timeline-focus-relation-center, .timeline-focus-asset, .timeline-focus-relation-label")) onBack();
-      } : undefined}>
-    <div key={assetId ?? "event"} className="timeline-focus-stage" style={stageStyle}>
-    <div ref={scene} className="timeline-focus-scene" data-empty={!total || undefined} data-scrolled={Boolean(scrolled) || undefined} style={sceneStyle}>
+  function trackFocusedPeer(target: EventTarget | null) {
+    setFocusedPeerId(target instanceof Element && viewportElement.current?.contains(target)
+      ? target.closest<HTMLElement>("[data-peer-id]")?.dataset.peerId : undefined);
+  }
+
+  const sceneContent = <div key={assetId ?? "event"} ref={scene} className="timeline-focus-scene"
+    data-empty={!total || undefined} data-scrolled={graphMoved || undefined} style={sceneStyle}>
       {orbit?.rings.map(ring => <div key={ring.radius} className="timeline-focus-orbit" aria-hidden="true"
         style={{inset: diagramSize / 2 - ring.radius * graphZoom}} />)}
       {centerGroup && center ? <div className="timeline-focus-relation-center" data-canvas-interactive>
@@ -446,14 +450,52 @@ export function TimelineFocusAssets({event, catalog, network, focusedAsset, orig
           </div>;
         })}
       </div>}
+  </div>;
+
+  const Surface = canvas.Surface;
+  return <div className="timeline-focus-assets" style={style} data-compact={compact || undefined}
+    data-relations={Boolean(assetId) || undefined} data-centering={enteringCenter || undefined}
+    data-small-nodes={nodeScale < 0.8 && !scaleTextWithZoom || undefined}
+    inert={closing} data-closing={closing || undefined}>
+    <div className="timeline-focus-toolbar">
+      <nav ref={breadcrumbBar} className="timeline-focus-breadcrumbs" aria-label="时间线浏览路径" data-canvas-interactive>
+        <ol>
+          {breadcrumbs.map(({label, target}, index) => {
+            const text = <span className="timeline-focus-crumb-label">{label}</span>;
+            return <li key={index}>
+              {index > 0 && <Icon name="chevronRight" size="small" />}
+              {index === breadcrumbs.length - 1
+                ? <span className="timeline-focus-crumb-current" aria-current="page" title={label}>{text}</span>
+                : <Button ref={target === "timeline" ? timelineCrumb : undefined} variant="ghost" title={label}
+                  onClick={() => onNavigate(target)}>{text}</Button>}
+            </li>;
+          })}
+        </ol>
+      </nav>
+      {assetId && !closing && <TimelineRelationCategoryFilter key={assetId}
+        categories={categoryGroups} value={categoryFilter} onChange={changeCategoryFilter} />}
     </div>
+    <div ref={viewportElement} className="timeline-focus-viewport" data-overflow={scrollableEvent || undefined}
+      data-pannable={pannable || undefined} data-canvas-interactive={scrollableEvent || undefined}
+      tabIndex={scrollableEvent ? 0 : undefined} role={scrollableEvent ? "region" : undefined}
+      aria-label={scrollableEvent ? "事件与全部关联资产" : undefined}
+      onFocus={pannable ? event => trackFocusedPeer(event.target) : undefined}
+      onBlur={pannable ? event => trackFocusedPeer(event.relatedTarget) : undefined}
+      onClick={scrollableEvent ? click => {
+        if (click.button !== 0 || click.ctrlKey || click.detail > 1 || !(click.target instanceof Element)) return;
+        const bounds = click.currentTarget.getBoundingClientRect();
+        if (click.clientX >= bounds.left + click.currentTarget.clientWidth
+          || click.clientY >= bounds.top + click.currentTarget.clientHeight) return;
+        if (!click.target.closest(".timeline-focus-event, .timeline-focus-relation-center, .timeline-focus-asset, .timeline-focus-relation-label")) onBack();
+      } : undefined}>
+      {pannable ? relationViewport && <Surface viewport={relationViewport} active={!closing} grid="none"
+        label="资产关系图" panOnPrimaryDrag wheelOnWorldControls showControls={Boolean(controlsTarget)}
+        controls={{label: "关系图视图", target: controlsTarget ?? undefined}}
+        zoomControls={<TimelineTextZoomSwitch checked={scaleTextWithZoom} disabled={closing || Boolean(relationView?.disposed)}
+          onChange={setScaleTextWithZoom} />}>
+        {sceneContent}
+      </Surface> : <div className="timeline-focus-stage" style={sceneStyle}>{sceneContent}</div>}
     </div>
-    </div>
-    {pannable && <div className="timeline-focus-zoom">
-      <CanvasZoomControls label="关系图视图" zoom={zoom} disabled={closing}
-        onZoomChange={zoomTo} onResetZoom={() => zoomTo(1)} onResetView={resetView}>
-        <TimelineTextZoomSwitch checked={scaleTextWithZoom} disabled={closing} onChange={setScaleTextWithZoom} />
-      </CanvasZoomControls>
-    </div>}
+    {pannable && <div ref={setControlsTarget} className="timeline-focus-zoom" />}
   </div>;
 }

@@ -22,6 +22,9 @@
   inset: calc(var(--ui-space-3) - var(--timeline-focus-inset-top))
     calc(var(--ui-space-4) - var(--timeline-focus-inset-inline)) auto;
   z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
 }
 
 .timeline-focus-zoom {
@@ -34,10 +37,90 @@
 
 .timeline-focus-breadcrumbs {
   inline-size: fit-content;
+  min-inline-size: 0;
   max-inline-size: 100%;
   overflow-x: auto;
   overscroll-behavior-x: contain;
   pointer-events: auto;
+}
+
+.timeline-focus-filter {
+  flex: none;
+  margin-inline-start: auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  pointer-events: auto;
+}
+
+.timeline-focus-filter[data-modes-visible] {
+  /* Three icon buttons, two gaps, the strip's padding and border, and the anchor gap. */
+  padding-inline-start: calc(3 * var(--ui-icon-button-size) + 2 * var(--ui-space-1) + 2 * var(--ui-space-2) + 6px);
+}
+
+.timeline-focus-filter > .icon-button[data-filter-active] {
+  color: var(--ui-state-hover-foreground);
+  background: var(--ui-surface-hover);
+}
+
+.timeline-focus-filter > .icon-button[data-filter-active]:hover {
+  color: var(--ui-state-selected-hover-foreground);
+  background: var(--ui-surface-selected-hover);
+}
+
+.timeline-focus-filter > .icon-button[data-filter-active]:active {
+  color: var(--ui-state-selected-pressed-foreground);
+  background: var(--ui-state-selected-pressed-background);
+}
+
+.timeline-focus-filter-popup {
+  inline-size: min(16rem, var(--available-width));
+  padding: var(--ui-space-2);
+}
+
+.timeline-event-popup.timeline-focus-filter-modes {
+  display: flex;
+  gap: var(--ui-space-1);
+  padding: var(--ui-space-2);
+  clip-path: inset(-1rem);
+  transition-property: opacity, clip-path;
+}
+
+.timeline-focus-filter-modes:is([data-starting-style], [data-ending-style]) {
+  clip-path: inset(-1rem -1rem -1rem 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .timeline-event-popup.timeline-focus-filter-modes { transition: none; }
+}
+
+.timeline-focus-filter-caption {
+  margin: 0;
+  padding: var(--ui-space-2) var(--ui-space-3);
+  color: var(--ui-text-secondary);
+  font-size: var(--ui-font-size-caption);
+  line-height: var(--ui-line-height-caption);
+}
+
+.timeline-focus-filter-option {
+  display: flex;
+  align-items: center;
+  gap: var(--ui-space-2);
+  min-block-size: var(--ui-menu-row-height);
+  padding: var(--ui-space-1) var(--ui-space-3);
+  border-radius: var(--ui-radius-row);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.timeline-focus-filter-option:hover {
+  color: var(--ui-state-hover-foreground);
+  background: var(--ui-surface-hover);
+}
+
+.timeline-focus-filter-option:active {
+  color: var(--ui-state-pressed-foreground);
+  background: var(--ui-surface-pressed);
 }
 
 .timeline-focus-breadcrumbs ol {
@@ -88,13 +171,9 @@
 }
 
 .timeline-focus-viewport[data-pannable] {
-  cursor: grab;
-  touch-action: none;
-}
-
-.timeline-focus-viewport[data-dragging] {
-  cursor: grabbing;
-  user-select: none;
+  display: flex;
+  overflow: clip;
+  pointer-events: auto;
 }
 
 .timeline-focus-viewport:focus-visible {
@@ -108,10 +187,6 @@
   min-height: 100%;
 }
 
-.timeline-focus-viewport[data-pannable] .timeline-focus-stage {
-  overflow: clip;
-}
-
 .timeline-focus-scene {
   position: absolute;
   inset: 50% auto auto 50%;
@@ -119,6 +194,11 @@
   container-type: inline-size;
   --timeline-focus-card-width: max(24px, calc(4.5rem * var(--timeline-focus-node-scale)));
   --timeline-focus-card-height: var(--timeline-focus-card-width);
+}
+
+.timeline-focus-viewport[data-pannable] .timeline-focus-scene {
+  inset: 0 auto auto 0;
+  transform-origin: 0 0;
 }
 
 .timeline-focus-orbit {
@@ -518,6 +598,10 @@
   inset-inline: 0;
 }
 
+.timeline-focus-assets[data-compact][data-relations] .timeline-focus-crumb-label {
+  max-inline-size: 8rem;
+}
+
 .timeline-focus-assets[data-compact] .timeline-focus-scene {
   inset: 0;
   display: flex;
@@ -613,6 +697,8 @@
   animation: timeline-focus-asset-fade var(--timeline-focus-reveal-duration)
     var(--ui-ease-enter) calc(var(--timeline-focus-asset-order) * var(--timeline-focus-reveal-step)) backwards;
 }
+
+.timeline-focus-assets[data-compact] .timeline-focus-scene[data-scrolled] .timeline-focus-asset-node { animation: none; }
 
 .timeline-focus-assets[data-compact] .timeline-focus-asset-face {
   flex-direction: row;

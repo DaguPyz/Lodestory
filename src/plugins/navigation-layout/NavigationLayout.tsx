@@ -1,6 +1,7 @@
 import {useEffect, useState, useSyncExternalStore, type ReactNode} from "react";
 import type {NavigationGroup} from "@lodestory/sdk/navigation-layout";
 import type {UiService} from "@lodestory/sdk/ui";
+import type {I18nService} from "@lodestory/sdk/i18n";
 import {BrandLogo} from "@lodestory/ui";
 import "../../styles.css";
 import "./navigation-layout.css";
@@ -22,13 +23,15 @@ type NavigationLayoutProps = {
   readonly getItems: () => readonly RegisteredNavigationItem[];
   readonly onNavigate: (id: string) => Promise<boolean>;
   readonly ui: UiService;
+  readonly i18n: I18nService;
   readonly children: ReactNode;
 };
 
 /** 默认导航外观；不认识作品、设置或其他具体页面。 */
-export function NavigationLayout({pageId, active, subscribeItems, getItems, onNavigate, ui, children}: NavigationLayoutProps) {
+export function NavigationLayout({pageId, active, subscribeItems, getItems, onNavigate, ui, i18n, children}: NavigationLayoutProps) {
   const items = useSyncExternalStore(subscribeItems, getItems, getItems);
   const route = useSyncExternalStore(ui.subscribe, ui.getSnapshot, ui.getSnapshot);
+  const {t} = useSyncExternalStore(i18n.subscribe, i18n.getSnapshot, i18n.getSnapshot);
   const [navigationFailed, setNavigationFailed] = useState(false);
   useEffect(() => { if (!active) setNavigationFailed(false); }, [active]);
 
@@ -51,35 +54,40 @@ export function NavigationLayout({pageId, active, subscribeItems, getItems, onNa
   }
 
   function renderItems(group: NavigationGroup) {
-    return items.filter(item => item.group === group).map(item => <button
-      key={item.id}
-      className={`navigation-item${item.icon ? "" : " navigation-item-text"}`}
-      type="button"
-      aria-current={item.kind === "page" && pageId === item.id ? "page" : undefined}
-      aria-label={item.label}
-      title={item.label}
-      disabled={!active}
-      onClick={() => void navigate(item.id)}
-    >
-      {item.icon && <span className="navigation-icon" aria-hidden="true">{item.icon}</span>}
-      <span className="navigation-label">{item.label}</span>
-    </button>);
+    return items.filter(item => item.group === group).map(item => {
+      const label = t(item.label);
+      return <button
+        key={item.id}
+        className={`navigation-item${item.icon ? "" : " navigation-item-text"}`}
+        type="button"
+        aria-current={item.kind === "page" && pageId === item.id ? "page" : undefined}
+        aria-label={label}
+        title={label}
+        disabled={!active}
+        onClick={() => void navigate(item.id)}
+      >
+        {item.icon && <span className="navigation-icon" aria-hidden="true">{item.icon}</span>}
+        <span className="navigation-label">{label}</span>
+      </button>;
+    });
   }
 
   return <div className="navigation-layout" data-ui-density="spacious">
-      <aside className="navigation-panel" aria-label="应用导航">
+      <aside className="navigation-panel" aria-label={t("应用导航")}>
         <div className="brand">
           <BrandLogo size="brand" />
           <div className="brand-copy">
             <span className="brand-name">Lodestory</span>
-            <span className="brand-caption">小说创作工作空间</span>
+            <span className="brand-caption">{t("小说创作工作空间")}</span>
           </div>
         </div>
-        <nav className="navigation-items" aria-label="主导航">{renderItems("primary")}</nav>
-        {navigationFailed && <p className="navigation-error" role="alert">操作未能完成，请重试。</p>}
-        <nav className="navigation-items navigation-secondary" aria-label="辅助导航">
+        <nav className="navigation-items" aria-label={t("主导航")}>{renderItems("primary")}</nav>
+        {navigationFailed && <p className="navigation-error" role="alert">{t("操作未能完成，请重试。")}</p>}
+        <nav className="navigation-items navigation-secondary" aria-label={t("辅助导航")}>
           {route.canGoBack && <button className="navigation-item navigation-item-text" type="button"
-            aria-label="返回上一页" disabled={!active} onClick={() => {void back();}}><span className="navigation-label">返回上一页</span></button>}
+            aria-label={t("返回上一页")} disabled={!active} onClick={() => {void back();}}>
+            <span className="navigation-label">{t("返回上一页")}</span>
+          </button>}
           {renderItems("secondary")}
         </nav>
       </aside>

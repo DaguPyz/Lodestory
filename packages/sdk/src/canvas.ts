@@ -39,8 +39,14 @@ export type CanvasSurfaceProps = Readonly<{
   grid?: "dots" | "none";
   /** Omit the zoom and reset toolbar when another view owns navigation. Defaults to true. */
   showControls?: boolean;
+  /** Optional accessible toolbar label and a mount point in the same visual surface. */
+  controls?: Readonly<{label?: string; target?: HTMLElement}>;
   /** Optional controls supplied by the consumer, placed beside the standard zoom controls. */
   zoomControls?: ReactNode;
+  /** Pan with the primary button on empty space, without requiring Space. */
+  panOnPrimaryDrag?: boolean;
+  /** Handle wheel navigation over interactive world content as well as empty space. */
+  wheelOnWorldControls?: boolean;
   /** World-space content; this layer is translated and scaled by the surface. */
   children?: ReactNode;
 }>;

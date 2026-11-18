@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { uiPluginFixture } from "./helpers/uiPluginFixture.mjs";
+import { createI18nFixture } from "./helpers/i18nFixture.mjs";
 
 function findElement(node, name) {
   if (Array.isArray(node)) {
@@ -33,9 +34,12 @@ test("motion preference keeps the effective selection after a failed write and r
   await f.mountUi();
   const { MotionSettings } = f.loadSource("plugins/settings/MotionSettings.tsx");
   const { createMotionSettingsModel } = f.loadSource("plugins/settings/motionSettingsModel.ts");
+  const {i18n, stop} = createI18nFixture(f.loadSource);
+  const {settingsMessages} = f.loadSource("plugins/settings/i18n.ts");
+  i18n.registerMessages("settings", settingsMessages);
   const model = createMotionSettingsModel(f.config);
   const instance = {};
-  const render = () => f.withHooks(instance, () => MotionSettings({ config: f.config, model }));
+  const render = () => f.withHooks(instance, () => MotionSettings({ config: f.config, model, i18n }));
 
   assert.equal(findElement(render(), "Select").props.value, "system");
   f.configFaults.writeError = new Error("disk full");
@@ -43,7 +47,7 @@ test("motion preference keeps the effective selection after a failed write and r
   await new Promise(resolve => setImmediate(resolve));
 
   const reopenedInstance = {};
-  const renderReopened = () => f.withHooks(reopenedInstance, () => MotionSettings({ config: f.config, model }));
+  const renderReopened = () => f.withHooks(reopenedInstance, () => MotionSettings({ config: f.config, model, i18n }));
   const failed = renderReopened();
   assert.equal(f.config.getSnapshot(f.uiMotionConfig), "system");
   assert.equal(findElement(failed, "Select").props.value, "system");
@@ -58,6 +62,7 @@ test("motion preference keeps the effective selection after a failed write and r
   assert.equal(findElement(retried, "Select").props.value, "reduce");
   assert.equal(findByRole(retried, "alert"), undefined);
   await model.dispose();
+  await stop();
   await f.core.unmountAll();
 });
 

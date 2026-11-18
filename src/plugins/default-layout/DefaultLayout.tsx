@@ -1,6 +1,7 @@
 import {useLayoutEffect, useRef, useState, useSyncExternalStore, type AnimationEvent, type RefObject} from "react";
 import type {LayoutContent, LayoutRole, LayoutViewProps} from "@lodestory/sdk/layout";
 import type {ErrorUiService} from "@lodestory/sdk/error";
+import type {I18nService, Translate} from "@lodestory/sdk/i18n";
 import { IconButton, Icon, Select } from "@lodestory/ui";
 import type {LayoutStore} from "./layoutStore";
 import type {createNavigationWidthModel} from "./navigationWidth";
@@ -38,7 +39,7 @@ function reduceMotionRequested() {
 }
 
 function LayoutPanel({role, entries, shownIds, docked, active, store, widths, root, workspace, rail, auxiliary, probe,
-  reserveAuxiliary, onClose, onAsideElement, ErrorBoundary}: {
+  reserveAuxiliary, onClose, onAsideElement, ErrorBoundary, t}: {
   role: PanelRole;
   entries: LayoutContent[];
   shownIds: readonly string[];
@@ -55,6 +56,7 @@ function LayoutPanel({role, entries, shownIds, docked, active, store, widths, ro
   onClose: (entry: LayoutContent) => void;
   onAsideElement?: (element: HTMLElement | null) => void;
   ErrorBoundary: ErrorUiService["ErrorBoundary"];
+  t: Translate;
 }) {
   const panel = useRef<HTMLElement>(null);
   const [presence, setPresence] = useState(initialLayoutPanelPresence);
@@ -175,12 +177,14 @@ function LayoutPanel({role, entries, shownIds, docked, active, store, widths, ro
     data-panel-phase={presence.phase} data-open={presence.phase === "open"}
     data-motion-enabled={allowOverlayMotion} hidden={!presentationId}
     aria-hidden={!panelActive} inert={!panelActive || exiting}
-    aria-label={role === "navigation" ? "导航内容" : "辅助内容"}>
+    aria-label={t(role === "navigation" ? "导航内容" : "辅助内容")}>
     <div className="layout-panel-header">
-      {entries.length > 1 ? <div className="layout-panel-switcher"><Select variant="title" aria-label={role === "navigation" ? "切换导航内容" : "切换辅助内容"}
+      {entries.length > 1 ? <div className="layout-panel-switcher"><Select variant="title"
+        aria-label={t(role === "navigation" ? "切换导航内容" : "切换辅助内容")}
         value={presentationEntry?.id ?? entries[0].id} onValueChange={id => store.show(id)}
-        options={entries.map(entry => ({value: entry.id, label: entry.title}))} /></div> : <h2>{presentationEntry?.title ?? entries[0]?.title}</h2>}
-      {presentationEntry && <IconButton label={`收起${presentationEntry.title}`} onClick={() => onClose(presentationEntry)}><Icon name="close" size="small"/></IconButton>}
+        options={entries.map(entry => ({value: entry.id, label: t(entry.title)}))} /></div> : <h2>{t((presentationEntry ?? entries[0])?.title ?? "")}</h2>}
+      {presentationEntry && <IconButton label={t("收起{title}", {values: {title: t(presentationEntry.title)}})}
+        onClick={() => onClose(presentationEntry)}><Icon name="close" size="small"/></IconButton>}
     </div>
     {entries.map(entry => {
       const isCurrent = currentId === entry.id;
@@ -191,7 +195,7 @@ function LayoutPanel({role, entries, shownIds, docked, active, store, widths, ro
         data-content-id={entry.id} data-entering={fadeContentId === entry.id}
         hidden={!visible} aria-hidden={!contentActive} inert={!contentActive}
         onAnimationEnd={event => clearContentFade(event, entry.id)}
-        aria-label={entry.title} tabIndex={-1}>
+        aria-label={t(entry.title)} tabIndex={-1}>
         <ErrorBoundary><Content entry={entry} active={contentActive}/></ErrorBoundary>
       </section>;
     })}
@@ -202,10 +206,11 @@ function LayoutPanel({role, entries, shownIds, docked, active, store, widths, ro
 }
 
 /** 仅消费用途目录；不读取业务 ID、业务 DOM，也不导入任何编辑页组件。 */
-export function DefaultLayout({store, widths, active, ErrorBoundary}: LayoutViewProps & {
+export function DefaultLayout({store, widths, active, ErrorBoundary, i18n}: LayoutViewProps & {
   store: LayoutStore;
   widths: ReturnType<typeof createNavigationWidthModel>;
   ErrorBoundary: ErrorUiService["ErrorBoundary"];
+  i18n: I18nService;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const workspace = useRef<HTMLDivElement>(null);
@@ -213,6 +218,7 @@ export function DefaultLayout({store, widths, active, ErrorBoundary}: LayoutView
   const auxiliary = useRef<HTMLElement>(null);
   const probe = useRef<HTMLDivElement>(null);
   const {snapshot, navigationDocked, auxiliaryDocked} = useSyncExternalStore(store.subscribe, store.getState, store.getState);
+  const {t} = useSyncExternalStore(i18n.subscribe, i18n.getSnapshot, i18n.getSnapshot);
   const contents = (role: LayoutRole) => snapshot.contents.filter(entry => entry.role === role);
   const shown = (id: string) => snapshot.shownIds.includes(id);
   const hasShown = (role: LayoutRole) => contents(role).some(entry => shown(entry.id));
@@ -243,7 +249,7 @@ export function DefaultLayout({store, widths, active, ErrorBoundary}: LayoutView
 
   function renderContent(entry: LayoutContent) {
     return <section key={entry.id} id={regionId(entry.id)} className="layout-content"
-      data-content-id={entry.id} hidden={!shown(entry.id)} aria-label={entry.title} tabIndex={-1}>
+      data-content-id={entry.id} hidden={!shown(entry.id)} aria-label={t(entry.title)} tabIndex={-1}>
       <ErrorBoundary><Content entry={entry} active={active && shown(entry.id)}/></ErrorBoundary>
     </section>;
   }
@@ -255,29 +261,29 @@ export function DefaultLayout({store, widths, active, ErrorBoundary}: LayoutView
     <div ref={workspace} className="layout-workspace" data-navigation-docked={navigationDocked && hasShown("navigation")}
       data-auxiliary-docked={auxiliaryDocked && hasShown("auxiliary")}
       data-has-navigation={contents("navigation").length > 0}>
-      <nav ref={rail} className="layout-activitybar" hidden={!contents("navigation").length} aria-label="工作空间工具">
-        {contents("navigation").map(entry => <IconButton key={entry.id} label={entry.title} aria-controls={regionId(entry.id)}
+      <nav ref={rail} className="layout-activitybar" hidden={!contents("navigation").length} aria-label={t("工作空间工具")}>
+        {contents("navigation").map(entry => <IconButton key={entry.id} label={t(entry.title)} aria-controls={regionId(entry.id)}
           aria-pressed={shown(entry.id)} onClick={() => toggle(entry)}>{entry.icon ?? <Icon name="file"/>}</IconButton>)}
       </nav>
       <LayoutPanel role="navigation" entries={contents("navigation")} shownIds={snapshot.shownIds}
         docked={navigationDocked} active={active} store={store} widths={widths} root={root}
         workspace={workspace} rail={rail} auxiliary={auxiliary} probe={probe}
-        reserveAuxiliary={auxiliaryDocked && hasShown("auxiliary")} onClose={close} ErrorBoundary={ErrorBoundary}/>
-      <main className="layout-main" aria-label="主工作区" tabIndex={-1}>
-        <div className="layout-tabs" aria-label="文档标签">
+        reserveAuxiliary={auxiliaryDocked && hasShown("auxiliary")} onClose={close} ErrorBoundary={ErrorBoundary} t={t}/>
+      <main className="layout-main" aria-label={t("主工作区")} tabIndex={-1}>
+        <div className="layout-tabs" aria-label={t("文档标签")}>
           {contents("tabs").map(renderContent)}
         </div>
         {contents("main").map(renderContent)}
-        {!hasShown("main") && <p className="layout-empty">从“布局内容”菜单选择要展示的内容。</p>}
+        {!hasShown("main") && <p className="layout-empty">{t("从“布局内容”菜单选择要展示的内容。")}</p>}
       </main>
       <LayoutPanel role="auxiliary" entries={contents("auxiliary")} shownIds={snapshot.shownIds}
         docked={auxiliaryDocked} active={active} store={store} widths={widths} root={root}
         workspace={workspace} rail={rail} auxiliary={auxiliary} probe={probe}
         reserveAuxiliary={false} onClose={close} onAsideElement={element => { auxiliary.current = element; }}
-        ErrorBoundary={ErrorBoundary}/>
+        ErrorBoundary={ErrorBoundary} t={t}/>
       <div ref={probe} className="layout-navigation-width-probe" aria-hidden="true" />
     </div>
-    <footer className="layout-status" hidden={!hasShown("status")} aria-label="工作区状态">
+    <footer className="layout-status" hidden={!hasShown("status")} aria-label={t("工作区状态")}>
       {contents("status").map(renderContent)}
     </footer>
   </div>;

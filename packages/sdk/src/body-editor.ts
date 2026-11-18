@@ -40,13 +40,23 @@ export type EditorCompletionCandidate = Readonly<{
     insertText: string;
 }>;
 
-export type EditorCompletion = Readonly<{
+export type EditorTextSource<Result> = Readonly<{
     isAvailable(): boolean;
-    /** Notify synchronously when availability or candidates change, invalidating previous results. */
+    /** Notify synchronously when availability or results change, invalidating previous results. */
     subscribe(listener: () => void): () => void;
-    /** Context contains only text immediately before the caret, within its logical line. */
-    query(textBefore: string, signal: AbortSignal): Promise<readonly EditorCompletionCandidate[]>;
+    query(text: string, signal: AbortSignal): Promise<readonly Result[]>;
 }>;
+
+/** Context contains only text immediately before the caret, within its logical line. */
+export type EditorCompletion = EditorTextSource<EditorCompletionCandidate>;
+
+/** A foreground style for a range of UTF-16 offsets relative to the queried text. */
+export type EditorHighlight = Readonly<{from: number; to: number; color?: string}>;
+
+/** Accepts the visible document excerpt with surrounding context. Return sorted, disjoint ranges.
+ * Color is #RRGGBB, or omitted to use the editor's theme accent.
+ */
+export type EditorHighlights = EditorTextSource<EditorHighlight>;
 
 /** 正文编辑器宿主传给格式实现的文档内容与交互状态。 */
 export type EditorProps = Readonly<{
@@ -58,6 +68,7 @@ export type EditorProps = Readonly<{
     active: boolean;
     /** Optional completion backed by the active project's registered source. */
     completion?: EditorCompletion;
+    highlights?: EditorHighlights;
     /** 用户编辑后的完整内容；初始化和纯 UI 状态变化不得触发。 */
     onChange(content: string): void;
     /** 编辑器实例可聚焦时上报句柄，卸载时以 null 清除。 */
@@ -84,6 +95,8 @@ export type BodyEditorService = {
     registerEditor(definition: EditorDefinition): PluginContribution;
     /** One optional source per project session and format. Dispose before releasing the source. */
     registerCompletionSource(sessionId: string, format: EditorFormat, source: EditorCompletion): () => void;
+    /** One optional highlight source per project session and format. */
+    registerHighlightSource(sessionId: string, format: EditorFormat, source: EditorHighlights): () => void;
     getText(fileName: string, content: string): string | undefined;
     getSearchText(fileName: string, content: string, signal?: AbortSignal): Promise<string | undefined>;
     revealSearchTarget(sessionId: string, target: EditorSearchTarget): boolean;

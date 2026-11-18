@@ -1,26 +1,26 @@
 import {createContext, useCallback, useContext, useEffect, useSyncExternalStore, type ReactNode} from "react";
 import {isTauri} from "@tauri-apps/api/core";
 import type {WorkbenchService} from "@lodestory/sdk/workbench";
-import type {EditorCompletion, EditorDefinition, EditorFormat} from "@lodestory/sdk/body-editor";
+import type {EditorDefinition, EditorFormat, EditorProps} from "@lodestory/sdk/body-editor";
 import {useContextMenus} from "../context-menu";
 import {useDocumentWorkspace} from "./useDocumentWorkspace";
 import type {BodyEditorModel} from "./bodyEditorModel";
 import "./body-editor.css";
 
 type EditorResolver = (format: EditorFormat) => Readonly<EditorDefinition> | undefined;
-type CompletionConnector = (sessionId: string, format: EditorFormat) => EditorCompletion;
+type SourceConnector = (sessionId: string, format: EditorFormat) => Pick<EditorProps, "completion" | "highlights">;
 
 function useBodyEditorModel(model: BodyEditorModel, workbench: WorkbenchService, resolveEditor: EditorResolver,
-  connectCompletion: CompletionConnector, sessionId: string) {
+  connectSources: SourceConnector, sessionId: string) {
   const data = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
   const workspace = useDocumentWorkspace(data.workspace);
-  const connect = useCallback((format: EditorFormat) => connectCompletion(sessionId, format), [connectCompletion, sessionId]);
+  const connect = useCallback((format: EditorFormat) => connectSources(sessionId, format), [connectSources, sessionId]);
   return {
     ...data,
     workspace,
     resolveEditor,
-    connectCompletion: connect,
+    connectSources: connect,
     busy: state.busy || workspace.blocked,
     newDisabled: !isTauri() || workspace.creating || workspace.blocked || state.busy || !state.active,
     requestNewDocument: model.requestNewDocument,
@@ -37,11 +37,11 @@ export function useBodyEditorContext() {
   return editor;
 }
 
-export function BodyEditorContentProvider({workbench, models, resolveEditor, connectCompletion, children}: {
+export function BodyEditorContentProvider({workbench, models, resolveEditor, connectSources, children}: {
   workbench: WorkbenchService;
   models: ReadonlyMap<string, BodyEditorModel>;
   resolveEditor: EditorResolver;
-  connectCompletion: CompletionConnector;
+  connectSources: SourceConnector;
   children: ReactNode;
 }) {
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
@@ -49,14 +49,14 @@ export function BodyEditorContentProvider({workbench, models, resolveEditor, con
   const model = sessionId && models.get(sessionId);
   return model && sessionId
     ? <BodyEditorModelProvider key={sessionId} sessionId={sessionId} model={model} workbench={workbench}
-        resolveEditor={resolveEditor} connectCompletion={connectCompletion}>{children}</BodyEditorModelProvider> : null;
+        resolveEditor={resolveEditor} connectSources={connectSources}>{children}</BodyEditorModelProvider> : null;
 }
 
-function BodyEditorModelProvider({model, workbench, resolveEditor, connectCompletion, sessionId, children}: {
+function BodyEditorModelProvider({model, workbench, resolveEditor, connectSources, sessionId, children}: {
   model: BodyEditorModel; workbench: WorkbenchService; resolveEditor: EditorResolver;
-  connectCompletion: CompletionConnector; sessionId: string; children: ReactNode;
+  connectSources: SourceConnector; sessionId: string; children: ReactNode;
 }) {
-  const value = useBodyEditorModel(model, workbench, resolveEditor, connectCompletion, sessionId);
+  const value = useBodyEditorModel(model, workbench, resolveEditor, connectSources, sessionId);
   return <BodyEditorContext.Provider value={value}>{children}</BodyEditorContext.Provider>;
 }
 

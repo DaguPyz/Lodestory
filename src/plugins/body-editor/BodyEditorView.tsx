@@ -113,7 +113,7 @@ export function BodyEditor({active}: {active: boolean}) {
         return <Manuscript key={document.id} document={document}
           visible={visible} active={documentActive}
           readOnly={disabled || workspace.blocked || !visible || workspace.deletingPath === document.path}
-          format={format} definition={definition} onEditorReady={onEditorReady} connectCompletion={editor.connectCompletion}
+          format={format} definition={definition} onEditorReady={onEditorReady} connectSources={editor.connectSources}
           onChange={content => {
             const latest = workspace.getSnapshot();
             const focus = focusState.current;

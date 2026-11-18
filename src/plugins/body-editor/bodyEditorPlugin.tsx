@@ -45,6 +45,10 @@ export function createBodyEditorPlugin(): Plugin {
         wrap: children => children,
       }));
       const resolveEditor = (format: EditorFormat) => editorRegistry.resolve(format);
+      const connectSources = (sessionId: string, format: EditorFormat) => ({
+        completion: editorRegistry.connectCompletion(sessionId, format),
+        highlights: editorRegistry.connectHighlights(sessionId, format),
+      });
       removeContents.push(context.on(documentRevealRequested, request => {
         const session = workbench.getSnapshot().session;
         if (!session || session.id !== request.sessionId) return;
@@ -75,7 +79,7 @@ export function createBodyEditorPlugin(): Plugin {
       for (const content of contents) {
         removeContents.push(context.track(layout.registerContent({...content, render: props =>
           <BodyEditorContentProvider workbench={workbench} models={models} resolveEditor={resolveEditor}
-            connectCompletion={editorRegistry.connectCompletion}>
+            connectSources={connectSources}>
             {content.render(props)}
           </BodyEditorContentProvider>})));
       }

@@ -16,6 +16,8 @@ export type AssetCatalogAsset = Readonly<{
   description: string;
   /** The canonical lowercase UUID of its type, or null when unclassified. */
   typeId: string | null;
+  /** Author-selected #RRGGBB color, if configured on this asset. */
+  color?: string;
 }>;
 
 export type AssetCatalogSnapshot = Readonly<{

@@ -1,8 +1,9 @@
-import type {EditorCompletion} from "@lodestory/sdk/body-editor";
+import type {EditorCompletion, EditorHighlights} from "@lodestory/sdk/body-editor";
 import {createPlainTextModel, normalizeInsertedText} from "./textModel";
 import {createPlainTextHistory} from "./history";
 import {nextTextBoundary, previousTextBoundary, TextLayout} from "./textLayout";
 import {createPlainTextCompletion} from "./plainTextCompletion";
+import {appendStyledText, createPlainTextHighlights} from "./plainTextHighlights";
 
 export type TextSelection = {anchor: number; head: number};
 type SearchOptions = {caseSensitive?: boolean; regexp?: boolean; wholeWord?: boolean};
@@ -36,6 +37,8 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
   let completionSource: EditorCompletion | undefined;
   let completion: ReturnType<typeof createPlainTextCompletion> | undefined;
   let completionFrame = 0;
+  let highlightSource: EditorHighlights | undefined;
+  let highlights: ReturnType<typeof createPlainTextHighlights> | undefined;
   const disposers: (() => void)[] = [];
   const viewport = document.createElement("div");
   viewport.className = "plain-text-viewport";
@@ -107,6 +110,9 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     const last = Math.ceil((viewport.scrollTop + viewport.clientHeight - padding) / lineHeight) + 6;
     const fragment = document.createDocumentFragment();
     const from = Math.min(selection.anchor, selection.head), to = Math.max(selection.anchor, selection.head);
+    const highlightRanges = highlights?.ranges();
+    let visibleFrom: number | undefined;
+    let visibleTo = 0;
     for (let i = first; i < Math.min(layout.rowCount, last); i++) {
       const row = layout.rowAt(i);
       // Resolving an overestimated line can remove rows during this loop.
@@ -114,6 +120,8 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
       const line = model.getLine(row.line);
       const rowFrom = line.from + row.start;
       const rowTo = line.from + row.end;
+      visibleFrom ??= rowFrom;
+      visibleTo = rowTo;
       const text = model.slice(rowFrom, rowTo);
       const element = document.createElement("div");
       element.className = "plain-text-line";
@@ -123,12 +131,8 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
       element.style.top = `${padding + i * lineHeight}px`;
       element.style.height = `${lineHeight}px`;
       const selectedFrom = Math.max(from, rowFrom), selectedTo = Math.min(to, rowTo);
-      if (selectedFrom < selectedTo) {
-        element.append(document.createTextNode(text.slice(0, selectedFrom - rowFrom)));
-        const mark = document.createElement("span");
-        mark.className = "plain-text-selected";
-        mark.textContent = text.slice(selectedFrom - rowFrom, selectedTo - rowFrom);
-        element.append(mark, document.createTextNode(text.slice(selectedTo - rowFrom)));
+      if (selectedFrom < selectedTo || highlightRanges?.length) {
+        appendStyledText(element, text, rowFrom, selectedFrom, selectedTo, highlightRanges);
       } else element.textContent = text;
       if (from <= rowTo && to > rowTo && row.end === line.text.length && line.toWithBreak > line.to) {
         const mark = document.createElement("span");
@@ -140,6 +144,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
       fragment.append(element);
     }
     layer.replaceChildren(fragment);
+    if (!composing && visibleFrom !== undefined) highlights?.request(visibleFrom, visibleTo, model.length, model.slice);
     const row = layout.rowForOffset(selection.head);
     const line = model.getLine(row.line);
     const x = textLeft + layout.xAt(line.text.slice(row.start, row.end), Math.max(0, Math.min(row.end, selection.head - line.from) - row.start));
@@ -241,6 +246,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     if (!composing && now - lastEditAt > 1000) history.breakGroup();
     lastEditAt = now;
     history.apply(from, to, normalized, {before: {...selection}, after: next, group});
+    highlights?.edit(from, to, normalized.length);
     selection = next;
     layout.update(first, last - first + 1, model.lineCount - beforeLines + last - first + 1);
     preferredX = undefined;
@@ -297,6 +303,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     const beforeLines = model.lineCount;
     const result = history[action]();
     if (!result) return;
+    highlights?.edit(change.from, change.to, change.insert.length);
     selection = result;
     layout.update(first, last - first + 1, model.lineCount - beforeLines + last - first + 1);
     syncInput(); reveal(); render(); notify();
@@ -558,6 +565,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
       const changed = applyInput();
       syncInput();
       if (event.data || changed) completion?.request(true);
+      if (highlights) scheduleRender();
     }), 0);
   }));
   on(input, "focus", scheduleRender);
@@ -645,6 +653,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
       if (destroyed) return;
       destroyed = true;
       completion?.destroy();
+      highlights?.destroy();
       cancelAnimationFrame(completionFrame);
       cancelAnimationFrame(frame); cancelAnimationFrame(dragFrame); clearTimeout(compositionTimer);
       resize?.disconnect(); themeObserver?.disconnect(); document.fonts?.removeEventListener("loadingdone", fontsChanged);
@@ -659,6 +668,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     replaceContent(text: string) {
       if (destroyed || text === model.getText()) return;
       completion?.close();
+      highlights?.clear();
       clearTimeout(compositionTimer);
       compositionTimer = 0;
       composing = false;
@@ -677,6 +687,13 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     getSelection() { return {...selection}; },
     setSelection,
     setCompletion,
+    setHighlights(source?: EditorHighlights) {
+      if (destroyed || source === highlightSource) return;
+      highlights?.destroy();
+      highlights = source && createPlainTextHighlights(source, scheduleRender);
+      highlightSource = source;
+      scheduleRender();
+    },
     openCompletion,
     canComplete() { return !readOnly && !composing && (completion?.isAvailable() ?? false); },
     getDebugState() {

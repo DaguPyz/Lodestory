@@ -22,10 +22,10 @@ describe("TXT-only document editor", () => {
       ]));
       for (const [typeId, names] of [[people, ["林川", "林月", "林月见"]], [places, ["林湾"]]]) {
         const assets = names.map((name, index) => ({id: `${typeId.slice(0, -2)}${typeId.at(-1)}${index}`,
-          name, typeId, description: "", values: {}}));
+          name, typeId, description: "", values: {}, ...(name === "林川" ? {color: "#ee7766"} : {})}));
         await writeFile(path.join(objects, `${typeId}.json`), JSON.stringify({assets, fields: []}));
       }
-      const manuscript = "第七章  回城\n\n暮色漫过白石城的城墙，晚钟响了三下。\n\n守门人翻开名册，指尖停在墨迹未干的那一页。\n她低声念道：「";
+      const manuscript = "第七章  回城\n\n暮色漫过白石城的城墙，晚钟响了三下。\n\n林川从林湾归来，守门人翻开名册。\n她低声念道：「";
       const documentPath = path.join(project.path, "回城.txt");
       await writeFile(documentPath, manuscript);
       assert.equal(await browser.execute(project => window.__lodestoryLifecycleTest.openPreparedProject(project), project), true);
@@ -36,6 +36,12 @@ describe("TXT-only document editor", () => {
       }), {timeout: 10000});
       assert.equal(await browser.execute(() => window.__lodestoryLifecycleTest.openDocument("回城.txt")), true);
       await $('textarea[aria-autocomplete="list"]').waitForExist({timeout: 10000});
+      await browser.waitUntil(() => browser.execute(() => {
+        const [person, place] = document.querySelectorAll(".plain-text-highlight");
+        return person?.textContent === "林川" && getComputedStyle(person).color === "rgb(238, 119, 102)"
+          && place?.textContent === "林湾" && !place.style.getPropertyValue("--plain-text-highlight-color")
+          && getComputedStyle(place).color !== getComputedStyle(place.parentElement).color;
+      }), {timeout: 5000, timeoutMsg: "The TXT editor did not use the stored asset color and the default accent."});
       await browser.execute(() => {
         const input = document.querySelector("textarea.plain-text-input");
         input.focus();

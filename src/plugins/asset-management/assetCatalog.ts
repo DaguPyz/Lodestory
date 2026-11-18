@@ -11,7 +11,8 @@ function projectTypes(types: AssetSchemaSnapshot["types"]): readonly AssetCatalo
 }
 
 function projectAssets(assets: AssetSchemaSnapshot["assets"]): readonly AssetCatalogAsset[] {
-  return Object.freeze(assets.map(({id, name, description, typeId}) => Object.freeze({id, name, description, typeId})));
+  return Object.freeze(assets.map(({id, name, description, typeId, color}) =>
+    Object.freeze({id, name, description, typeId, ...(color !== undefined ? {color} : {})})));
 }
 
 /** Projects the private asset schema into a stable, immutable public catalog. */
@@ -36,7 +37,8 @@ export function createAssetCatalog(store: AssetSchemaStore): AssetCatalogControl
     if (sourceAssets !== next.assets) {
       sourceAssets = next.assets;
       if (assets.length !== sourceAssets.length || sourceAssets.some((item, i) => item.id !== assets[i].id
-        || item.name !== assets[i].name || item.description !== assets[i].description || item.typeId !== assets[i].typeId)) {
+        || item.name !== assets[i].name || item.description !== assets[i].description || item.typeId !== assets[i].typeId
+        || item.color !== assets[i].color)) {
         assets = projectAssets(sourceAssets);
       }
     }

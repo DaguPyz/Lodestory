@@ -1,11 +1,13 @@
 import type {AssetCatalogAsset, AssetCatalogType} from "@lodestory/sdk/asset-catalog";
-import type {EditorCompletionCandidate} from "@lodestory/sdk/body-editor";
+import type {EditorCompletionCandidate, EditorHighlight} from "@lodestory/sdk/body-editor";
 
+export type AssetTextQuery = {kind: "query" | "highlight"; text: string};
 export type AssetCompletionMessage =
-  | {kind: "index"; assets: readonly Pick<AssetCatalogAsset, "name" | "typeId">[];
+  | {kind: "index"; assets: readonly Pick<AssetCatalogAsset, "name" | "typeId" | "color">[];
       types: readonly Pick<AssetCatalogType, "id" | "name">[]}
-  | {kind: "query"; textBefore: string};
+  | AssetTextQuery;
 
 export type AssetCompletionReply =
   | {kind: "indexed"}
-  | {kind: "candidates"; candidates: readonly EditorCompletionCandidate[]};
+  | {kind: "candidates"; candidates: readonly EditorCompletionCandidate[]}
+  | {kind: "highlights"; highlights: readonly EditorHighlight[]};

@@ -62,6 +62,7 @@
   color: var(--ui-state-selected-foreground);
   background: var(--ui-surface-selected);
 }
+.plain-text-highlight { color: var(--plain-text-highlight-color, var(--ui-accent-foreground)); }
 .plain-text-selected-break { display: inline-block; min-width: .4em; }
 .plain-text-caret {
   position: absolute;

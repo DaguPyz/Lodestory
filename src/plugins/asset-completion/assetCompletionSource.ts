@@ -1,25 +1,32 @@
 import type {AssetCatalog, AssetCatalogSnapshot} from "@lodestory/sdk/asset-catalog";
-import type {EditorCompletion, EditorCompletionCandidate} from "@lodestory/sdk/body-editor";
-import type {AssetCompletionMessage, AssetCompletionReply} from "./assetCompletionProtocol";
+import type {EditorCompletion, EditorHighlights} from "@lodestory/sdk/body-editor";
+import type {AssetCompletionMessage, AssetCompletionReply, AssetTextQuery} from "./assetCompletionProtocol";
 
 type Query = {
-  textBefore: string;
+  message: AssetTextQuery;
   signal: AbortSignal;
-  finish(candidates: readonly EditorCompletionCandidate[]): void;
+  finish(reply?: AssetCompletionReply): void;
 };
 
-export function createAssetCompletionSource(catalog: AssetCatalog): EditorCompletion & {dispose(): void} {
+export function createAssetCompletionSource(catalog: AssetCatalog): EditorCompletion & {highlights: EditorHighlights; dispose(): void} {
   let snapshot = catalog.getSnapshot();
   const worker = new Worker(new URL("./assetCompletionWorker.ts", import.meta.url), {type: "module"});
   const listeners = new Set<() => void>();
   let alive = true;
   let pendingIndex: AssetCatalogSnapshot | undefined = snapshot;
   let inFlight: "index" | Query | undefined;
-  let pendingQuery: Query | undefined;
+  const pending: Partial<Record<AssetTextQuery["kind"], Query>> = {};
   let unsubscribe = () => {};
 
   function available() { return alive && snapshot.loaded && snapshot.assets.length > 0; }
   function notify() { for (const listener of [...listeners]) listener(); }
+  function cancelQueries() {
+    pending.query?.finish();
+    pending.highlight?.finish();
+    delete pending.query;
+    delete pending.highlight;
+    if (inFlight && inFlight !== "index") inFlight.finish();
+  }
   function dispose() {
     if (!alive) return;
     alive = false;
@@ -28,9 +35,8 @@ export function createAssetCompletionSource(catalog: AssetCatalog): EditorComple
     } finally {
       worker.onmessage = worker.onerror = worker.onmessageerror = null;
       worker.terminate();
-      pendingQuery?.finish([]);
-      if (inFlight && inFlight !== "index") inFlight.finish([]);
-      pendingQuery = pendingIndex = inFlight = undefined;
+      cancelQueries();
+      pendingIndex = inFlight = undefined;
       try { notify(); } finally { listeners.clear(); }
     }
   }
@@ -45,21 +51,22 @@ export function createAssetCompletionSource(catalog: AssetCatalog): EditorComple
       const {assets, types} = pendingIndex;
       pendingIndex = undefined;
       inFlight = "index";
-      post({kind: "index", assets: assets.map(({name, typeId}) => ({name, typeId})),
+      post({kind: "index", assets: assets.map(({name, typeId, color}) => ({name, typeId, color})),
         types: types.map(({id, name}) => ({id, name}))});
-    } else if (pendingQuery) {
-      const query = pendingQuery;
-      pendingQuery = undefined;
-      if (query.signal.aborted) return;
-      inFlight = query;
-      post({kind: "query", textBefore: query.textBefore});
+      return;
     }
+    const query = pending.query ?? pending.highlight;
+    if (!query) return;
+    delete pending[query.message.kind];
+    if (query.signal.aborted) { pump(); return; }
+    inFlight = query;
+    post(query.message);
   }
 
   worker.onmessage = (event: MessageEvent<AssetCompletionReply>) => {
     const job = inFlight;
     inFlight = undefined;
-    if (job && job !== "index") job.finish(event.data.kind === "candidates" ? event.data.candidates : []);
+    if (job && job !== "index") job.finish(event.data);
     pump();
   };
   worker.onerror = event => { event.preventDefault(); dispose(); };
@@ -70,9 +77,7 @@ export function createAssetCompletionSource(catalog: AssetCatalog): EditorComple
       if (snapshot.assets === next.assets && snapshot.types === next.types && snapshot.loaded === next.loaded) return;
       snapshot = next;
       pendingIndex = next;
-      pendingQuery?.finish([]);
-      pendingQuery = undefined;
-      if (inFlight && inFlight !== "index") inFlight.finish([]);
+      cancelQueries();
       notify();
       pump();
     });
@@ -82,26 +87,32 @@ export function createAssetCompletionSource(catalog: AssetCatalog): EditorComple
     throw error;
   }
 
+  function request<Result>(kind: AssetTextQuery["kind"], text: string, signal: AbortSignal,
+    resultOf: (reply: AssetCompletionReply) => readonly Result[]): Promise<readonly Result[]> {
+    if (!available() || signal.aborted) return Promise.resolve([]);
+    return new Promise(resolve => {
+      function abort() { finish(); }
+      function finish(reply?: AssetCompletionReply) {
+        signal.removeEventListener("abort", abort);
+        resolve(reply && !signal.aborted ? resultOf(reply) : []);
+      }
+      signal.addEventListener("abort", abort, {once: true});
+      pending[kind]?.finish();
+      pending[kind] = {message: {kind, text}, signal, finish};
+      pump();
+    });
+  }
+  function subscribe(listener: () => void) {
+    if (!alive) return () => {};
+    listeners.add(listener);
+    return () => { listeners.delete(listener); };
+  }
   return {
-    isAvailable: available,
-    subscribe(listener) {
-      if (!alive) return () => {};
-      listeners.add(listener);
-      return () => { listeners.delete(listener); };
-    },
-    query(textBefore, signal) {
-      if (!available() || signal.aborted) return Promise.resolve([]);
-      return new Promise(resolve => {
-        function abort() { finish([]); }
-        function finish(candidates: readonly EditorCompletionCandidate[]) {
-          signal.removeEventListener("abort", abort);
-          resolve(signal.aborted ? [] : candidates);
-        }
-        signal.addEventListener("abort", abort, {once: true});
-        pendingQuery?.finish([]);
-        pendingQuery = {textBefore, signal, finish};
-        pump();
-      });
+    isAvailable: available, subscribe,
+    query: (text, signal) => request("query", text, signal, reply => reply.kind === "candidates" ? reply.candidates : []),
+    highlights: {
+      isAvailable: available, subscribe,
+      query: (text, signal) => request("highlight", text, signal, reply => reply.kind === "highlights" ? reply.highlights : []),
     },
     dispose,
   };

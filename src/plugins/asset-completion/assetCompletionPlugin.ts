@@ -22,11 +22,16 @@ export function createAssetCompletionPlugin(): Plugin {
           try {
             const {createAssetCompletionSource} = await import("./assetCompletionSource");
             const source = createAssetCompletionSource(catalog);
+            let removeCompletion: (() => void) | undefined;
             try {
-              const remove = editor.registerCompletionSource(session.id, "plain-text", source);
-              return {dispose() { try { remove(); } finally { source.dispose(); } }};
+              removeCompletion = editor.registerCompletionSource(session.id, "plain-text", source);
+              const removeHighlights = editor.registerHighlightSource(session.id, "plain-text", source.highlights);
+              return {dispose() {
+                try { removeHighlights(); }
+                finally { try { removeCompletion?.(); } finally { source.dispose(); } }
+              }};
             } catch (error) {
-              source.dispose();
+              try { removeCompletion?.(); } finally { source.dispose(); }
               throw error;
             }
           } catch (error) {

@@ -704,6 +704,56 @@ test("self-built plain-text editor keeps a huge source editable with a bounded v
       await fixture("removeCompletion");
     });
 
+    await t.test("asset name styles use catalog colors and follow the visible text without editing it", async () => {
+      const text = "😀她听见焚烧，穿过林湾。";
+      const asset = (color) => [{name: "焚烧", color}, "焚", "林湾"];
+      const spans = () => evaluate(`[...document.querySelectorAll('.plain-text-highlight')].map(node => ({
+        text: node.textContent, color: getComputedStyle(node).color,
+        custom: node.style.getPropertyValue('--plain-text-highlight-color')
+      }))`);
+      await fixture("setProps", {content: text});
+      const edits = (await fixture("snapshot")).changeCount;
+      await fixture("setCompletionAssets", asset("#ee7766"));
+      await waitFor(() => spans().then(result => result.length === 2), "Asset names did not receive highlight spans.");
+      assert.deepEqual(await spans(), [
+        {text: "焚烧", color: "rgb(238, 119, 102)", custom: "#ee7766"},
+        {text: "林湾", color: "rgb(140, 207, 226)", custom: ""},
+      ]);
+      assert.equal(await fixture("flushContent"), text);
+      assert.equal((await fixture("snapshot")).changeCount, edits);
+
+      const start = text.indexOf("焚烧");
+      await fixture("setSelection", start + 1, start + 2);
+      assert.equal(await evaluate("document.querySelector('.plain-text-selected').textContent"), "烧");
+      assert.equal((await spans())[0].text, "焚", "selection styling takes precedence for the selected characters");
+      await fixture("replaceSelection", "灭");
+      await waitFor(() => spans().then(result => result[0]?.text === "焚" && result[0].custom === ""),
+        "Removing part of a name did not update its style.");
+      await fixture("focusAt", start + 2);
+      await shortcut("z", "KeyZ", 90, commandModifier);
+      assert.equal(await fixture("flushContent"), text, "Undo restores the text and the original selection");
+      await fixture("setSelection", start + 2, start + 2);
+      await waitFor(() => spans().then(result => result[0]?.text === "焚烧"), "Undo did not restore the asset styling.");
+
+      await fixture("setCompletionAssets", asset("#97c685"));
+      await waitFor(() => spans().then(result => result[0]?.custom === "#97c685"), "Changing only the asset color did not update text.");
+
+      const longLine = "文".repeat(120);
+      await fixture("setProps", {content: longLine});
+      await waitFor(() => fixture("snapshot").then(state => state.modelLength === longLine.length), "The wrapped sample did not load.");
+      const wrapAt = await evaluate("Number(document.querySelector('.plain-text-line').dataset.to)");
+      assert.ok(wrapAt > 1 && wrapAt < longLine.length);
+      const wrapped = longLine.slice(0, wrapAt - 1) + "焚烧" + longLine.slice(wrapAt + 1);
+      await fixture("setProps", {content: wrapped});
+      await waitFor(() => spans().then(result => result.length === 2 && result.every(span => span.custom === "#97c685")),
+        "A name spanning two visual lines did not keep its color on both.");
+      assert.deepEqual((await spans()).map(span => span.text), ["焚", "烧"]);
+
+      await fixture("removeCompletion");
+      await waitFor(() => spans().then(result => result.length === 0), "Withdrawing the provider did not clear the styles.");
+      assert.equal(await fixture("flushContent"), wrapped);
+    });
+
     await t.test("unmount releases the handle, input and rendered line nodes", async () => {
       await fixture("unmount");
       await waitFor(() => evaluate(`document.querySelectorAll('.plain-text-editor').length === 0`),

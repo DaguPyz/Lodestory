@@ -2,8 +2,8 @@ import {createRoot, type Root} from "react-dom/client";
 import PlainTextEditor from "../../src/plugins/plain-text-editor/PlainTextEditor";
 import {createPlainTextDriver, getPlainTextDriver} from "../../src/plugins/plain-text-editor/plainTextDriver";
 import {createAssetCompletionSource} from "../../src/plugins/asset-completion/assetCompletionSource";
-import {createEditorCompletionRegistry} from "../../src/plugins/body-editor/editorCompletionRegistry";
-import type {EditorHandle, EditorProps} from "../../packages/sdk/src/body-editor";
+import {createEditorTextSourceRegistry} from "../../src/plugins/body-editor/editorTextSourceRegistry";
+import type {EditorCompletionCandidate, EditorHandle, EditorHighlight, EditorProps} from "../../packages/sdk/src/body-editor";
 import type {AssetCatalogSnapshot} from "../../packages/sdk/src/asset-catalog";
 import "../../src/styles/theme-colors.css";
 import "../../src/styles/tokens.css";
@@ -39,7 +39,7 @@ type FixtureApi = {
   setPropsWithoutRender(patch: Partial<Pick<EditorProps, "content" | "readOnly" | "active">>): void;
   renderProps(): void;
   flushContent(currentContent?: string): string;
-  setCompletionAssets(names: readonly string[]): void;
+  setCompletionAssets(names: readonly (string | {name: string; color?: string})[]): void;
   completionSettled(): Promise<void>;
   openCompletion(): void;
   removeCompletion(): void;
@@ -74,7 +74,8 @@ let handle: EditorHandle | null = null;
 let unmounted = false;
 let initialDriver: ReturnType<typeof getPlainTextDriver>;
 let errorText: string | undefined;
-const completionRegistry = createEditorCompletionRegistry();
+const completionRegistry = createEditorTextSourceRegistry<EditorCompletionCandidate>();
+const highlightRegistry = createEditorTextSourceRegistry<EditorHighlight>();
 let catalogSnapshot: AssetCatalogSnapshot;
 const catalogListeners = new Set<() => void>();
 let removeCompletion: (() => void) | undefined;
@@ -329,7 +330,10 @@ const fixture: FixtureApi = {
   setCompletionAssets(names) {
     catalogSnapshot = {
       types: [{id: "people", name: "角色", status: "active"}, {id: "places", name: "地点", status: "active"}],
-      assets: names.map((name, index) => ({id: String(index), name, description: "", typeId: name.endsWith("湾") ? "places" : "people"})),
+      assets: names.map((entry, index) => {
+        const asset = typeof entry === "string" ? {name: entry} : entry;
+        return {...asset, id: String(index), description: "", typeId: asset.name.endsWith("湾") ? "places" : "people"};
+      }),
       loaded: true, loading: false, error: null, blocked: false,
     };
     if (!removeCompletion) {
@@ -339,9 +343,10 @@ const fixture: FixtureApi = {
         retry: async () => true,
       });
       const remove = completionRegistry.register("fixture", "plain-text", source);
-      removeCompletion = () => { remove(); source.dispose(); };
+      const removeHighlights = highlightRegistry.register("fixture", "plain-text", source.highlights);
+      removeCompletion = () => { removeHighlights(); remove(); source.dispose(); };
       const completion = completionRegistry.connect("fixture", "plain-text");
-      props = {...props, completion: {...completion, query(textBefore, signal) {
+      props = {...props, highlights: highlightRegistry.connect("fixture", "plain-text"), completion: {...completion, query(textBefore, signal) {
         const result = completion.query(textBefore, signal);
         lastCompletionQuery = result;
         return result;
@@ -454,6 +459,7 @@ const fixture: FixtureApi = {
     root.unmount();
     fixture.removeCompletion();
     completionRegistry.dispose();
+    highlightRegistry.dispose();
   },
 };
 

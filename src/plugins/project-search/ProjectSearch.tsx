@@ -60,7 +60,7 @@ export function ProjectSearch({search, workbench, requests}: {search: ProjectSea
     return <li key={`${result.sourceId}:${result.id}:${result.match?.start ?? ""}`}>
       <button type="button" disabled={opening} onClick={() => void openResult(result)}>
         {!grouped && <span className="project-search-title">{highlighted(result.title, query)}</span>}
-        <span className="project-search-detail">{highlighted(result.detail, query)}{result.kind === "事件" ? " · 打开所属时间线" : ""}</span>
+        <span className="project-search-detail">{highlighted(result.detail, query)}</span>
       </button>
     </li>;
   }

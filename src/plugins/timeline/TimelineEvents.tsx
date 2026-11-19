@@ -8,9 +8,9 @@ import type {AssetRelationNetwork} from "@lodestory/sdk/asset-relations";
 import {Button, Dialog, DialogActions, DialogClose, Icon, IconButton, TextField, Textarea, useInteractionRef} from "@lodestory/ui";
 import type {TimelineAxisSettings} from "./timelineAxisStore";
 import {isTimelineEventColor, type TimelineEvent, type TimelineEventStore} from "./timelineEventStore";
-import {getTimelineEventsGeometry, TIMELINE_TURNING_CAPTION_FONT_SIZE, type TimelineEventGeometry, type TimelineEventsGeometry} from "./timelineEventsGeometry";
+import {getTimelineEventsGeometry, timelineEventWorldX, TIMELINE_TURNING_CAPTION_FONT_SIZE, type TimelineEventGeometry, type TimelineEventsGeometry} from "./timelineEventsGeometry";
 import {getTimelineStemSegments, type TimelineStemSegment} from "./timelineStemSegments";
-import {formatTimelineAxisValue, timelineValueAtOffset, TIMELINE_AXIS_BASE_PIXEL_INTERVAL, type TimelineLabelBounds} from "./timelineAxisGeometry";
+import {formatTimelineAxisValue, timelineValueAtOffset, type TimelineLabelBounds} from "./timelineAxisGeometry";
 import {EventAssetPicker} from "./EventAssetPicker";
 import {TimelineFocusAssets, type AssetClickPosition, type FocusedAsset, type TimelineFocusTarget} from "./TimelineFocusAssets";
 import "./timeline-events.css";
@@ -188,7 +188,7 @@ const AxisAnchors = memo(function AxisAnchors({events, step, zoom, originWorldX,
   return <>{Array.from({length: count}, (_, index) => {
     const group = events.slice(Math.floor(index * events.length / count), Math.floor((index + 1) * events.length / count));
     return <g key={group[0].id} data-growth-anchor={group[0].id}>{group.map(event => {
-      const x = ((event.offset / step) * TIMELINE_AXIS_BASE_PIXEL_INTERVAL - originWorldX) * zoom;
+      const x = (timelineEventWorldX(event.offset, step) - originWorldX) * zoom;
       return <AxisAnchor key={event.id} event={event} x={x} active={active}
         hidden={focusedAxisId !== null && focusedAxisId !== event.id} onEdit={onEdit} />;
     })}</g>;

@@ -206,9 +206,9 @@ test("timeline owns the main canvas and one session-only viewport per timeline w
   assert.ok(layout.getSnapshot().shownIds.includes("outline-design.navigation"), "opening the canvas leaves the outline navigation visible");
   assert.ok(layout.getSnapshot().shownIds.includes("timeline.main"), "timeline selection switches the main contribution to the canvas");
   const timelineResource = canvasElement().props.sessions.get(sessionId);
-  assert.equal(timelineResource.openGeneration, 1, "explicitly opening the canvas triggers one entrance");
+  assert.equal(canvasElement().tree.props.openToken, `${sessionId}:1`, "explicitly opening the canvas triggers one entrance");
   assert.equal(timelines.open(sessionId, firstId), true);
-  assert.equal(timelineResource.openGeneration, 1, "opening the already visible timeline does not replay it");
+  assert.equal(canvasElement().tree.props.openToken, `${sessionId}:1`, "opening the already visible timeline does not replay it");
   assert.equal(canvasElement().tree.props.active, true);
   layout.show("body-editor.main");
   assert.equal(canvasElement().tree.props.active, false, "hiding the canvas pauses its gestures");
@@ -220,7 +220,7 @@ test("timeline owns the main canvas and one session-only viewport per timeline w
   listModel.cancelCreate();
   const secondId = await createTimeline("第二条时间线");
   assert.equal(await timelines.open(sessionId, secondId), true);
-  assert.equal(timelineResource.openGeneration, 2, "opening a newly selected timeline triggers a new entrance");
+  assert.equal(canvasElement().tree.props.openToken, `${sessionId}:2`, "opening a newly selected timeline triggers a new entrance");
   const secondView = canvasElement().tree.props.canvasView;
   const secondViewport = secondView.viewport;
   assert.ok(secondViewport);

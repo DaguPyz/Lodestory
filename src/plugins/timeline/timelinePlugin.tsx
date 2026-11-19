@@ -28,6 +28,12 @@ type TimelineEntrySummary = {
 };
 
 type TimelineModel = ReturnType<typeof createTimelineListModel>;
+type TimelineOpenState = Readonly<{
+  generation: number;
+  eventTarget: Readonly<{timelineId: string; eventId: string}> | null;
+}>;
+const INITIAL_OPEN_STATE: TimelineOpenState = Object.freeze({generation: 0, eventTarget: null});
+
 type TimelineSessionResources = {
   model: TimelineModel;
   publicModel: TimelineListModel;
@@ -42,11 +48,16 @@ type TimelineSessionResources = {
   snapshot: TimelineListSnapshot;
   unsubscribe: () => void;
   selectedId: string | null;
-  openGeneration: number;
+  openState: TimelineOpenState;
   openedId: string | null;
   openListeners: Set<() => void>;
   searchListeners: Set<() => void>;
 };
+
+function publishOpenState(resource: TimelineSessionResources, state: TimelineOpenState) {
+  resource.openState = state;
+  for (const listener of [...resource.openListeners]) listener();
+}
 
 /** Owns timeline metadata, project-session models, canvas viewports, and axis settings. */
 export function createTimelinePlugin(): Plugin {
@@ -152,6 +163,9 @@ export function createTimelinePlugin(): Plugin {
 
         const selectionChanged = resource.selectedId !== snapshot.selectedId;
         resource.selectedId = snapshot.selectedId;
+        if (selectionChanged && resource.openState.eventTarget && resource.openState.eventTarget.timelineId !== snapshot.selectedId) {
+          publishOpenState(resource, {...resource.openState, eventTarget: null});
+        }
         if (snapshot.selectedId) {
           ensureView(resource, snapshot.selectedId);
           const axis = createAxis(files, resource, snapshot.selectedId);
@@ -183,7 +197,7 @@ export function createTimelinePlugin(): Plugin {
             snapshot: model.getSnapshot(),
             unsubscribe: () => {},
             selectedId: null,
-            openGeneration: 0,
+            openState: INITIAL_OPEN_STATE,
             openedId: null,
             openListeners: new Set(),
             searchListeners: new Set(),
@@ -249,13 +263,11 @@ export function createTimelinePlugin(): Plugin {
               },
               subscribe(listener) { resource.searchListeners.add(listener); return () => { resource.searchListeners.delete(listener); }; },
               open(id) {
-                const timelineId = id.startsWith("timeline:") ? id.slice("timeline:".length)
-                  : id.startsWith("event:") ? id.slice("event:".length).split("/")[0] : "";
                 if (id.startsWith("event:")) {
-                  const eventId = id.slice("event:".length).split("/")[1];
-                  if (!resource.events.get(timelineId)?.getSnapshot().events.some(event => event.id === eventId)) return false;
+                  const [timelineId, eventId] = id.slice("event:".length).split("/");
+                  return Boolean(eventId) && openTimeline(session.id, timelineId, eventId);
                 }
-                return service.open(session.id, timelineId);
+                return id.startsWith("timeline:") && openTimeline(session.id, id.slice("timeline:".length));
               },
             });
           } catch (error) {
@@ -336,28 +348,33 @@ export function createTimelinePlugin(): Plugin {
         },
       }));
 
+      function openTimeline(sessionId: string, timelineId: string, eventId?: string) {
+        const current = workbench.getSnapshot();
+        const resource = sessions.get(sessionId);
+        const model = resource?.model;
+        const snapshot = model?.getSnapshot();
+        if (!alive || !resource || !model || !snapshot || current.session?.id !== sessionId
+          || !current.active || current.busy || snapshot.busy || snapshot.createDraft
+          || !snapshot.entries.some(entry => entry.id === timelineId) || resource.editing.size > 0) return false;
+        if (eventId && !resource.events.get(timelineId)?.getSnapshot().events.some(event => event.id === eventId)) return false;
+        const opening = resource.openedId !== timelineId || snapshot.selectedId !== timelineId
+          || !layout.getSnapshot().shownIds.includes(MAIN_CONTENT_ID);
+        model.select(timelineId);
+        ensureView(resource, timelineId);
+        layout.show(MAIN_CONTENT_ID);
+        if (opening || eventId || resource.openState.eventTarget) {
+          resource.openedId = timelineId;
+          publishOpenState(resource, {
+            generation: resource.openState.generation + (opening || eventId ? 1 : 0),
+            eventTarget: eventId ? {timelineId, eventId} : null,
+          });
+        }
+        return true;
+      }
+
       const service: TimelineService = {
         getModel(sessionId) { return sessions.get(sessionId)?.publicModel ?? null; },
-        open(sessionId, timelineId) {
-          const current = workbench.getSnapshot();
-          const resource = sessions.get(sessionId);
-          const model = resource?.model;
-          const snapshot = model?.getSnapshot();
-          if (!alive || !resource || !model || !snapshot || current.session?.id !== sessionId
-            || !current.active || current.busy || snapshot.busy || snapshot.createDraft
-            || !snapshot.entries.some(entry => entry.id === timelineId) || resource.editing.size > 0) return false;
-          const opening = resource.openedId !== timelineId || snapshot.selectedId !== timelineId
-            || !layout.getSnapshot().shownIds.includes(MAIN_CONTENT_ID);
-          model.select(timelineId);
-          ensureView(resource, timelineId);
-          layout.show(MAIN_CONTENT_ID);
-          if (opening) {
-            resource.openedId = timelineId;
-            resource.openGeneration++;
-            for (const listener of [...resource.openListeners]) listener();
-          }
-          return true;
-        },
+        open(sessionId, timelineId) { return openTimeline(sessionId, timelineId); },
       };
       context.provide(timelineKey, service);
 
@@ -406,10 +423,10 @@ function TimelineMain({workbench, canvas, contextMenus, assetCatalog, sessions, 
   const subscribe = resource?.publicModel.subscribe ?? emptySubscribe;
   const getSnapshot = resource?.publicModel.getSnapshot ?? emptySnapshot;
   const snapshot = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-  const openGeneration = useSyncExternalStore(
+  const openState = useSyncExternalStore(
     listener => { resource?.openListeners.add(listener); return () => resource?.openListeners.delete(listener); },
-    () => resource?.openGeneration ?? 0,
-    () => 0,
+    () => resource?.openState ?? INITIAL_OPEN_STATE,
+    () => INITIAL_OPEN_STATE,
   );
   const entry = snapshot.entries.find(item => item.id === snapshot.selectedId);
   const canvasView = entry ? resource?.views.get(entry.id) : undefined;
@@ -420,9 +437,16 @@ function TimelineMain({workbench, canvas, contextMenus, assetCatalog, sessions, 
   if (!entry || !canvasView || !axis || !events || !session || !resource) {
     return <div className="timeline-canvas-empty" role="status">选择或新建一条时间线以打开画布。</div>;
   }
+  const eventTarget = openState.eventTarget?.timelineId === entry.id ? openState.eventTarget : null;
   return <TimelineCanvas canvas={canvas} contextMenus={contextMenus} assetCatalog={assetCatalog.getCatalog(session.id)}
     assetRelations={relationSource?.getNetwork(session.id) ?? null} canvasView={canvasView} active={current} title={entry.title} axis={axis} events={events}
-    openToken={openGeneration ? `${session.id}:${openGeneration}` : null}
+    openToken={openState.generation ? `${session.id}:${openState.generation}` : null}
+    searchEventId={eventTarget?.eventId}
+    onSearchEventHandled={() => {
+      if (eventTarget && resource.openState.eventTarget === eventTarget) {
+        publishOpenState(resource, {...resource.openState, eventTarget: null});
+      }
+    }}
     onEditingChange={editing => onEditingChange(session.id, entry.id, editing)}/>;
 }
 

@@ -8,7 +8,7 @@ import type {TimelineAxisStore, TimelineAxisSettings} from "./timelineAxisStore"
 import type {TimelineEventStore} from "./timelineEventStore";
 import {TimelineEvents} from "./TimelineEvents";
 import {TimelineTextZoomSwitch} from "./TimelineTextZoomSwitch";
-import type {TimelineEventsGeometry} from "./timelineEventsGeometry";
+import {getTimelineEventsGeometry, timelineEventWorldX, type TimelineEventsGeometry} from "./timelineEventsGeometry";
 import {getStemSegmentTiming, type TimelineStemSegment} from "./timelineStemSegments";
 import {formatTimelineAxisValue, getTimelineAxisGeometry, TIMELINE_AXIS_LABEL_LAYOUT, type TimelineAxisTick} from "./timelineAxisGeometry";
 
@@ -73,7 +73,8 @@ function AxisTicks({ticks, axisY, worldHalfWidth, zoom}: {ticks: readonly Timeli
   </g></>;
 }
 
-export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelations = null, canvasView, active, title, axis, events, openToken = null, onEditingChange}: {
+export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelations = null, canvasView, active, title, axis, events,
+  openToken = null, searchEventId, onSearchEventHandled, onEditingChange}: {
   canvas: CanvasService;
   contextMenus: ContextMenuService;
   assetCatalog: AssetCatalog | null;
@@ -84,6 +85,8 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
   axis: TimelineAxisStore;
   events: TimelineEventStore;
   openToken?: string | null;
+  searchEventId?: string;
+  onSearchEventHandled?: () => void;
   onEditingChange?: (editing: boolean) => void;
 }) {
   const {viewport, getScaleTextWithZoom} = canvasView;
@@ -277,6 +280,34 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
   const axisVisible = axisScreenY >= 0 && axisScreenY <= size.height;
   const axisReady = snapshot.loaded && geometry.width > 0 && geometry.height > 0;
   const eventsReady = eventSnapshot.loaded || (!eventSnapshot.loading && Boolean(eventSnapshot.error));
+
+  useLayoutEffect(() => {
+    if (!searchEventId) return;
+    handledOpen.current = openToken;
+    stopGrowth.current?.();
+    if (!active || snapshot.loading || eventSnapshot.loading) return;
+    const {width, height} = frame.current?.getBoundingClientRect() ?? size;
+    if (width <= 0 || height <= 0) return;
+    const event = eventSnapshot.events.find(item => item.id === searchEventId);
+    if (event && snapshot.loaded && eventSnapshot.loaded) {
+      const {center, zoom} = viewport.getSnapshot();
+      const settings = snapshot.settings;
+      const target = {x: timelineEventWorldX(event.offset, settings.step), y: 0};
+      const projection = {width, height, zoom, center: target};
+      // Predict the lane at the destination while the axis is still in view.
+      const targetAxis = getTimelineAxisGeometry({...projection, settings});
+      const point = getTimelineEventsGeometry({...projection, events: eventSnapshot.events, origin: settings.origin,
+        step: settings.step, axisLabelBounds: targetAxis.labelBounds, scaleTextWithZoom}).events.find(item => item.id === event.id);
+      if (point) {
+        const targetY = (point.endpointY - point.axisY) / zoom;
+        viewport.panBy((center.x - target.x) * zoom, (center.y - targetY) * zoom);
+        const actualX = viewport.getSnapshot().center.x;
+        // Large jumps between distant offsets can round the relative pan on the first pass.
+        if (actualX !== target.x) viewport.panBy((actualX - target.x) * zoom, 0);
+      }
+    }
+    onSearchEventHandled?.();
+  }, [searchEventId, onSearchEventHandled, openToken, active, snapshot, eventSnapshot, size, viewport, scaleTextWithZoom]);
 
   useLayoutEffect(() => {
     if (!openToken || !active || !axisReady || !eventsReady || handledOpen.current === openToken) return;

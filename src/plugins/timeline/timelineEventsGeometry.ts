@@ -83,6 +83,10 @@ type CaptionCandidateColumns = Readonly<{pointIndex: number; columns: readonly n
 
 const orderedEventCache = new WeakMap<readonly TimelineEventPoint[], readonly CachedEvent[]>();
 
+export function timelineEventWorldX(offset: number, step: number): number {
+  return (offset / step) * BASE_PIXEL_INTERVAL;
+}
+
 function clamp(value: number, min: number, max: number): number {
   if (max < min) return min;
   return Math.max(min, Math.min(max, value));
@@ -454,14 +458,13 @@ export function getTimelineEventsGeometry(input: TimelineEventsGeometryInput): T
   const belowRise = textScale === 1 ? INITIAL_RISE : axisLabelBounds.reduce((rise, bounds) =>
     Math.max(rise, bounds.top + bounds.height - axisY + belowOffset + ENDPOINT_GAP), INITIAL_RISE);
   const captionSize = {width: CAPTION_WIDTH * textScale, height: CAPTION_HEIGHT * textScale};
-  const projectedX = (offset: number) => width / 2 + ((offset / step) * BASE_PIXEL_INTERVAL - centerX) * zoom;
+  const projectedX = (offset: number) => width / 2 + (timelineEventWorldX(offset, step) - centerX) * zoom;
   const start = lowerBound(orderedEvents, -24, item => projectedX(item.event.offset));
   const end = upperBound(orderedEvents, width + 24, item => projectedX(item.event.offset));
   const candidates: Omit<PreparedEvent, "lane">[] = [];
   for (let index = start; index < Math.min(end, orderedEvents.length); index++) {
     const {event, labelWidth} = orderedEvents[index];
-    const worldX = (event.offset / step) * BASE_PIXEL_INTERVAL;
-    const x = width / 2 + (worldX - centerX) * zoom;
+    const x = projectedX(event.offset);
     // Labels may align at the canvas edge, but distant anchors must not occupy lanes.
     if (!Number.isFinite(x) || x < -24 || x > width + 24) continue;
     candidates.push({...labelPosition(x, labelWidth * textScale, width), event, x});

@@ -15,6 +15,7 @@
 - 每条时间线可添加、编辑和删除事件。事件标题为 trim 后 1～60 个 Unicode 码点，摘要最多 200 个码点；摘要可空。`offset` 是距故事起点的数值增量，必须是有限数字且绝对值不超过 `1e9`；`placement` 为 `above` 或 `below`，`important` 标记关键事件。
 - 事件标签显示 `origin + offset` 和当前轴单位。因此修改轴起点会同步更新事件的显示数值，事件保存的相对增量不变。当前不解析日历、时间范围或单位换算。
 - 节点使用轴锚点、细引线和文字端点，不使用卡片或边框。普通事件在轴上显示圆点；关键事件在轴上显示琥珀色菱形。文字端点使用实心圆和外圆环，外环以 2.4 秒周期呼吸；内圆保持不动。时间线内容 inactive 时暂停外环，减少动效时外环静止。
+- 从项目搜索打开事件时，时间线打开所属画布，并在当前缩放下把事件的文字端点移到画布中心。请求只在当前项目会话中生效。
 - “关键转折”文字根据当前视口中的刻度文字、故事起点、事件文字和引线自动避让；优先在轴下方就近错开，底部空间不足时尝试轴上方。平移、缩放和窗口尺寸变化会重新计算，事件的时间数值与轴上锚点不变。
 - 引线经过其他文字区域时留出空隙，避免密集节点的竖线穿过标题、摘要或轴刻度文字；同样适用于浅色和深色主题。
 - 事件通过共享 Dialog 添加、编辑和删除。空项目不自动填入示例事件；保存失败时保留草稿并提供重试，未完成编辑参与工作台离开检查。
@@ -31,7 +32,7 @@
 
 ## 插件协作
 
-提供 `timelineKey`；依赖 `layoutKey`、`workbenchKey`、`projectStorageKey`、`canvasKey`、`contextMenuKey` 和 `assetCatalogKey`。主内容通过 `layout.registerContent` 登记，默认实现由 `appPlugins` 静态装配；内核和入口不编排时间线业务。
+提供 `timelineKey`；依赖 `layoutKey`、`workbenchKey`、`projectStorageKey`、`canvasKey`、`contextMenuKey`、`assetCatalogKey` 和 `projectSearchKey`。主内容通过 `layout.registerContent` 登记，默认实现由 `appPlugins` 静态装配；内核和入口不编排时间线业务。
 
 资产插件通过 `@lodestory/sdk/asset-catalog` 提供按项目会话隔离的只读目录。时间线只订阅公开的类型与资产摘要，不读取资产插件的私有 store，也不改写资产记录。关联 ID 归时间线事件所有；目录变更只更新显示名称和可选范围，不自动删除事件中的关联，也不阻止资产管理删除对象。
 

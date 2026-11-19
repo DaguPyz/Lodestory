@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, statSync, symlinkSync } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, rmdirSync, statSync, symlinkSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -26,7 +26,7 @@ function hasCommand(command, commandEnv) {
 }
 
 function buildMacos(product, version) {
-  const target = "universal-apple-darwin";
+  const targets = { aarch64: "aarch64-apple-darwin", x64: "x86_64-apple-darwin" };
   const macEnv = { ...env };
   if (!macEnv.APPLE_SIGNING_IDENTITY && !macEnv.APPLE_CERTIFICATE) {
     const identities = run("security", ["find-identity", "-v", "-p", "codesigning"], { capture: true });
@@ -53,9 +53,11 @@ function buildMacos(product, version) {
     }
   }
 
-  run("rustup", ["target", "add", "aarch64-apple-darwin", "x86_64-apple-darwin"]);
-  run("pnpm", ["build:desktop", "--target", target, "--bundles", "dmg", "--", "--locked"], { env: macEnv });
-  return path.join(targetDir, target, "release", "bundle", "dmg", `${product}_${version}_universal.dmg`);
+  run("rustup", ["target", "add", ...Object.values(targets)]);
+  return Object.entries(targets).map(([arch, target]) => {
+    run("pnpm", ["build:desktop", "--target", target, "--bundles", "dmg", "--", "--locked"], { env: macEnv });
+    return path.join(targetDir, target, "release", "bundle", "dmg", `${product}_${version}_${arch}.dmg`);
+  });
 }
 
 function buildWindows(product, version) {
@@ -97,7 +99,7 @@ function buildWindows(product, version) {
   if (windowsEnv.LODESTORY_WINDOWS_SIGN !== "1") args.push("--no-sign");
   run("rustup", ["target", "add", target]);
   run("pnpm", [...args, "--", "--locked"], { env: windowsEnv });
-  return path.join(targetDir, target, "release", "bundle", "nsis", `${product}_${version}_x64-setup.exe`);
+  return [path.join(targetDir, target, "release", "bundle", "nsis", `${product}_${version}_x64-setup.exe`)];
 }
 
 function main() {
@@ -115,21 +117,35 @@ function main() {
   }
 
   const { productName, version } = JSON.parse(readFileSync(path.join(root, "src-tauri", "tauri.conf.json"), "utf8"));
+  const now = new Date();
+  const timestamp = [
+    now.getFullYear(),
+    now.getMonth() + 1,
+    now.getDate(),
+    now.getHours(),
+    now.getMinutes(),
+    now.getSeconds(),
+  ].map((part) => String(part).padStart(2, "0")).join("");
   const outputBase = path.join(root, "output");
   mkdirSync(outputBase, { recursive: true });
-  const output = mkdtempSync(path.join(outputBase, "installers."));
+  const output = path.join(outputBase, `installers.${timestamp}`);
+  mkdirSync(output);
   const failed = [];
   const platforms = platform === "all" ? Object.keys(builds) : [platform];
   for (const name of platforms) {
     try {
       console.log(`Building ${name} installers`);
-      const installer = builds[name](productName, version);
-      if (!statSync(installer, { throwIfNoEntry: false })?.size) {
-        throw new Error(`Installer missing or empty: ${installer}`);
+      const installers = builds[name](productName, version);
+      for (const installer of installers) {
+        if (!statSync(installer, { throwIfNoEntry: false })?.size) {
+          throw new Error(`Installer missing or empty: ${installer}`);
+        }
       }
       const destination = path.join(output, name);
       mkdirSync(destination);
-      copyFileSync(installer, path.join(destination, path.basename(installer)));
+      for (const installer of installers) {
+        copyFileSync(installer, path.join(destination, path.basename(installer)));
+      }
       console.log(`Installers: ${destination}`);
     } catch (error) {
       console.error(`${name}: ${error.message}`);

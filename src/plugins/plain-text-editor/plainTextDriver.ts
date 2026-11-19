@@ -10,6 +10,7 @@ export type SearchOptions = {caseSensitive?: boolean; regexp?: boolean; wholeWor
 export type SearchRequest = {replace: boolean; selected: string};
 export type HighlightInspection = {preview: EditorHighlightPreview; anchor: {left: number; top: number; bottom: number}};
 export type PlainTextDriver = ReturnType<typeof createPlainTextDriver>;
+type SearchAlignment = "nearest" | "center";
 const drivers = new WeakMap<HTMLElement, PlainTextDriver>();
 const completionContextLimit = 128;
 export function getPlainTextDriver(root: HTMLElement) { return drivers.get(root); }
@@ -26,6 +27,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
   const initialCaret = initialContent.startsWith("\uFEFF") ? 1 : 0;
   let selection: TextSelection = {anchor: initialCaret, head: initialCaret};
   let selectionIsSearchMatch = false;
+  let pendingSearchReveal: {selection: TextSelection; alignment: SearchAlignment} | undefined;
   let readOnly = true;
   let destroyed = false;
   let composing = false;
@@ -110,10 +112,21 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
   }
   function render() {
     if (destroyed || !layout.rowCount) return;
+    const height = viewport.clientHeight;
+    if (pendingSearchReveal && (pendingSearchReveal.selection !== selection || !selectionIsSearchMatch)) {
+      pendingSearchReveal = undefined;
+    }
+    const searchReveal = pendingSearchReveal && height > 0 && viewport.clientWidth > 0 ? pendingSearchReveal : undefined;
+    if (searchReveal) {
+      // A newly opened document needs a scroll range before we can move the viewport.
+      updateContentHeight(height);
+      if (searchReveal.alignment === "center") viewport.scrollTop = centeredSearchTop(height);
+      else reveal();
+    }
     layer.style.left = `${textLeft}px`;
     layer.style.width = `${textWidth}px`;
     const first = Math.max(0, Math.min(layout.rowCount - 1, Math.floor((viewport.scrollTop - padding) / lineHeight) - 6));
-    const last = Math.ceil((viewport.scrollTop + viewport.clientHeight - padding) / lineHeight) + 6;
+    const last = Math.ceil((viewport.scrollTop + height - padding) / lineHeight) + 6;
     const fragment = document.createDocumentFragment();
     const from = Math.min(selection.anchor, selection.head), to = Math.max(selection.anchor, selection.head);
     const selectionClass = selectionIsSearchMatch ? "plain-text-search-match" : "plain-text-selected";
@@ -164,8 +177,23 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     input.style.left = `${Math.min(x, viewport.clientWidth - 4)}px`;
     input.style.top = `${y}px`;
     input.style.height = `${lineHeight}px`;
-    content.style.height = `${Math.max(viewport.clientHeight, layout.rowCount * lineHeight + padding * 2)}px`;
+    updateContentHeight(height);
+    if (searchReveal) {
+      // Rendering nearby lines can correct their estimated wraps and move the match.
+      if (searchReveal.alignment === "center" && Math.abs(viewport.scrollTop - centeredSearchTop(height)) > 1) scheduleRender();
+      else pendingSearchReveal = undefined;
+    }
     completion?.position();
+  }
+  function updateContentHeight(height: number) {
+    content.style.height = `${Math.max(height, layout.rowCount * lineHeight + padding * 2)}px`;
+  }
+  function centeredSearchTop(height: number) {
+    const first = layout.rowForOffset(selection.anchor).index;
+    const last = layout.rowForOffset(Math.max(selection.anchor, selection.head - 1)).index;
+    const lastCenteredRow = (last - first + 1) * lineHeight <= height ? last : first;
+    const center = padding + (first + lastCenteredRow + 1) * lineHeight / 2;
+    return Math.max(0, Math.min(viewport.scrollHeight - height, center - height / 2));
   }
   function getCompletionContext() {
     const {anchor, head} = selection;
@@ -222,13 +250,15 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
     input.value = bufferValue;
     input.setSelectionRange(from - bufferFrom, to - bufferFrom, selection.anchor > selection.head ? "backward" : "forward");
   }
-  function setSelection(anchor: number, head = anchor, scrollIntoView = true, isSearchMatch = false) {
+  function setSelection(anchor: number, head = anchor, scrollIntoView = true, searchAlignment?: SearchAlignment) {
     completion?.close();
     history.breakGroup();
     selection = {anchor: Math.max(0, Math.min(anchor, model.length)), head: Math.max(0, Math.min(head, model.length))};
-    selectionIsSearchMatch = isSearchMatch;
+    selectionIsSearchMatch = searchAlignment !== undefined;
     preferredX = undefined;
-    if (scrollIntoView) reveal();
+    // A search can select a range before the document has a scrollable viewport.
+    pendingSearchReveal = scrollIntoView && searchAlignment ? {selection, alignment: searchAlignment} : undefined;
+    if (scrollIntoView && !pendingSearchReveal) reveal();
     syncInput();
     render();
   }
@@ -479,7 +509,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
       }
     }
     if (!found) { clearSearchMatch(); return false; }
-    setSelection(found.index, found.index + found[0].length, true, true);
+    setSelection(found.index, found.index + found[0].length, true, "nearest");
     return true;
   }
   function replaceSearchMatch(query: string, replacement: string, options: SearchOptions) {

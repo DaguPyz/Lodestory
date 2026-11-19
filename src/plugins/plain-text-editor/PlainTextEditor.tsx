@@ -70,7 +70,7 @@ export default function PlainTextEditor(props: EditorProps) {
         revealSearchRange(target) {
           if (!alive || !instance || !current.current.active || instance.getContent() !== target.text
             || target.start < 0 || target.end <= target.start || target.end > target.text.length) return false;
-          instance.setSelection(target.start, target.end);
+          instance.setSelection(target.start, target.end, true, "center");
           instance.focus();
           return true;
         },

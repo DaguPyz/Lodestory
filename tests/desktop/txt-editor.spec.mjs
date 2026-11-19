@@ -4,6 +4,91 @@ import {tmpdir} from "node:os";
 import path from "node:path";
 
 describe("TXT-only document editor", () => {
+  it("centers and outlines the clicked project search occurrence in the manuscript", async () => {
+    const parent = await mkdtemp(path.join(tmpdir(), "lodestory-project-search-"));
+    try {
+      await browser.waitUntil(() => browser.execute(() => !!window.__lodestoryLifecycleTest), {timeout: 10000});
+      const project = await browser.execute(async parentPath => {
+        const {project} = await window.__TAURI__.core.invoke("create_project", {parentPath, name: "正文搜索"});
+        return project;
+      }, parent);
+      const term = "同一处关键线索";
+      const lines = Array.from({length: 1100}, (_, i) => `第 ${i + 1} 行。${"这是会自动换行的正文。".repeat(i % 8)}`);
+      lines[104] = `较早的${term}。`;
+      lines[1038] = `较晚的${term}。`;
+      const documentPath = path.join(project.path, "长篇.txt");
+      const manuscript = lines.join("\r\n");
+      await writeFile(documentPath, manuscript);
+      await writeFile(path.join(project.path, "另一篇.txt"), "另一份文稿。");
+      assert.equal(await browser.execute(project => window.__lodestoryLifecycleTest.openPreparedProject(project), project), true);
+      await browser.waitUntil(() => browser.execute(() => {
+        const state = window.__lodestoryLifecycleTest.snapshot();
+        return !!state.session && state.active && !state.busy && !state.loading;
+      }), {timeout: 10000});
+      await browser.execute(() => window.__lodestoryLifecycleTest.showLayoutContent("asset-management.assets"));
+
+      async function openOccurrence(line, viewportWasHidden = false) {
+        const search = await $('button[aria-label="搜索项目"]');
+        await search.waitForClickable({timeout: 5000});
+        await search.click();
+        const query = await $('input[aria-label="搜索项目资源"]');
+        await query.waitForDisplayed({timeout: 5000});
+        await query.setValue(term);
+        const result = await $(`//button[starts-with(normalize-space(.), "第 ${line} 行 ·")]`);
+        await result.waitForDisplayed({timeout: 10000});
+        await result.click();
+        await query.waitForDisplayed({timeout: 5000, reverse: true});
+        if (viewportWasHidden) {
+          // Return the viewport after the selection reaches the editor but before it can scroll.
+          await browser.waitUntil(() => browser.execute(term => {
+            const input = document.querySelector('.editor-document[aria-label="长篇.txt"]:not([hidden]) .plain-text-input');
+            return input?.value === `较早的${term}。` && input.value.slice(input.selectionStart, input.selectionEnd) === term;
+          }, term), {timeout: 5000});
+          await browser.execute(() => {
+            document.querySelector('.editor-document[aria-label="长篇.txt"] .plain-text-viewport').style.display = "";
+          });
+        }
+        let state;
+        try {
+          await browser.waitUntil(async () => {
+            state = await browser.execute(line => {
+              const viewport = document.querySelector('.editor-document[aria-label="长篇.txt"]:not([hidden]) .plain-text-viewport');
+              const mark = viewport?.querySelector(`.plain-text-line[data-line="${line - 1}"] .plain-text-search-match`);
+              const bounds = viewport?.getBoundingClientRect();
+              const match = mark?.getBoundingClientRect();
+              return {top: viewport?.scrollTop, text: mark?.textContent,
+                centerDistance: match && Math.abs((match.top + match.bottom - bounds.top - bounds.bottom) / 2),
+                visible: !!match && match.top >= bounds.top && match.bottom <= bounds.bottom,
+                outline: mark && getComputedStyle(mark).outlineStyle,
+                firstLine: viewport?.querySelector(".plain-text-line")?.getAttribute("data-line"),
+                feedback: document.querySelector(".editor-document-feedback")?.textContent};
+            }, line);
+            return state.top > 0 && state.text === term && state.visible && state.centerDistance <= 6;
+          }, {timeout: 5000});
+        } catch (error) {
+          throw new Error(`The clicked occurrence on line ${line} is not centered: ${JSON.stringify(state)}`, {cause: error});
+        }
+        assert.equal(state.outline, "solid");
+      }
+
+      await openOccurrence(1039);
+      const closeTab = await $('button[aria-label="关闭 长篇.txt"]');
+      await closeTab.click();
+      await closeTab.waitForExist({timeout: 5000, reverse: true});
+      await openOccurrence(1039);
+      assert.equal(await browser.execute(() => window.__lodestoryLifecycleTest.openDocument("另一篇.txt")), true);
+      await browser.execute(() => {
+        document.querySelector('.editor-document[aria-label="长篇.txt"] .plain-text-viewport').style.display = "none";
+      });
+      await openOccurrence(105, true);
+      assert.equal(await browser.execute(() => window.__lodestoryLifecycleTest.closeProject()), true);
+      assert.equal(await readFile(documentPath, "utf8"), manuscript);
+    } finally {
+      await browser.execute(() => window.__lodestoryLifecycleTest?.closeProject()).catch(() => {});
+      await rm(parent, {recursive: true, force: true});
+    }
+  });
+
   it("completes, finds and inspects project asset names in the packaged WebView", async () => {
     const parent = await mkdtemp(path.join(tmpdir(), "lodestory-completion-"));
     try {

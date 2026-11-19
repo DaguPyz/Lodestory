@@ -32,11 +32,12 @@ cargo install --locked cargo-xwin
 pnpm build:installers
 ```
 
-Installers are saved in a new `output/installers.*` directory on each run. Use `pnpm build:installers macos` or `pnpm build:installers windows` to build a single platform.
+Installers are saved in `output/installers.YYYYMMDDHHmmss/`, using the local time when the build starts. Use `pnpm build:installers macos` or `pnpm build:installers windows` to build a single platform.
 
 | Platform | Architecture | Files |
 | --- | --- | --- |
-| macOS | Apple Silicon and Intel (universal) | `.dmg` |
+| macOS | Apple Silicon (ARM64) | `_aarch64.dmg` |
+| macOS | Intel (x86-64) | `_x64.dmg` |
 | Windows | x64 | `-setup.exe` |
 
 The installer script signs the macOS app and DMG by default. Import your **Developer ID Application** certificate and its private key into your macOS keychain. The script selects the identity automatically when exactly one is available. Set `APPLE_SIGNING_IDENTITY` to the full identity name to select a specific certificate. Use `APPLE_SIGNING_IDENTITY=- pnpm build:installers macos` for an ad-hoc test build.

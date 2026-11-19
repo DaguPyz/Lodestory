@@ -64,18 +64,26 @@ export function BodyEditor({active}: {active: boolean}) {
 
   useEffect(() => {
     const target = editor.searchTarget;
-    if (!target || !active || editor.busy) return;
-    if (workspace.activeId !== target.documentId) {
-      editor.finishSearchTarget(target, true);
-      return;
-    }
-    const handle = handles.current.get(target.documentId);
-    if (!handle) return;
-    const current = workspace.getSnapshot().documents.find(document => document.id === target.documentId);
-    let success = false;
-    try { success = current?.content === target.content && Boolean(handle.revealSearchRange?.(target.range)); }
-    finally { editor.finishSearchTarget(target, success); }
-  }, [active, editor.busy, editor.searchTarget, editor.finishSearchTarget, readyVersion, workspace.activeId, workspace.getSnapshot]);
+    if (!target) return;
+    // Strict Mode can replace a newly registered handle during the current effect flush.
+    const frame = requestAnimationFrame(() => {
+      if (!mounted.current || editor.getSearchTarget() !== target) return;
+      const state = workspace.getSnapshot();
+      if (state.activeId !== target.documentId) {
+        editor.finishSearchTarget(target, true);
+        return;
+      }
+      if (!focusState.current.active || focusState.current.busy || state.blocked) return;
+      const handle = handles.current.get(target.documentId);
+      if (!handle) return;
+      const current = state.documents.find(document => document.id === target.documentId);
+      let success = false;
+      try { success = current?.content === target.content && Boolean(handle.revealSearchRange?.(target.range)); }
+      catch (error) { console.error("Could not reveal the search result in the editor.", error); }
+      editor.finishSearchTarget(target, success);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [active, editor.busy, editor.searchTarget, editor.getSearchTarget, editor.finishSearchTarget, readyVersion, workspace.activeId, workspace.getSnapshot]);
 
   useEffect(() => {
     if (!active || editor.busy) return;

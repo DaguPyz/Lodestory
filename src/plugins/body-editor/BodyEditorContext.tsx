@@ -16,6 +16,7 @@ function useBodyEditorModel(model: BodyEditorModel, workbench: WorkbenchService,
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
   const workspace = useDocumentWorkspace(data.workspace);
   const connect = useCallback((format: EditorFormat) => connectSources(sessionId, format), [connectSources, sessionId]);
+  const getSearchTarget = useCallback(() => model.getSnapshot().searchTarget, [model]);
   return {
     ...data,
     workspace,
@@ -24,6 +25,7 @@ function useBodyEditorModel(model: BodyEditorModel, workbench: WorkbenchService,
     busy: state.busy || workspace.blocked,
     newDisabled: !isTauri() || workspace.creating || workspace.blocked || state.busy || !state.active,
     requestNewDocument: model.requestNewDocument,
+    getSearchTarget,
     finishSearchTarget: model.finishSearchTarget,
   };
 }

@@ -1,3 +1,5 @@
+import type {I18nService, Translate} from "@lodestory/sdk/i18n";
+import {useTranslation} from "../../utils/useTranslation";
 import {useLayoutEffect, useState, useSyncExternalStore} from "react";
 import type {WorkbenchService} from "@lodestory/sdk/workbench";
 import {shortcutCommandIds, type ShortcutsService} from "@lodestory/sdk/shortcuts";
@@ -9,6 +11,7 @@ import {ProjectTree} from "./ProjectTree";
 import "./project-management.css";
 
 type ProjectManagementViewsProps = {
+  i18n: I18nService;
   workbench: WorkbenchService;
   models: ReadonlyMap<string, ProjectManagementModel>;
 };
@@ -17,8 +20,9 @@ function useWorkbench(workbench: WorkbenchService) {
   return useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
 }
 
-function ProjectFilesForSession({workbench, model, active, shortcuts}: {
+function ProjectFilesForSession({t, workbench, model, active, shortcuts}: {
   workbench: WorkbenchService;
+  t: Translate;
   model: ProjectManagementModel;
   active: boolean;
   shortcuts: ShortcutsService;
@@ -26,7 +30,7 @@ function ProjectFilesForSession({workbench, model, active, shortcuts}: {
   const workbenchState = useWorkbench(workbench);
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const canInteract = active && workbenchState.active && !workbenchState.busy && !snapshot.blocked;
-  return <ProjectTree shortcuts={shortcuts}
+  return <ProjectTree t={t} shortcuts={shortcuts}
     projectName={snapshot.projectName}
     entries={snapshot.entries}
     activeDocumentPath={snapshot.activeDocumentPath}
@@ -50,15 +54,16 @@ function ProjectFilesForSession({workbench, model, active, shortcuts}: {
 }
 
 /** Registered as the project's navigation content; layout owns its placement. */
-export function ProjectFiles({workbench, models, shortcuts, active}: ProjectManagementViewsProps & {shortcuts: ShortcutsService; active: boolean}) {
+export function ProjectFiles({i18n, workbench, models, shortcuts, active}: ProjectManagementViewsProps & {shortcuts: ShortcutsService; active: boolean}) {
   const workbenchState = useWorkbench(workbench);
+  const t = useTranslation(i18n);
   const session = workbenchState.session;
   const model = session ? models.get(session.id) : undefined;
   if (!session || !model) return null;
-  return <ProjectFilesForSession key={session.id} workbench={workbench} model={model} active={active} shortcuts={shortcuts} />;
+  return <ProjectFilesForSession t={t} key={session.id} workbench={workbench} model={model} active={active} shortcuts={shortcuts} />;
 }
 
-function ProjectDialogsForSession({workbench, model}: {workbench: WorkbenchService; model: ProjectManagementModel}) {
+function ProjectDialogsForSession({t, workbench, model}: {t: Translate; workbench: WorkbenchService; model: ProjectManagementModel}) {
   const workbenchState = useWorkbench(workbench);
   const snapshot = useSyncExternalStore(model.subscribe, model.getSnapshot, model.getSnapshot);
   const [closingDeletePath, setClosingDeletePath] = useState(snapshot.deletePath);
@@ -69,7 +74,7 @@ function ProjectDialogsForSession({workbench, model}: {workbench: WorkbenchServi
 
   if (!workbenchState.active) return null;
   return <>
-    <RenameEntryDialog
+    <RenameEntryDialog t={t}
       open={snapshot.renamePath !== null}
       name={snapshot.renameName}
       suffix={snapshot.renameSuffix}
@@ -79,7 +84,7 @@ function ProjectDialogsForSession({workbench, model}: {workbench: WorkbenchServi
       onClose={() => { model.closeRenameDialog(); }}
       onRename={name => model.rename(name)}
     />
-    <DeleteDocumentDialog
+    <DeleteDocumentDialog t={t}
       open={snapshot.deletePath !== null}
       path={snapshot.deletePath ?? closingDeletePath ?? ""}
       busy={workbenchState.busy || snapshot.blocked || snapshot.deleting || !!snapshot.deletingPath}
@@ -90,7 +95,7 @@ function ProjectDialogsForSession({workbench, model}: {workbench: WorkbenchServi
       }}
       onDelete={() => model.confirmDelete()}
     />
-    <NewDocumentDialog
+    <NewDocumentDialog t={t}
       open={snapshot.dialogOpen}
       initialParent={snapshot.selectedFolder}
       kind={snapshot.createKind}
@@ -103,10 +108,11 @@ function ProjectDialogsForSession({workbench, model}: {workbench: WorkbenchServi
 }
 
 /** Mounted in a UI wrapper so the dialog stays available when the navigation content is hidden. */
-export function ProjectDialogs({workbench, models}: ProjectManagementViewsProps) {
+export function ProjectDialogs({i18n, workbench, models}: ProjectManagementViewsProps) {
   const workbenchState = useWorkbench(workbench);
+  const t = useTranslation(i18n);
   const session = workbenchState.session;
   const model = session ? models.get(session.id) : undefined;
   if (!session || !model) return null;
-  return <ProjectDialogsForSession key={session.id} workbench={workbench} model={model} />;
+  return <ProjectDialogsForSession t={t} key={session.id} workbench={workbench} model={model} />;
 }

@@ -165,6 +165,21 @@
   white-space: nowrap;
 }
 
+.timeline-event-search-match {
+  display: inline-block;
+  box-sizing: border-box;
+  max-inline-size: 100%;
+  overflow: hidden;
+  padding-inline: var(--ui-space-1);
+  vertical-align: top;
+  text-overflow: ellipsis;
+  border-radius: var(--ui-radius-row);
+  color: var(--ui-highlight-active-foreground);
+  background: var(--ui-highlight-active-background);
+  outline: 1px solid var(--ui-highlight-active-border);
+  outline-offset: -1px;
+}
+
 .timeline-events-overlay[data-active="false"] :is(.timeline-event-title, .timeline-event-offset, .timeline-event-summary, .timeline-event-title-rule) { transition: none; }
 
 :root[data-ui-motion="reduce"] .timeline-events-overlay { --timeline-event-text-duration: 0ms; }
@@ -576,6 +591,12 @@
   .timeline-event-offset,
   .timeline-event-title,
   .timeline-event-summary { color: CanvasText; }
+  .timeline-event-search-match {
+    color: HighlightText;
+    background: Highlight;
+    outline-color: HighlightText;
+    forced-color-adjust: none;
+  }
   .timeline-event-title-rule { background: CanvasText; }
   .timeline-event-label[data-custom-color="true"] .timeline-event-title-rule { background: CanvasText; outline: none; }
   .timeline-event-color-choice input:checked + span { outline-color: Highlight; }

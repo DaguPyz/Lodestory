@@ -1,3 +1,4 @@
+import type {Translate} from "@lodestory/sdk/i18n";
 import {useEffect, useId, useLayoutEffect, useRef, useState, useSyncExternalStore} from "react";
 import {Icon, IconButton, Select} from "@lodestory/ui";
 import {createDialogDragController} from "@lodestory/ui/pointer-drag";
@@ -9,7 +10,8 @@ const keyboardMoves: Partial<Record<string, Point>> = {
 };
 const inset = 8;
 
-export function PlainTextHighlightCard({inspection, active, front, onRaise, onClose}: {
+export function PlainTextHighlightCard({t, inspection, active, front, onRaise, onClose}: {
+  t: Translate;
   inspection: HighlightInspection;
   active: boolean;
   front: boolean;
@@ -100,7 +102,7 @@ export function PlainTextHighlightCard({inspection, active, front, onRaise, onCl
     }}>
     <header>
       <div className="plain-text-highlight-card-handle" ref={header} tabIndex={0} role="group"
-        title="拖动标题移动卡片" aria-label={`移动卡片 ${entry.title}，使用方向键`}
+        title={t("拖动标题移动卡片")} aria-label={t("移动卡片 {title}，使用方向键", {values: {title: entry.title}})}
         onPointerDown={event => {
           if (event.button !== 0) return;
           event.currentTarget.focus({preventScroll: true});
@@ -125,18 +127,18 @@ export function PlainTextHighlightCard({inspection, active, front, onRaise, onCl
         }}>
         <h2 id={titleId}>{entry.title}</h2>
       </div>
-      <IconButton label={expanded ? "收起详情" : "展开详情"} aria-expanded={expanded} aria-controls={detailsId}
+      <IconButton label={expanded ? t("收起详情") : t("展开详情")} aria-expanded={expanded} aria-controls={detailsId}
         onClick={() => setExpanded(value => !value)}>
         <Icon name={expanded ? "chevronUp" : "chevronDown"} size="small" />
       </IconButton>
-      <IconButton label={`关闭卡片 ${entry.title}`} onClick={() => onClose(true)}><Icon name="close" size="small" /></IconButton>
+      <IconButton label={t("关闭卡片 {title}", {values: {title: entry.title}})} onClick={() => onClose(true)}><Icon name="close" size="small" /></IconButton>
     </header>
-    {!expanded && summary && <div className="plain-text-highlight-card-body" role="region" aria-label="资产简介" tabIndex={0}>
+    {!expanded && summary && <div className="plain-text-highlight-card-body" role="region" aria-label={t("资产简介")} tabIndex={0}>
       {summary}
     </div>}
-    <div id={detailsId} hidden={!expanded} className="plain-text-highlight-card-body" role="region" aria-label="卡片详情" tabIndex={0}>
+    <div id={detailsId} hidden={!expanded} className="plain-text-highlight-card-body" role="region" aria-label={t("卡片详情")} tabIndex={0}>
       {expanded && <>
-        {distinct ? <Select aria-label="选择同名资产" value={entry.id} onValueChange={setSelected}
+        {distinct ? <Select aria-label={t("选择同名资产")} value={entry.id} onValueChange={setSelected}
           options={entries.map(item => ({value: item.id, label: item.subtitle ? `${item.title} · ${item.subtitle}` : item.title}))} />
           : entry.subtitle && <p className="plain-text-highlight-card-category">{entry.subtitle}</p>}
         {summary}

@@ -1,0 +1,35 @@
+import type {MessageCatalog} from "@lodestory/sdk/i18n";
+
+export default {
+  en: {
+    "纯文本正文": "Plain text manuscript",
+    "纯文本编辑器仅支持 TXT 文档。": "The plain text editor supports TXT documents only.",
+    "纯文本编辑器已关闭。": "The plain text editor has closed.",
+    "显示补全": "Show completions",
+    "区分大小写": "Match case",
+    "正则表达式": "Regular expression",
+    "全词匹配": "Match whole words",
+    "未找到匹配项": "No matches",
+    "查找表达式无效": "Invalid search expression",
+    "查找": "Find",
+    "查找文本": "Find text",
+    "上一个": "Previous match",
+    "下一个": "Next match",
+    "替换为": "Replace with",
+    "替换文本": "Replacement text",
+    "替换": "Replace",
+    "全部替换": "Replace all",
+    "关闭查找": "Close find",
+    "拖动标题移动卡片": "Drag the heading to move the card",
+    "移动卡片 {title}，使用方向键": "Move {title} card with arrow keys",
+    "收起详情": "Hide details",
+    "展开详情": "Show details",
+    "关闭卡片 {title}": "Close {title} card",
+    "资产简介": "Asset summary",
+    "卡片详情": "Card details",
+    "选择同名资产": "Choose an asset with this name",
+    "颜色标记": "Color marker",
+    "未填写": "Not filled in",
+    "未分类": "Uncategorized"
+  },
+} satisfies MessageCatalog;

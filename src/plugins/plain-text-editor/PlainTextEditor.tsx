@@ -1,3 +1,5 @@
+import type {I18nService} from "@lodestory/sdk/i18n";
+import {useTranslation} from "../../utils/useTranslation";
 import {useEffect, useLayoutEffect, useRef, useState} from "react";
 import type {EditorProps} from "@lodestory/sdk/body-editor";
 import {createPlainTextDriver, type HighlightInspection, type PlainTextDriver, type SearchRequest} from "./plainTextDriver";
@@ -6,7 +8,10 @@ import {PlainTextSearchBar} from "./PlainTextSearchBar";
 import "./plain-text-editor.css";
 
 /** One document owns one input, viewport, text model and undo stack. */
-export default function PlainTextEditor(props: EditorProps) {
+export default function PlainTextEditor(props: EditorProps & {i18n?: I18nService}) {
+  const t = useTranslation(props.i18n);
+  const translator = useRef(t);
+  translator.current = t;
   const mount = useRef<HTMLDivElement>(null);
   const current = useRef(props);
   current.current = props;
@@ -32,6 +37,10 @@ export default function PlainTextEditor(props: EditorProps) {
       }
     }
   }, [props.content, props.readOnly, props.active, props.completion, props.highlights]);
+
+  useLayoutEffect(() => {
+    driver.current?.setInputLabel(t("纯文本正文"));
+  }, [t]);
 
   useEffect(() => {
     const root = mount.current;
@@ -59,13 +68,14 @@ export default function PlainTextEditor(props: EditorProps) {
       });
       driver.current = instance;
       instance.setReadOnly(current.current.readOnly || !current.current.active);
+      instance.setInputLabel(translator.current("纯文本正文"));
       instance.setCompletion(current.current.completion);
       instance.setHighlights(current.current.active ? current.current.highlights : undefined);
       current.current.onReady({
         focus() { if (alive && current.current.active) instance?.focus(); },
         getContextMenuActions() {
           if (!alive || !instance?.canComplete()) return [];
-          return [{id: "show-completion", label: "显示补全", restoreFocus: false, run: () => instance?.openCompletion()}];
+          return [{id: "show-completion", label: translator.current("显示补全"), restoreFocus: false, run: () => instance?.openCompletion()}];
         },
         revealSearchRange(target) {
           if (!alive || !instance || !current.current.active || instance.getContent() !== target.text
@@ -108,13 +118,13 @@ export default function PlainTextEditor(props: EditorProps) {
       closeSearch();
     }
   }}>
-    <PlainTextSearchBar request={search} driver={driver} readOnly={props.readOnly || !props.active} onClose={closeSearch} />
+    <PlainTextSearchBar t={t} request={search} driver={driver} readOnly={props.readOnly || !props.active} onClose={closeSearch} />
     <div className="plain-text-work-area">
       <div className="plain-text-document" ref={mount} />
       <div className="plain-text-highlight-cards" hidden={!props.active}>
         {cards.map(inspection => {
           const key = inspection.preview.key;
-          return <PlainTextHighlightCard key={key} inspection={inspection} active={props.active} front={frontCard === key}
+          return <PlainTextHighlightCard t={t} key={key} inspection={inspection} active={props.active} front={frontCard === key}
             onRaise={() => setFrontCard(key)} onClose={restoreFocus => {
               setCards(open => open.filter(item => item.preview.key !== key));
               if (restoreFocus && props.active) driver.current?.focus();

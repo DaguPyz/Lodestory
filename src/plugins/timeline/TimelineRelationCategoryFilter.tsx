@@ -1,3 +1,4 @@
+import type {Translate} from "@lodestory/sdk/i18n";
 import {memo, useId, useLayoutEffect, useRef, useState} from "react";
 import {Popover} from "@base-ui/react/popover";
 import {Icon, IconButton, useInteractionRef} from "@lodestory/ui";
@@ -17,7 +18,8 @@ export type RelationCategoryFilter = Readonly<{
 
 export const allRelationCategories: RelationCategoryFilter = {mode: "all", categoryIds: new Set()};
 
-export const TimelineRelationCategoryFilter = memo(function TimelineRelationCategoryFilter({categories, value, onChange}: {
+export const TimelineRelationCategoryFilter = memo(function TimelineRelationCategoryFilter({t, categories, value, onChange}: {
+  t: Translate;
   categories: readonly {id: string; label: string}[];
   value: RelationCategoryFilter;
   onChange(value: RelationCategoryFilter): void;
@@ -35,9 +37,9 @@ export const TimelineRelationCategoryFilter = memo(function TimelineRelationCate
   const optionInteractionRef = useInteractionRef<HTMLDivElement>(showOptions, "popover");
   const categoryLabelId = useId();
   const count = categories.reduce((total, category) => total + Number(value.categoryIds.has(category.id)), 0);
-  const categoryHint = !categories.length ? "暂无关联分类"
-    : value.mode === "exclude" ? "隐藏所选分类"
-    : count ? "只显示所选分类" : "勾选要显示的分类";
+  const categoryHint = !categories.length ? t("暂无关联分类")
+    : value.mode === "exclude" ? t("隐藏所选分类")
+    : count ? t("只显示所选分类") : t("勾选要显示的分类");
 
   useLayoutEffect(() => {
     if (!disabled) return;
@@ -62,22 +64,22 @@ export const TimelineRelationCategoryFilter = memo(function TimelineRelationCate
       if (!open) setModeStripState(state => state === "closing" ? "closed" : state);
     }}>
       <Popover.Trigger disabled={disabled} data-filter-active={active || undefined}
-        render={<IconButton label={active ? `${filterLabel}，${modes[value.mode].label} ${count} 类` : filterLabel} />}>
+        render={<IconButton label={active ? t("{filterLabel}，{value} {count} 类", {values: {filterLabel: t(filterLabel), value: t(modes[value.mode].label), count}}) : t(filterLabel)} />}>
         <Icon name="slidersHorizontal" size="small" />
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Positioner ref={modeStrip} className="timeline-event-popup-positioner" data-ui-density={density}
           side="left" sideOffset={4} collisionPadding={8}>
-          <Popover.Popup className="timeline-event-popup timeline-focus-filter-modes" ref={modeInteractionRef} aria-label="筛选方式">
+          <Popover.Popup className="timeline-event-popup timeline-focus-filter-modes" ref={modeInteractionRef} aria-label={t("筛选方式")}>
             <Popover.Root open={showOptions} onOpenChange={setOptionsOpen}>
-              <IconButton label={modes.all.label} tooltip={modes.all.tooltip} aria-pressed={value.mode === "all"} onClick={() => {
+              <IconButton label={t(modes.all.label)} tooltip={t(modes.all.tooltip)} aria-pressed={value.mode === "all"} onClick={() => {
                 if (active) onChange(allRelationCategories);
                 setOptionsOpen(false);
               }}>
                 <Icon name={modes.all.icon} size="small" />
               </IconButton>
               {(["exclude", "include"] as const).map(mode => <Popover.Trigger key={mode} aria-pressed={value.mode === mode}
-                render={<IconButton label={modes[mode].label} tooltip={modes[mode].tooltip} />}
+                render={<IconButton label={t(modes[mode].label)} tooltip={t(modes[mode].tooltip)} />}
                 onClick={() => {
                   if (value.mode !== mode) onChange({...value, mode});
                 }}>
@@ -87,7 +89,7 @@ export const TimelineRelationCategoryFilter = memo(function TimelineRelationCate
                 <Popover.Positioner anchor={modeStrip} className="timeline-event-popup-positioner" data-ui-density={density}
                   align="end" sideOffset={4} collisionPadding={8}>
                   <Popover.Popup className="timeline-event-popup timeline-focus-filter-popup" ref={optionInteractionRef}
-                    aria-label={`${modes[value.mode].label}分类`}>
+                    aria-label={t(modes[value.mode].tooltip)}>
                     <div role="group" aria-labelledby={categoryLabelId}>
                       <p className="timeline-focus-filter-caption" id={categoryLabelId}>{categoryHint}</p>
                       {categories.map(category => <label key={category.id} className="timeline-focus-filter-option">

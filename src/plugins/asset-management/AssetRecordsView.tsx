@@ -1,3 +1,5 @@
+import type {Translate} from "@lodestory/sdk/i18n";
+import {useTranslation} from "../../utils/useTranslation";
 import {useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
 import {Button, Dialog, DialogActions, Icon, IconButton, SearchField, Textarea, TextField} from "@lodestory/ui";
 import type {AssetEditorPanel, AssetEditorService} from "@lodestory/sdk/asset-editor";
@@ -42,7 +44,8 @@ function EditingPanel({panel, sessionId, assetId, active, onEditingChange}: {
   return <panel.View sessionId={sessionId} assetId={assetId} active={active} onEditingChange={updateEditing}/>;
 }
 
-function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus, sessionId, assetEditor}: {
+function RecordsEditor({t, resource, active, canInteract, onOpenTypes, contextMenus, sessionId, assetEditor}: {
+  t: Translate;
   resource: AssetSessionResources;
   active: boolean;
   canInteract(): boolean;
@@ -109,11 +112,11 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
       .some(value => value.toLowerCase().includes(normalizedSearchQuery)));
   const searchActive = normalizedSearchQuery !== "";
   const objectListEmptyTitle = searchActive
-    ? `没有找到与“${searchQuery.trim()}”匹配的对象。`
-    : `还没有“${selectedType?.name}”对象。`;
+    ? t("没有找到与“{value}”匹配的对象。", {values: {value: searchQuery.trim()}})
+    : t("还没有“{value}”对象。", {values: {value: selectedType?.name ?? ""}});
   const objectListEmptyHint = searchActive
-    ? "可搜索对象名称、简介或字段值，请尝试其他关键词。"
-    : "在此处点击右键新建对象，字段和默认值会从模板带出。";
+    ? t("可搜索对象名称、简介或字段值，请尝试其他关键词。")
+    : t("在此处点击右键新建对象，字段和默认值会从模板带出。");
   const deleting = deleteTarget !== null;
   const deletionApplied = deleteTarget?.kind === "asset"
     ? !snapshot.assets.some(asset => asset.id === deleteTarget.id)
@@ -166,9 +169,9 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
         setFieldDraft(null);
         setDeleteTarget(null);
         editor.current?.focus();
-      } else if (!accepted) setError(store.getSnapshot().error ?? "未能保存，请检查内容后重试。");
+      } else if (!accepted) setError(store.getSnapshot().error ?? t("未能保存，请检查内容后重试。"));
     } catch (cause) {
-      if (operationEpoch === epoch.current) setError(cause instanceof Error ? cause.message : "保存失败，请重试。");
+      if (operationEpoch === epoch.current) setError(cause instanceof Error ? cause.message : t("保存失败，请重试。"));
     } finally {
       if (operationEpoch === epoch.current) setPending(false);
     }
@@ -196,7 +199,7 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
   function openTypes(create = false) {
     if (disabled || draft || fieldDraft || deleting || !canInteract() || resource.editing.size > 0) return;
     if (create && !store.requestTypeCreation()) {
-      setError(store.getSnapshot().error ?? "暂时无法新建资产模板，请重试。");
+      setError(store.getSnapshot().error ?? t("暂时无法新建资产模板，请重试。"));
       return;
     }
     setError(null);
@@ -273,9 +276,9 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
     if (!draft || busy || panelEditing || !active || !canInteract()) return;
     if (!event.currentTarget.reportValidity()) return;
     const name = draft.name.trim();
-    if ([...name].length < 1 || [...name].length > 60) { setError("对象名称需要填写 1–60 个字符。"); nameInput.current?.focus(); return; }
-    if ([...draft.description].length > 200) { setError("对象简介不能超过 200 个字符。"); return; }
-    if (draft.color !== null && !isAssetColor(draft.color)) { setError("颜色值需要使用 #RRGGBB 格式，例如 #D8E5F2。"); return; }
+    if ([...name].length < 1 || [...name].length > 60) { setError(t("对象名称需要填写 1–60 个字符。")); nameInput.current?.focus(); return; }
+    if ([...draft.description].length > 200) { setError(t("对象简介不能超过 200 个字符。")); return; }
+    if (draft.color !== null && !isAssetColor(draft.color)) { setError(t("颜色值需要使用 #RRGGBB 格式，例如 #D8E5F2。")); return; }
     const values = Object.fromEntries(fields.filter(field => Object.prototype.hasOwnProperty.call(draft.values, field.id)).map(field => [field.id, draft.values[field.id]]));
     const input = {name, description: draft.description, color: draft.color, values};
     void run(async () => {
@@ -316,29 +319,29 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
     return <section className="asset-properties-section" aria-label={title}>
       <div className="asset-fields-heading"><h2>{title}</h2>
         {custom && selected && !draft && <Button variant="ghost" disabled={disabled || fieldDraft !== null || deleting}
-          onClick={() => openField()}><Icon name="plus" size="small"/>添加专属属性</Button>}
+          onClick={() => openField()}><Icon name="plus" size="small"/>{t("添加专属属性")}</Button>}
       </div>
       {definitions.length > 0 ? draft
-        ? <AssetValueFields fields={definitions} assets={snapshot.assets} values={draft.values} disabled={disabled}
+        ? <AssetValueFields t={t} fields={definitions} assets={snapshot.assets} values={draft.values} disabled={disabled}
           onChange={(id, value) => {setDraft({...draft, values: {...draft.values, [id]: value}}); setError(null);}}/>
         : selected && <dl className="asset-property-values">{definitions.map(field => <div key={field.id}>
           <dt>{custom ? <Button variant="ghost" disabled={disabled || fieldDraft !== null || deleting}
-            aria-label={`修改“${field.title}”的属性标题`} onClick={() => openField(field)}>{field.title}</Button> : field.title}</dt>
+            aria-label={t("修改“{title}”的属性标题", {values: {title: field.title}})} onClick={() => openField(field)}>{field.title}</Button> : field.title}</dt>
           <dd className={custom ? "asset-property-content" : undefined}
             data-empty={selected.values[field.id] === undefined || selected.values[field.id] === null || selected.values[field.id] === "" || undefined}>
-            <span>{displayedValue(field, selected, snapshot.assets)}</span>
+            <span>{displayedValue(field, selected, snapshot.assets, undefined, t)}</span>
             {custom && <Button variant="ghost" disabled={disabled || fieldDraft !== null || deleting}
-              aria-label={`删除“${field.title}”的专属属性`} onClick={() => confirmFieldRemoval(field)}>删除</Button>}
+              aria-label={t("删除“{title}”的专属属性", {values: {title: field.title}})} onClick={() => confirmFieldRemoval(field)}>{t("删除")}</Button>}
           </dd>
         </div>)}</dl>
         : <p className="asset-editor-message">{custom
-          ? "可以为这个对象补充属性，不影响模板和其他对象。"
-          : owner?.typeId ? "这个模板还没有字段。" : "这份旧对象未使用模板，已有的专属属性会继续保留。"}</p>}
+          ? t("可以为这个对象补充属性，不影响模板和其他对象。")
+          : owner?.typeId ? t("这个模板还没有字段。") : t("这份旧对象未使用模板，已有的专属属性会继续保留。")}</p>}
     </section>;
   }
 
   const displayType = snapshot.types.find(type => type.id === (draft?.typeId ?? selected?.typeId));
-  const displayTypeName = displayType?.name ?? "未分类";
+  const displayTypeName = displayType?.name ?? t("未分类");
   const isObjectList = !draft && !selected;
   const isObjectDetail = !draft && selected !== null;
   const formId = draft ? `asset-record-form-${sessionId}-${draft.id}` : undefined;
@@ -351,35 +354,35 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
   const listActionsDisabled = disabled || fieldDraft !== null || deleting || resource.editing.size > 0 || !canInteract();
   const viewSwitchDisabled = !active || !canInteract() || pending || snapshot.saving || resource.editing.size > 0;
   const listMenuItems: readonly MenuEntry<string | null>[] = selectedType ? [
-    {id: "create-object", label: "新建对象", icon: <Icon name="plus"/>, disabled: listActionsDisabled,
+    {id: "create-object", label: t("新建对象"), icon: <Icon name="plus"/>, disabled: listActionsDisabled,
       restoreFocus: false, onSelect: menuTypeId => createObjectFromMenu(menuTypeId)},
-    {id: "edit-template", label: "模板设置", icon: <Icon name="settings"/>, disabled: listActionsDisabled,
+    {id: "edit-template", label: t("模板设置"), icon: <Icon name="settings"/>, disabled: listActionsDisabled,
       restoreFocus: false, onSelect: menuTypeId => openSelectedTemplateSettings(menuTypeId)},
   ] : [
-    {id: "create-template", label: "新建资产模板", icon: <Icon name="plus"/>, disabled: listActionsDisabled,
+    {id: "create-template", label: t("新建资产模板"), icon: <Icon name="plus"/>, disabled: listActionsDisabled,
       restoreFocus: false, onSelect: menuTypeId => createTemplateFromMenu(menuTypeId)},
   ];
   const detailMenuItems: readonly MenuEntry<string | null>[] = [
-    {id: "return-to-list", label: "返回对象列表", disabled: assetId => !assetFromMenu(assetId),
+    {id: "return-to-list", label: t("返回对象列表"), disabled: assetId => !assetFromMenu(assetId),
       restoreFocus: false, onSelect: returnToList},
-    {id: "edit-object", label: "编辑对象", disabled: assetId => !assetFromMenu(assetId),
+    {id: "edit-object", label: t("编辑对象"), disabled: assetId => !assetFromMenu(assetId),
       restoreFocus: false, onSelect: assetId => editAsset(assetFromMenu(assetId))},
-    {id: "delete-object", label: "删除对象", disabled: assetId => !assetFromMenu(assetId),
+    {id: "delete-object", label: t("删除对象"), disabled: assetId => !assetFromMenu(assetId),
       restoreFocus: false, onSelect: removeAssetFromMenu},
   ];
   const objectMenuItems: readonly MenuEntry<string | null>[] = selectedType ? [
-    {id: "create-object", label: "新建对象", icon: <Icon name="plus"/>, disabled: assetId => !assetFromListMenu(assetId),
+    {id: "create-object", label: t("新建对象"), icon: <Icon name="plus"/>, disabled: assetId => !assetFromListMenu(assetId),
       restoreFocus: false, onSelect: createObjectFromAssetMenu},
-    {id: "edit-template", label: "模板设置", icon: <Icon name="settings"/>, disabled: assetId => !assetFromListMenu(assetId),
+    {id: "edit-template", label: t("模板设置"), icon: <Icon name="settings"/>, disabled: assetId => !assetFromListMenu(assetId),
       restoreFocus: false, onSelect: openTemplateSettingsFromAssetMenu},
-    {id: "edit-object", label: "编辑对象", icon: <Icon name="pencil"/>, disabled: assetId => !assetFromListMenu(assetId),
+    {id: "edit-object", label: t("编辑对象"), icon: <Icon name="pencil"/>, disabled: assetId => !assetFromListMenu(assetId),
       restoreFocus: false, onSelect: assetId => editAsset(assetFromListMenu(assetId))},
-    {id: "delete-object", label: "删除对象", icon: <Icon name="trash"/>, disabled: assetId => !assetFromListMenu(assetId),
+    {id: "delete-object", label: t("删除对象"), icon: <Icon name="trash"/>, disabled: assetId => !assetFromListMenu(assetId),
       restoreFocus: false, onSelect: removeAssetFromListMenu},
   ] : [
-    {id: "create-template", label: "新建资产模板", icon: <Icon name="plus"/>, disabled: assetId => !assetFromListMenu(assetId),
+    {id: "create-template", label: t("新建资产模板"), icon: <Icon name="plus"/>, disabled: assetId => !assetFromListMenu(assetId),
       restoreFocus: false, onSelect: createTemplateFromAssetMenu},
-    {id: "delete-object", label: "删除对象", icon: <Icon name="trash"/>, disabled: assetId => !assetFromListMenu(assetId),
+    {id: "delete-object", label: t("删除对象"), icon: <Icon name="trash"/>, disabled: assetId => !assetFromListMenu(assetId),
       restoreFocus: false, onSelect: removeAssetFromListMenu},
   ];
 
@@ -387,96 +390,96 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
     ref={editor} tabIndex={!draft && active ? 0 : -1}>
     <header className={`asset-editor-header ${headerClass}`.trimEnd()}>
       <div className={headingClass}>
-        <h1>{draft ? draft.kind === "create" ? "新建对象" : "编辑对象" : selected ? selected.name : selectedType?.name ?? (scopeAssets.length > 0 ? "未分类对象" : "对象管理")}</h1>
+        <h1>{draft ? draft.kind === "create" ? t("新建对象") : t("编辑对象") : selected ? selected.name : selectedType?.name ?? (scopeAssets.length > 0 ? t("未分类对象") : t("对象管理"))}</h1>
         {editorPanels && <div className="asset-editor-panels-jump">
           <Button variant="ghost" disabled={!active} onClick={() => panelContainer.current?.focus()}>
-            {panels.length === 1 ? `查看${panels[0].title}` : "查看编辑面板"}
+            {panels.length === 1 ? t("查看{value}", {values: {value: panels[0].title}}) : t("查看编辑面板")}
           </Button>
         </div>}
         {isObjectDetail && <div className="asset-editor-back">
           <Button variant="ghost" disabled={listActionsDisabled} onClick={() => returnToList(selected.id)}>
             <Icon name="arrowLeft" size="small" />
-            <span>{selectedType ? `返回${selectedType.name}列表` : "返回对象列表"}</span>
+            <span>{selectedType ? t("返回{name}列表", {values: {name: selectedType.name}}) : t("返回对象列表")}</span>
           </Button>
         </div>}
         {!draft && <p aria-live={isObjectList ? "polite" : undefined}>{selected
           ? `${displayTypeName}${selected.description ? ` · ${selected.description}` : ""}`
-          : selectedType ? `${searchActive ? `${visibleAssets.length} / ` : ""}${scopeAssets.length} 个对象${viewMode === "list" ? ` · ${scopeFields.length} 个字段` : ""}`
-            : scopeAssets.length > 0 ? "保留的旧对象可继续查看和编辑；新对象需要从模板创建。" : "先定义资产模板，再基于模板创建具体对象。"}</p>}
+          : selectedType ? `${searchActive ? `${visibleAssets.length} / ` : ""}${t("{count} 个对象", {count: scopeAssets.length, values: {count: scopeAssets.length}})}${viewMode === "list" ? t(" · {count} 个字段", {count: scopeFields.length, values: {count: scopeFields.length}}) : ""}`
+            : scopeAssets.length > 0 ? t("保留的旧对象可继续查看和编辑；新对象需要从模板创建。") : t("先定义资产模板，再基于模板创建具体对象。")}</p>}
       </div>
       {isObjectList && <div className="asset-records-tools">
-        <SearchField label="搜索对象" placeholder="搜索名称、简介或字段值" value={searchQuery}
+        <SearchField label={t("搜索对象")} placeholder={t("搜索名称、简介或字段值")} value={searchQuery}
           aria-controls="asset-object-results" disabled={!active || !snapshot.loaded || snapshot.loading || snapshot.blocked}
           onChange={event => setSearchQuery(event.currentTarget.value)}/>
-        <div className="asset-view-switch" role="group" aria-label="查看模式">
-          <IconButton label="列表视图" aria-pressed={viewMode === "list"} disabled={viewSwitchDisabled}
+        <div className="asset-view-switch" role="group" aria-label={t("查看模式")}>
+          <IconButton label={t("列表视图")} aria-pressed={viewMode === "list"} disabled={viewSwitchDisabled}
             onClick={() => switchViewMode("list")}><Icon name="list"/></IconButton>
-          <IconButton label="卡片视图" aria-pressed={viewMode === "cards"} disabled={viewSwitchDisabled}
+          <IconButton label={t("卡片视图")} aria-pressed={viewMode === "cards"} disabled={viewSwitchDisabled}
             onClick={() => switchViewMode("cards")}><Icon name="grid"/></IconButton>
         </div>
       </div>}
     </header>
     {(error || snapshot.error) && !fieldDraft && !deleting && <div className="asset-feedback" role="alert">
-      <span>{error ?? snapshot.error}</span>{!draft && <Button variant="ghost" disabled={!active || busy} onClick={() => void run(store.retry)}>重试</Button>}
+      <span>{t(error ?? snapshot.error ?? "")}</span>{!draft && <Button variant="ghost" disabled={!active || busy} onClick={() => void run(store.retry)}>{t("重试")}</Button>}
     </div>}
-    {snapshot.loading && <p className="asset-editor-message" role="status">正在读取对象资料…</p>}
+    {snapshot.loading && <p className="asset-editor-message" role="status">{t("正在读取对象资料…")}</p>}
     {draft ? <div className="asset-record-edit" data-panels={editorPanels ? "true" : undefined}>
       <div className="asset-record-edit-content">
         <form id={formId} className="asset-record-form" onSubmit={submit} noValidate aria-busy={busy || undefined}>
           <div className="asset-record-basics">
-            <label className="asset-form-field"><span>对象名称</span><TextField ref={nameInput} value={draft.name} disabled={disabled} required
-              autoComplete="off" aria-label="对象名称" placeholder="例如：林舟、御风诀、青铜古剑"
+            <label className="asset-form-field"><span>{t("对象名称")}</span><TextField ref={nameInput} value={draft.name} disabled={disabled} required
+              autoComplete="off" aria-label={t("对象名称")} placeholder={t("例如：林舟、御风诀、青铜古剑")}
               onChange={event => {setDraft({...draft, name: event.currentTarget.value}); setError(null);}}/>
               <span className="asset-form-help">{[...draft.name.trim()].length}/60</span></label>
-            <p className="asset-editor-message">资产模板：{displayTypeName}</p>
-            <label className="asset-form-field"><span>对象简介 <span className="asset-optional">选填</span></span>
-              <Textarea value={draft.description} disabled={disabled} aria-label="对象简介"
+            <p className="asset-editor-message">{t("资产模板：{name}", {values: {name: displayTypeName}})}</p>
+            <label className="asset-form-field"><span>{t("对象简介")}<span className="asset-optional">{t("选填")}</span></span>
+              <Textarea value={draft.description} disabled={disabled} aria-label={t("对象简介")}
                 onChange={event => {setDraft({...draft, description: event.currentTarget.value}); setError(null);}}/>
               <span className="asset-form-help">{[...draft.description].length}/200</span></label>
-            <AssetColorPicker value={draft.color} disabled={disabled}
+            <AssetColorPicker t={t} value={draft.color} disabled={disabled}
               onChange={color => {setDraft({...draft, color}); setError(null);}}/>
           </div>
-          {fieldSection("模板字段", detailTemplateFields)}
-          {customFields.length > 0 && fieldSection("专属属性", customFields, true)}
-          {draft.kind === "create" && <p className="asset-form-help">创建对象后，可以继续添加只属于这个对象的专属属性。</p>}
+          {fieldSection(t("模板字段"), detailTemplateFields)}
+          {customFields.length > 0 && fieldSection(t("专属属性"), customFields, true)}
+          {draft.kind === "create" && <p className="asset-form-help">{t("创建对象后，可以继续添加只属于这个对象的专属属性。")}</p>}
         </form>
         {editorPanels}
       </div>
       <div className="asset-record-form-actions">
-        <span className="asset-form-help" role="status">{panelEditing ? "请先保存或取消面板中的编辑。" : busy ? "正在保存…" : snapshot.dirty ? "保存失败，输入已保留，请重试。" : "填写完成后保存。"}</span>
-        <Button variant="secondary" type="button" disabled={busy || panelEditing} onClick={cancel}>{snapshot.dirty ? "关闭编辑" : "取消"}</Button>
-        <Button variant="primary" type="submit" form={formId} disabled={!active || busy || panelEditing || snapshot.blocked}>{snapshot.dirty ? "重试保存" : draft.kind === "create" ? "创建对象" : "保存对象"}</Button>
+        <span className="asset-form-help" role="status">{panelEditing ? t("请先保存或取消面板中的编辑。") : busy ? t("正在保存…") : snapshot.dirty ? t("保存失败，输入已保留，请重试。") : t("填写完成后保存。")}</span>
+        <Button variant="secondary" type="button" disabled={busy || panelEditing} onClick={cancel}>{snapshot.dirty ? t("关闭编辑") : t("取消")}</Button>
+        <Button variant="primary" type="submit" form={formId} disabled={!active || busy || panelEditing || snapshot.blocked}>{snapshot.dirty ? t("重试保存") : draft.kind === "create" ? t("创建对象") : t("保存对象")}</Button>
       </div>
     </div> : snapshot.loaded && !snapshot.blocked && (selected ? <>
-      {fieldSection("模板字段", detailTemplateFields)}
-      {fieldSection("专属属性", customFields, true)}
-      <p className="asset-form-help" role="status">{snapshot.saving ? "正在保存…" : snapshot.dirty ? "尚未保存" : "已保存"}</p>
+      {fieldSection(t("模板字段"), detailTemplateFields)}
+      {fieldSection(t("专属属性"), customFields, true)}
+      <p className="asset-form-help" role="status">{snapshot.saving ? t("正在保存…") : snapshot.dirty ? t("尚未保存") : t("已保存")}</p>
     </> : <>
       {scopeAssets.length > 0 || selectedType ? viewMode === "cards"
         ? visibleAssets.length > 0 ? <>
-          <div className="asset-object-card-legend" aria-label="字段数量图例">
-            <span><Icon name="layers" size="small"/>模板字段</span>
-            <span><Icon name="slidersHorizontal" size="small"/>专属字段</span>
+          <div className="asset-object-card-legend" aria-label={t("字段数量图例")}>
+            <span><Icon name="layers" size="small"/>{t("模板字段")}</span>
+            <span><Icon name="slidersHorizontal" size="small"/>{t("专属字段")}</span>
           </div>
-          <ul id="asset-object-results" className="asset-object-cards" ref={cardList} aria-label={`${selectedType?.name ?? "未分类"}对象卡片`}>
+          <ul id="asset-object-results" className="asset-object-cards" ref={cardList} aria-label={t("{value}对象卡片", {values: {value: selectedType?.name ?? t("未分类")}})}>
           {visibleAssets.map(asset => {
             const templateCount = asset.typeId === null ? 0 : templateFieldCounts.get(asset.typeId) ?? 0;
             const customCount = customFieldCounts.get(asset.id) ?? 0;
-            return <MenuRegion key={asset.id} context={asset.id} label={`对象“${asset.name}”操作`} items={objectMenuItems}
+            return <MenuRegion key={asset.id} context={asset.id} label={t("对象“{name}”操作", {values: {name: asset.name}})} items={objectMenuItems}
               disabled={listActionsDisabled} fallbackFocus={() => editor.current}>
             <li className="asset-object-card" data-colored={isAssetColor(asset.color) || undefined}
               style={assetCardColorStyle(asset.color)}>
             <header><h2><Button variant="ghost" disabled={disabled} title={asset.name}
-              aria-label={`查看对象“${asset.name}”`} onClick={() => showAsset(asset.id)}>
+              aria-label={t("查看对象“{name}”", {values: {name: asset.name}})} onClick={() => showAsset(asset.id)}>
               {asset.name}
             </Button></h2>
               <div className="asset-object-card-counts">
                 <span className="asset-object-field-count" data-field-scope="template" role="img"
-                  aria-label={`模板字段 ${templateCount} 个`} title={`模板字段：${templateCount} 个`}>
+                  aria-label={t("模板字段 {templateCount} 个", {values: {templateCount}})} title={t("模板字段：{templateCount} 个", {values: {templateCount}})}>
                   <Icon name="layers" size="small"/><span aria-hidden="true">{templateCount}</span>
                 </span>
                 <span className="asset-object-field-count" data-field-scope="custom" role="img"
-                  aria-label={`专属字段 ${customCount} 个`} title={`专属字段：${customCount} 个`}>
+                  aria-label={t("专属字段 {customCount} 个", {values: {customCount}})} title={t("专属字段：{customCount} 个", {values: {customCount}})}>
                   <Icon name="slidersHorizontal" size="small"/><span aria-hidden="true">{customCount}</span>
                 </span>
               </div>
@@ -487,17 +490,17 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
           <p>{objectListEmptyTitle}</p>
           <span>{objectListEmptyHint}</span>
         </div>
-        : <div id="asset-object-results" className="asset-object-table-scroll asset-object-table-frame" data-ui-density="compact" tabIndex={0} role="region" aria-label="对象数据表，可横向滚动">
-        <table className="asset-object-table" aria-label={`${selectedType?.name ?? "未分类"}对象列表`}>
+        : <div id="asset-object-results" className="asset-object-table-scroll asset-object-table-frame" data-ui-density="compact" tabIndex={0} role="region" aria-label={t("对象数据表，可横向滚动")}>
+        <table className="asset-object-table" aria-label={t("{value}对象列表", {values: {value: selectedType?.name ?? t("未分类")}})}>
           <thead><tr>
-            <th scope="col">对象名称</th>
+            <th scope="col">{t("对象名称")}</th>
             {scopeFields.map(field => <th scope="col" key={field.id} data-value-type={field.valueType}>{field.title}</th>)}
-            <th scope="col" aria-label="对象操作"/>
+            <th scope="col" aria-label={t("对象操作")}/>
           </tr></thead>
-          <tbody>{visibleAssets.map(asset => <MenuRegion key={asset.id} context={asset.id} label={`对象“${asset.name}”操作`} items={objectMenuItems}
+          <tbody>{visibleAssets.map(asset => <MenuRegion key={asset.id} context={asset.id} label={t("对象“{name}”操作", {values: {name: asset.name}})} items={objectMenuItems}
             disabled={listActionsDisabled} fallbackFocus={() => editor.current}><tr>
             <th scope="row"><div className="asset-object-name"><Button variant="ghost" disabled={disabled}
-              title={asset.name} aria-label={`查看对象“${asset.name}”`} onClick={() => showAsset(asset.id)}>
+              title={asset.name} aria-label={t("查看对象“{name}”", {values: {name: asset.name}})} onClick={() => showAsset(asset.id)}>
               <strong className="asset-object-name-label">{asset.name}</strong>
               {asset.description.trim() !== "" && <span className="asset-object-name-summary" title={asset.description}>{asset.description}</span>}
             </Button></div></th>
@@ -508,7 +511,7 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
               </td>;
             })}
             <td className="asset-object-actions">
-              <IconButton label={`删除对象“${asset.name}”`} disabled={disabled || resource.editing.size > 0}
+              <IconButton label={t("删除对象“{name}”", {values: {name: asset.name}})} disabled={disabled || resource.editing.size > 0}
                 onClick={() => confirmAssetRemoval(asset)}><Icon name="trash"/></IconButton>
             </td>
           </tr></MenuRegion>)}{visibleAssets.length === 0 && <tr><td colSpan={scopeFields.length + 2}>
@@ -516,37 +519,37 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
           </td></tr>}</tbody>
         </table>
       </div> : <div className="asset-editor-empty">
-        <p>{types.length === 0 ? "还没有资产模板。" : "这个范围里还没有未分类对象。"}</p>
+        <p>{types.length === 0 ? t("还没有资产模板。") : t("这个范围里还没有未分类对象。")}</p>
         <span>{types.length === 0
-          ? "在此处点击右键新建资产模板，定义字段后再创建对象。"
-          : "请先在导航中选择资产模板，再在此处点击右键新建对象。"}</span>
+          ? t("在此处点击右键新建资产模板，定义字段后再创建对象。")
+          : t("请先在导航中选择资产模板，再在此处点击右键新建对象。")}</span>
       </div>}
     </>)}
     <Dialog open={fieldDraft !== null && active} onOpenChange={open => {if (!open) cancel();}}
-      title={fieldDraft?.kind === "renameField" ? "修改专属属性标题" : "添加专属属性"}
-      description={`只属于“${selected?.name ?? "当前对象"}”，不会改变资产模板。`}
+      title={fieldDraft?.kind === "renameField" ? t("修改专属属性标题") : t("添加专属属性")}
+      description={t("只属于“{value}”，不会改变资产模板。", {values: {value: selected?.name ?? t("当前对象")}})}
       size="regular" initialFocus={fieldInput} finalFocus={editor} busy={busy}>
-      {fieldDraft && <AssetSchemaForm draft={fieldDraft} types={types} busy={busy} error={error ?? snapshot.error} inputRef={fieldInput}
+      {fieldDraft && <AssetSchemaForm t={t} draft={fieldDraft} types={types} busy={busy} error={error ?? snapshot.error} inputRef={fieldInput}
         onChange={next => {setFieldDraft(next); setError(null);}} onCancel={cancel} store={store}
         onSubmit={operation => void run(snapshot.dirty ? store.retry : operation, true)}/>}
     </Dialog>
     <Dialog open={deleting && active} onOpenChange={open => {if (!open) cancel();}}
-      title={deleteTarget?.kind === "field" ? "删除专属属性" : "删除对象"} size="narrow" busy={busy}
+      title={deleteTarget?.kind === "field" ? t("删除专属属性") : t("删除对象")} size="narrow" busy={busy}
       initialFocus={deleteCancel} finalFocus={editor}
       description={deleteTarget?.kind === "field"
-        ? `确定删除“${deleteTarget.assetName}”的专属属性“${deleteTarget.title}”及其填写的值吗？此操作无法撤销，资产模板和其他对象保持不变。`
-        : deleteTarget ? `确定删除对象“${deleteTarget.name}”吗？它的属性值和专属属性也会删除，此操作无法撤销。` : undefined}>
-      {(error || snapshot.error) && <p className="asset-form-error asset-delete-feedback" role="alert">{error ?? snapshot.error}</p>}
-      {deletionPendingSave && <p className="asset-form-help asset-delete-feedback" role="status">删除变更尚未保存，请重试保存。</p>}
+        ? t("确定删除“{assetName}”的专属属性“{title}”及其填写的值吗？此操作无法撤销，资产模板和其他对象保持不变。", {values: {assetName: deleteTarget.assetName, title: deleteTarget.title}})
+        : deleteTarget ? t("确定删除对象“{name}”吗？它的属性值和专属属性也会删除，此操作无法撤销。", {values: {name: deleteTarget.name}}) : undefined}>
+      {(error || snapshot.error) && <p className="asset-form-error asset-delete-feedback" role="alert">{t(error ?? snapshot.error ?? "")}</p>}
+      {deletionPendingSave && <p className="asset-form-help asset-delete-feedback" role="status">{t("删除变更尚未保存，请重试保存。")}</p>}
       <DialogActions>
-        <Button variant="secondary" ref={deleteCancel} disabled={busy} onClick={cancel}>{deletionPendingSave ? "关闭" : "取消"}</Button>
+        <Button variant="secondary" ref={deleteCancel} disabled={busy} onClick={cancel}>{deletionPendingSave ? t("关闭") : t("取消")}</Button>
         <Button variant="danger" disabled={!active || busy} onClick={removeConfirmed}>
-          {busy ? "正在删除…" : deletionPendingSave ? "重试保存" : "确认删除"}
+          {busy ? t("正在删除…") : deletionPendingSave ? t("重试保存") : t("确认删除")}
         </Button>
       </DialogActions>
     </Dialog>
   </div>;
-  return <MenuRegion label={isObjectList ? "对象列表操作" : "对象详情操作"}
+  return <MenuRegion label={isObjectList ? t("对象列表操作") : t("对象详情操作")}
     context={isObjectList ? selectedType?.id ?? null : selected?.id ?? null}
     items={isObjectList ? listMenuItems : detailMenuItems} disabled={draft !== null || listActionsDisabled}
     fallbackFocus={() => editor.current}>{content}</MenuRegion>;
@@ -554,8 +557,9 @@ function RecordsEditor({resource, active, canInteract, onOpenTypes, contextMenus
 
 export function AssetRecordsEditor(props: AssetViewProps & {assetEditor: AssetEditorService}) {
   const project = useAssetProject(props);
+  const t = useTranslation(props.i18n);
   return project.resource && project.session
-    ? <RecordsEditor key={project.session.id} sessionId={project.session.id} assetEditor={props.assetEditor}
+    ? <RecordsEditor t={t} key={project.session.id} sessionId={project.session.id} assetEditor={props.assetEditor}
       resource={project.resource} active={project.active} canInteract={project.canInteract} onOpenTypes={props.onOpenTypes} contextMenus={props.contextMenus}/>
-    : <div className="asset-type-editor"><p className="asset-editor-message">请先打开一个项目。</p></div>;
+    : <div className="asset-type-editor"><p className="asset-editor-message">{t("请先打开一个项目。")}</p></div>;
 }

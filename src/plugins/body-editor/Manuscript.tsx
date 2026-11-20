@@ -1,3 +1,5 @@
+import type {Translate} from "@lodestory/sdk/i18n";
+import {sourceText} from "../../utils/sourceText";
 import {Component, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ErrorInfo, type ReactNode} from "react";
 import { Button, Icon } from "@lodestory/ui";
 import type {OpenDocument} from "@lodestory/sdk/documents";
@@ -5,7 +7,8 @@ import type {EditorDefinition, EditorFormat, EditorHandle, EditorProps} from "@l
 import {ContextMenuRegion, type MenuEntry} from "../context-menu";
 import {createEditorCallbackGuard, type EditorCallbackGuard} from "./editorCallbackGuard";
 
-export function Manuscript({document, visible, active, readOnly = false, format, definition, connectSources, onChange, onSave, onEditorReady}: {
+export function Manuscript({t = sourceText, document, visible, active, readOnly = false, format, definition, connectSources, onChange, onSave, onEditorReady}: {
+  t?: Translate;
   document: OpenDocument;
   visible: boolean;
   active: boolean;
@@ -48,7 +51,7 @@ export function Manuscript({document, visible, active, readOnly = false, format,
     const generation = current.generation;
     const handle = current.handle;
     const entries: MenuEntry<string>[] = [{
-      id: "save", label: "保存",
+      id: "save", label: t("保存"),
       disabled: current.readOnly || current.saveState === "saving",
       onSelect: id => {
         const now = latest.current;
@@ -79,7 +82,7 @@ export function Manuscript({document, visible, active, readOnly = false, format,
   };
 
   return (
-    <ContextMenuRegion context={document.id} label={document.fileName + "文稿操作"}
+    <ContextMenuRegion context={document.id} label={t("{fileName}文稿操作", {values: {fileName: document.fileName}})}
       mode={editorActions.length ? "custom" : undefined} items={menuItems}>
     <section
       className="editor-document"
@@ -92,14 +95,14 @@ export function Manuscript({document, visible, active, readOnly = false, format,
       <article className="manuscript">
         {document.saveError && <div className="document-save-error" role="alert">
           <p className="project-error">{document.saveError}</p>
-          <Button variant="ghost" disabled={readOnly || document.saveState === "saving"} onClick={onSave}>重试保存</Button>
+          <Button variant="ghost" disabled={readOnly || document.saveState === "saving"} onClick={onSave}>{t("重试保存")}</Button>
         </div>}
         {definition && format
-          ? <EditorRuntime key={format + ":" + definition.id} definition={definition} documentId={document.id} format={format}
+          ? <EditorRuntime t={t} key={format + ":" + definition.id} definition={definition} documentId={document.id} format={format}
               content={document.content} readOnly={readOnly || !visible} active={editorActive}
               {...sources} onChange={onChange} onReady={ready}/>
           : <p className="editor-document-feedback" role="status">
-              {format ? "当前没有可用的编辑器实现。" : "暂不支持该文档格式。"}
+              {format ? t("当前没有可用的编辑器实现。") : t("暂不支持该文档格式。")}
             </p>}
       </article>
     </section>
@@ -107,7 +110,8 @@ export function Manuscript({document, visible, active, readOnly = false, format,
   );
 }
 
-function EditorRuntime({definition, documentId, format, content, readOnly, active, completion, highlights, onChange, onReady}: {
+function EditorRuntime({t, definition, documentId, format, content, readOnly, active, completion, highlights, onChange, onReady}: {
+  t: Translate;
   definition: Readonly<EditorDefinition>;
   documentId: string;
   format: EditorFormat;
@@ -170,25 +174,25 @@ function EditorRuntime({definition, documentId, format, content, readOnly, activ
     setAttempt(value => value + 1);
   }, [invalidate]);
   if (error) return <div className="editor-document-feedback" role="alert">
-    <p className="project-error">编辑器加载或运行失败：{error.message}</p>
-    <Button variant="ghost" onClick={retry}>重试加载编辑器</Button>
+    <p className="project-error">{t("编辑器加载或运行失败：{message}", {values: {message: t(error.message)}})}</p>
+    <Button variant="ghost" onClick={retry}>{t("重试加载编辑器")}</Button>
   </div>;
-  if (!Editor) return <p className="editor-document-feedback" role="status">正在加载编辑器…</p>;
+  if (!Editor) return <p className="editor-document-feedback" role="status">{t("正在加载编辑器…")}</p>;
 
   const guard = activeGuard.current;
-  if (!guard) return <p className="editor-document-feedback" role="status">正在准备编辑器…</p>;
+  if (!guard) return <p className="editor-document-feedback" role="status">{t("正在准备编辑器…")}</p>;
   const props: EditorProps = {
     documentId, format, content, readOnly, active, completion, highlights,
     onChange: guard.onChange,
     onReady: guard.onReady,
     onError: guard.onError,
   };
-  return <EditorErrorBoundary key={attempt} onError={guard.onError}>
+  return <EditorErrorBoundary t={t} key={attempt} onError={guard.onError}>
     <Editor {...props}/>
   </EditorErrorBoundary>;
 }
 
-class EditorErrorBoundary extends Component<{children: ReactNode; onError: (error: Error) => void}, {error?: Error}> {
+class EditorErrorBoundary extends Component<{t: Translate; children: ReactNode; onError: (error: Error) => void}, {error?: Error}> {
   state: {error?: Error} = {};
 
   static getDerivedStateFromError(reason: unknown) {
@@ -201,7 +205,7 @@ class EditorErrorBoundary extends Component<{children: ReactNode; onError: (erro
 
   render() {
     if (this.state.error) {
-      return <p className="editor-document-feedback" role="alert">编辑器运行失败：{this.state.error.message}</p>;
+      return <p className="editor-document-feedback" role="alert">{this.props.t("编辑器运行失败：{message}", {values: {message: this.props.t(this.state.error.message)}})}</p>;
     }
     return this.props.children;
   }
@@ -211,18 +215,18 @@ function asError(reason: unknown): Error {
   return reason instanceof Error ? reason : new Error(String(reason));
 }
 
-export function EmptyDocument({projectPath, onCreate, disabled}: {projectPath: string; onCreate: () => void; disabled: boolean}) {
+export function EmptyDocument({t, projectPath, onCreate, disabled}: {t: Translate; projectPath: string; onCreate: () => void; disabled: boolean}) {
   return (
-    <ContextMenuRegion label="文稿工作区操作" items={[
-      {id: "new-document", label: "新建文档", icon: <Icon name="plus"/>, disabled, restoreFocus: false,
+    <ContextMenuRegion label={t("文稿工作区操作")} items={[
+      {id: "new-document", label: t("新建文档"), icon: <Icon name="plus"/>, disabled, restoreFocus: false,
         onSelect: () => { if (!disabled) onCreate(); }},
     ]}>
     <section className="editor-empty" aria-labelledby="editor-empty-title" tabIndex={0}>
       <Icon name="book" size="brand"/>
-      <h1 id="editor-empty-title" tabIndex={-1}>作品已打开</h1>
+      <h1 id="editor-empty-title" tabIndex={-1}>{t("作品已打开")}</h1>
       <p className="editor-project-path" title={projectPath}>{projectPath}</p>
-      <p>选择文档，或新建文档开始写作。</p>
-      <Button variant="primary" onClick={onCreate} disabled={disabled}><Icon name="plus"/>新建文档</Button>
+      <p>{t("选择文档，或新建文档开始写作。")}</p>
+      <Button variant="primary" onClick={onCreate} disabled={disabled}><Icon name="plus"/>{t("新建文档")}</Button>
     </section>
     </ContextMenuRegion>
   );

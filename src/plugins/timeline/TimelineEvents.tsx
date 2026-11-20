@@ -1,3 +1,6 @@
+import {displayTimelineUnit} from "./displayTimelineUnit";
+import type {Translate} from "@lodestory/sdk/i18n";
+import {sourceText} from "../../utils/sourceText";
 import {memo, useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type MouseEvent, type RefObject} from "react";
 import {Menu} from "@base-ui/react/menu";
 import {Popover} from "@base-ui/react/popover";
@@ -38,7 +41,7 @@ const EVENT_COLORS = [
   {name: "紫色", value: "#a489c9"}, {name: "粉色", value: "#ce83a2"},
 ] as const;
 
-function EventActions({disabled, onDelete}: {disabled: boolean; onDelete(): void}) {
+function EventActions({t, disabled, onDelete}: {t: Translate; disabled: boolean; onDelete(): void}) {
   const trigger = useRef<HTMLButtonElement>(null);
   const [open, setOpen] = useState(false);
   const [density, setDensity] = useState<string>();
@@ -48,18 +51,19 @@ function EventActions({disabled, onDelete}: {disabled: boolean; onDelete(): void
     if (next) setDensity(trigger.current?.closest<HTMLElement>("[data-ui-density]")?.dataset.uiDensity);
     setOpen(next);
   }}>
-    <Menu.Trigger ref={trigger} disabled={disabled} render={<IconButton label="更多操作" />}><Icon name="more" /></Menu.Trigger>
+    <Menu.Trigger ref={trigger} disabled={disabled} render={<IconButton label={t("更多操作")} />}><Icon name="more" /></Menu.Trigger>
     <Menu.Portal>
       <Menu.Positioner className="timeline-event-popup-positioner" data-ui-density={density} align="end" sideOffset={4} collisionPadding={8}>
         <Menu.Popup className="timeline-event-popup timeline-event-menu" ref={interactionRef}>
-          <Menu.Item className="timeline-event-menu-item" onClick={onDelete}>删除事件</Menu.Item>
+          <Menu.Item className="timeline-event-menu-item" onClick={onDelete}>{t("删除事件")}</Menu.Item>
         </Menu.Popup>
       </Menu.Positioner>
     </Menu.Portal>
   </Menu.Root>;
 }
 
-function EventColorPicker({value, valid, disabled, onChange}: {
+function EventColorPicker({t, value, valid, disabled, onChange}: {
+  t: Translate;
   value: string; valid: boolean; disabled: boolean; onChange(value: string): void;
 }) {
   const id = useId();
@@ -71,7 +75,7 @@ function EventColorPicker({value, valid, disabled, onChange}: {
 
   return <div className="timeline-event-color">
     <div className="timeline-event-color-row">
-      <span id={id}>颜色标记</span>
+      <span id={id}>{t("颜色标记")}</span>
       <Popover.Root open={open && !disabled} onOpenChange={next => {
         if (next) setDensity(trigger.current?.closest<HTMLElement>("[data-ui-density]")?.dataset.uiDensity);
         setOpen(next);
@@ -79,17 +83,17 @@ function EventColorPicker({value, valid, disabled, onChange}: {
         <Popover.Trigger ref={trigger} disabled={disabled} aria-labelledby={`${id} ${id}-value`} aria-invalid={!valid || undefined}
           aria-describedby={!valid ? `${id}-error` : undefined} render={<Button variant="secondary" />}>
           <span className="timeline-event-color-swatch" aria-hidden="true" style={valid && value ? {backgroundColor: value} : undefined} />
-          <span id={`${id}-value`}>{value ? selected?.name ?? "自定义" : "默认"}</span>
+          <span id={`${id}-value`}>{value ? selected?.name ?? t("自定义") : t("默认")}</span>
           <Icon name="chevronDown" size="small" />
         </Popover.Trigger>
         <Popover.Portal>
           <Popover.Positioner className="timeline-event-popup-positioner" data-ui-density={density} align="end" sideOffset={4} collisionPadding={8}>
-            <Popover.Popup className="timeline-event-popup timeline-event-color-popup" ref={interactionRef} aria-label="选择颜色">
-              <fieldset className="timeline-event-color-picker" aria-label="预设颜色" disabled={disabled}>
+            <Popover.Popup className="timeline-event-popup timeline-event-color-popup" ref={interactionRef} aria-label={t("选择颜色")}>
+              <fieldset className="timeline-event-color-picker" aria-label={t("预设颜色")} disabled={disabled}>
                 <div className="timeline-event-color-options">
                   <label className="timeline-event-color-choice timeline-event-color-default">
                     <input type="radio" name={id} checked={!value} onChange={() => onChange("")} />
-                    <span>默认</span>
+                    <span>{t("默认")}</span>
                   </label>
                   {EVENT_COLORS.map(color => <label className="timeline-event-color-choice" key={color.value} title={color.name}>
                     <input type="radio" name={id} aria-label={color.name} checked={selected === color} onChange={() => onChange(color.value)} />
@@ -97,9 +101,9 @@ function EventColorPicker({value, valid, disabled, onChange}: {
                   </label>)}
                 </div>
                 <div className="timeline-event-color-custom">
-                  <label>自定义 <input type="color" aria-label="自定义颜色" value={value && valid ? value : "#6b9bce"}
+                  <label>{t("自定义")}<input type="color" aria-label={t("自定义颜色")} value={value && valid ? value : "#6b9bce"}
                     onChange={event => onChange(event.currentTarget.value)} /></label>
-                  <TextField aria-label="颜色值" aria-invalid={!valid || undefined} autoComplete="off" spellCheck={false}
+                  <TextField aria-label={t("颜色值")} aria-invalid={!valid || undefined} autoComplete="off" spellCheck={false}
                     placeholder="#RRGGBB" maxLength={7} value={value} onChange={event => onChange(event.currentTarget.value)} />
                 </div>
               </fieldset>
@@ -108,7 +112,7 @@ function EventColorPicker({value, valid, disabled, onChange}: {
         </Popover.Portal>
       </Popover.Root>
     </div>
-    {!valid && <p id={`${id}-error`} className="timeline-event-form-error" role="alert">颜色值需要使用 #RRGGBB 格式。</p>}
+    {!valid && <p id={`${id}-error`} className="timeline-event-form-error" role="alert">{t("颜色值需要使用 #RRGGBB 格式。")}</p>}
   </div>;
 }
 
@@ -123,22 +127,22 @@ function signedAxisValue(value: number): string {
   return value > 0 ? `+${text}` : text;
 }
 
-function calloutLabel(settings: TimelineAxisSettings, event: TimelineEvent): string {
+function calloutLabel(t: Translate, settings: TimelineAxisSettings, event: TimelineEvent): string {
   const value = timelineValueAtOffset(event.offset, settings);
-  return `${signedAxisValue(value)} ${settings.unit}`;
+  return `${signedAxisValue(value)} ${displayTimelineUnit(t, settings.unit)}`;
 }
 
-function eventAccessibleName(settings: TimelineAxisSettings, event: TimelineEvent): string {
-  const marker = event.important ? "关键转折" : "普通事件";
+function eventAccessibleName(t: Translate, settings: TimelineAxisSettings, event: TimelineEvent): string {
+  const marker = event.important ? t("关键转折") : t("普通事件");
   const summary = event.summary ? `，${event.summary}` : "";
-  return `${marker}：${event.title}${summary}，${calloutLabel(settings, event)}，${event.placement === "above" ? "轴线上方" : "轴线下方"}`;
+  return `${marker}：${event.title}${summary}，${calloutLabel(t, settings, event)}，${event.placement === "above" ? t("轴线上方") : t("轴线下方")}`;
 }
 
-function formatOffsetHint(settings: TimelineAxisSettings, offsetText: string): string {
+function formatOffsetHint(t: Translate, settings: TimelineAxisSettings, offsetText: string): string {
   const offset = Number(offsetText);
   return Number.isFinite(offset)
-    ? `对应轴上数值 ${formatTimelineAxisValue(timelineValueAtOffset(offset, settings))} ${settings.unit}`
-    : `故事起点为 ${formatTimelineAxisValue(settings.origin)} ${settings.unit}`;
+    ? t("对应轴上数值 {value} {unit}", {values: {value: formatTimelineAxisValue(timelineValueAtOffset(offset, settings)), unit: displayTimelineUnit(t, settings.unit)}})
+    : t("故事起点为 {value} {unit}", {values: {value: formatTimelineAxisValue(settings.origin), unit: displayTimelineUnit(t, settings.unit)}});
 }
 
 const AxisMarkerGlyph = memo(function AxisMarkerGlyph({important, origin}: {important: boolean; origin: boolean}) {
@@ -195,7 +199,9 @@ const AxisAnchors = memo(function AxisAnchors({events, step, zoom, originWorldX,
   })}</>;
 });
 
-function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX, zoom, textScale, active, focusedId, onFocusEvent, onEdit}: {
+function EventAxisMarkers({t, eventById, settings, geometry, stemSegments, centerX, zoom, textScale, active,
+  focusedId, highlightedEventId, onFocusEvent, onEdit}: {
+  t: Translate;
   eventById: ReadonlyMap<string, TimelineEvent>;
   settings: TimelineAxisSettings;
   geometry: ReturnType<typeof getTimelineEventsGeometry>;
@@ -205,6 +211,7 @@ function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX,
   textScale: number;
   active: boolean;
   focusedId: string | null;
+  highlightedEventId?: string;
   onFocusEvent(id: string): void;
   onEdit(event: TimelineEvent): void;
 }) {
@@ -245,15 +252,16 @@ function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX,
           onDoubleClick={() => { if (active) onEdit(event); }}>
           <text className="timeline-event-turning-caption"
             x={point.turningCaption.left + point.turningCaption.width / 2 - point.x} y={point.turningCaption.top - point.axisY}
-            fontSize={TIMELINE_TURNING_CAPTION_FONT_SIZE * textScale} textAnchor="middle" dominantBaseline="hanging">关键转折</text>
+            fontSize={TIMELINE_TURNING_CAPTION_FONT_SIZE * textScale} textAnchor="middle" dominantBaseline="hanging">{t("关键转折")}</text>
         </g>}
         {point.endpointVisible && <g className={["timeline-event-endpoint", originEvent ? "timeline-event-endpoint-origin" : "",
           event.important ? "timeline-event-endpoint-important" : ""].filter(Boolean).join(" ")}
           style={event.color ? {"--timeline-event-color": event.color} as CSSProperties : undefined}
           data-custom-color={event.color ? "true" : undefined}
           role="button" tabIndex={active && !focusedId ? 0 : -1}
-          aria-label={eventAccessibleName(settings, event)} aria-disabled={!active}
-          aria-expanded={focusedId === event.id} aria-description="右键菜单或空格查看关联资产，Enter 编辑事件。"
+          aria-label={eventAccessibleName(t, settings, event)} aria-disabled={!active}
+          aria-expanded={focusedId === event.id}
+          aria-description={t("{value}右键菜单或空格查看关联资产，Enter 编辑事件。", {values: {value: highlightedEventId === event.id ? t("当前搜索命中。") : ""}})}
           data-canvas-interactive transform={`translate(${point.x} ${point.endpointY})`}
           onDoubleClick={() => { if (active) onEdit(event); }}
           onKeyDown={nativeEvent => {
@@ -271,19 +279,28 @@ function EventAxisMarkers({eventById, settings, geometry, stemSegments, centerX,
   </svg>;
 }
 
-const EventLabelText = memo(function EventLabelText({event, settings}: {event: TimelineEvent; settings: TimelineAxisSettings}) {
+const EventLabelText = memo(function EventLabelText({t, event, settings, highlighted}: {
+  t: Translate;
+  event: TimelineEvent;
+  settings: TimelineAxisSettings;
+  highlighted: boolean;
+}) {
   return <>
-    <span className="timeline-event-offset">{calloutLabel(settings, event)}</span>
-    <span className="timeline-event-title">{event.title}</span>
+    <span className="timeline-event-offset">{calloutLabel(t, settings, event)}</span>
+    <span className="timeline-event-title">
+      {highlighted ? <mark className="timeline-event-search-match">{event.title}</mark> : event.title}
+    </span>
     <span className="timeline-event-title-rule" aria-hidden="true" />
     {event.summary && <span className="timeline-event-summary">{event.summary}</span>}
   </>;
 });
 
-function EventLabels({eventById, settings, points, onEdit}: {
+function EventLabels({t, eventById, settings, points, highlightedEventId, onEdit}: {
+  t: Translate;
   eventById: ReadonlyMap<string, TimelineEvent>;
   settings: TimelineAxisSettings;
   points: readonly TimelineEventGeometry[];
+  highlightedEventId?: string;
   onEdit(event: TimelineEvent): void;
 }) {
   return <div className="timeline-event-labels">
@@ -299,13 +316,14 @@ function EventLabels({eventById, settings, points, onEdit}: {
         data-custom-color={event.color ? "true" : undefined}
         aria-hidden="true" data-canvas-interactive
         onDoubleClick={() => onEdit(event)}>
-        <EventLabelText event={event} settings={settings} />
+        <EventLabelText t={t} event={event} settings={settings} highlighted={event.id === highlightedEventId} />
       </div>;
     })}
   </div>;
 }
 
-function FocusedEvent({event, settings, onEdit}: {
+function FocusedEvent({t, event, settings, onEdit}: {
+  t: Translate;
   event: TimelineEvent;
   settings: TimelineAxisSettings;
   onEdit(event: TimelineEvent): void;
@@ -314,14 +332,14 @@ function FocusedEvent({event, settings, onEdit}: {
   useLayoutEffect(() => {
     title.current?.focus({preventScroll: true});
   }, []);
-  const offset = calloutLabel(settings, event);
+  const offset = calloutLabel(t, settings, event);
 
   return <div className="timeline-focus-event" data-timeline-event-id={event.id} data-canvas-interactive
     style={event.color ? {"--timeline-focus-event-color": event.color} as CSSProperties : undefined}
     onDoubleClick={click => { if (click.button === 0) onEdit(event); }}>
     <span className="timeline-focus-event-offset" title={offset}>{offset}</span>
     <button ref={title} className="timeline-focus-event-title" type="button"
-      aria-label={eventAccessibleName(settings, event)} aria-description="按 Enter 编辑事件。"
+      aria-label={eventAccessibleName(t, settings, event)} aria-description={t("按 Enter 编辑事件。")}
       title={event.title} onClick={click => { if (click.detail === 0) onEdit(event); }}>
       <span>{event.title}</span>
     </button>
@@ -330,7 +348,9 @@ function FocusedEvent({event, settings, onEdit}: {
   </div>;
 }
 
-export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelations = null, store, settings, view, size, axisLabelBounds, scaleTextWithZoom = false, active, openToken, growthGeometryRef, growthStemsRef, onEditingChange, onRelationFocusChange}: {
+export function TimelineEvents({t = sourceText, canvas, contextMenus, assetCatalog, assetRelations = null, store, settings, view, size, axisLabelBounds,
+  scaleTextWithZoom = false, active, openToken, highlightedEventId, growthGeometryRef, growthStemsRef, onEditingChange, onRelationFocusChange}: {
+  t?: Translate;
   canvas: CanvasService;
   contextMenus: ContextMenuService;
   assetCatalog: AssetCatalog | null;
@@ -343,6 +363,7 @@ export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelatio
   scaleTextWithZoom?: boolean;
   active: boolean;
   openToken?: string | null;
+  highlightedEventId?: string;
   growthGeometryRef?: RefObject<TimelineEventsGeometry | null>;
   growthStemsRef?: RefObject<readonly TimelineStemSegment[] | null>;
   onEditingChange?: (editing: boolean) => void;
@@ -504,15 +525,15 @@ export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelatio
     const summary = value.summary;
     const offsetText = value.offset.trim();
     const offset = Number(offsetText);
-    if (!title || [...title].length > 60) return {event: null, error: "事件名称需为 1–60 个字符。"};
-    if ([...summary].length > 200) return {event: null, error: "事件说明不能超过 200 个字符。"};
+    if (!title || [...title].length > 60) return {event: null, error: t("事件名称需为 1–60 个字符。")};
+    if ([...summary].length > 200) return {event: null, error: t("事件说明不能超过 200 个字符。")};
     if (!offsetText || !Number.isFinite(offset) || Math.abs(offset) > 1_000_000_000) {
-      return {event: null, error: "距故事起点的数值需为有限数字，且绝对值不超过 1,000,000,000。"};
+      return {event: null, error: t("距故事起点的数值需为有限数字，且绝对值不超过 1,000,000,000。")};
     }
-    if (value.placement !== "above" && value.placement !== "below") return {event: null, error: "请选择节点在线轴上方或下方。"};
-    if (value.color && !isTimelineEventColor(value.color)) return {event: null, error: "颜色值需要使用 #RRGGBB 格式。"};
+    if (value.placement !== "above" && value.placement !== "below") return {event: null, error: t("请选择节点在线轴上方或下方。")};
+    if (value.color && !isTimelineEventColor(value.color)) return {event: null, error: t("颜色值需要使用 #RRGGBB 格式。")};
     const id = value.id;
-    if (!id) return {event: null, error: "事件编号尚未准备好，请重新打开添加事件。"};
+    if (!id) return {event: null, error: t("事件编号尚未准备好，请重新打开添加事件。")};
     return {event: Object.freeze({id, title, summary, offset: Object.is(offset, -0) ? 0 : offset, placement: value.placement, important: value.important, assetIds: [...value.assetIds], ...(value.color ? {color: value.color.toLowerCase()} : {})}), error: null};
   }
 
@@ -531,10 +552,10 @@ export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelatio
       const saved = await operationStore.upsert(validated.event);
       if (epoch !== operationEpochRef.current || storeRef.current !== operationStore || !activeRef.current) return;
       if (saved) cancelDraft(true);
-      else setOperationError(operationStore.getSnapshot().error ?? "事件保存失败，请重试。");
+      else setOperationError(operationStore.getSnapshot().error ?? t("事件保存失败，请重试。"));
     } catch (cause) {
       if (epoch === operationEpochRef.current && storeRef.current === operationStore && activeRef.current) {
-        setOperationError(cause instanceof Error ? cause.message : "事件保存失败，请重试。");
+        setOperationError(cause instanceof Error ? cause.message : t("事件保存失败，请重试。"));
       }
     } finally {
       if (epoch === operationEpochRef.current && storeRef.current === operationStore) setSubmitting(false);
@@ -552,10 +573,10 @@ export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelatio
       const removed = await operationStore.remove(deleteTarget.id);
       if (epoch !== operationEpochRef.current || storeRef.current !== operationStore || !activeRef.current) return;
       if (removed) cancelDraft(true);
-      else setOperationError(operationStore.getSnapshot().error ?? "事件删除失败，请重试。");
+      else setOperationError(operationStore.getSnapshot().error ?? t("事件删除失败，请重试。"));
     } catch (cause) {
       if (epoch === operationEpochRef.current && storeRef.current === operationStore && activeRef.current) {
-        setOperationError(cause instanceof Error ? cause.message : "事件删除失败，请重试。");
+        setOperationError(cause instanceof Error ? cause.message : t("事件删除失败，请重试。"));
       }
     } finally {
       if (epoch === operationEpochRef.current && storeRef.current === operationStore) setSubmitting(false);
@@ -572,11 +593,11 @@ export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelatio
       try {
         const loaded = await operationStore.retry();
         if (epoch === operationEpochRef.current && storeRef.current === operationStore && activeRef.current && !loaded) {
-          setOperationError(operationStore.getSnapshot().error ?? "读取事件失败，请重试。");
+          setOperationError(operationStore.getSnapshot().error ?? t("读取事件失败，请重试。"));
         }
       } catch (cause) {
         if (epoch === operationEpochRef.current && storeRef.current === operationStore && activeRef.current) {
-          setOperationError(cause instanceof Error ? cause.message : "读取事件失败，请重试。");
+          setOperationError(cause instanceof Error ? cause.message : t("读取事件失败，请重试。"));
         }
       } finally {
         if (epoch === operationEpochRef.current && storeRef.current === operationStore) setSubmitting(false);
@@ -590,7 +611,7 @@ export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelatio
       const saved = await operationStore.retry();
       if (epoch !== operationEpochRef.current || storeRef.current !== operationStore || !activeRef.current) return;
       if (!saved) {
-        setOperationError(operationStore.getSnapshot().error ?? "事件保存失败，请重试。");
+        setOperationError(operationStore.getSnapshot().error ?? t("事件保存失败，请重试。"));
         return;
       }
       if (operation.kind === "remove") {
@@ -599,23 +620,23 @@ export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelatio
         const removed = await operationStore.remove(operation.id);
         if (epoch !== operationEpochRef.current || storeRef.current !== operationStore || !activeRef.current) return;
         if (removed) cancelDraft(true);
-        else setOperationError(operationStore.getSnapshot().error ?? "事件删除失败，请重试。");
+        else setOperationError(operationStore.getSnapshot().error ?? t("事件删除失败，请重试。"));
       } else {
         const latestDraft = draft ?? operation.draft;
         const validated = validateDraft(latestDraft);
         if (!validated.event) {
-          setOperationError(validated.error ?? "请检查事件内容后重试。");
+          setOperationError(validated.error ?? t("请检查事件内容后重试。"));
           return;
         }
         operationRef.current = {kind: "upsert", draft: {...latestDraft}};
         const resaved = await operationStore.upsert(validated.event);
         if (epoch !== operationEpochRef.current || storeRef.current !== operationStore || !activeRef.current) return;
         if (resaved) cancelDraft(true);
-        else setOperationError(operationStore.getSnapshot().error ?? "事件保存失败，请重试。");
+        else setOperationError(operationStore.getSnapshot().error ?? t("事件保存失败，请重试。"));
       }
     } catch (cause) {
       if (epoch === operationEpochRef.current && storeRef.current === operationStore && activeRef.current) {
-        setOperationError(cause instanceof Error ? cause.message : "事件保存失败，请重试。");
+        setOperationError(cause instanceof Error ? cause.message : t("事件保存失败，请重试。"));
       }
     } finally {
       if (epoch === operationEpochRef.current && storeRef.current === operationStore) setSubmitting(false);
@@ -708,27 +729,27 @@ export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelatio
   const MenuRegion = contextMenus.Region;
   const menuItems = (target: EventMenuTarget): MenuEntry<EventMenuTarget>[] => {
     if (target.store !== store) return [];
-    const addEvent: MenuEntry<EventMenuTarget> = {id: "add-event", label: "添加事件", icon: <Icon name="plus"/>, restoreFocus: false, onSelect: beginCreate};
+    const addEvent: MenuEntry<EventMenuTarget> = {id: "add-event", label: t("添加事件"), icon: <Icon name="plus"/>, restoreFocus: false, onSelect: beginCreate};
     if (!target.eventId) return [addEvent];
     const event = eventById.get(target.eventId);
     if (!event) return [];
     return [
-      {id: "view-event-assets", label: "查看关联资产", icon: <Icon name="assets"/>, restoreFocus: false, onSelect: () => focusEvent(event.id)},
-      {id: "edit-event", label: "编辑事件", icon: <Icon name="pencil"/>, restoreFocus: false, onSelect: () => openEvent(event)},
+      {id: "view-event-assets", label: t("查看关联资产"), icon: <Icon name="assets"/>, restoreFocus: false, onSelect: () => focusEvent(event.id)},
+      {id: "edit-event", label: t("编辑事件"), icon: <Icon name="pencil"/>, restoreFocus: false, onSelect: () => openEvent(event)},
       addEvent,
       {id: "event-menu-separator", type: "separator"},
-      {id: "delete-event", label: "删除事件", icon: <Icon name="trash"/>, restoreFocus: false, onSelect: () => askToDelete(event, "canvas")},
+      {id: "delete-event", label: t("删除事件"), icon: <Icon name="trash"/>, restoreFocus: false, onSelect: () => askToDelete(event, "canvas")},
     ];
   };
 
   return <>
-    <MenuRegion<EventMenuTarget> label="时间线画布操作"
+    <MenuRegion<EventMenuTarget> label={t("时间线画布操作")}
       disabled={!active || editing || !snapshot.loaded || snapshot.loading || snapshot.blocked || snapshot.saving}
       resolveContext={target => ({store, eventId: target?.closest("[data-timeline-event-id]")?.getAttribute("data-timeline-event-id") ?? undefined})}
       items={menuItems}>
     <div ref={menuSurface} className="timeline-events-overlay" style={overlayStyle} data-active={active}
       data-event-focused={Boolean(focusedPoint) || undefined}
-      tabIndex={active ? 0 : -1} aria-label="时间线事件画布" onClick={handleCanvasClick}
+      tabIndex={active ? 0 : -1} aria-label={t("时间线事件画布")} onClick={handleCanvasClick}
       onKeyDown={event => {
         if (focusedPoint && !editingRef.current && event.key === "Escape" && !event.nativeEvent.isComposing) {
           event.preventDefault();
@@ -737,21 +758,21 @@ export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelatio
         }
       }}>
       {snapshot.loaded && geometry.width > 0 && geometry.height > 0 && <>
-        <EventAxisMarkers eventById={eventById} settings={settings} geometry={geometry} stemSegments={stemSegments} centerX={view.center.x} zoom={view.zoom} textScale={textScale} active={active}
-          focusedId={focusedPoint?.id ?? null} onFocusEvent={focusEvent} onEdit={openEvent} />
-        <EventLabels eventById={eventById} settings={settings} points={focusedPoint ? [focusedPoint] : geometry.events}
-          onEdit={openEvent} />
-        {focusedEvent && focusedPoint && <TimelineFocusAssets key={focusedEvent.id} canvas={canvas}
+        <EventAxisMarkers t={t} eventById={eventById} settings={settings} geometry={geometry} stemSegments={stemSegments} centerX={view.center.x} zoom={view.zoom} textScale={textScale} active={active}
+          focusedId={focusedPoint?.id ?? null} highlightedEventId={highlightedEventId} onFocusEvent={focusEvent} onEdit={openEvent} />
+        <EventLabels t={t} eventById={eventById} settings={settings} points={focusedPoint ? [focusedPoint] : geometry.events}
+          highlightedEventId={highlightedEventId} onEdit={openEvent} />
+        {focusedEvent && focusedPoint && <TimelineFocusAssets t={t} key={focusedEvent.id} canvas={canvas}
           event={focusedEvent} catalog={assetCatalog} size={size} closing={Boolean(focusInView?.closing)}
           network={assetRelations} focusedAsset={focusedAsset} origin={focusedAsset ? focusInView?.assetClickPosition : null}
           onFocusAsset={focusAsset} onNavigate={navigateFocus} onBack={backFromFocus} onExited={completeEventFocusExit}>
-          <FocusedEvent event={focusedEvent} settings={settings} onEdit={openEvent} />
+          <FocusedEvent t={t} event={focusedEvent} settings={settings} onEdit={openEvent} />
         </TimelineFocusAssets>}
       </>}
-      {snapshot.loading && <div className="timeline-events-feedback" role="status">正在读取时间线事件…</div>}
+      {snapshot.loading && <div className="timeline-events-feedback" role="status">{t("正在读取时间线事件…")}</div>}
       {!snapshot.loading && snapshot.error && <div className="timeline-events-feedback" role="alert">
         <span>{snapshot.error}</span>
-        <Button variant="ghost" disabled={!active || snapshot.loading || snapshot.saving || submitting} onClick={() => void retryLastOperation()}>重试</Button>
+        <Button variant="ghost" disabled={!active || snapshot.loading || snapshot.saving || submitting} onClick={() => void retryLastOperation()}>{t("重试")}</Button>
       </div>}
     </div>
     </MenuRegion>
@@ -759,17 +780,17 @@ export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelatio
     {deleteTarget && <Dialog key="delete-event" open={editing && active} onOpenChange={open => {
       if (!open && active) keepEvent();
     }} onOpenChangeComplete={onDialogTransitionComplete}
-      title="删除事件" size="narrow" description="删除后会立即保存到当前项目。"
+      title={t("删除事件")} size="narrow" description={t("删除后会立即保存到当前项目。")}
       busy={busy} initialFocus={keepEventButton} finalFocus={menuSurface}>
       <div className="timeline-event-delete-confirm">
-        <p>确定删除「{deleteTarget.title}」吗？</p>
-        {(operationError || snapshot.error) && <p className="timeline-event-form-error" role="alert">{operationError ?? snapshot.error}</p>}
+        <p>{t("确定删除「{title}」吗？", {values: {title: deleteTarget.title}})}</p>
+        {(operationError || snapshot.error) && <p className="timeline-event-form-error" role="alert">{t(operationError ?? snapshot.error ?? "")}</p>}
         <DialogActions>
           {operationRef.current?.kind === "remove" && (operationError || snapshot.error)
-            && <Button variant="ghost" type="button" disabled={submitting || snapshot.saving} onClick={() => void retryLastOperation()}>重试删除</Button>}
-          <Button ref={keepEventButton} variant="secondary" type="button" disabled={busy} onClick={keepEvent}>保留事件</Button>
+            && <Button variant="ghost" type="button" disabled={submitting || snapshot.saving} onClick={() => void retryLastOperation()}>{t("重试删除")}</Button>}
+          <Button ref={keepEventButton} variant="secondary" type="button" disabled={busy} onClick={keepEvent}>{t("保留事件")}</Button>
           <Button type="button" variant="danger" disabled={submitting || snapshot.saving} onClick={() => void removeEvent()}>
-            {submitting ? "正在删除…" : "确认删除"}
+            {submitting ? t("正在删除…") : t("确认删除")}
           </Button>
         </DialogActions>
       </div>
@@ -778,10 +799,10 @@ export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelatio
     {draft && !deleteTarget && <Dialog key="event-form" open={editing && active} onOpenChange={open => {
       if (!open && active && !busy) cancelDraft();
     }} onOpenChangeComplete={onDialogTransitionComplete}
-      title={isNewDraft ? "添加时间线事件" : "编辑事件"} size="large" bodyLayout="flush"
+      title={isNewDraft ? t("添加时间线事件") : t("编辑事件")} size="large" bodyLayout="flush"
       headerActions={<>
-        {editedEvent && <EventActions disabled={busy} onDelete={() => askToDelete(editedEvent, "editor")} />}
-        <DialogClose aria-label="关闭事件编辑" title="关闭" variant="ghost"><Icon name="close" /></DialogClose>
+        {editedEvent && <EventActions t={t} disabled={busy} onDelete={() => askToDelete(editedEvent, "editor")} />}
+        <DialogClose aria-label={t("关闭事件编辑")} title={t("关闭")} variant="ghost"><Icon name="close" /></DialogClose>
       </>}
       busy={busy} initialFocus={titleInput} finalFocus={menuSurface}>
       <form key={formSession} className="timeline-event-form" onSubmit={event => void submitEvent(event)}>
@@ -789,39 +810,39 @@ export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelatio
           <div className="timeline-event-form-columns">
             <div className="timeline-event-content">
               <div className="timeline-event-field">
-                <label htmlFor={`${formId}-title`}>事件名称</label>
-                <TextField ref={titleInput} id={`${formId}-title`} type="text" required autoComplete="off" placeholder="例如：收到故乡来信" value={draft?.title ?? ""}
+                <label htmlFor={`${formId}-title`}>{t("事件名称")}</label>
+                <TextField ref={titleInput} id={`${formId}-title`} type="text" required autoComplete="off" placeholder={t("例如：收到故乡来信")} value={draft?.title ?? ""}
                   onChange={event => updateDraft({title: event.target.value})} aria-invalid={invalidTitle || undefined}
                   aria-describedby={invalidTitle ? `${formId}-title-help` : undefined} disabled={busy}/>
-                {invalidTitle && <span id={`${formId}-title-help`} className="timeline-event-form-error">事件名称需为 1–60 个字符。</span>}
+                {invalidTitle && <span id={`${formId}-title-help`} className="timeline-event-form-error">{t("事件名称需为 1–60 个字符。")}</span>}
               </div>
               <div className="timeline-event-field">
-                <label htmlFor={`${formId}-summary`}>事件说明 <span className="timeline-event-optional">选填</span></label>
-                <Textarea id={`${formId}-summary`} rows={4} placeholder="发生了什么，对故事有什么影响…" value={draft?.summary ?? ""} onChange={event => updateDraft({summary: event.target.value})}
+                <label htmlFor={`${formId}-summary`}>{t("事件说明")}<span className="timeline-event-optional">{t("选填")}</span></label>
+                <Textarea id={`${formId}-summary`} rows={4} placeholder={t("发生了什么，对故事有什么影响…")} value={draft?.summary ?? ""} onChange={event => updateDraft({summary: event.target.value})}
                   aria-invalid={!validSummary || undefined} aria-describedby={`${formId}-summary-help`} disabled={busy}/>
                 <span id={`${formId}-summary-help`} className={validSummary ? "timeline-event-summary-help timeline-event-field-help" : "timeline-event-summary-help timeline-event-form-error"}>
-                  {validSummary ? "200 字以内" : "事件说明不能超过 200 个字符。"}
+                  {validSummary ? t("200 字以内") : t("事件说明不能超过 200 个字符。")}
                 </span>
               </div>
-              {draft && <EventAssetPicker catalog={assetCatalog} selectedIds={draft.assetIds}
+              {draft && <EventAssetPicker t={t} catalog={assetCatalog} selectedIds={draft.assetIds}
                 disabled={busy} onChange={assetIds => updateDraft({assetIds})} />}
             </div>
             <section className="timeline-event-settings" aria-labelledby={`${formId}-axis`}>
-              <h3 id={`${formId}-axis`}>时间轴</h3>
+              <h3 id={`${formId}-axis`}>{t("时间轴")}</h3>
               <div className="timeline-event-field">
-                <label htmlFor={`${formId}-offset`}>距故事起点</label>
+                <label htmlFor={`${formId}-offset`}>{t("距故事起点")}</label>
                 <TextField id={`${formId}-offset`} type="number" step="any" min="-1000000000" max="1000000000" required value={draft?.offset ?? ""}
                   onChange={event => updateDraft({offset: event.target.value})} aria-invalid={invalidOffset || (Boolean(draft?.offset.trim()) && !validOffset) || undefined}
                   aria-describedby={`${formId}-offset-help`} disabled={busy}/>
-                <span id={`${formId}-offset-help`} className="timeline-event-field-help">{formatOffsetHint(settings, draft?.offset ?? "")}</span>
+                <span id={`${formId}-offset-help`} className="timeline-event-field-help">{formatOffsetHint(t, settings, draft?.offset ?? "")}</span>
               </div>
               <fieldset className="timeline-event-placement">
-                <legend>节点位置</legend>
+                <legend>{t("节点位置")}</legend>
                 <div>
                   <Button variant="ghost" aria-pressed={draft?.placement === "above"}
-                    disabled={busy} onClick={() => updateDraft({placement: "above"})}>轴线上方</Button>
+                    disabled={busy} onClick={() => updateDraft({placement: "above"})}>{t("轴线上方")}</Button>
                   <Button variant="ghost" aria-pressed={draft?.placement === "below"}
-                    disabled={busy} onClick={() => updateDraft({placement: "below"})}>轴线下方</Button>
+                    disabled={busy} onClick={() => updateDraft({placement: "below"})}>{t("轴线下方")}</Button>
                 </div>
               </fieldset>
               <div className="timeline-event-markers">
@@ -831,20 +852,20 @@ export function TimelineEvents({canvas, contextMenus, assetCatalog, assetRelatio
                       disabled={busy}/>
                     <Icon name="check" size="small"/>
                   </span>
-                  <span>关键转折</span>
+                  <span>{t("关键转折")}</span>
                 </label>
-                <EventColorPicker value={draft?.color ?? ""} valid={validColor} disabled={busy}
+                <EventColorPicker t={t} value={draft?.color ?? ""} valid={validColor} disabled={busy}
                   onChange={color => updateDraft({color})} />
               </div>
             </section>
           </div>
         </div>
         <div className="timeline-event-form-footer">
-          {(operationError || snapshot.error) && <p className="timeline-event-form-error" role="alert">{operationError ?? snapshot.error}</p>}
+          {(operationError || snapshot.error) && <p className="timeline-event-form-error" role="alert">{t(operationError ?? snapshot.error ?? "")}</p>}
           <DialogActions>
-            <Button variant="ghost" disabled={busy} onClick={() => cancelDraft()}>取消</Button>
+            <Button variant="ghost" disabled={busy} onClick={() => cancelDraft()}>{t("取消")}</Button>
             <Button type="submit" variant="primary" disabled={!formValid || busy}>
-              {submitting ? "正在保存…" : snapshot.error ? "重试保存" : "保存事件"}
+              {submitting ? t("正在保存…") : snapshot.error ? t("重试保存") : t("保存事件")}
             </Button>
           </DialogActions>
         </div>

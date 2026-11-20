@@ -77,7 +77,7 @@ function createPanAccumulator(viewport: CanvasViewport, host: Window): PanAccumu
 
 /** All DOM listeners and pointer capture belong to this mounted surface, not the viewport model. */
 export function CanvasSurface({viewport, active, label, children, grid = "dots", showControls = true, controls, zoomControls,
-  panOnPrimaryDrag = false, wheelOnWorldControls = false}: CanvasSurfaceProps) {
+  panOnPrimaryDrag = false, wheelOnWorldControls = false, t}: CanvasSurfaceProps & {t?: Translate}) {
   const snapshot = useSyncExternalStore(viewport.subscribe, viewport.getSnapshot, viewport.getSnapshot);
   const surface = useRef<HTMLDivElement>(null);
   const world = useRef<HTMLDivElement>(null);
@@ -225,15 +225,21 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots",
   const pitch = gridStep * snapshot.zoom;
   const gridOffset = {x: ((offset.x % pitch) + pitch) % pitch, y: ((offset.y % pitch) + pitch) % pitch};
   const toolbar = showControls ? <CanvasZoomControls label={controls?.label} zoom={snapshot.zoom} disabled={!enabled}
+    labels={t && {
+      toolbar: t("画布视图"), zoomOut: t("缩小画布"), zoomIn: t("放大画布"), resetZoom: t("恢复到 100%"),
+      currentZoom: percentage => t("画布缩放 {percentage}，恢复到 100%", {values: {percentage}}),
+      resetView: t("回到原点"),
+    }}
     onZoomChange={zoom => { flushPan(viewport); viewport.zoomTo(zoom); }}
     onResetZoom={() => { flushPan(viewport); viewport.resetZoom(); }}
     onResetView={() => { flushPan(viewport); viewport.resetView(); }}>
     {zoomControls}
   </CanvasZoomControls> : null;
   const dragDescription = panOnPrimaryDrag ? "拖动空白处或用方向键平移" : "方向键平移，空格加左键或中键拖动";
+  const keyboardDescription = "Ctrl 或 Command 加滚轮缩放，Home 回到原点。";
 
   return <div ref={surface} className="canvas-surface" role="region" aria-label={label} tabIndex={0}
-    aria-description={`${dragDescription}，Ctrl 或 Command 加滚轮缩放，Home 回到原点。`}
+    aria-description={t ? `${t(dragDescription)}${t("，")}${t(keyboardDescription)}` : `${dragDescription}，${keyboardDescription}`}
     data-canvas-active={enabled} data-canvas-hand={hand || enabled && panOnPrimaryDrag} data-canvas-dragging={dragging}
     data-canvas-center-x={snapshot.center.x} data-canvas-center-y={snapshot.center.y} data-canvas-zoom={snapshot.zoom}
     onPointerDown={pointerDown} onPointerMove={pointerMove}
@@ -265,3 +271,4 @@ export function CanvasSurface({viewport, active, label, children, grid = "dots",
     {toolbar && controls?.target ? createPortal(toolbar, controls.target) : toolbar}
   </div>;
 }
+import type {Translate} from "@lodestory/sdk/i18n";

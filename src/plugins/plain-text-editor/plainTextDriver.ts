@@ -693,6 +693,7 @@ export function createPlainTextDriver(root: HTMLElement, initialContent: string,
       resize?.disconnect(); themeObserver?.disconnect(); document.fonts?.removeEventListener("loadingdone", fontsChanged);
       disposers.forEach(dispose => dispose()); root.replaceChildren(); drivers.delete(root);
     },
+    setInputLabel(label: string) { input.setAttribute("aria-label", label); },
     setReadOnly(value: boolean) {
       if (value && !readOnly && composing) finishComposition(false);
       if (value) completion?.close();

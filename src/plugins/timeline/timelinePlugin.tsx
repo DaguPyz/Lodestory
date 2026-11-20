@@ -1,3 +1,5 @@
+import {i18nKey, type I18nService} from "@lodestory/sdk/i18n";
+import {useTranslation} from "../../utils/useTranslation";
 import {useSyncExternalStore} from "react";
 import type {Plugin} from "@lodestory/sdk";
 import {canvasKey, type CanvasService} from "@lodestory/sdk/canvas";
@@ -30,7 +32,7 @@ type TimelineEntrySummary = {
 type TimelineModel = ReturnType<typeof createTimelineListModel>;
 type TimelineOpenState = Readonly<{
   generation: number;
-  eventTarget: Readonly<{timelineId: string; eventId: string}> | null;
+  eventTarget: Readonly<{timelineId: string; eventId: string; located: boolean}> | null;
 }>;
 const INITIAL_OPEN_STATE: TimelineOpenState = Object.freeze({generation: 0, eventTarget: null});
 
@@ -68,11 +70,12 @@ export function createTimelinePlugin(): Plugin {
 
   return {
     id: "timeline",
-    requires: [layoutKey, workbenchKey, projectStorageKey, canvasKey, contextMenuKey, assetCatalogKey, projectSearchKey],
+    requires: [layoutKey, workbenchKey, projectStorageKey, canvasKey, contextMenuKey, assetCatalogKey, projectSearchKey, i18nKey],
     provides: [timelineKey],
     activate(context) {
       alive = true;
       const layout = context.get(layoutKey);
+      const i18n = context.get(i18nKey);
       const workbench = context.get(workbenchKey);
       const storage = context.get(projectStorageKey);
       const canvas = context.get(canvasKey);
@@ -110,6 +113,10 @@ export function createTimelinePlugin(): Plugin {
           resource.eventUnsubscribes.set(timelineId, events.subscribe(() => {
             publishSession(resource);
             const next = events!.getSnapshot();
+            const target = resource.openState.eventTarget;
+            if (next.events !== previous.events && target?.timelineId === timelineId && !next.events.some(event => event.id === target.eventId)) {
+              publishOpenState(resource, {...resource.openState, eventTarget: null});
+            }
             if (next.events !== previous.events || next.loading !== previous.loading || next.loaded !== previous.loaded || next.error !== previous.error)
               for (const listener of [...resource.searchListeners]) listener();
             previous = next;
@@ -366,7 +373,7 @@ export function createTimelinePlugin(): Plugin {
           resource.openedId = timelineId;
           publishOpenState(resource, {
             generation: resource.openState.generation + (opening || eventId ? 1 : 0),
-            eventTarget: eventId ? {timelineId, eventId} : null,
+            eventTarget: eventId ? {timelineId, eventId, located: false} : null,
           });
         }
         return true;
@@ -383,7 +390,7 @@ export function createTimelinePlugin(): Plugin {
         title: "时间线画布",
         role: "main",
         order: 10,
-        render: ({active}) => <TimelineMain workbench={workbench} canvas={canvas} contextMenus={contextMenus} assetCatalog={assetCatalog} sessions={sessions} active={active}
+        render: ({active}) => <TimelineMain i18n={i18n} workbench={workbench} canvas={canvas} contextMenus={contextMenus} assetCatalog={assetCatalog} sessions={sessions} active={active}
           onEditingChange={(sessionId, timelineId, editing) => {
             const resource = sessions.get(sessionId);
             if (!resource || !alive) return;
@@ -406,7 +413,8 @@ export function createTimelinePlugin(): Plugin {
   };
 }
 
-function TimelineMain({workbench, canvas, contextMenus, assetCatalog, sessions, active, onEditingChange}: {
+function TimelineMain({i18n, workbench, canvas, contextMenus, assetCatalog, sessions, active, onEditingChange}: {
+  i18n: I18nService;
   workbench: WorkbenchService;
   canvas: CanvasService;
   contextMenus: ContextMenuService;
@@ -415,6 +423,7 @@ function TimelineMain({workbench, canvas, contextMenus, assetCatalog, sessions, 
   active: boolean;
   onEditingChange(sessionId: string, timelineId: string, editing: boolean): void;
 }) {
+  const t = useTranslation(i18n);
   const workbenchSnapshot = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
   const relationSource = useSyncExternalStore(assetCatalog.relationSource?.subscribe ?? emptySubscribe,
     assetCatalog.relationSource?.getSnapshot ?? noRelations, noRelations);
@@ -435,16 +444,17 @@ function TimelineMain({workbench, canvas, contextMenus, assetCatalog, sessions, 
   const current = Boolean(active && session && workbenchSnapshot.active && !workbenchSnapshot.busy
     && !snapshot.busy && !snapshot.createDraft && entry && canvasView && axis && events);
   if (!entry || !canvasView || !axis || !events || !session || !resource) {
-    return <div className="timeline-canvas-empty" role="status">选择或新建一条时间线以打开画布。</div>;
+    return <div className="timeline-canvas-empty" role="status">{t("选择或新建一条时间线以打开画布。")}</div>;
   }
   const eventTarget = openState.eventTarget?.timelineId === entry.id ? openState.eventTarget : null;
-  return <TimelineCanvas canvas={canvas} contextMenus={contextMenus} assetCatalog={assetCatalog.getCatalog(session.id)}
+  return <TimelineCanvas t={t} canvas={canvas} contextMenus={contextMenus} assetCatalog={assetCatalog.getCatalog(session.id)}
     assetRelations={relationSource?.getNetwork(session.id) ?? null} canvasView={canvasView} active={current} title={entry.title} axis={axis} events={events}
     openToken={openState.generation ? `${session.id}:${openState.generation}` : null}
-    searchEventId={eventTarget?.eventId}
-    onSearchEventHandled={() => {
-      if (eventTarget && resource.openState.eventTarget === eventTarget) {
-        publishOpenState(resource, {...resource.openState, eventTarget: null});
+    searchEventId={eventTarget?.located === false ? eventTarget.eventId : undefined}
+    highlightedEventId={eventTarget?.located ? eventTarget.eventId : undefined}
+    onSearchEventHandled={located => {
+      if (eventTarget?.located === false && resource.openState.eventTarget === eventTarget) {
+        publishOpenState(resource, {...resource.openState, eventTarget: located ? {...eventTarget, located} : null});
       }
     }}
     onEditingChange={editing => onEditingChange(session.id, entry.id, editing)}/>;

@@ -104,6 +104,9 @@ test("built-in catalogs are registered and withdrawn as their plugins are enable
 
   assert.equal(i18n.getSnapshot().t("快捷键", {namespace: "shortcuts"}), "Shortcuts");
   assert.equal(i18n.getSnapshot().t("界面语言"), "Interface language");
+  assert.equal(i18n.getSnapshot().t("资产管理"), "Asset Library");
+  assert.equal(i18n.getSnapshot().t("大纲设计"), "Visual Outline");
+  assert.equal(i18n.getSnapshot().t("工程文件"), "Project Files");
   assert.equal(settings.open("general.language"), true);
   await assert.rejects(runtime.unmount("i18n"), /required by plugins/);
   await runtime.unmount("language-settings");

@@ -1,3 +1,5 @@
+import type {I18nService} from "@lodestory/sdk/i18n";
+import {useTranslation} from "../../utils/useTranslation";
 import {useCallback, useEffect, useRef, useState} from "react";
 import { IconButton, Icon } from "@lodestory/ui";
 import type {EditorHandle} from "@lodestory/sdk/body-editor";
@@ -5,7 +7,8 @@ import {getEditorFormat} from "./bodyEditorRegistry";
 import {BodyEditorInteractions, useBodyEditorContext} from "./BodyEditorContext";
 import {EmptyDocument, Manuscript} from "./Manuscript";
 
-export function BodyEditor({active}: {active: boolean}) {
+export function BodyEditor({active, i18n}: {active: boolean; i18n?: I18nService}) {
+  const t = useTranslation(i18n);
   const editor = useBodyEditorContext();
   const {workspace} = editor;
   const root = useRef<HTMLDivElement>(null);
@@ -107,10 +110,10 @@ export function BodyEditor({active}: {active: boolean}) {
     {editor.searchError && <p className="editor-document-feedback" role="alert">{editor.searchError}</p>}
     {workspace.error && <div className="editor-document-feedback" role="alert">
       <p className="project-error">{workspace.error}</p>
-      <IconButton label="关闭提示" disabled={disabled} onClick={workspace.clearError}><Icon name="close" size="small"/></IconButton>
+      <IconButton label={t("关闭提示")} disabled={disabled} onClick={workspace.clearError}><Icon name="close" size="small"/></IconButton>
     </div>}
     {(workspace.openingPath || workspace.creating) && <p className="editor-document-feedback" role="status">
-      {workspace.creating ? "正在创建文档…" : "正在打开文档…"}
+      {workspace.creating ? t("正在创建文档…") : t("正在打开文档…")}
     </p>}
     <div className="editor-document-stack">
       {workspace.documents.length ? workspace.documents.map(document => {
@@ -118,7 +121,7 @@ export function BodyEditor({active}: {active: boolean}) {
         const documentActive = visible && active;
         const format = getEditorFormat(document.fileName);
         const definition = format ? editor.resolveEditor(format) : undefined;
-        return <Manuscript key={document.id} document={document}
+        return <Manuscript t={t} key={document.id} document={document}
           visible={visible} active={documentActive}
           readOnly={disabled || workspace.blocked || !visible || workspace.deletingPath === document.path}
           format={format} definition={definition} onEditorReady={onEditorReady} connectSources={editor.connectSources}
@@ -132,7 +135,7 @@ export function BodyEditor({active}: {active: boolean}) {
             }
           }}
           onSave={() => workspace.save(document.id)}/>
-      }) : <EmptyDocument projectPath={editor.projectPath} onCreate={() => editor.requestNewDocument()} disabled={editor.newDisabled || !active}/>}
+      }) : <EmptyDocument t={t} projectPath={editor.projectPath} onCreate={() => editor.requestNewDocument()} disabled={editor.newDisabled || !active}/>}
     </div>
   </div>;
 }

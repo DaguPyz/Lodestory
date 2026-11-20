@@ -1,8 +1,10 @@
+import type {Translate} from "@lodestory/sdk/i18n";
 import {useLayoutEffect, useRef, useState} from "react";
 import {Icon, Select, Textarea, TextField, type SelectOption} from "@lodestory/ui";
 import type {AssetFieldDefinition, AssetPropertyValue, AssetRecord} from "./assetSchemaStore";
 
 export type AssetValueFieldsProps = {
+  t: Translate;
   fields: readonly AssetFieldDefinition[];
   assets: readonly AssetRecord[];
   values: Readonly<Record<string, AssetPropertyValue>>;
@@ -30,7 +32,7 @@ function stringListValue(value: AssetPropertyValue | undefined): readonly string
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
-export function AssetValueFields({fields, assets, values, disabled, onChange}: AssetValueFieldsProps) {
+export function AssetValueFields({t, fields, assets, values, disabled, onChange}: AssetValueFieldsProps) {
   const numberInputs = useRef(new Map<string, HTMLInputElement>());
   const previousValues = useRef(values);
   const reportedValues = useRef(new Map<string, AssetPropertyValue>());
@@ -65,7 +67,7 @@ export function AssetValueFields({fields, assets, values, disabled, onChange}: A
 
   function updateNumber(fieldId: string, input: HTMLInputElement) {
     if (input.validity.badInput) {
-      const message = "请输入有效数字。";
+      const message = t("请输入有效数字。");
       input.setCustomValidity(message);
       setNumberErrors(current => current[fieldId] === message ? current : {...current, [fieldId]: message});
       return;
@@ -81,7 +83,7 @@ export function AssetValueFields({fields, assets, values, disabled, onChange}: A
 
     const nextValue = input.value === "" ? null : input.valueAsNumber;
     if (nextValue !== null && !Number.isFinite(nextValue)) {
-      const message = "请输入有效数字。";
+      const message = t("请输入有效数字。");
       input.setCustomValidity(message);
       setNumberErrors(current => ({...current, [fieldId]: message}));
       return;
@@ -124,14 +126,14 @@ export function AssetValueFields({fields, assets, values, disabled, onChange}: A
 
       if (field.valueType === "singleSelect") {
         const current = stringValue(value);
-        const options: SelectOption[] = [{value: "", label: "未设置"}, ...(field.config.options ?? []).map(option => ({value: option.id, label: option.title}))];
+        const options: SelectOption[] = [{value: "", label: t("未设置")}, ...(field.config.options ?? []).map(option => ({value: option.id, label: option.title}))];
         if (current && !options.some(option => option.value === current)) {
-          options.push({value: current, label: `已移除选项（${current}）`, disabled: true});
+          options.push({value: current, label: t("已移除选项（{current}）", {values: {current}}), disabled: true});
         }
         return <label className="asset-form-field" key={field.id}>
           <span>{field.title}<span className="asset-optional"> · {typeLabel}</span></span>
           <Select id={`asset-value-${field.id}`} value={current ?? ""} options={options} disabled={disabled}
-            aria-label={field.title} placeholder="未设置"
+            aria-label={field.title} placeholder={t("未设置")}
             onValueChange={next => onChange(field.id, next === "" ? null : next)} />
         </label>;
       }
@@ -140,7 +142,7 @@ export function AssetValueFields({fields, assets, values, disabled, onChange}: A
         const selected = stringListValue(value);
         const options = [...(field.config.options ?? [])];
         for (const selectedId of selected) {
-          if (!options.some(option => option.id === selectedId)) options.push({id: selectedId, title: `已移除选项（${selectedId}）`});
+          if (!options.some(option => option.id === selectedId)) options.push({id: selectedId, title: t("已移除选项（{selectedId}）", {values: {selectedId}})});
         }
         return <fieldset className="asset-option-fields" key={field.id}>
           <legend>{field.title}<span className="asset-optional"> · {typeLabel}</span></legend>
@@ -166,17 +168,17 @@ export function AssetValueFields({fields, assets, values, disabled, onChange}: A
       const current = stringValue(value);
       const targetTypeId = field.config.targetTypeId ?? null;
       const matchingAssets = assets.filter(asset => targetTypeId === null || asset.typeId === targetTypeId);
-      const options: SelectOption[] = [{value: "", label: "无关联"}, ...matchingAssets.map(asset => ({value: asset.id, label: asset.name}))];
+      const options: SelectOption[] = [{value: "", label: t("无关联")}, ...matchingAssets.map(asset => ({value: asset.id, label: asset.name}))];
       if (current && !options.some(option => option.value === current)) {
         const existing = assets.find(asset => asset.id === current);
         options.push({value: current, label: existing
-          ? `不符合目标类型：${existing.name}`
-          : `资产已不存在（${current}）`, disabled: true});
+          ? t("不符合目标类型：{name}", {values: {name: existing.name}})
+          : t("资产已不存在（{current}）", {values: {current}}), disabled: true});
       }
       return <label className="asset-form-field" key={field.id}>
         <span>{field.title}<span className="asset-optional"> · {typeLabel}</span></span>
         <Select id={`asset-value-${field.id}`} value={current ?? ""} options={options} disabled={disabled}
-          aria-label={field.title} placeholder="无关联"
+          aria-label={field.title} placeholder={t("无关联")}
           onValueChange={next => onChange(field.id, next === "" ? null : next)} />
       </label>;
     })}

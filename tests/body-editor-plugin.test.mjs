@@ -18,6 +18,7 @@ function createWorkspace() {
 function setup({rejectContentId, editorDefaults = {"plain-text": "plain-text"}} = {}) {
   const fixture = createMainFixture();
   const {configKey} = fixture.requireSdk("@lodestory/sdk/config");
+  const {i18nKey} = fixture.requireSdk("@lodestory/sdk/i18n");
   const {workbenchKey} = fixture.requireSdk("@lodestory/sdk/workbench");
   const {documentsKey, documentCreateRequested, documentRevealRequested} = fixture.requireSdk("@lodestory/sdk/documents");
   const {layoutKey} = fixture.requireSdk("@lodestory/sdk/layout");
@@ -90,6 +91,7 @@ function setup({rejectContentId, editorDefaults = {"plain-text": "plain-text"}} 
     get(key) {
       if (provided.has(key)) return provided.get(key);
       if (key === configKey) return config;
+      if (key === i18nKey) return undefined;
       if (key === workbenchKey) return workbench;
       if (key === documentsKey) return documents;
       if (key === layoutKey) return layout;
@@ -197,7 +199,7 @@ test("body editor declares the SDK contract and keeps reveal listening before a 
   const {uiKey} = f.fixture.requireSdk("@lodestory/sdk/ui");
   const {configKey} = f.fixture.requireSdk("@lodestory/sdk/config");
   assert.equal(f.plugin.id, "body-editor");
-  assert.deepEqual(Array.from(f.plugin.requires, key => key.id), [workbenchKey.id, documentsKey.id, layoutKey.id, uiKey.id, configKey.id]);
+  assert.deepEqual(Array.from(f.plugin.requires, key => key.id), [workbenchKey.id, documentsKey.id, layoutKey.id, uiKey.id, configKey.id, "app/i18n"]);
   assert.deepEqual(Array.from(f.plugin.provides, key => key.id), [f.bodyEditorKey.id]);
 
   f.plugin.activate(f.context);

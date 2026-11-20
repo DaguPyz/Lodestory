@@ -8,6 +8,8 @@ test("plain text editor registers only TXT and loads its own component on demand
     "plugins/plain-text-editor/PlainTextEditor.tsx": {default: PlainTextStub},
   }});
   const {bodyEditorKey} = fixture.requireSdk("@lodestory/sdk/body-editor");
+  const {i18nKey} = fixture.requireSdk("@lodestory/sdk/i18n");
+  const i18n = {};
   const {createPlainTextEditorPlugin} = fixture.loadModule("plugins/plain-text-editor/plainTextEditorPlugin.ts");
 
   const definitions = new Map();
@@ -18,8 +20,12 @@ test("plain text editor registers only TXT and loads its own component on demand
   }};
   const plugin = createPlainTextEditorPlugin();
   assert.equal(plugin.id, "plain-text-editor");
-  assert.deepEqual(Array.from(plugin.requires), [bodyEditorKey]);
-  plugin.activate({track: value => value, get(key) { assert.strictEqual(key, bodyEditorKey); return service; }});
+  assert.deepEqual(Array.from(plugin.requires), [bodyEditorKey, i18nKey]);
+  plugin.activate({track: value => value, get(key) {
+    if (key === i18nKey) return i18n;
+    assert.strictEqual(key, bodyEditorKey);
+    return service;
+  }});
 
   const definition = definitions.get("plain-text");
   assert.ok(definition);
@@ -28,7 +34,10 @@ test("plain text editor registers only TXT and loads its own component on demand
   assert.equal(fixture.moduleImports.some(({specifier}) => specifier === "./PlainTextEditor"), false,
     "registering TXT support does not load the editor component");
   const loaded = await definition.load();
-  assert.strictEqual(loaded.default, PlainTextStub);
+  const localized = loaded.default({content: "sample"});
+  assert.strictEqual(localized.type, PlainTextStub);
+  assert.strictEqual(localized.props.i18n, i18n);
+  assert.equal(localized.props.content, "sample");
 
   plugin.deactivate();
   plugin.deactivate();

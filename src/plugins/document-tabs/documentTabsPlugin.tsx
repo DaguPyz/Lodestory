@@ -1,3 +1,6 @@
+import {i18nKey, type I18nService} from "@lodestory/sdk/i18n";
+import type {Translate} from "@lodestory/sdk/i18n";
+import {useTranslation} from "../../utils/useTranslation";
 import {useEffect, useSyncExternalStore} from "react";
 import {isTauri} from "@tauri-apps/api/core";
 import type {Plugin} from "@lodestory/sdk";
@@ -18,12 +21,13 @@ export function createDocumentTabsPlugin(): Plugin {
   let removeScope: (() => void) | undefined;
   return {
     id: "document-tabs",
-    requires: [workbenchKey, documentsKey, layoutKey, shortcutsKey],
+    requires: [workbenchKey, documentsKey, layoutKey, shortcutsKey, i18nKey],
     provides: [],
     activate(context) {
       const workbench = context.get(workbenchKey);
       const documents = context.get(documentsKey);
       const layout = context.get(layoutKey);
+      const i18n = context.get(i18nKey);
       const shortcuts = context.get(shortcutsKey);
       removeScope = shortcuts.registerScope({
         id: shortcutScopeIds.document,
@@ -43,6 +47,7 @@ export function createDocumentTabsPlugin(): Plugin {
         title: "文稿标签",
         role: "tabs",
         render: ({active}) => <DocumentTabsContent
+          i18n={i18n}
           active={active}
           workbench={workbench}
           documents={documents}
@@ -63,13 +68,15 @@ export function createDocumentTabsPlugin(): Plugin {
   };
 }
 
-function DocumentTabsContent({active, workbench, documents, layout, shortcuts}: {
+function DocumentTabsContent({i18n, active, workbench, documents, layout, shortcuts}: {
+  i18n: I18nService;
   active: boolean;
   workbench: WorkbenchService;
   documents: DocumentsService;
   layout: LayoutService;
   shortcuts: ShortcutsService;
 }) {
+  const t = useTranslation(i18n);
   const shortcutSnapshot = useSyncExternalStore(shortcuts.subscribe, shortcuts.getSnapshot, shortcuts.getSnapshot);
   const state = useSyncExternalStore(workbench.subscribe, workbench.getSnapshot, workbench.getSnapshot);
   const session = state.session;
@@ -80,13 +87,14 @@ function DocumentTabsContent({active, workbench, documents, layout, shortcuts}: 
   const newShortcut = registeredCommandIds.has(shortcutCommandIds.newDocument)
     ? shortcuts.getShortcut(shortcutCommandIds.newDocument) : undefined;
   return session && workspace
-    ? <DocumentTabsSession key={session.id} sessionId={session.id} active={active} workbench={workbench}
+    ? <DocumentTabsSession t={t} key={session.id} sessionId={session.id} active={active} workbench={workbench}
         workspace={workspace} layout={layout} shortcuts={shortcuts}
         closeShortcut={closeShortcut} newShortcut={newShortcut}/>
     : null;
 }
 
-function DocumentTabsSession({sessionId, active, workbench, workspace, layout, shortcuts, closeShortcut, newShortcut}: {
+function DocumentTabsSession({t, sessionId, active, workbench, workspace, layout, shortcuts, closeShortcut, newShortcut}: {
+  t: Translate;
   sessionId: string;
   active: boolean;
   workbench: WorkbenchService;
@@ -125,7 +133,7 @@ function DocumentTabsSession({sessionId, active, workbench, workspace, layout, s
       .catch(error => { console.error("Could not close a document.", {error}); return false; });
   }
 
-  return bodyVisible && snapshot.documents.length > 0 ? <DocumentTabs documents={snapshot.documents} activeDocument={snapshot.activeId}
+  return bodyVisible && snapshot.documents.length > 0 ? <DocumentTabs t={t} documents={snapshot.documents} activeDocument={snapshot.activeId}
     onSelect={workspace.select} onClose={closeDocument} onCloseMany={workspace.closeMany} onSave={workspace.save}
     onNewDocument={createDocument} newDisabled={newDisabled} disabled={disabled}
     closeShortcut={closeShortcut} newShortcut={newShortcut}/> : null;

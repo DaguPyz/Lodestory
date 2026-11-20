@@ -1,3 +1,4 @@
+import type {Translate} from "@lodestory/sdk/i18n";
 import {useLayoutEffect, useRef, useState, type RefObject} from "react";
 import {Icon, IconButton, TextField} from "@lodestory/ui";
 import type {PlainTextDriver, SearchOptions, SearchRequest} from "./plainTextDriver";
@@ -8,7 +9,8 @@ const flags = [
   ["wholeWord", "全词匹配", "wholeWord"],
 ] as const;
 
-export function PlainTextSearchBar({request, driver, readOnly, onClose}: {
+export function PlainTextSearchBar({t, request, driver, readOnly, onClose}: {
+  t: Translate;
   request?: SearchRequest;
   driver: RefObject<PlainTextDriver | undefined>;
   readOnly: boolean;
@@ -57,26 +59,26 @@ export function PlainTextSearchBar({request, driver, readOnly, onClose}: {
 
   return <div className="plain-text-search" role="search" hidden={!request}>
     <div className="plain-text-search-group">
-      <TextField type="search" ref={query} placeholder="查找" aria-label="查找文本" onInput={resetMatch} onKeyDown={event => {
+      <TextField type="search" ref={query} placeholder={t("查找")} aria-label={t("查找文本")} onInput={resetMatch} onKeyDown={event => {
         if (event.key !== "Enter" || event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
         event.preventDefault();
         run(event.shiftKey ? "previous" : "next");
       }} />
-      <IconButton label="上一个" onClick={() => run("previous")}><Icon name="chevronUp" /></IconButton>
-      <IconButton label="下一个" onClick={() => run("next")}><Icon name="chevronDown" /></IconButton>
+      <IconButton label={t("上一个")} onClick={() => run("previous")}><Icon name="chevronUp" /></IconButton>
+      <IconButton label={t("下一个")} onClick={() => run("next")}><Icon name="chevronDown" /></IconButton>
     </div>
     <div className="plain-text-search-group">
-      <TextField ref={replacement} placeholder="替换为" aria-label="替换文本" />
-      <IconButton label="替换" disabled={readOnly} onClick={() => run("replace")}><Icon name="replace" /></IconButton>
-      <IconButton label="全部替换" disabled={readOnly} onClick={() => run("replaceAll")}><Icon name="replaceAll" /></IconButton>
+      <TextField ref={replacement} placeholder={t("替换为")} aria-label={t("替换文本")} />
+      <IconButton label={t("替换")} disabled={readOnly} onClick={() => run("replace")}><Icon name="replace" /></IconButton>
+      <IconButton label={t("全部替换")} disabled={readOnly} onClick={() => run("replaceAll")}><Icon name="replaceAll" /></IconButton>
     </div>
     <div className="plain-text-search-group">
-      {flags.map(([name, label, icon]) => <IconButton key={name} label={label} aria-pressed={options[name] ?? false} onClick={() => {
+      {flags.map(([name, label, icon]) => <IconButton key={name} label={t(label)} aria-pressed={options[name] ?? false} onClick={() => {
         setOptions(current => ({...current, [name]: !current[name]}));
         resetMatch();
       }}><Icon name={icon} /></IconButton>)}
     </div>
-    <IconButton label="关闭查找" onClick={onClose}><Icon name="close" /></IconButton>
-    <span role="status">{status}</span>
+    <IconButton label={t("关闭查找")} onClick={onClose}><Icon name="close" /></IconButton>
+    <span role="status">{t(status)}</span>
   </div>;
 }

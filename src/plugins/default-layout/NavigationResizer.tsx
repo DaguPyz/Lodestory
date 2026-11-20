@@ -5,7 +5,8 @@ import type {createNavigationWidthModel} from "./navigationWidth";
 type WidthModel = ReturnType<typeof createNavigationWidthModel>;
 type ElementRef = RefObject<HTMLElement | null>;
 
-export function NavigationResizer({widths, root, workspace, rail, auxiliary, probe, enabled, docked, reserveAuxiliary}: {
+export function NavigationResizer({t, widths, root, workspace, rail, auxiliary, probe, enabled, docked, reserveAuxiliary}: {
+  t: Translate;
   widths: WidthModel;
   root: ElementRef;
   workspace: ElementRef;
@@ -111,11 +112,11 @@ export function NavigationResizer({widths, root, workspace, rail, auxiliary, pro
   }, [enabled]);
 
   return <div ref={handle} className="layout-navigation-resizer" role="separator" tabIndex={enabled ? 0 : -1}
-    aria-label="调整导航面板宽度" aria-orientation="vertical"
+    aria-label={t("调整导航面板宽度")} aria-orientation="vertical"
     aria-valuemin={Math.round(snapshot.minWidth)} aria-valuemax={Math.round(snapshot.maxWidth)}
-    aria-valuenow={Math.round(snapshot.effectiveWidth)} aria-valuetext={`${Math.round(snapshot.effectiveWidth)} 像素`}
+    aria-valuenow={Math.round(snapshot.effectiveWidth)} aria-valuetext={t("{value} 像素", {values: {value: Math.round(snapshot.effectiveWidth)}})}
     aria-disabled={!enabled || snapshot.minWidth === snapshot.maxWidth}
-    title={error ?? "左右拖动调整宽度，双击恢复默认；方向键调整，Esc 取消拖动。"}
+    title={t(error ?? "左右拖动调整宽度，双击恢复默认；方向键调整，Esc 取消拖动。")}
     onPointerDown={event => { if (interactionEnabled.current) controller.current?.pointerDown(event); }}
     onPointerMove={event => controller.current?.pointerMove(event)}
     onPointerUp={event => controller.current?.pointerUp(event)}
@@ -125,3 +126,4 @@ export function NavigationResizer({widths, root, workspace, rail, auxiliary, pro
     onDoubleClick={() => { if (interactionEnabled.current) controller.current?.doubleClick(); }}
   />;
 }
+import type {Translate} from "@lodestory/sdk/i18n";

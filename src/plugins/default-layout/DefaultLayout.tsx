@@ -199,7 +199,7 @@ function LayoutPanel({role, entries, shownIds, docked, active, store, widths, ro
         <ErrorBoundary><Content entry={entry} active={contentActive}/></ErrorBoundary>
       </section>;
     })}
-    {role === "navigation" && <NavigationResizer widths={widths} root={root} workspace={workspace}
+    {role === "navigation" && <NavigationResizer t={t} widths={widths} root={root} workspace={workspace}
       rail={rail} auxiliary={auxiliary} probe={probe} enabled={active && !!current} docked={docked}
       reserveAuxiliary={reserveAuxiliary} />}
   </aside>;

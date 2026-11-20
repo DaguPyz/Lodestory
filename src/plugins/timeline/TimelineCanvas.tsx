@@ -1,3 +1,6 @@
+import {displayTimelineUnit} from "./displayTimelineUnit";
+import type {Translate} from "@lodestory/sdk/i18n";
+import {sourceText} from "../../utils/sourceText";
 import {useId, useLayoutEffect, useRef, useState, useSyncExternalStore, type FormEvent} from "react";
 import type {CanvasService, CanvasViewport} from "@lodestory/sdk/canvas";
 import type {ContextMenuService} from "@lodestory/sdk/context-menu";
@@ -49,7 +52,7 @@ function draftIsDirty(draft: Draft | null, settings: TimelineAxisSettings): bool
     || origin !== settings.origin || step !== settings.step || draft.unit !== settings.unit;
 }
 
-function AxisTicks({ticks, axisY, worldHalfWidth, zoom}: {ticks: readonly TimelineAxisTick[]; axisY: number; worldHalfWidth: number; zoom: number}) {
+function AxisTicks({t, ticks, axisY, worldHalfWidth, zoom}: {t: Translate; ticks: readonly TimelineAxisTick[]; axisY: number; worldHalfWidth: number; zoom: number}) {
   const layout = TIMELINE_AXIS_LABEL_LAYOUT;
   return <><g className="timeline-axis-ticks">
     {ticks.map(tick => {
@@ -67,14 +70,15 @@ function AxisTicks({ticks, axisY, worldHalfWidth, zoom}: {ticks: readonly Timeli
             {formatTimelineAxisValue(tick.value)}
           </text>
           {tick.origin && <text className="timeline-axis-origin-caption" x={x} y={axisY + layout.originTop}
-            fontSize={layout.originFontSize} textAnchor="middle" dominantBaseline="hanging">故事起点</text>}
+            fontSize={layout.originFontSize} textAnchor="middle" dominantBaseline="hanging">{t("故事起点")}</text>}
       </g>;
     })}
   </g></>;
 }
 
-export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelations = null, canvasView, active, title, axis, events,
-  openToken = null, searchEventId, onSearchEventHandled, onEditingChange}: {
+export function TimelineCanvas({t = sourceText, canvas, contextMenus, assetCatalog, assetRelations = null, canvasView, active, title, axis, events,
+  openToken = null, searchEventId, highlightedEventId, onSearchEventHandled, onEditingChange}: {
+  t?: Translate;
   canvas: CanvasService;
   contextMenus: ContextMenuService;
   assetCatalog: AssetCatalog | null;
@@ -86,7 +90,8 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
   events: TimelineEventStore;
   openToken?: string | null;
   searchEventId?: string;
-  onSearchEventHandled?: () => void;
+  highlightedEventId?: string;
+  onSearchEventHandled?: (located: boolean) => void;
   onEditingChange?: (editing: boolean) => void;
 }) {
   const {viewport, getScaleTextWithZoom} = canvasView;
@@ -208,10 +213,10 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
       const saved = await axis.retry();
       if (epoch !== operationEpochRef.current) return;
       if (saved && editingRef.current && draft && !draftIsDirty(draft, axis.getSnapshot().settings)) discardDraft();
-      else if (!saved) setOperationError(axis.getSnapshot().error ?? "时间轴设置保存失败，请重试。");
+      else if (!saved) setOperationError(axis.getSnapshot().error ?? t("时间轴设置保存失败，请重试。"));
     } catch (error) {
       if (epoch !== operationEpochRef.current) return;
-      setOperationError(error instanceof Error ? error.message : "时间轴设置保存失败，请重试。");
+      setOperationError(error instanceof Error ? error.message : t("时间轴设置保存失败，请重试。"));
     } finally {
       if (epoch === operationEpochRef.current) setSubmitting(false);
     }
@@ -228,7 +233,7 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
     if (!originText || !stepText || !Number.isFinite(origin) || Math.abs(origin) > 1_000_000_000
       || !Number.isFinite(step) || step < 0.000001 || step > 1_000_000_000
       || unitLength < 1 || unitLength > 20 || /[\u0000-\u001f\u007f-\u009f]/u.test(unit)) {
-      setOperationError("请检查起点数值、刻度间隔和单位范围。");
+      setOperationError(t("请检查起点数值、刻度间隔和单位范围。"));
       return;
     }
     setOperationError(null);
@@ -244,7 +249,7 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
           return;
         }
         const latest = axis.getSnapshot();
-        setOperationError(latest.error ?? "时间轴设置未能保存，请重试。");
+        setOperationError(latest.error ?? t("时间轴设置未能保存，请重试。"));
         return;
       } else if (!snapshot.error) {
         return;
@@ -254,10 +259,10 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
       const saved = await axis.retry();
       if (epoch !== operationEpochRef.current) return;
       if (saved) discardDraft();
-      else setOperationError(axis.getSnapshot().error ?? "时间轴设置保存失败，请重试。");
+      else setOperationError(axis.getSnapshot().error ?? t("时间轴设置保存失败，请重试。"));
     } catch (error) {
       if (epoch !== operationEpochRef.current) return;
-      setOperationError(error instanceof Error ? error.message : "时间轴设置未能保存，请重试。");
+      setOperationError(error instanceof Error ? error.message : t("时间轴设置未能保存，请重试。"));
     } finally {
       if (epoch === operationEpochRef.current) setSubmitting(false);
     }
@@ -289,6 +294,7 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
     const {width, height} = frame.current?.getBoundingClientRect() ?? size;
     if (width <= 0 || height <= 0) return;
     const event = eventSnapshot.events.find(item => item.id === searchEventId);
+    let located = false;
     if (event && snapshot.loaded && eventSnapshot.loaded) {
       const {center, zoom} = viewport.getSnapshot();
       const settings = snapshot.settings;
@@ -304,9 +310,10 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
         const actualX = viewport.getSnapshot().center.x;
         // Large jumps between distant offsets can round the relative pan on the first pass.
         if (actualX !== target.x) viewport.panBy((actualX - target.x) * zoom, 0);
+        located = !viewport.getSnapshot().disposed;
       }
     }
-    onSearchEventHandled?.();
+    onSearchEventHandled?.(located);
   }, [searchEventId, onSearchEventHandled, openToken, active, snapshot, eventSnapshot, size, viewport, scaleTextWithZoom]);
 
   useLayoutEffect(() => {
@@ -528,26 +535,26 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
 
   return <div className="timeline-canvas-frame" ref={frame} onPointerDownCapture={finishGrowth} onWheelCapture={finishGrowth}
     onKeyDownCapture={finishGrowth} onFocusCapture={finishGrowth}>
-    <Surface viewport={viewport} active={surfaceActive} label={`${title}时间轴`} grid="none" showControls={!relationFocused}
-      zoomControls={<TimelineTextZoomSwitch checked={scaleTextWithZoom} disabled={!surfaceActive || view.disposed}
+    <Surface viewport={viewport} active={surfaceActive} label={t("{title}时间轴", {values: {title}})} grid="none" showControls={!relationFocused}
+      zoomControls={<TimelineTextZoomSwitch t={t} checked={scaleTextWithZoom} disabled={!surfaceActive || view.disposed}
         onChange={canvasView.setScaleTextWithZoom} />}>
       {snapshot.loaded && geometry.width > 0 && geometry.height > 0 && <div className="timeline-axis-overlay" style={axisOverlayStyle}>
         <svg className="timeline-axis-svg" role="img"
-          aria-label={`${title}，单位${snapshot.settings.unit}，故事起点为${formatTimelineAxisValue(snapshot.settings.origin)}`}
+          aria-label={t("{title}，单位{unit}，故事起点为{value}", {values: {title, unit: displayTimelineUnit(t, snapshot.settings.unit), value: formatTimelineAxisValue(snapshot.settings.origin)}})}
           width={geometry.width} height={geometry.height}
           viewBox={`0 0 ${geometry.width} ${geometry.height}`}>
-          <title>{`${title}时间轴：原点 ${formatTimelineAxisValue(snapshot.settings.origin)} ${snapshot.settings.unit}`}</title>
+          <title>{t("{title}时间轴：原点 {value} {unit}", {values: {title, value: formatTimelineAxisValue(snapshot.settings.origin), unit: displayTimelineUnit(t, snapshot.settings.unit)}})}</title>
           <defs />
           {axisVisible && <g className="timeline-axis">
             <line ref={axisLine} className="timeline-axis-line" x1="0" x2={geometry.width - 12} y1={axisScreenY} y2={axisScreenY}/>
-            <AxisTicks ticks={geometry.ticks} axisY={axisScreenY} worldHalfWidth={worldHalfWidth} zoom={view.zoom}/>
+            <AxisTicks t={t} ticks={geometry.ticks} axisY={axisScreenY} worldHalfWidth={worldHalfWidth} zoom={view.zoom}/>
             <path className="timeline-axis-arrow" d={`M ${geometry.width - 12} ${axisScreenY - 4} L ${geometry.width - 2} ${axisScreenY} L ${geometry.width - 12} ${axisScreenY + 4} Z`}/>
           </g>}
         </svg>
       </div>}
-      {snapshot.loaded && <TimelineEvents canvas={canvas} contextMenus={contextMenus} assetCatalog={assetCatalog} assetRelations={assetRelations}
+      {snapshot.loaded && <TimelineEvents t={t} canvas={canvas} contextMenus={contextMenus} assetCatalog={assetCatalog} assetRelations={assetRelations}
         store={events} settings={snapshot.settings} view={view} size={size}
-        openToken={openToken}
+        openToken={openToken} highlightedEventId={highlightedEventId}
         growthGeometryRef={growthGeometry}
         growthStemsRef={growthStems}
         axisLabelBounds={geometry.labelBounds}
@@ -558,48 +565,48 @@ export function TimelineCanvas({canvas, contextMenus, assetCatalog, assetRelatio
 
     <div className="timeline-axis-unit" style={{top: unitTop}}>
       <Button variant="ghost" disabled={!active || eventEditing || !snapshot.loaded || snapshot.blocked || snapshot.loading} onClick={beginEditing}>
-        单位：{snapshot.loaded ? snapshot.settings.unit : "—"}
+        {t("单位：{unit}", {values: {unit: snapshot.loaded ? displayTimelineUnit(t, snapshot.settings.unit) : "—"}})}
       </Button>
     </div>
 
     {!snapshot.loading && snapshot.error && <div className="timeline-axis-feedback" role="alert">
       <span>{snapshot.error}</span>
-      <Button variant="ghost" disabled={!active || snapshot.loading || snapshot.saving || submitting} onClick={() => void retrySettings()}>重试</Button>
+      <Button variant="ghost" disabled={!active || snapshot.loading || snapshot.saving || submitting} onClick={() => void retrySettings()}>{t("重试")}</Button>
     </div>}
-    {snapshot.loading && <div className="timeline-axis-feedback" role="status">正在读取时间轴设置…</div>}
+    {snapshot.loading && <div className="timeline-axis-feedback" role="status">{t("正在读取时间轴设置…")}</div>}
 
     <Dialog open={editing && active} onOpenChange={open => {
       if (!open && (!draftDirty || snapshot.error) && !snapshot.saving && !submitting) discardDraft();
-    }} title="时间轴设置" size="narrow" description="设置故事起点和刻度，左侧递减，右侧递增。"
+    }} title={t("时间轴设置")} size="narrow" description={t("设置故事起点和刻度，左侧递减，右侧递增。")}
       busy={snapshot.saving || submitting} initialFocus={originInput}>
       <form className="timeline-axis-form" onSubmit={submitSettings}>
-        <label className="timeline-axis-field"><span>故事起点数值</span>
+        <label className="timeline-axis-field"><span>{t("故事起点数值")}</span>
           <TextField ref={originInput} name="origin" type="number" min="-1000000000" max="1000000000" step="any" required value={draft?.origin ?? ""}
             onChange={event => { setOperationError(null); setDraft(current => current ? {...current, origin: event.target.value} : current); }}
             aria-describedby="timeline-axis-origin-help"
             aria-invalid={Boolean(draft?.origin.trim()) && (!Number.isFinite(parsedOrigin) || Math.abs(parsedOrigin) > 1_000_000_000) || undefined}
             disabled={submitting || snapshot.saving}/>
-          <span id="timeline-axis-origin-help" className="timeline-axis-field-help">故事开始时的数值，例如 100。</span>
+          <span id="timeline-axis-origin-help" className="timeline-axis-field-help">{t("故事开始时的数值，例如 100。")}</span>
         </label>
-        <label className="timeline-axis-field"><span>主刻度间隔</span>
+        <label className="timeline-axis-field"><span>{t("主刻度间隔")}</span>
           <TextField name="step" type="number" min="0.000001" max="1000000000" step="any" required value={draft?.step ?? ""}
             onChange={event => { setOperationError(null); setDraft(current => current ? {...current, step: event.target.value} : current); }}
             aria-describedby="timeline-axis-step-help"
             aria-invalid={Boolean(draft?.step.trim()) && (!Number.isFinite(parsedStep) || parsedStep < 0.000001 || parsedStep > 1_000_000_000) || undefined}
             disabled={submitting || snapshot.saving}/>
-          <span id="timeline-axis-step-help" className="timeline-axis-field-help">相邻主刻度的数值增量。</span>
+          <span id="timeline-axis-step-help" className="timeline-axis-field-help">{t("相邻主刻度的数值增量。")}</span>
         </label>
-        <label className="timeline-axis-field"><span>单位</span>
+        <label className="timeline-axis-field"><span>{t("单位")}</span>
           <TextField name="unit" type="text" required value={draft?.unit ?? ""}
             onChange={event => { setOperationError(null); setDraft(current => current ? {...current, unit: event.target.value} : current); }}
             aria-describedby="timeline-axis-unit-help" disabled={submitting || snapshot.saving}/>
-          <span id="timeline-axis-unit-help" className="timeline-axis-field-help">1–20 个字符，例如天、年或轮次。</span>
+          <span id="timeline-axis-unit-help" className="timeline-axis-field-help">{t("1–20 个字符，例如天、年或轮次。")}</span>
         </label>
-        {(operationError || snapshot.error) && <p className="timeline-axis-form-error" role="alert">{operationError ?? snapshot.error}</p>}
+        {(operationError || snapshot.error) && <p className="timeline-axis-form-error" role="alert">{t(operationError ?? snapshot.error ?? "")}</p>}
         <DialogActions>
-          <Button variant="secondary" type="button" disabled={snapshot.saving || submitting} onClick={discardDraft}>取消</Button>
+          <Button variant="secondary" type="button" disabled={snapshot.saving || submitting} onClick={discardDraft}>{t("取消")}</Button>
           <Button type="submit" variant="primary" disabled={snapshot.saving || submitting || !inputValid || (!draftDirty && !snapshot.error)}>
-            {snapshot.saving || submitting ? "正在保存…" : snapshot.error && (!draftDirty || snapshot.saveState === "error") ? "重试保存" : "保存设置"}
+            {snapshot.saving || submitting ? t("正在保存…") : snapshot.error && (!draftDirty || snapshot.saveState === "error") ? t("重试保存") : t("保存设置")}
           </Button>
         </DialogActions>
       </form>

@@ -1,3 +1,4 @@
+import {i18nKey} from "@lodestory/sdk/i18n";
 import type {Plugin} from "@lodestory/sdk";
 import {documentsKey, documentCreateRequested, documentRevealRequested, projectDocumentCatalogKey} from "@lodestory/sdk/documents";
 import {layoutKey} from "@lodestory/sdk/layout";
@@ -13,11 +14,12 @@ import "./project-management.css";
 export function createProjectManagementPlugin(): Plugin {
     let cleanup: (() => Promise<void>) | undefined;
     return {
-        id: "project-management", requires: [workbenchKey, documentsKey, layoutKey, uiKey, projectSearchKey, shortcutsKey], provides: [projectDocumentCatalogKey],
+        id: "project-management", requires: [workbenchKey, documentsKey, layoutKey, uiKey, projectSearchKey, shortcutsKey, i18nKey], provides: [projectDocumentCatalogKey],
         activate(context) {
             const workbench = context.get(workbenchKey);
             const documents = context.get(documentsKey);
             const layout = context.get(layoutKey);
+            const i18n = context.get(i18nKey);
             const ui = context.get(uiKey);
             const search = context.get(projectSearchKey);
             const shortcuts = context.get(shortcutsKey);
@@ -183,11 +185,11 @@ export function createProjectManagementPlugin(): Plugin {
             }));
             removers.push(context.track(layout.registerContent({
                 id: "project-management.files", title: "工程文件", role: "navigation",
-                render: ({active: visible}) => <ProjectFiles workbench={workbench} models={models} shortcuts={shortcuts} active={visible}/>,
+                render: ({active: visible}) => <ProjectFiles i18n={i18n} workbench={workbench} models={models} shortcuts={shortcuts} active={visible}/>,
             })));
             removers.push(context.track(ui.addWrapper({
                 id: "project-management.dialogs", order: 50,
-                wrap: children => <>{children}<ProjectDialogs workbench={workbench} models={models}/></>,
+                wrap: children => <>{children}<ProjectDialogs i18n={i18n} workbench={workbench} models={models}/></>,
             })));
         },
         async deactivate() {

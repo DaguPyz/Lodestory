@@ -8,6 +8,7 @@ function setup({wrapperError, invokeHandler} = {}) {
   const {workbenchKey} = sdk("@lodestory/sdk/workbench");
   const {documentsKey, documentCreateRequested, documentRevealRequested} = sdk("@lodestory/sdk/documents");
   const {layoutKey} = sdk("@lodestory/sdk/layout");
+  const {i18nKey} = sdk("@lodestory/sdk/i18n");
   const {uiKey} = sdk("@lodestory/sdk/ui");
   const {projectSearchKey} = sdk("@lodestory/sdk/project-search");
   const {shortcutsKey, shortcutCommandIds, shortcutScopeIds} = sdk("@lodestory/sdk/shortcuts");
@@ -102,6 +103,7 @@ function setup({wrapperError, invokeHandler} = {}) {
       if (key === workbenchKey) return workbench;
       if (key === documentsKey) return documents;
       if (key === layoutKey) return layout;
+      if (key === i18nKey) return undefined;
       if (key === uiKey) return ui;
       if (key === projectSearchKey) return {registerSource() { return () => {}; }};
       if (key === shortcutsKey) return shortcuts;
@@ -174,7 +176,9 @@ test("project management registers its own navigation and a dialog wrapper indep
   const {uiKey} = f.fixture.requireSdk("@lodestory/sdk/ui");
   const {projectSearchKey} = f.fixture.requireSdk("@lodestory/sdk/project-search");
   const {shortcutsKey} = f.fixture.requireSdk("@lodestory/sdk/shortcuts");
-  assert.deepEqual(Array.from(f.plugin.requires, key => key.id), [workbenchKey.id, documentsKey.id, layoutKey.id, uiKey.id, projectSearchKey.id, shortcutsKey.id]);
+  const {i18nKey} = f.fixture.requireSdk("@lodestory/sdk/i18n");
+  assert.deepEqual(Array.from(f.plugin.requires, key => key.id),
+    [workbenchKey.id, documentsKey.id, layoutKey.id, uiKey.id, projectSearchKey.id, shortcutsKey.id, i18nKey.id]);
   assert.deepEqual(Array.from(f.plugin.provides, key => key.id), ["app/project-document-catalog"]);
   f.plugin.activate(f.context);
   assert.equal(f.contributions.length, 1);

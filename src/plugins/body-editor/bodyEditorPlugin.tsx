@@ -1,3 +1,4 @@
+import {i18nKey} from "@lodestory/sdk/i18n";
 import type {Plugin} from "@lodestory/sdk";
 import {documentCreateRequested, documentRevealRequested, documentsKey} from "@lodestory/sdk/documents";
 import {layoutKey, type LayoutContent} from "@lodestory/sdk/layout";
@@ -21,12 +22,13 @@ export function createBodyEditorPlugin(): Plugin {
   let removeConfig: (() => void) | undefined;
   return {
     id: "body-editor",
-    requires: [workbenchKey, documentsKey, layoutKey, uiKey, configKey],
+    requires: [workbenchKey, documentsKey, layoutKey, uiKey, configKey, i18nKey],
     provides: [bodyEditorKey],
     activate(context) {
       const workbench = context.get(workbenchKey);
       const documents = context.get(documentsKey);
       const layout = context.get(layoutKey);
+      const i18n = context.get(i18nKey);
       const ui = context.get(uiKey);
       const config = context.get(configKey);
       removeConfig = config.register(bodyEditorDefaultEditorsConfig);
@@ -74,7 +76,7 @@ export function createBodyEditorPlugin(): Plugin {
         },
       }));
       const contents: LayoutContent[] = [
-        {id: bodyEditorContentIds.main, title: "正文编辑", role: "main", render: props => <BodyEditor {...props}/>},
+        {id: bodyEditorContentIds.main, title: "正文编辑", role: "main", render: props => <BodyEditor {...props} i18n={i18n}/>},
       ];
       for (const content of contents) {
         removeContents.push(context.track(layout.registerContent({...content, render: props =>

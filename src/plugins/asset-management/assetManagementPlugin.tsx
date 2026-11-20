@@ -1,3 +1,4 @@
+import {i18nKey} from "@lodestory/sdk/i18n";
 import type {Plugin} from "@lodestory/sdk";
 import {flushSync} from "react-dom";
 import {contextMenuKey} from "@lodestory/sdk/context-menu";
@@ -43,11 +44,12 @@ export function createAssetManagementPlugin(): Plugin {
 
   return {
     id: "asset-management",
-    requires: [layoutKey, workbenchKey, projectStorageKey, contextMenuKey, projectSearchKey, backgroundTasksKey],
+    requires: [layoutKey, workbenchKey, projectStorageKey, contextMenuKey, projectSearchKey, backgroundTasksKey, i18nKey],
     provides: [assetCatalogKey, assetEditorKey],
     async activate(context) {
       alive = true;
       const layout = context.get(layoutKey);
+      const i18n = context.get(i18nKey);
       const workbench = context.get(workbenchKey);
       const storage = context.get(projectStorageKey);
       const contextMenus = context.get(contextMenuKey);
@@ -71,7 +73,7 @@ export function createAssetManagementPlugin(): Plugin {
           role: "navigation",
           order: 20,
           icon: <Icon name="assets"/>,
-          render: ({active}) => <AssetTypeNavigation workbench={workbench} sessions={sessions} contextMenus={contextMenus}
+          render: ({active}) => <AssetTypeNavigation i18n={i18n} workbench={workbench} sessions={sessions} contextMenus={contextMenus}
             active={active} onOpenTypes={onOpenTypes} onOpenAssets={onOpenAssets}/>,
         }));
         removeMain = context.track(layout.registerContent({
@@ -79,7 +81,7 @@ export function createAssetManagementPlugin(): Plugin {
           title: "模板设置",
           role: "main",
           order: 20,
-          render: ({active}) => <AssetTypeEditor workbench={workbench} sessions={sessions} contextMenus={contextMenus}
+          render: ({active}) => <AssetTypeEditor i18n={i18n} workbench={workbench} sessions={sessions} contextMenus={contextMenus}
             active={active} onOpenTypes={onOpenTypes} onOpenAssets={onOpenAssets}/>,
         }));
         removeAssets = context.track(layout.registerContent({
@@ -87,7 +89,7 @@ export function createAssetManagementPlugin(): Plugin {
           title: "对象管理",
           role: "main",
           order: 21,
-          render: ({active}) => <AssetRecordsEditor workbench={workbench} sessions={sessions} contextMenus={contextMenus}
+          render: ({active}) => <AssetRecordsEditor i18n={i18n} workbench={workbench} sessions={sessions} contextMenus={contextMenus}
             active={active} onOpenTypes={onOpenTypes} assetEditor={panels.service}/>,
         }));
         removeParticipant = context.track(workbench.registerParticipant({

@@ -1,3 +1,4 @@
+import {i18nKey} from "@lodestory/sdk/i18n";
 import type {Plugin} from "@lodestory/sdk";
 import {layoutKey} from "@lodestory/sdk/layout";
 import {workbenchKey} from "@lodestory/sdk/workbench";
@@ -12,20 +13,21 @@ export function createOutlineDesignPlugin(): Plugin {
   let removeContent: (() => void) | undefined;
   return {
     id: "outline-design",
-    requires: [layoutKey, workbenchKey, contextMenuKey, timelineKey],
+    requires: [layoutKey, workbenchKey, contextMenuKey, timelineKey, i18nKey],
     provides: [],
     activate(context) {
       const layout = context.get(layoutKey);
       const workbench = context.get(workbenchKey);
       const contextMenus = context.get(contextMenuKey);
       const timelines = context.get(timelineKey);
+      const i18n = context.get(i18nKey);
       removeContent = context.track(layout.registerContent({
         id: "outline-design.navigation",
         title: "大纲设计",
         role: "navigation",
         order: 10,
         icon: <Icon name="outline"/>,
-        render: ({active}) => <OutlineDesignPanel workbench={workbench} contextMenus={contextMenus}
+        render: ({active}) => <OutlineDesignPanel i18n={i18n} workbench={workbench} contextMenus={contextMenus}
           timelines={timelines} active={active}/>,
       }));
     },

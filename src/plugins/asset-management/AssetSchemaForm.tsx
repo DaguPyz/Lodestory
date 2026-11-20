@@ -1,3 +1,4 @@
+import type {Translate} from "@lodestory/sdk/i18n";
 import {useState, type FormEvent, type RefObject} from "react";
 import {Button, DialogActions, Icon, IconButton, Select, Textarea, TextField, type SelectOption} from "@lodestory/ui";
 import type {AssetFieldOption, AssetSchemaStore, AssetTypeTemplate, AssetValueType} from "./assetSchemaStore";
@@ -9,6 +10,7 @@ export type AssetSchemaDraft =
   | {kind: "newField" | "renameField"; id: string; ownerKind?: "type" | "asset"; typeId: string; title: string; valueType: AssetValueType; options: AssetFieldOption[]; targetTypeId: string | null; defaultText: string; defaultOptions: string[]};
 
 export type AssetSchemaFormProps = {
+  t: Translate;
   draft: AssetSchemaDraft;
   types: readonly AssetTypeTemplate[];
   busy: boolean;
@@ -48,23 +50,23 @@ function isSelectValueType(valueType: AssetValueType): boolean {
   return valueType === "singleSelect" || valueType === "multiSelect";
 }
 
-export function AssetSchemaForm({draft, types, busy, error, inputRef, onChange, onCancel, onSubmit, store}: AssetSchemaFormProps) {
+export function AssetSchemaForm({t, draft, types, busy, error, inputRef, onChange, onCancel, onSubmit, store}: AssetSchemaFormProps) {
   const [validationError, setValidationError] = useState<string | null>(null);
   const hasPendingSave = store.getSnapshot().dirty;
   const fieldsDisabled = busy || hasPendingSave;
   const isAssetField = !isTypeDraft(draft) && draft.ownerKind === "asset";
-  const valueLabel = isAssetField ? "字段值" : "默认值";
-  const emptyValueLabel = isAssetField ? "不填写字段值" : "不设置默认值";
+  const valueLabel = isAssetField ? t("字段值") : t("默认值");
+  const emptyValueLabel = isAssetField ? t("不填写字段值") : t("不设置默认值");
 
   function validateType(): string | null {
     if (!isTypeDraft(draft)) return null;
     const name = draft.name.trim();
     const nameLength = characterCount(name);
-    if (nameLength < 1 || nameLength > 60) return "模板名称需要填写 1–60 个字符。";
-    if (characterCount(draft.description) > 200) return "模板说明不能超过 200 个字符。";
-    if (draft.color !== null && !isAssetColor(draft.color)) return "颜色需要使用 #RRGGBB 格式。";
+    if (nameLength < 1 || nameLength > 60) return t("模板名称需要填写 1–60 个字符。");
+    if (characterCount(draft.description) > 200) return t("模板说明不能超过 200 个字符。");
+    if (draft.color !== null && !isAssetColor(draft.color)) return t("颜色需要使用 #RRGGBB 格式。");
     if (types.some(type => type.id !== draft.id && type.status === "active" && normalizedName(type.name) === normalizedName(name))) {
-      return "已存在同名的资产模板。";
+      return t("已存在同名的资产模板。");
     }
     return null;
   }
@@ -73,46 +75,46 @@ export function AssetSchemaForm({draft, types, busy, error, inputRef, onChange, 
     if (isTypeDraft(draft)) return null;
     const title = draft.title.trim();
     const titleLength = characterCount(title);
-    if (titleLength < 1 || titleLength > 60) return "字段名称需要填写 1–60 个字符。";
+    if (titleLength < 1 || titleLength > 60) return t("字段名称需要填写 1–60 个字符。");
     const ownerKind = draft.ownerKind ?? "type";
     if (ownerKind === "type") {
       const type = types.find(item => item.id === draft.typeId);
-      if (!type || type.status !== "active") return "请选择一个可用的资产模板。";
+      if (!type || type.status !== "active") return t("请选择一个可用的资产模板。");
     } else if (!store.getSnapshot().assets.some(asset => asset.id === draft.typeId)) {
-      return "所属对象不存在，请重新选择。";
+      return t("所属对象不存在，请重新选择。");
     }
 
     const existingTitle = store.getSnapshot().fields.some(field => field.owner.kind === ownerKind && field.owner.id === draft.typeId
       && field.id !== (draft.kind === "renameField" ? draft.id : "")
       && field.status === "active"
       && normalizedName(field.title) === normalizedName(title));
-    if (existingTitle) return ownerKind === "asset" ? "该对象中已存在同名字段。" : "该模板中已存在同名字段。";
+    if (existingTitle) return ownerKind === "asset" ? t("该对象中已存在同名字段。") : t("该模板中已存在同名字段。");
 
     if (draft.kind === "renameField") return null;
 
     if (isSelectValueType(draft.valueType)) {
-      if (draft.options.length < 1 || draft.options.length > 100) return "单选和多选字段需要 1–100 个选项。";
+      if (draft.options.length < 1 || draft.options.length > 100) return t("单选和多选字段需要 1–100 个选项。");
       const optionTitles = new Set<string>();
       for (const option of draft.options) {
         const optionTitle = option.title.trim();
         const optionLength = characterCount(optionTitle);
-        if (optionLength < 1 || optionLength > 60) return "每个选项标题需要填写 1–60 个字符。";
+        if (optionLength < 1 || optionLength > 60) return t("每个选项标题需要填写 1–60 个字符。");
         const key = normalizedName(optionTitle);
-        if (optionTitles.has(key)) return "同一字段中的选项标题不能重复。";
+        if (optionTitles.has(key)) return t("同一字段中的选项标题不能重复。");
         optionTitles.add(key);
       }
       if (draft.defaultOptions.some(id => !draft.options.some(option => option.id === id))) {
-        return isAssetField ? "字段值必须来自当前字段的选项。" : "默认选项必须来自当前字段的选项。";
+        return isAssetField ? t("字段值必须来自当前字段的选项。") : t("默认选项必须来自当前字段的选项。");
       }
-      if (draft.valueType === "singleSelect" && draft.defaultOptions.length > 1) return isAssetField ? "单选字段只能选择一个值。" : "单选字段只能设置一个默认选项。";
+      if (draft.valueType === "singleSelect" && draft.defaultOptions.length > 1) return isAssetField ? t("单选字段只能选择一个值。") : t("单选字段只能设置一个默认选项。");
     } else if (draft.valueType === "number" && draft.defaultText.trim() !== "") {
       const numericDefault = Number(draft.defaultText);
-      if (!Number.isFinite(numericDefault)) return isAssetField ? "字段值必须是有效数字。" : "数字默认值必须是有效数字。";
+      if (!Number.isFinite(numericDefault)) return isAssetField ? t("字段值必须是有效数字。") : t("数字默认值必须是有效数字。");
     }
 
     if (draft.valueType === "reference" && draft.targetTypeId !== null
       && !types.some(type => type.id === draft.targetTypeId && type.status === "active")) {
-      return "关联资产模板无效，请重新选择。";
+      return t("关联资产模板无效，请重新选择。");
     }
     return null;
   }
@@ -192,43 +194,43 @@ export function AssetSchemaForm({draft, types, busy, error, inputRef, onChange, 
   }
 
   const displayedError = validationError ?? error;
-  const submitLabel = busy ? "保存中…"
-    : hasPendingSave || error?.includes("保存") ? "重试保存"
-      : draft.kind === "newType" ? "创建模板"
-        : draft.kind === "newField" ? "添加字段" : "保存";
+  const submitLabel = busy ? t("保存中…")
+    : hasPendingSave || error?.includes(t("保存")) ? t("重试保存")
+      : draft.kind === "newType" ? t("创建模板")
+        : draft.kind === "newField" ? t("添加字段") : t("保存");
 
   return <form className="asset-schema-form" onSubmit={handleSubmit} aria-busy={busy || undefined} noValidate>
     {isTypeDraft(draft) ? <>
       <label className="asset-form-field">
-        <span>模板名称</span>
+        <span>{t("模板名称")}</span>
         <TextField ref={inputRef} autoFocus={false} value={draft.name} disabled={fieldsDisabled} autoComplete="off"
-          placeholder="例如：人物、兵器、功法"
-          aria-label="模板名称" aria-describedby="asset-type-name-help"
+          placeholder={t("例如：人物、兵器、功法")}
+          aria-label={t("模板名称")} aria-describedby="asset-type-name-help"
           onChange={event => {onChange({...draft, name: event.currentTarget.value}); setValidationError(null);}} />
         <span className="asset-form-help" id="asset-type-name-help">{characterCount(draft.name.trim())}/60</span>
       </label>
       <label className="asset-form-field">
-        <span>模板说明</span>
-        <Textarea value={draft.description} disabled={fieldsDisabled} aria-label="模板说明"
+        <span>{t("模板说明")}</span>
+        <Textarea value={draft.description} disabled={fieldsDisabled} aria-label={t("模板说明")}
           onChange={event => {onChange({...draft, description: event.currentTarget.value}); setValidationError(null);}} />
         <span className="asset-form-help">{characterCount(draft.description)}/200</span>
       </label>
-      <AssetColorPicker value={draft.color} disabled={fieldsDisabled} target="左侧列表选项"
+      <AssetColorPicker t={t} value={draft.color} disabled={fieldsDisabled} target={t("左侧列表选项")}
         onChange={color => {onChange({...draft, color}); setValidationError(null);}}/>
     </> : <>
       <label className="asset-form-field">
-        <span>字段名称</span>
+        <span>{t("字段名称")}</span>
         <TextField ref={inputRef} value={draft.title} disabled={fieldsDisabled} autoComplete="off"
-          placeholder="例如：别名、品阶、材质"
-          aria-label="字段名称" aria-describedby="asset-field-title-help"
+          placeholder={t("例如：别名、品阶、材质")}
+          aria-label={t("字段名称")} aria-describedby="asset-field-title-help"
           onChange={event => {onChange({...draft, title: event.currentTarget.value}); setValidationError(null);}} />
         <span className="asset-form-help" id="asset-field-title-help">{characterCount(draft.title.trim())}/60</span>
       </label>
 
       {draft.kind === "newField" && <>
         <label className="asset-form-field">
-          <span>字段类型</span>
-          <Select value={draft.valueType} options={VALUE_TYPE_OPTIONS} disabled={fieldsDisabled} aria-label="字段类型"
+          <span>{t("字段类型")}</span>
+          <Select value={draft.valueType} options={VALUE_TYPE_OPTIONS.map(option => ({...option, label: t(option.label)}))} disabled={fieldsDisabled} aria-label={t("字段类型")}
             onValueChange={value => {
               const valueType = value as AssetValueType;
               const options = isSelectValueType(valueType) && draft.options.length === 0 ? [makeOption()] : draft.options;
@@ -239,12 +241,12 @@ export function AssetSchemaForm({draft, types, busy, error, inputRef, onChange, 
 
         {isSelectValueType(draft.valueType) && <div className="asset-option-fields">
           <div className="asset-form-field">
-            <span>选项</span>
+            <span>{t("选项")}</span>
             <div className="asset-option-list">
               {draft.options.map((option, index) => <div className="asset-option-row" key={option.id}>
-                <TextField value={option.title} disabled={fieldsDisabled} autoComplete="off" aria-label={`选项 ${index + 1}`}
+                <TextField value={option.title} disabled={fieldsDisabled} autoComplete="off" aria-label={t("选项 {value}", {values: {value: index + 1}})}
                   onChange={event => updateOption(option.id, event.currentTarget.value)} />
-                <IconButton label={`删除选项 ${index + 1}`} disabled={fieldsDisabled || draft.options.length <= 1}
+                <IconButton label={t("删除选项 {value}", {values: {value: index + 1}})} disabled={fieldsDisabled || draft.options.length <= 1}
                   onClick={() => updateOptionList(draft.options.filter(item => item.id !== option.id))}>
                   <Icon name="close" size="small" />
                 </IconButton>
@@ -252,16 +254,15 @@ export function AssetSchemaForm({draft, types, busy, error, inputRef, onChange, 
             </div>
             <Button variant="ghost" type="button" disabled={fieldsDisabled || draft.options.length >= 100}
               onClick={() => updateOptionList([...draft.options, makeOption()])}>
-              <Icon name="plus" size="small" /> 添加选项
-            </Button>
-            <span className="asset-form-help">可添加 1–100 个选项</span>
+              <Icon name="plus" size="small" /> {t("添加选项")}</Button>
+            <span className="asset-form-help">{t("可添加 1–100 个选项")}</span>
           </div>
 
           <div className="asset-form-field">
-            <span>{valueLabel} <span className="asset-optional">选填</span></span>
+            <span>{valueLabel} <span className="asset-optional">{t("选填")}</span></span>
             {draft.valueType === "singleSelect" ? <Select value={draft.defaultOptions[0] ?? ""}
-              options={[{value: "", label: emptyValueLabel}, ...draft.options.map((option, index) => ({value: option.id, label: option.title.trim() || `选项 ${index + 1}`}))]}
-              disabled={fieldsDisabled} placeholder={emptyValueLabel} aria-label={isAssetField ? "字段值" : "默认选项"}
+              options={[{value: "", label: emptyValueLabel}, ...draft.options.map((option, index) => ({value: option.id, label: option.title.trim() || t("选项 {value}", {values: {value: index + 1}})}))]}
+              disabled={fieldsDisabled} placeholder={emptyValueLabel} aria-label={isAssetField ? t("字段值") : t("默认选项")}
               onValueChange={value => {onChange({...draft, defaultOptions: value === "" ? [] : [value]}); setValidationError(null);}} />
               : <div className="asset-default-options">
                 {draft.options.map((option, index) => <label className="asset-default-check" key={option.id}>
@@ -270,28 +271,28 @@ export function AssetSchemaForm({draft, types, busy, error, inputRef, onChange, 
                       onChange={event => {setDefaultOption(option.id, event.currentTarget.checked); setValidationError(null);}} />
                     <Icon name="check" size="small" />
                   </span>
-                  <span>{option.title.trim() || `选项 ${index + 1}`}</span>
+                  <span>{option.title.trim() || t("选项 {value}", {values: {value: index + 1}})}</span>
                 </label>)}
               </div>}
           </div>
         </div>}
 
         {draft.valueType === "reference" && <label className="asset-form-field">
-          <span>关联资产模板</span>
-          <Select value={draft.targetTypeId ?? ""} disabled={fieldsDisabled} aria-label="关联资产模板" placeholder="任意对象"
-            options={[{value: "", label: "任意对象"}, ...types.filter(type => type.status === "active").map(type => ({value: type.id, label: type.name}))]}
+          <span>{t("关联资产模板")}</span>
+          <Select value={draft.targetTypeId ?? ""} disabled={fieldsDisabled} aria-label={t("关联资产模板")} placeholder={t("任意对象")}
+            options={[{value: "", label: t("任意对象")}, ...types.filter(type => type.status === "active").map(type => ({value: type.id, label: type.name}))]}
             onValueChange={value => {onChange({...draft, targetTypeId: value === "" ? null : value}); setValidationError(null);}} />
-          <span className="asset-form-help">不指定模板时，可关联任意对象。</span>
+          <span className="asset-form-help">{t("不指定模板时，可关联任意对象。")}</span>
         </label>}
 
         {(draft.valueType === "text" || draft.valueType === "number") && <label className="asset-form-field">
-          <span>{valueLabel} <span className="asset-optional">选填</span></span>
+          <span>{valueLabel} <span className="asset-optional">{t("选填")}</span></span>
           {draft.valueType === "number" ? <TextField type="number" defaultValue={draft.defaultText} disabled={fieldsDisabled}
             step="any" aria-label={valueLabel}
             onInput={event => {
               const input = event.currentTarget;
               if (input.validity.badInput) {
-                input.setCustomValidity("请输入有效数字。");
+                input.setCustomValidity(t("请输入有效数字。"));
                 return;
               }
               input.setCustomValidity("");
@@ -303,10 +304,10 @@ export function AssetSchemaForm({draft, types, busy, error, inputRef, onChange, 
       </>}
     </>}
 
-    {displayedError && <p className="asset-form-error" role="alert">{displayedError}</p>}
+    {displayedError && <p className="asset-form-error" role="alert">{t(displayedError)}</p>}
 
     <DialogActions>
-      <Button variant="secondary" type="button" disabled={busy} onClick={onCancel}>{hasPendingSave ? "关闭" : "取消"}</Button>
+      <Button variant="secondary" type="button" disabled={busy} onClick={onCancel}>{hasPendingSave ? t("关闭") : t("取消")}</Button>
       <Button type="submit" variant="primary" disabled={busy}>{submitLabel}</Button>
     </DialogActions>
   </form>;

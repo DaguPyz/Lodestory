@@ -110,9 +110,10 @@ test("canvas plugin owns independent surfaces and releases outstanding viewports
   const f = createMainFixture();
   const plugin = f.loadModule("plugins/canvas/canvasPlugin.tsx").createCanvasPlugin();
   const key = f.requireSdk("@lodestory/sdk/canvas").canvasKey;
+  const {i18nKey} = f.requireSdk("@lodestory/sdk/i18n");
   let service;
-  plugin.activate({provide(providedKey, value) { assert.strictEqual(providedKey, key); service = value; }});
-  assert.equal(plugin.requires.length, 0, "the canvas provider does not depend on project or outline services");
+  plugin.activate({get(requested) { assert.strictEqual(requested, i18nKey); return {}; }, provide(providedKey, value) { assert.strictEqual(providedKey, key); service = value; }});
+  assert.deepEqual(Array.from(plugin.requires), [i18nKey], "canvas depends only on the shared language service");
   assert.equal(typeof service.Surface, "function");
   const first = service.createViewport();
   const second = service.createViewport();

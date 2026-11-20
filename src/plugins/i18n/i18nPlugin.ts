@@ -1,6 +1,7 @@
 import type {Plugin} from "@lodestory/sdk";
 import {configKey, type ConfigItem} from "@lodestory/sdk/config";
 import {i18nKey, type I18nService, type I18nSnapshot, type MessageCatalog, type Translate, type Translation} from "@lodestory/sdk/i18n";
+import {sourceText} from "../../utils/sourceText";
 
 const defaultLocale = "zh-CN";
 const locales = Object.freeze([
@@ -57,9 +58,7 @@ function createTranslator(locale: string, catalogs: ReadonlyMap<string, Catalog>
     const translation = messages?.get(source);
     const form = options?.count === undefined ? "other" : plural.select(options.count);
     const text = typeof translation === "string" ? translation : translation?.[form] ?? translation?.other ?? source;
-    const values = options?.values;
-    return values ? text.replace(/\{([A-Za-z][\w]*)\}/g, (token, name: string) =>
-      Object.prototype.hasOwnProperty.call(values, name) ? String(values[name]) : token) : text;
+    return sourceText(text, options);
   };
 }
 

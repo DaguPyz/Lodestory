@@ -1,3 +1,5 @@
+import type {Translate} from "@lodestory/sdk/i18n";
+import {sourceText} from "../../utils/sourceText";
 import type {AssetCatalogSnapshot} from "@lodestory/sdk/asset-catalog";
 import type {AssetRelation} from "@lodestory/sdk/asset-relations";
 
@@ -11,18 +13,18 @@ const preferredGroups = [
 ];
 const categoryColors = [3, 4, 5, 6, 1, 2].map(index => `var(--ui-category-${index}-foreground)`);
 
-export function groupFocusAssets(ids: readonly string[], snapshot: AssetCatalogSnapshot | null) {
+export function groupFocusAssets(ids: readonly string[], snapshot: AssetCatalogSnapshot | null, t: Translate = sourceText) {
   if (!ids.length) return [];
   const assets = new Map(snapshot?.assets.map(asset => [asset.id, asset]));
   const types = new Map(snapshot?.types.map((type, index) => [type.id, {type, index}]));
   const available = Boolean(snapshot?.loaded && !snapshot.blocked && !snapshot.error);
-  const unavailable = available ? "失效关联" : "待确认关联";
+  const unavailable = available ? t("失效关联") : t("待确认关联");
   const groups = new Map<string, FocusGroup>();
   for (const id of ids) {
     const asset = assets.get(id);
     const template = asset?.typeId ? types.get(asset.typeId) : undefined;
     const type = template?.type;
-    const label = type?.name ?? (asset ? (asset.typeId ? "未知分类" : "未分类") : unavailable);
+    const label = type?.name ?? (asset ? (asset.typeId ? t("未知分类") : t("未分类")) : unavailable);
     const groupId = type?.id ?? label;
     let group = groups.get(groupId);
     if (!group) {
@@ -33,8 +35,8 @@ export function groupFocusAssets(ids: readonly string[], snapshot: AssetCatalogS
         rank: sector >= 0 ? sector : preferredGroups.length + (template?.index ?? types.size), items: []};
       groups.set(groupId, group);
     }
-    const name = asset?.name ?? (available ? "资产不可用" : "资产待确认");
-    const detail = !asset ? id.slice(0, 8) : type?.status === "archived" ? `${label}（已归档）` : label;
+    const name = asset?.name ?? (available ? t("资产不可用") : t("资产待确认"));
+    const detail = !asset ? id.slice(0, 8) : type?.status === "archived" ? t("{label}（已归档）", {values: {label}}) : label;
     group.items.push({id, name, detail, known: Boolean(asset),
       title: asset?.description ? `${name} · ${asset.description}` : asset ? name : id});
   }

@@ -1,3 +1,4 @@
+import type {Translate} from "@lodestory/sdk/i18n";
 import {useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type MouseEvent, type ReactNode} from "react";
 import type {AssetCatalog, AssetCatalogSnapshot} from "@lodestory/sdk/asset-catalog";
 import type {AssetRelationNetwork, AssetRelationSnapshot} from "@lodestory/sdk/asset-relations";
@@ -99,7 +100,8 @@ function relationSegment(position: OrbitSlot, center: number, zoom: number, node
   return `M${center} ${center}L${center - offsetX * ratio} ${center - offsetY * ratio}`;
 }
 
-export function TimelineFocusAssets({canvas, event, catalog, network, focusedAsset, origin, size, closing, onFocusAsset, onNavigate, onBack, onExited, children}: {
+export function TimelineFocusAssets({t, canvas, event, catalog, network, focusedAsset, origin, size, closing, onFocusAsset, onNavigate, onBack, onExited, children}: {
+  t: Translate;
   canvas: CanvasService;
   event: TimelineEvent;
   catalog: AssetCatalog | null;
@@ -141,18 +143,18 @@ export function TimelineFocusAssets({canvas, event, catalog, network, focusedAss
     if (focusedAsset) {
       const names = new Map(snapshot?.assets.map(asset => [asset.id, asset.name]));
       for (let asset: FocusedAsset | null = focusedAsset; asset; asset = asset.previous) {
-        path.push({label: names.get(asset.id) ?? (catalogReady ? "资产不可用" : "资产待确认"), target: asset});
+        path.push({label: names.get(asset.id) ?? (catalogReady ? t("资产不可用") : t("资产待确认")), target: asset});
       }
     }
-    path.push({label: event.title, target: "event"}, {label: "时间线", target: "timeline"});
+    path.push({label: event.title, target: "event"}, {label: t("时间线"), target: "timeline"});
     return path.reverse();
   }, [focusedAsset, event.title, snapshot?.assets, catalogReady]);
-  const categoryGroups = useMemo(() => groupFocusAssets(assetIds, snapshot), [assetIds, snapshot]);
+  const categoryGroups = useMemo(() => groupFocusAssets(assetIds, snapshot, t), [assetIds, snapshot, t]);
   const groups = useMemo(() => categoryFilter.mode === "all" ? categoryGroups : categoryGroups.filter(({id}) =>
     categoryFilter.categoryIds.has(id) === (categoryFilter.mode === "include")), [categoryGroups, categoryFilter]);
   const highlightedPeerId = useMemo(() => selectedPeerId && groups.some(group => group.items.some(({id}) => id === selectedPeerId))
     ? selectedPeerId : null, [groups, selectedPeerId]);
-  const centerGroup = useMemo(() => assetId ? groupFocusAssets([assetId], snapshot)[0] : undefined, [assetId, snapshot]);
+  const centerGroup = useMemo(() => assetId ? groupFocusAssets([assetId], snapshot, t)[0] : undefined, [assetId, snapshot, t]);
   const center = centerGroup?.items[0];
   const scene = useRef<HTMLDivElement>(null);
   const viewportElement = useRef<HTMLDivElement>(null);
@@ -237,11 +239,11 @@ export function TimelineFocusAssets({canvas, event, catalog, network, focusedAss
     return shownGroups.flatMap(({items}) => items.flatMap(({relation}) => relation
       ? [relationSegment(relation.position, diagramSize / 2, graphZoom, nodeRem)] : [])).join("");
   }, [drawFullRelations, graphZoom, shownGroups, diagramSize, nodeRem]);
-  const relationMessage = relationSnapshot?.loading ? "正在读取资产关系…"
-    : !relationSnapshot?.loaded ? "资产关系读取失败"
-    : !assetIds.length ? "暂无资产关系" : !total ? "没有符合筛选条件的关联资产" : null;
-  const message = assetId ? relationMessage : !total ? "暂无关联资产"
-    : snapshot?.loading && !snapshot.loaded ? "正在读取关联资产…" : !catalogReady ? "资产目录暂不可用" : null;
+  const relationMessage = relationSnapshot?.loading ? t("正在读取资产关系…")
+    : !relationSnapshot?.loaded ? t("资产关系读取失败")
+    : !assetIds.length ? t("暂无资产关系") : !total ? t("没有符合筛选条件的关联资产") : null;
+  const message = assetId ? relationMessage : !total ? t("暂无关联资产")
+    : snapshot?.loading && !snapshot.loaded ? t("正在读取关联资产…") : !catalogReady ? t("资产目录暂不可用") : null;
   const sceneStyle = compact ? undefined : {width: diagramSize, height: diagramSize,
     // The world layer places the origin. Keep projected text and edges in screen pixels.
     transform: pannable ? `scale(${1 / graphZoom}) translate(-50%, -50%)` : undefined};
@@ -382,7 +384,7 @@ export function TimelineFocusAssets({canvas, event, catalog, network, focusedAss
         {message && <p className="timeline-focus-message" role="status">{message}</p>}
       </div>}
       {total > 0 && <div className="timeline-focus-groups" data-canvas-interactive={compact || undefined}
-        tabIndex={compact ? 0 : undefined} role="region" aria-label={assetId ? "直接关联资产" : "关联资产"}>
+        tabIndex={compact ? 0 : undefined} role="region" aria-label={assetId ? t("直接关联资产") : t("关联资产")}>
         {visibleGroups.map(({id, label, color, items}) => {
           return items.length > 0 && <section className="timeline-focus-group" key={id} aria-label={label}
             style={{"--timeline-focus-category-color": color} as CSSProperties}>
@@ -415,7 +417,7 @@ export function TimelineFocusAssets({canvas, event, catalog, network, focusedAss
                   data-relation-motion={assetId && position && (initial ? "enter" : "scroll") || undefined}
                   data-highlighted={highlightedPeerId === asset.id || undefined}>
                   {canInspect ? <button type="button" className="timeline-focus-asset-node" data-canvas-interactive
-                    title={nodeTitle} aria-label={`查看「${asset.name}」的资产关系`}
+                    title={nodeTitle} aria-label={t("查看「{name}」的资产关系", {values: {name: asset.name}})}
                     aria-describedby={relation && hasLabel ? `${relationLabelId}-${asset.id}` : undefined}
                     aria-description={hasLabel ? undefined : relation}
                     onClick={event => {
@@ -458,7 +460,7 @@ export function TimelineFocusAssets({canvas, event, catalog, network, focusedAss
     data-small-nodes={nodeScale < 0.8 && !scaleTextWithZoom || undefined}
     inert={closing} data-closing={closing || undefined}>
     <div className="timeline-focus-toolbar">
-      <nav ref={breadcrumbBar} className="timeline-focus-breadcrumbs" aria-label="时间线浏览路径" data-canvas-interactive>
+      <nav ref={breadcrumbBar} className="timeline-focus-breadcrumbs" aria-label={t("时间线浏览路径")} data-canvas-interactive>
         <ol>
           {breadcrumbs.map(({label, target}, index) => {
             const text = <span className="timeline-focus-crumb-label">{label}</span>;
@@ -472,13 +474,13 @@ export function TimelineFocusAssets({canvas, event, catalog, network, focusedAss
           })}
         </ol>
       </nav>
-      {assetId && !closing && <TimelineRelationCategoryFilter key={assetId}
+      {assetId && !closing && <TimelineRelationCategoryFilter t={t} key={assetId}
         categories={categoryGroups} value={categoryFilter} onChange={changeCategoryFilter} />}
     </div>
     <div ref={viewportElement} className="timeline-focus-viewport" data-overflow={scrollableEvent || undefined}
       data-pannable={pannable || undefined} data-canvas-interactive={scrollableEvent || undefined}
       tabIndex={scrollableEvent ? 0 : undefined} role={scrollableEvent ? "region" : undefined}
-      aria-label={scrollableEvent ? "事件与全部关联资产" : undefined}
+      aria-label={scrollableEvent ? t("事件与全部关联资产") : undefined}
       onFocus={pannable ? event => trackFocusedPeer(event.target) : undefined}
       onBlur={pannable ? event => trackFocusedPeer(event.relatedTarget) : undefined}
       onClick={scrollableEvent ? click => {
@@ -489,9 +491,9 @@ export function TimelineFocusAssets({canvas, event, catalog, network, focusedAss
         if (!click.target.closest(".timeline-focus-event, .timeline-focus-relation-center, .timeline-focus-asset, .timeline-focus-relation-label")) onBack();
       } : undefined}>
       {pannable ? relationViewport && <Surface viewport={relationViewport} active={!closing} grid="none"
-        label="资产关系图" panOnPrimaryDrag wheelOnWorldControls showControls={Boolean(controlsTarget)}
-        controls={{label: "关系图视图", target: controlsTarget ?? undefined}}
-        zoomControls={<TimelineTextZoomSwitch checked={scaleTextWithZoom} disabled={closing || Boolean(relationView?.disposed)}
+        label={t("资产关系图")} panOnPrimaryDrag wheelOnWorldControls showControls={Boolean(controlsTarget)}
+        controls={{label: t("关系图视图"), target: controlsTarget ?? undefined}}
+        zoomControls={<TimelineTextZoomSwitch t={t} checked={scaleTextWithZoom} disabled={closing || Boolean(relationView?.disposed)}
           onChange={setScaleTextWithZoom} />}>
         {sceneContent}
       </Surface> : <div className="timeline-focus-stage" style={sceneStyle}>{sceneContent}</div>}
